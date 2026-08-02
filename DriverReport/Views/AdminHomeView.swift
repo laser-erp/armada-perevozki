@@ -248,6 +248,9 @@ struct AdminOrderDetailView: View {
     @State private var paymentForm: PaymentForm = .cash
     @State private var ratePerKmCash = ""
     @State private var estimateKm = ""
+    @State private var ratePerHourWork = ""
+    @State private var estimateWorkHours = ""
+    @State private var workHours = ""
     @State private var rateWithVat = ""
     @State private var rateWithoutVat = ""
     @State private var rateCash = ""
@@ -257,6 +260,7 @@ struct AdminOrderDetailView: View {
     @State private var saved = false
     @State private var syncingRates = false
     @State private var routeError: String?
+    @State private var tariffSummary = ""
 
     private var order: OrderRecord? {
         store.allOrders().first { $0.id == orderId }
@@ -337,25 +341,36 @@ struct AdminOrderDetailView: View {
                         row("С грузом", "\(order.loadedKm.map(String.init) ?? "—") км")
                         TextField("Пробег до стоянки, км", text: $emptyKmAfter)
                             .keyboardType(.numberPad)
+                            .onChange(of: emptyKmAfter) { _, _ in syncFromTariff() }
                         row("От стоянки до конца", "\(m.kmParkingToEnd.map(String.init) ?? "—") км")
                         row("Общий за день (по полям)", "\(order.dayTotalKm.map(String.init) ?? "—") км")
                     }
-                    Section("Ставка / оплата") {
-                        Text("База для клиента — ₽/км наличными. Сумма = ₽/км × км (факт с грузом или ориентир). Без НДС и с НДС считаются от нал (−8% / +22%).")
+                    Section("Тариф клиенту") {
+                        Text("Комбо: часы + ₽/км. Город ≤\(store.financeSettings.cityKmThreshold) км: мин. \(format(store.financeSettings.minWorkHours)) ч работы + \(format(store.financeSettings.podachaHours)) ч подачи. Если нулевой × ₽/км > подачи — ₽/км нулевого добавляется.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
                         TextField("₽/км наличные", text: $ratePerKmCash)
                             .keyboardType(.decimalPad)
-                            .onChange(of: ratePerKmCash) { _, _ in syncFromPerKm() }
-                        if order.loadedKm == nil {
-                            TextField("Ориентир км (пока нет факта)", text: $estimateKm)
-                                .keyboardType(.numberPad)
-                                .onChange(of: estimateKm) { _, _ in syncFromPerKm() }
-                        } else {
-                            row("Ориентир км", estimateKm.isEmpty ? "—" : "\(estimateKm) км")
+                            .onChange(of: ratePerKmCash) { _, _ in syncFromTariff() }
+                        TextField("₽/час работы", text: $ratePerHourWork)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: ratePerHourWork) { _, _ in syncFromTariff() }
+                        TextField("Ориентир км (цепочка)", text: $estimateKm)
+                            .keyboardType(.numberPad)
+                            .onChange(of: estimateKm) { _, _ in syncFromTariff() }
+                        TextField("Ориентир часов работы", text: $estimateWorkHours)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: estimateWorkHours) { _, _ in syncFromTariff() }
+                        TextField("Факт часов работы", text: $workHours)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: workHours) { _, _ in syncFromTariff() }
+                        row("Цепочка км", chainKmLabel(for: order))
+                        if !tariffSummary.isEmpty {
+                            Text(tariffSummary)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(AppTheme.accent)
                         }
-                        row("Км для расчёта", billableKmLabel(for: order))
-                        if let preview = perKmPreviewTotals(for: order) {
+                        if let preview = tariffPreviewTotals(for: order) {
                             row("Сумма нал (расчёт)", "\(format(preview.cash)) ₽")
                             row("Сумма без НДС", "\(format(preview.withoutVat)) ₽")
                             row("Сумма с НДС", "\(format(preview.withVat)) ₽")
@@ -422,9 +437,12 @@ struct AdminOrderDetailView: View {
             unloading: order.unloadingAddress
         )
         routeError = nil
-        paymentForm = order.paymentForm ?? (order.ratePerKmCash != nil ? .cash : .withVat)
+        paymentForm = order.paymentForm ?? .cash
         ratePerKmCash = order.ratePerKmCash.map(format) ?? ""
         estimateKm = order.estimateKm.map(String.init) ?? ""
+        ratePerHourWork = order.ratePerHourWork.map(format) ?? ""
+        estimateWorkHours = order.estimateWorkHours.map(format) ?? ""
+        workHours = order.workHours.map(format) ?? ""
         rateWithVat = order.rateWithVat.map(format) ?? ""
         rateWithoutVat = order.rateWithoutVat.map(format) ?? ""
         rateCash = order.rateCash.map(format) ?? ""
@@ -432,15 +450,20 @@ struct AdminOrderDetailView: View {
         vehicleRent = order.vehicleRent.map(format) ?? ""
         emptyKmAfter = order.emptyKmAfter.map(String.init) ?? ""
         syncingRates = false
-        syncFromPerKm()
+        syncFromTariff()
     }
 
-    private func parsedPerKm() -> Double? {
-        let raw = ratePerKmCash.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func parsedDouble(_ text: String) -> Double? {
+        let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: ",", with: ".")
         guard let value = Double(raw), value > 0 else { return nil }
         return value
     }
+
+    private func parsedPerKm() -> Double? { parsedDouble(ratePerKmCash) }
+    private func parsedPerHour() -> Double? { parsedDouble(ratePerHourWork) }
+    private func parsedEstimateHours() -> Double? { parsedDouble(estimateWorkHours) }
+    private func parsedWorkHours() -> Double? { parsedDouble(workHours) }
 
     private func parsedEstimateKm() -> Int? {
         let digits = estimateKm.filter(\.isNumber)
@@ -448,30 +471,45 @@ struct AdminOrderDetailView: View {
         return value
     }
 
-    private func billableKmLabel(for order: OrderRecord) -> String {
-        if let loaded = order.loadedKm, loaded > 0 {
-            return "\(loaded) км (факт с грузом)"
-        }
-        if let est = parsedEstimateKm() {
-            return "\(est) км (ориентир)"
-        }
-        return "— (укажите ориентир км)"
+    private func draftOrderForTariff(_ order: OrderRecord) -> OrderRecord {
+        var draft = order
+        draft.ratePerKmCash = parsedPerKm()
+        draft.estimateKm = parsedEstimateKm()
+        draft.ratePerHourWork = parsedPerHour()
+        draft.estimateWorkHours = parsedEstimateHours()
+        draft.workHours = parsedWorkHours()
+        draft.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber)) ?? order.emptyKmAfter
+        return draft
     }
 
-    private func perKmPreviewTotals(for order: OrderRecord) -> (withVat: Double, withoutVat: Double, cash: Double)? {
-        guard let perKm = parsedPerKm() else { return nil }
-        let km = OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: parsedEstimateKm())
-        guard let km else { return nil }
-        return OrderFinance.amountsFromPerKmCash(perKmCash: perKm, km: km)
+    private func chainKmLabel(for order: OrderRecord) -> String {
+        let draft = draftOrderForTariff(order)
+        if let total = OrderFinance.totalOrderKm(for: draft) {
+            let empty = OrderFinance.emptyKm(for: draft)
+            let loaded = draft.loadedKm ?? 0
+            return "\(total) км (нулевой \(empty) + груз \(loaded))"
+        }
+        return "— (ориентир или факт после закрытия)"
     }
 
-    private func syncFromPerKm() {
+    private func tariffPreviewTotals(for order: OrderRecord) -> (withVat: Double, withoutVat: Double, cash: Double)? {
+        let draft = draftOrderForTariff(order)
+        guard let breakdown = OrderFinance.calculateClientTariff(for: draft, settings: store.financeSettings) else {
+            return nil
+        }
+        return OrderFinance.fillRates(from: .cash, amount: breakdown.totalCash)
+    }
+
+    private func syncFromTariff() {
         guard !syncingRates else { return }
-        guard let perKm = parsedPerKm() else { return }
-        // Даже без км показываем соотношение ₽/км по формам не обязательно — ждём км для сумм.
         guard let order else { return }
-        let km = OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: parsedEstimateKm())
-        guard let km, let triad = OrderFinance.amountsFromPerKmCash(perKmCash: perKm, km: km) else { return }
+        let draft = draftOrderForTariff(order)
+        guard let breakdown = OrderFinance.calculateClientTariff(for: draft, settings: store.financeSettings) else {
+            tariffSummary = ""
+            return
+        }
+        tariffSummary = breakdown.summaryText
+        let triad = OrderFinance.fillRates(from: .cash, amount: breakdown.totalCash)
         syncingRates = true
         paymentForm = .cash
         rateCash = format(triad.cash)
@@ -511,11 +549,6 @@ struct AdminOrderDetailView: View {
             rateWithVat = format(triad.withVat)
             rateWithoutVat = format(triad.withoutVat)
         }
-        // Обратный пересчёт ₽/км нал, если известен км
-        if let order,
-           let km = OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: parsedEstimateKm()) {
-            ratePerKmCash = format(OrderFinance.round2(triad.cash / Double(km)))
-        }
         syncingRates = false
     }
 
@@ -543,27 +576,28 @@ struct AdminOrderDetailView: View {
         order.applyRoutePoints(cleaned)
         order.ratePerKmCash = parsedPerKm()
         order.estimateKm = parsedEstimateKm()
+        order.ratePerHourWork = parsedPerHour()
+        order.estimateWorkHours = parsedEstimateHours()
+        order.workHours = parsedWorkHours()
+        order.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber))
         order.paymentForm = paymentForm
-        OrderFinance.applyPerKmCash(to: &order)
-        if order.ratePerKmCash == nil {
-            order.rateWithVat = Double(rateWithVat.replacingOccurrences(of: ",", with: "."))
-            order.rateWithoutVat = Double(rateWithoutVat.replacingOccurrences(of: ",", with: "."))
-            order.rateCash = Double(rateCash.replacingOccurrences(of: ",", with: "."))
-        } else if OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: order.estimateKm) == nil {
-            // ₽/км задан, км ещё нет — суммы вручную не затираем, если уже были
+        OrderFinance.applyClientTariff(to: &order, settings: store.financeSettings)
+        if OrderFinance.calculateClientTariff(for: order, settings: store.financeSettings) == nil {
             order.rateWithVat = Double(rateWithVat.replacingOccurrences(of: ",", with: "."))
             order.rateWithoutVat = Double(rateWithoutVat.replacingOccurrences(of: ",", with: "."))
             order.rateCash = Double(rateCash.replacingOccurrences(of: ",", with: "."))
         }
         order.salaryBonus = Double(salaryBonus.replacingOccurrences(of: ",", with: "."))
         order.vehicleRent = Double(vehicleRent.replacingOccurrences(of: ",", with: "."))
-        order.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber))
         order.freight = OrderFinance.selectedRate(order)
         store.upsertOrder(order)
         routePoints = order.routePoints
         rateWithVat = order.rateWithVat.map(format) ?? rateWithVat
         rateWithoutVat = order.rateWithoutVat.map(format) ?? rateWithoutVat
         rateCash = order.rateCash.map(format) ?? rateCash
+        if let b = OrderFinance.calculateClientTariff(for: order, settings: store.financeSettings) {
+            tariffSummary = b.summaryText
+        }
         saved = true
     }
 
@@ -586,15 +620,20 @@ struct AdminCatalogView: View {
 
     var body: some View {
         List {
-            Section("Финансы") {
+            Section("Финансы / тариф") {
                 NavigationLink {
-                    MarkupEditView(store: store)
+                    FinanceSettingsEditView(store: store)
                 } label: {
-                    HStack {
-                        Text("Наценка к себестоимости")
-                        Spacer()
-                        Text("\(Int(store.financeSettings.markupPercent.rounded()))%")
-                            .foregroundStyle(AppTheme.accent)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Тариф по умолчанию")
+                            Spacer()
+                            Text("город ≤\(store.financeSettings.cityKmThreshold) км")
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        Text("мин \(formatHours(store.financeSettings.minWorkHours)) ч + подача \(formatHours(store.financeSettings.podachaHours)) ч · наценка \(Int(store.financeSettings.markupPercent.rounded()))%")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textMuted)
                     }
                 }
                 .listRowBackground(AppTheme.botBubble.opacity(0.7))
@@ -634,33 +673,65 @@ struct AdminCatalogView: View {
         .background(AppTheme.canvasTop)
         .navigationTitle("Справочники")
     }
+
+    private func formatHours(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%g", value)
+    }
 }
 
-struct MarkupEditView: View {
+struct FinanceSettingsEditView: View {
     @ObservedObject var store: ShiftStore
-    @State private var value = ""
+    @State private var markup = ""
+    @State private var cityKm = ""
+    @State private var minWork = ""
+    @State private var podacha = ""
+    @State private var perHour = ""
+    @State private var perKm = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Form {
-            Text("Целевая маржа в рекомендуемой ставке. По умолчанию 15%. Можно менять от 0 до 80.")
+            Text("Город ≤ N км: минимум часов работы + час(ы) подачи. Если нулевой × ₽/км больше подачи — к сумме добавляется ₽/км нулевого.")
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(AppTheme.textMuted)
-            TextField("Наценка, %", text: $value)
-                .keyboardType(.decimalPad)
+            TextField("Наценка к себестоимости, %", text: $markup).keyboardType(.decimalPad)
+            TextField("Порог города, км", text: $cityKm).keyboardType(.numberPad)
+            TextField("Мин. часов работы (город)", text: $minWork).keyboardType(.decimalPad)
+            TextField("Часов подачи", text: $podacha).keyboardType(.decimalPad)
+            TextField("₽/час работы по умолчанию", text: $perHour).keyboardType(.decimalPad)
+            TextField("₽/км нал по умолчанию", text: $perKm).keyboardType(.decimalPad)
             Button("Сохранить") {
-                let raw = Double(value.replacingOccurrences(of: ",", with: ".")) ?? 15
-                let clamped = min(80, max(0, raw))
-                store.updateFinanceSettings(FinanceSettings(markupPercent: clamped))
+                let m = Double(markup.replacingOccurrences(of: ",", with: ".")) ?? 15
+                let threshold = Int(cityKm.filter(\.isNumber)) ?? 100
+                let minH = Double(minWork.replacingOccurrences(of: ",", with: ".")) ?? 4
+                let pod = Double(podacha.replacingOccurrences(of: ",", with: ".")) ?? 1
+                let hour = Double(perHour.replacingOccurrences(of: ",", with: ".")) ?? 0
+                let km = Double(perKm.replacingOccurrences(of: ",", with: ".")) ?? 0
+                store.updateFinanceSettings(
+                    FinanceSettings(
+                        markupPercent: min(80, max(0, m)),
+                        cityKmThreshold: max(1, threshold),
+                        minWorkHours: max(0, minH),
+                        podachaHours: max(0, pod),
+                        defaultRatePerHourWork: max(0, hour),
+                        defaultRatePerKmCash: max(0, km)
+                    )
+                )
                 dismiss()
             }
             .foregroundStyle(AppTheme.accent)
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.canvasTop)
-        .navigationTitle("Наценка")
+        .navigationTitle("Тариф")
         .onAppear {
-            value = String(format: "%g", store.financeSettings.markupPercent)
+            let s = store.financeSettings
+            markup = String(format: "%g", s.markupPercent)
+            cityKm = String(s.cityKmThreshold)
+            minWork = String(format: "%g", s.minWorkHours)
+            podacha = String(format: "%g", s.podachaHours)
+            perHour = s.defaultRatePerHourWork > 0 ? String(format: "%g", s.defaultRatePerHourWork) : ""
+            perKm = s.defaultRatePerKmCash > 0 ? String(format: "%g", s.defaultRatePerKmCash) : ""
         }
     }
 }

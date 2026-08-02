@@ -19,6 +19,8 @@ final class ChatViewModel: ObservableObject {
     private var draftLoadingAddress: String?
     private var draftCloseOdometer: Int?
     private var draftFuelPrice: Double?
+    private var draftCloseLiters: Double?
+    private var draftCloseRefueled: Bool?
     private var draftAssignedOrderId: UUID?
 
     private let store: ShiftStore
@@ -231,7 +233,17 @@ final class ChatViewModel: ObservableObject {
                 return
             }
             append(.driver, "\(formatDecimal(liters)) л")
-            finalizeCloseOrder(refueled: true, price: draftFuelPrice, liters: liters)
+            askClosingEmptyAfter(refueled: true, price: draftFuelPrice, liters: liters)
+            return
+        }
+
+        if orderStep == .closingEmptyAfter {
+            let digits = trimmed.filter(\.isNumber)
+            guard let value = Int(digits), !digits.isEmpty else {
+                numberError = "Введите целое число километров"
+                return
+            }
+            acceptClosingEmptyAfter(value)
             return
         }
 
@@ -648,11 +660,52 @@ final class ChatViewModel: ObservableObject {
             numberError = nil
             persistMessages()
         } else {
-            finalizeCloseOrder(refueled: false, price: nil, liters: nil)
+            askClosingEmptyAfter(refueled: false, price: nil, liters: nil)
         }
     }
 
-    private func finalizeCloseOrder(refueled: Bool, price: Double?, liters: Double?) {
+    private func askClosingEmptyAfter(refueled: Bool, price: Double?, liters: Double?) {
+        draftCloseRefueled = refueled
+        draftFuelPrice = price
+        draftCloseLiters = liters
+        append(
+            .bot,
+            """
+            Укажите одометр на стоянке или у следующего заказа \
+            (пробег после выгрузки: нулевой возврат).
+            """
+        )
+        orderStep = .closingEmptyAfter
+        inputMode = .number(placeholder: "Например, 277780")
+        draftNumber = ""
+        numberError = nil
+        persistMessages()
+    }
+
+    private func acceptClosingEmptyAfter(_ value: Int) {
+        guard let endOdo = draftCloseOdometer else {
+            numberError = "Нет данных закрытия заказа"
+            return
+        }
+        guard value >= endOdo else {
+            numberError = "Одометр не может быть меньше окончания заказа (\(endOdo))"
+            return
+        }
+        append(.driver, "\(value)")
+        finalizeCloseOrder(
+            refueled: draftCloseRefueled ?? false,
+            price: draftFuelPrice,
+            liters: draftCloseLiters,
+            parkingOrNextOdometer: value
+        )
+    }
+
+    private func finalizeCloseOrder(
+        refueled: Bool,
+        price: Double?,
+        liters: Double?,
+        parkingOrNextOdometer: Int
+    ) {
         guard var shift = activeShift,
               var order = openOrder,
               let start = order.startOdometer,
@@ -665,6 +718,7 @@ final class ChatViewModel: ObservableObject {
         let loaded = endOdo - start
         order.endOdometer = endOdo
         order.loadedKm = loaded
+        order.emptyKmAfter = max(0, parkingOrNextOdometer - endOdo)
         order.refueled = refueled
         if refueled, let price, let liters {
             order.fuelPricePerLiter = price
@@ -672,7 +726,7 @@ final class ChatViewModel: ObservableObject {
             order.fuelTotalCost = (price * liters * 100).rounded() / 100
         }
         order.closedAt = Date()
-        shift.lastOdometerPoint = endOdo
+        shift.lastOdometerPoint = parkingOrNextOdometer
         store.attachOrder(order, to: shift.id)
 
         append(
@@ -680,6 +734,7 @@ final class ChatViewModel: ObservableObject {
             """
             Заказ №\(order.sequentialNumber) закрыт.
             Одометр окончания: \(endOdo)
+            До стоянки / след. заказа: \(order.emptyKmAfter ?? 0) км
             ЗП по заказу появится в «Заявки» после расчёта администратором.
             """
         )
@@ -690,6 +745,8 @@ final class ChatViewModel: ObservableObject {
 
         draftCloseOdometer = nil
         draftFuelPrice = nil
+        draftCloseLiters = nil
+        draftCloseRefueled = nil
         orderStep = .idle
         inputMode = .afterETO
         draftNumber = ""
@@ -795,6 +852,8 @@ final class ChatViewModel: ObservableObject {
         draftLoadingAddress = nil
         draftCloseOdometer = nil
         draftFuelPrice = nil
+        draftCloseLiters = nil
+        draftCloseRefueled = nil
         draftAssignedOrderId = nil
     }
 

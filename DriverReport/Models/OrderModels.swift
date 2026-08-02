@@ -74,8 +74,14 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var rateCash: Double?
     /// Базовая ставка для клиента: ₽/км наличными; остальные формы считаются от неё.
     var ratePerKmCash: Double?
-    /// Ориентировочный км, пока нет факта «с грузом».
+    /// Ориентировочный км, пока нет факта цепочки.
     var estimateKm: Int?
+    /// ₽/час работы (переопределение справочника).
+    var ratePerHourWork: Double?
+    /// Ориентир часов работы.
+    var estimateWorkHours: Double?
+    /// Факт часов работы (админ после закрытия).
+    var workHours: Double?
     var salaryBonus: Double?
     var vehicleRent: Double?
     var driverPercent: Double
@@ -184,6 +190,9 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         rateCash: Double? = nil,
         ratePerKmCash: Double? = nil,
         estimateKm: Int? = nil,
+        ratePerHourWork: Double? = nil,
+        estimateWorkHours: Double? = nil,
+        workHours: Double? = nil,
         salaryBonus: Double? = nil,
         vehicleRent: Double? = nil,
         driverPercent: Double = AppDefaults.driverPercent,
@@ -224,6 +233,9 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.rateCash = rateCash
         self.ratePerKmCash = ratePerKmCash
         self.estimateKm = estimateKm
+        self.ratePerHourWork = ratePerHourWork
+        self.estimateWorkHours = estimateWorkHours
+        self.workHours = workHours
         self.salaryBonus = salaryBonus
         self.vehicleRent = vehicleRent
         self.driverPercent = driverPercent
@@ -236,6 +248,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         case emptyKmBefore, loadedKm, emptyKmAfter, endOdometer, closedAt
         case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, freight
         case paymentForm, rateWithVat, rateWithoutVat, rateCash, ratePerKmCash, estimateKm
+        case ratePerHourWork, estimateWorkHours, workHours
         case salaryBonus, vehicleRent, driverPercent, earnings
     }
 
@@ -282,6 +295,9 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         rateCash = try c.decodeIfPresent(Double.self, forKey: .rateCash)
         ratePerKmCash = try c.decodeIfPresent(Double.self, forKey: .ratePerKmCash)
         estimateKm = try c.decodeIfPresent(Int.self, forKey: .estimateKm)
+        ratePerHourWork = try c.decodeIfPresent(Double.self, forKey: .ratePerHourWork)
+        estimateWorkHours = try c.decodeIfPresent(Double.self, forKey: .estimateWorkHours)
+        workHours = try c.decodeIfPresent(Double.self, forKey: .workHours)
         salaryBonus = try c.decodeIfPresent(Double.self, forKey: .salaryBonus)
         vehicleRent = try c.decodeIfPresent(Double.self, forKey: .vehicleRent)
         driverPercent = try c.decodeIfPresent(Double.self, forKey: .driverPercent) ?? AppDefaults.driverPercent
@@ -319,6 +335,9 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encodeIfPresent(rateCash, forKey: .rateCash)
         try c.encodeIfPresent(ratePerKmCash, forKey: .ratePerKmCash)
         try c.encodeIfPresent(estimateKm, forKey: .estimateKm)
+        try c.encodeIfPresent(ratePerHourWork, forKey: .ratePerHourWork)
+        try c.encodeIfPresent(estimateWorkHours, forKey: .estimateWorkHours)
+        try c.encodeIfPresent(workHours, forKey: .workHours)
         try c.encodeIfPresent(salaryBonus, forKey: .salaryBonus)
         try c.encodeIfPresent(vehicleRent, forKey: .vehicleRent)
         try c.encode(driverPercent, forKey: .driverPercent)
@@ -344,6 +363,7 @@ enum OrderFlowStep: String, Codable {
     case askRefuel
     case fuelPrice
     case fuelAmount
+    case closingEmptyAfter
     case startAssignedOdometer
     case closeShiftParking
 }

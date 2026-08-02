@@ -133,6 +133,11 @@ final class ShiftStore: ObservableObject {
         var s = settings
         if s.markupPercent < 0 { s.markupPercent = 0 }
         if s.markupPercent > 80 { s.markupPercent = 80 }
+        if s.cityKmThreshold < 1 { s.cityKmThreshold = 1 }
+        if s.minWorkHours < 0 { s.minWorkHours = 0 }
+        if s.podachaHours < 0 { s.podachaHours = 0 }
+        if s.defaultRatePerHourWork < 0 { s.defaultRatePerHourWork = 0 }
+        if s.defaultRatePerKmCash < 0 { s.defaultRatePerKmCash = 0 }
         financeSettings = s
         persist()
     }
@@ -173,7 +178,7 @@ final class ShiftStore: ObservableObject {
             }
             _ = liters
         }
-        OrderFinance.applyPerKmCash(to: &o)
+        OrderFinance.applyClientTariff(to: &o, settings: financeSettings)
         if let rate = OrderFinance.selectedRate(o) {
             let bonus = o.salaryBonus ?? 0
             o.earnings = OrderFinance.round2(

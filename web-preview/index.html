@@ -178,7 +178,7 @@ const ADMIN_PIN="2580";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
-const DEFAULT_FINANCE={markupPercent:15};
+const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,defaultRatePerHourWork:0,defaultRatePerKmCash:0};
 const state={
   step:"idle", orderStep:"idle", messages:[], shift:null,
   shifts:saved.shifts||[], orders:saved.orders||[], seq:saved.seq||0,
@@ -189,6 +189,11 @@ const state={
 };
 if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
 if(state.finance.markupPercent>80) state.finance.markupPercent=80;
+if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
+if(!(state.finance.minWorkHours>=0)) state.finance.minWorkHours=4;
+if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
+if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
+if(!(state.finance.defaultRatePerKmCash>=0)) state.finance.defaultRatePerKmCash=0;
 if(!state.orders.length && state.shifts.length){ state.orders = state.shifts.flatMap(s => s.orders||[]); }
 function kindTitle(kind){ return kind==='unloading'?'Выгрузка':'Загрузка'; }
 function normalizePoint(p, fallbackKind){
@@ -291,9 +296,60 @@ function billableKm(o, estimateOverride){
   if(est!=null && +est>0) return +est;
   return null;
 }
+function emptyKmOf(o){ return (o.emptyKmBefore||0)+(o.emptyKmAfter||0); }
+function totalOrderKm(o){
+  const has=o.emptyKmBefore!=null||o.loadedKm!=null||o.emptyKmAfter!=null;
+  if(has) return (o.emptyKmBefore||0)+(o.loadedKm||0)+(o.emptyKmAfter||0);
+  if(o.estimateKm>0) return +o.estimateKm;
+  return null;
+}
 function amountsFromPerKmCash(perKmCash, km){
   if(!(perKmCash>0) || !(km>0)) return null;
   return fillRatesFrom('cash', round2(perKmCash*km));
+}
+function calculateClientTariff(o, fin){
+  const s=Object.assign({}, DEFAULT_FINANCE, fin||state.finance||{});
+  const perKm=(o.ratePerKmCash>0?+o.ratePerKmCash:+s.defaultRatePerKmCash)||0;
+  const perHour=(o.ratePerHourWork>0?+o.ratePerHourWork:+s.defaultRatePerHourWork)||0;
+  if(!(perKm>0||perHour>0)) return null;
+  const hasSegments=o.emptyKmBefore!=null||o.loadedKm!=null||o.emptyKmAfter!=null;
+  const empty=emptyKmOf(o);
+  const loaded=o.loadedKm||0;
+  const totalKm=totalOrderKm(o)||0;
+  const isCity=totalKm>0 && totalKm<=s.cityKmThreshold;
+  const workEntered=o.workHours??o.estimateWorkHours??0;
+  const minWork=isCity?s.minWorkHours:0;
+  const workHoursCharged=Math.max(+workEntered||0, minWork);
+  const workCash=round2(workHoursCharged*perHour);
+  const applyPodacha=perHour>0 && s.podachaHours>0 && (isCity||empty>0||hasSegments);
+  const podachaHourCash=applyPodacha?round2(s.podachaHours*perHour):0;
+  const emptyCost=round2(empty*perKm);
+  let emptyKmCash=0, podachaCoveredByHour=!!applyPodacha;
+  if(empty>0 && perKm>0){
+    if(podachaHourCash>0 && emptyCost<=podachaHourCash){ podachaCoveredByHour=true; emptyKmCash=0; }
+    else { podachaCoveredByHour=false; emptyKmCash=emptyCost; }
+  }
+  let loadedKmCash=0;
+  if(hasSegments) loadedKmCash=isCity?0:round2(loaded*perKm);
+  else if(o.estimateKm>0 && !isCity) loadedKmCash=round2(+o.estimateKm*perKm);
+  const totalCash=round2(workCash+podachaHourCash+emptyKmCash+loadedKmCash);
+  if(!(totalCash>0)) return null;
+  const parts=[];
+  if(workCash>0) parts.push(`работа ${workHoursCharged} ч = ${fmt(workCash)} ₽`);
+  if(podachaHourCash>0) parts.push(`подача = ${fmt(podachaHourCash)} ₽`);
+  if(emptyKmCash>0) parts.push(`нулевой ${empty} км = ${fmt(emptyKmCash)} ₽`);
+  else if(empty>0 && podachaCoveredByHour) parts.push('нулевой покрыт подачей');
+  if(loadedKmCash>0) parts.push(`груз ${hasSegments?loaded:o.estimateKm} км = ${fmt(loadedKmCash)} ₽`);
+  return {totalCash,isCity,summary:`[${isCity?'город':'межгород'}] ${parts.join(' + ')||'—'}`};
+}
+function applyClientTariff(o){
+  const b=calculateClientTariff(o, state.finance);
+  if(!b) return applyPerKmCash(o);
+  const t=fillRatesFrom('cash', b.totalCash);
+  o.rateCash=t.cash; o.rateWithoutVat=t.withoutVat; o.rateWithVat=t.withVat;
+  if(!o.paymentForm) o.paymentForm='cash';
+  o.freight=selectedRate(o);
+  return true;
 }
 function applyPerKmCash(o){
   const per=+o.ratePerKmCash;
@@ -325,39 +381,49 @@ function wireRateAutoFill(order){
     };
   });
 }
+function draftTariffFromDom(order){
+  const num=el=>{ const v=($(el)?.value||'').trim().replace(',','.'); return v===''?null:Number(v); };
+  const d=Object.assign({}, order);
+  const per=num('d-perkm'); d.ratePerKmCash=(per!=null&&per>0)?per:null;
+  const hour=num('d-perhour'); d.ratePerHourWork=(hour!=null&&hour>0)?hour:null;
+  const est=(($('d-estimate-km')||{}).value||'').replace(/\D/g,''); d.estimateKm=est?+est:null;
+  const eh=num('d-estimate-hours'); d.estimateWorkHours=(eh!=null&&eh>0)?eh:null;
+  const wh=num('d-work-hours'); d.workHours=(wh!=null&&wh>0)?wh:null;
+  const after=(($('d-empty-after')||{}).value||'').replace(/\D/g,'');
+  if(after!=='') d.emptyKmAfter=+after;
+  return d;
+}
 function updatePerKmPreview(order){
   const box=$('perkm-preview'); if(!box) return;
-  const per=+((($('d-perkm')||{}).value||'').trim().replace(',','.'));
-  const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
-  const km=billableKm(order||{}, estRaw?+estRaw:null);
-  const kmLabel=order&&order.loadedKm>0
-    ? `${order.loadedKm} км (факт с грузом)`
-    : (km?`${km} км (ориентир)`:'— (укажите ориентир км)');
-  const t=amountsFromPerKmCash(per, km);
+  const d=draftTariffFromDom(order||{});
+  const b=calculateClientTariff(d, state.finance);
+  const total=totalOrderKm(d);
+  const empty=emptyKmOf(d);
   box.innerHTML=`
-    <div><span>Км для расчёта</span><span>${esc(kmLabel)}</span></div>
-    ${t?`
-      <div><span>Сумма нал (расчёт)</span><span>${fmt(t.cash)} ₽</span></div>
-      <div><span>Сумма без НДС</span><span>${fmt(t.withoutVat)} ₽</span></div>
-      <div><span>Сумма с НДС</span><span>${fmt(t.withVat)} ₽</span></div>
-    `:`<div class="hint">Введите ₽/км и ориентир км — появится сумма для клиента</div>`}
+    <div><span>Цепочка км</span><span>${total!=null?`${total} (нулевой ${empty} + груз ${d.loadedKm||0})`:'—'}</span></div>
+    ${b?`
+      <div class="hint">${esc(b.summary)}</div>
+      <div><span>Сумма нал (расчёт)</span><span>${fmt(b.totalCash)} ₽</span></div>
+      <div><span>Сумма без НДС</span><span>${fmt(fillRatesFrom('cash', b.totalCash).withoutVat)} ₽</span></div>
+      <div><span>Сумма с НДС</span><span>${fmt(fillRatesFrom('cash', b.totalCash).withVat)} ₽</span></div>
+    `:`<div class="hint">Задайте ₽/км и/или ₽/час — появится сумма</div>`}
   `;
 }
 function wirePerKmInputs(order){
   const apply=()=>{
-    const per=+((($('d-perkm')||{}).value||'').trim().replace(',','.'));
-    const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
-    const km=billableKm(order||{}, estRaw?+estRaw:null);
-    const t=amountsFromPerKmCash(per, km);
+    const d=draftTariffFromDom(order||{});
+    const b=calculateClientTariff(d, state.finance);
     updatePerKmPreview(order);
-    if(!t) return;
+    if(!b) return;
+    const t=fillRatesFrom('cash', b.totalCash);
     $('d-form').value='cash';
     $('d-cash').value=String(t.cash);
     $('d-novat').value=String(t.withoutVat);
     $('d-vat').value=String(t.withVat);
   };
-  $('d-perkm')&&($('d-perkm').oninput=apply);
-  $('d-estimate-km')&&($('d-estimate-km').oninput=apply);
+  ['d-perkm','d-perhour','d-estimate-km','d-estimate-hours','d-work-hours','d-empty-after'].forEach(id=>{
+    $(id)&&($(id).oninput=apply);
+  });
   apply();
 }
 function variableShare(driverPercent){ return driverPercent/100 + 0.10; }
@@ -415,8 +481,8 @@ function renderInput(){
   const err=state.error?`<div class="error">${esc(state.error)}</div>`:'';
   let html=err; const os=state.orderStep;
   if(os==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
-  else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='startAssignedOdometer'||os==='closeShiftParking'){
-    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closeShiftParking'?'Например, 277800':os==='closingOdometer'?'Например, 277720':'Например, 277690';
+  else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='startAssignedOdometer'||os==='closeShiftParking'||os==='closingEmptyAfter'){
+    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closeShiftParking'||os==='closingEmptyAfter'?'Например, 277800':os==='closingOdometer'?'Например, 277720':'Например, 277690';
     html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
   } else if(os==='dayNumber') html+=`<div class="hint">Номер заказа за день</div><div class="nums">${[1,2,3,4,5].map(n=>`<button data-day="${n}">${n}</button>`).join('')}</div>`;
   else if(os==='loading'||os==='unloading') html+=`<div class="row"><textarea id="text" rows="2" placeholder="Город, улица, дом, строение"></textarea><button id="text-ok">OK</button></div>`;
@@ -539,7 +605,14 @@ function submitNumber(){
   }
   if(state.orderStep==='fuelAmount'){
     const liters=+raw; if(!(liters>0)){state.error='Введите количество литров, например 40';renderInput();return;}
-    add('driver',`${liters} л`); finalizeClose(true, state.draft.fuelPrice, liters); return;
+    add('driver',`${liters} л`); askClosingEmptyAfter(true, state.draft.fuelPrice, liters); return;
+  }
+  if(state.orderStep==='closingEmptyAfter'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    const value=+digits; const end=state.draft.closeOdo;
+    if(end!=null && value<end){state.error=`Одометр не может быть меньше окончания заказа (${end})`;renderInput();return;}
+    state.draft.parkingAfterOdo=value; add('driver',String(value));
+    finalizeClose(!!state.draft.closeRefueled, state.draft.fuelPrice||null, state.draft.closeLiters||null); return;
   }
   if(state.step==='odometer'){
     const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
@@ -624,17 +697,26 @@ function acceptCloseShiftParking(value){
 function answerRefuel(yes){
   add('driver', yes?'Да':'Нет');
   if(yes){ add('bot','Укажите стоимость литра.'); state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); }
-  else finalizeClose(false,null,null);
+  else askClosingEmptyAfter(false,null,null);
+}
+function askClosingEmptyAfter(refueled, price, liters){
+  state.draft.closeRefueled=refueled; state.draft.fuelPrice=price; state.draft.closeLiters=liters;
+  add('bot','Укажите одометр на стоянке или у следующего заказа (пробег после выгрузки).');
+  state.orderStep='closingEmptyAfter'; state.error=''; upsertShift(); renderInput();
 }
 function finalizeClose(refueled,price,liters){
   const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
   const end=state.draft.closeOdo; const loaded=end-order.startOdometer;
   order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=new Date().toISOString();
   if(refueled){ order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters); }
-  applyPerKmCash(order);
-  if(state.shift) state.shift.lastOdometerPoint=end;
+  const park=state.draft.parkingAfterOdo;
+  if(park!=null && park>=end){
+    order.emptyKmAfter=Math.max(0, park-end);
+    if(state.shift) state.shift.lastOdometerPoint=park;
+  } else if(state.shift) state.shift.lastOdometerPoint=end;
+  applyClientTariff(order);
   upsertOrder(order);
-  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
+  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nДо стоянки / след. заказа: ${order.emptyKmAfter??0} км\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
@@ -875,10 +957,13 @@ function openDetail(id){
     <h3 style="margin:12px 0 0">Маршрут</h3>
     <div id="route-editor"></div>
     <label>Пробег до стоянки, км</label><input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
-    <h3 style="margin:12px 0 0">Ставка клиенту</h3>
-    <label>₽/км наличные</label><input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 110" />
-    ${o.loadedKm?`<div class="hint">Факт с грузом: ${fmt(o.loadedKm)} км — суммы пересчитаются от него</div>`
-      :`<label>Ориентир км (пока нет факта)</label><input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 800" />`}
+    <h3 style="margin:12px 0 0">Тариф клиенту</h3>
+    <div class="hint">Город ≤${state.finance.cityKmThreshold} км: мин ${state.finance.minWorkHours} ч + подача ${state.finance.podachaHours} ч. Если нулевой×₽/км > подачи — добавляем ₽/км нулевого.</div>
+    <label>₽/км наличные</label><input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 50" />
+    <label>₽/час работы</label><input id="d-perhour" inputmode="decimal" value="${o.ratePerHourWork??''}" placeholder="например 2000" />
+    <label>Ориентир км (цепочка)</label><input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 80" />
+    <label>Ориентир часов работы</label><input id="d-estimate-hours" inputmode="decimal" value="${o.estimateWorkHours??''}" placeholder="например 4" />
+    <label>Факт часов работы</label><input id="d-work-hours" inputmode="decimal" value="${o.workHours??''}" placeholder="после закрытия" />
     <div class="calc" id="perkm-preview"></div>
     <label>Форма оплаты (какая ставка в расчётах ЗП/прибыли)</label>
     <select id="d-form">
@@ -934,10 +1019,14 @@ function openDetail(id){
     order.emptyKmAfter=after?+after:null;
     const per=num('d-perkm');
     order.ratePerKmCash=(per!=null && per>0)?per:null;
+    const hour=num('d-perhour');
+    order.ratePerHourWork=(hour!=null && hour>0)?hour:null;
     const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
-    order.estimateKm=estRaw?+estRaw:order.estimateKm||null;
+    order.estimateKm=estRaw?+estRaw:null;
+    const eh=num('d-estimate-hours'); order.estimateWorkHours=(eh!=null&&eh>0)?eh:null;
+    const wh=num('d-work-hours'); order.workHours=(wh!=null&&wh>0)?wh:null;
     order.paymentForm=$('d-form').value;
-    if(!applyPerKmCash(order)){
+    if(!applyClientTariff(order)){
       const form=order.paymentForm;
       const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
       if(seed!=null && seed>0){
@@ -959,10 +1048,15 @@ function openCatalogs(){
   $('catalogs-form').innerHTML=`
     <button class="secondary" id="cat-back">Назад</button>
     <h2 style="margin:0">Справочники</h2>
-    <h3 style="margin:8px 0 0">Финансы</h3>
-    <label>Наценка к себестоимости, % (по умолчанию 15)</label>
-    <div class="row"><input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" /><button id="fin-save">OK</button></div>
-    <div class="hint">Рекомендуемая ставка = фикс / (1 − %ЗП − подушка 10% − наценка). Диапазон 0–80.</div>
+    <h3 style="margin:8px 0 0">Финансы / тариф</h3>
+    <label>Наценка к себестоимости, %</label><input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" />
+    <label>Порог города, км</label><input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" />
+    <label>Мин. часов работы (город)</label><input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" />
+    <label>Часов подачи</label><input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" />
+    <label>₽/час работы по умолчанию</label><input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" />
+    <label>₽/км нал по умолчанию</label><input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||''}" />
+    <button class="primary" id="fin-save">Сохранить тариф</button>
+    <div class="hint">Город ≤ порога: мин. часы + подача. Если нулевой×₽/км > подачи — добавляем ₽/км нулевого.</div>
     <h3 style="margin:8px 0 0">Авто (л/100 км)</h3>
     ${state.vehicles.map((v,i)=>`<label>${esc(v.plate)}</label><div class="row"><input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" /><button data-save-veh="${i}">OK</button></div>`).join('')}
     <h3 style="margin:8px 0 0">Водители (% от ставки)</h3>
@@ -972,11 +1066,13 @@ function openCatalogs(){
   show('admin-catalogs-screen');
   $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('fin-save').onclick=()=>{
-    let v=+(($('fin-markup').value||'').replace(',','.'));
-    if(Number.isNaN(v)) return;
-    v=Math.min(80, Math.max(0, v));
-    state.finance.markupPercent=v;
-    $('fin-markup').value=String(v);
+    let markup=+(($('fin-markup').value||'').replace(',','.')); if(Number.isNaN(markup)) markup=15;
+    state.finance.markupPercent=Math.min(80, Math.max(0, markup));
+    const city=+(($('fin-city').value||'').replace(/\D/g,'')); state.finance.cityKmThreshold=city>0?city:100;
+    let minW=+(($('fin-minwork').value||'').replace(',','.')); if(!(minW>=0)) minW=4; state.finance.minWorkHours=minW;
+    let pod=+(($('fin-podacha').value||'').replace(',','.')); if(!(pod>=0)) pod=1; state.finance.podachaHours=pod;
+    let ph=+(($('fin-perhour').value||'').replace(',','.')); state.finance.defaultRatePerHourWork=(ph>0)?ph:0;
+    let pk=+(($('fin-perkm').value||'').replace(',','.')); state.finance.defaultRatePerKmCash=(pk>0)?pk:0;
     persist();
     $('cat-ok').style.display='block';
   };
