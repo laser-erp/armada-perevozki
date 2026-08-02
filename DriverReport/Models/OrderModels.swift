@@ -86,6 +86,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var vehicleRent: Double?
     var driverPercent: Double
     var earnings: Double?
+    /// Смена закрыта при незакрытом заказе: машина осталась загружена, выгрузка на следующий день.
+    var staysLoadedOvernight: Bool?
 
     var routeText: String {
         let points = Self.normalizedRoutePoints(routePoints, loading: loadingAddress, unloading: unloadingAddress)
@@ -145,9 +147,11 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var isClosed: Bool { closedAt != nil }
     var isAssignedPending: Bool { !isClosed && startOdometer == nil }
     var isInProgress: Bool { !isClosed && startOdometer != nil }
+    var isCarryOverLoaded: Bool { isInProgress && (staysLoadedOvernight == true) }
 
     var statusText: String {
         if isClosed { return "Закрыт" }
+        if isCarryOverLoaded { return "В работе · до выгрузки" }
         if isInProgress { return "В работе" }
         return "Назначен"
     }
@@ -196,7 +200,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         salaryBonus: Double? = nil,
         vehicleRent: Double? = nil,
         driverPercent: Double = AppDefaults.driverPercent,
-        earnings: Double? = nil
+        earnings: Double? = nil,
+        staysLoadedOvernight: Bool? = nil
     ) {
         self.id = id
         self.sequentialNumber = sequentialNumber
@@ -240,6 +245,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.vehicleRent = vehicleRent
         self.driverPercent = driverPercent
         self.earnings = earnings
+        self.staysLoadedOvernight = staysLoadedOvernight
     }
 
     enum CodingKeys: String, CodingKey {
@@ -249,7 +255,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, freight
         case paymentForm, rateWithVat, rateWithoutVat, rateCash, ratePerKmCash, estimateKm
         case ratePerHourWork, estimateWorkHours, workHours
-        case salaryBonus, vehicleRent, driverPercent, earnings
+        case salaryBonus, vehicleRent, driverPercent, earnings, staysLoadedOvernight
     }
 
     init(from decoder: Decoder) throws {
@@ -302,6 +308,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         vehicleRent = try c.decodeIfPresent(Double.self, forKey: .vehicleRent)
         driverPercent = try c.decodeIfPresent(Double.self, forKey: .driverPercent) ?? AppDefaults.driverPercent
         earnings = try c.decodeIfPresent(Double.self, forKey: .earnings)
+        staysLoadedOvernight = try c.decodeIfPresent(Bool.self, forKey: .staysLoadedOvernight)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -342,6 +349,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encodeIfPresent(vehicleRent, forKey: .vehicleRent)
         try c.encode(driverPercent, forKey: .driverPercent)
         try c.encodeIfPresent(earnings, forKey: .earnings)
+        try c.encodeIfPresent(staysLoadedOvernight, forKey: .staysLoadedOvernight)
     }
 }
 
@@ -366,4 +374,5 @@ enum OrderFlowStep: String, Codable {
     case closingEmptyAfter
     case startAssignedOdometer
     case closeShiftParking
+    case closeShiftStaysLoaded
 }

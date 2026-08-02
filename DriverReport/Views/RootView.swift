@@ -191,7 +191,7 @@ struct DriverShellView: View {
                             DriverCabinetView(store: store)
                         }
                         NavigationLink("Заявки") {
-                            OrdersListView(store: store, adminMode: false)
+                            OrdersListView(store: store, adminMode: false, chatViewModel: chatHolder.viewModel)
                         }
                         NavigationLink("Смены") {
                             ShiftsListView(store: store)

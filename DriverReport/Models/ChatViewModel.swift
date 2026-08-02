@@ -443,7 +443,17 @@ final class ChatViewModel: ObservableObject {
     }
 
     func startCreateOrder() {
-        guard step == .done, activeShift != nil else { return }
+        if activeShift == nil, let open = store.openShift() {
+            resume(open)
+        }
+        guard activeShift != nil else {
+            numberError = "Сначала откройте смену"
+            return
+        }
+        guard step == .done else {
+            numberError = "Сначала завершите ЕТО"
+            return
+        }
         guard !hasOpenOrder else {
             numberError = "Сначала закройте текущий заказ"
             return
@@ -457,13 +467,32 @@ final class ChatViewModel: ObservableObject {
         persistMessages()
     }
 
-    func beginAssignedOrder(_ order: OrderRecord) {
-        guard step == .done, activeShift != nil else { return }
-        guard !hasOpenOrder else {
-            numberError = "Сначала закройте текущий заказ"
-            return
+    /// Возвращает текст ошибки или nil при успехе.
+    @discardableResult
+    func beginAssignedOrder(_ order: OrderRecord) -> String? {
+        if activeShift == nil, let open = store.openShift() {
+            resume(open)
         }
-        guard order.isAssignedPending else { return }
+        guard activeShift != nil else {
+            let msg = "Сначала откройте смену"
+            numberError = msg
+            return msg
+        }
+        guard step == .done else {
+            let msg = "Сначала завершите ЕТО"
+            numberError = msg
+            return msg
+        }
+        guard !hasOpenOrder else {
+            let msg = "Сначала закройте текущий заказ"
+            numberError = msg
+            return msg
+        }
+        guard order.isAssignedPending else {
+            let msg = "Заказ недоступен для старта"
+            numberError = msg
+            return msg
+        }
         draftAssignedOrderId = order.id
         append(.driver, "Начать заказ №\(order.sequentialNumber)")
         append(
@@ -480,6 +509,7 @@ final class ChatViewModel: ObservableObject {
         draftNumber = ""
         numberError = nil
         persistMessages()
+        return nil
     }
 
     private func acceptStartAssignedOdometer(_ value: Int) {
@@ -649,6 +679,17 @@ final class ChatViewModel: ObservableObject {
         persistMessages()
     }
 
+    func answerYesNo(_ yes: Bool) {
+        switch orderStep {
+        case .askRefuel:
+            answerRefuel(yes)
+        case .closeShiftStaysLoaded:
+            answerStaysLoadedOvernight(yes)
+        default:
+            break
+        }
+    }
+
     func answerRefuel(_ yes: Bool) {
         guard orderStep == .askRefuel else { return }
         append(.driver, yes ? "Да" : "Нет")
@@ -662,6 +703,25 @@ final class ChatViewModel: ObservableObject {
         } else {
             askClosingEmptyAfter(refueled: false, price: nil, liters: nil)
         }
+    }
+
+    private func answerStaysLoadedOvernight(_ yes: Bool) {
+        guard orderStep == .closeShiftStaysLoaded else { return }
+        append(.driver, yes ? "Да" : "Нет")
+        guard yes else {
+            append(.bot, "Сначала закройте заказ — либо подтвердите, что машина осталась загружена до завтра.")
+            orderStep = .idle
+            inputMode = .afterETO
+            numberError = "Сначала закройте текущий заказ"
+            persistMessages()
+            return
+        }
+        append(.bot, "Укажите показания одометра по возвращении на стоянку. Заказ останется открытым до выгрузки.")
+        orderStep = .closeShiftParking
+        inputMode = .number(placeholder: "Например, 277800")
+        draftNumber = ""
+        numberError = nil
+        persistMessages()
     }
 
     private func askClosingEmptyAfter(refueled: Bool, price: Double?, liters: Double?) {
@@ -720,6 +780,7 @@ final class ChatViewModel: ObservableObject {
         order.loadedKm = loaded
         order.emptyKmAfter = max(0, parkingOrNextOdometer - endOdo)
         order.refueled = refueled
+        order.staysLoadedOvernight = nil
         if refueled, let price, let liters {
             order.fuelPricePerLiter = price
             order.fuelLiters = liters
@@ -763,11 +824,22 @@ final class ChatViewModel: ObservableObject {
             numberError = "Сначала завершите ЕТО"
             return
         }
-        guard !hasOpenOrder else {
-            numberError = "Сначала закройте текущий заказ"
+        append(.driver, "Закрыть смену")
+        if let open = openOrder {
+            append(
+                .bot,
+                """
+                Есть незакрытый заказ №\(open.sequentialNumber).
+                Машина осталась загружена? Выгрузка на следующий день?
+                """
+            )
+            orderStep = .closeShiftStaysLoaded
+            inputMode = .yesNo(prompt: "Машина осталась загружена?")
+            draftNumber = ""
+            numberError = nil
+            persistMessages()
             return
         }
-        append(.driver, "Закрыть смену")
         append(.bot, "Укажите показания одометра по возвращении на стоянку.")
         orderStep = .closeShiftParking
         inputMode = .number(placeholder: "Например, 277800")
@@ -789,23 +861,41 @@ final class ChatViewModel: ObservableObject {
 
         append(.driver, "\(value)")
 
-        // Пробег до стоянки — по последнему закрытому заказу смены (только админу).
-        if let lastClosed = shift.orders
-            .filter({ $0.closedAt != nil && $0.endOdometer != nil })
-            .max(by: { ($0.closedAt ?? .distantPast) < ($1.closedAt ?? .distantPast) }),
-           let endOdo = lastClosed.endOdometer {
-            var order = lastClosed
-            order.emptyKmAfter = max(0, value - endOdo)
-            store.attachOrder(order, to: shift.id)
-            if let refreshed = store.allOrders().first(where: { $0.id == order.id }),
+        if var open = store.inProgressOrder() {
+            // Исключение: машина осталась загружена до завтра.
+            open.staysLoadedOvernight = true
+            store.attachOrder(open, to: shift.id)
+            if let refreshed = store.allOrders().first(where: { $0.id == open.id }),
                let idx = shift.orders.firstIndex(where: { $0.id == refreshed.id }) {
                 shift.orders[idx] = refreshed
-            } else if let idx = shift.orders.firstIndex(where: { $0.id == order.id }) {
-                shift.orders[idx] = order
+            } else if !shift.orders.contains(where: { $0.id == open.id }) {
+                shift.orders.append(open)
             }
+            append(
+                .bot,
+                """
+                Смена закрыта. Заказ №\(open.sequentialNumber) перенесён — машина загружена.
+                Завтра после ЕТО закройте заказ после выгрузки.
+                """
+            )
+        } else {
+            // Пробег до стоянки — по последнему закрытому заказу смены (только админу).
+            if let lastClosed = shift.orders
+                .filter({ $0.closedAt != nil && $0.endOdometer != nil })
+                .max(by: { ($0.closedAt ?? .distantPast) < ($1.closedAt ?? .distantPast) }),
+               let endOdo = lastClosed.endOdometer {
+                var order = lastClosed
+                order.emptyKmAfter = max(0, value - endOdo)
+                store.attachOrder(order, to: shift.id)
+                if let refreshed = store.allOrders().first(where: { $0.id == order.id }),
+                   let idx = shift.orders.firstIndex(where: { $0.id == refreshed.id }) {
+                    shift.orders[idx] = refreshed
+                } else if let idx = shift.orders.firstIndex(where: { $0.id == order.id }) {
+                    shift.orders[idx] = order
+                }
+            }
+            append(.bot, "Смена закрыта. Хорошего отдыха!")
         }
-
-        append(.bot, "Смена закрыта. Хорошего отдыха!")
 
         shift.parkingOdometer = value
         shift.lastOdometerPoint = value

@@ -201,6 +201,9 @@ struct OrdersListView: View {
     @ObservedObject var store: ShiftStore
     var adminMode: Bool = false
     var driverName: String = AppDefaults.driverName
+    var chatViewModel: ChatViewModel?
+    @Environment(\.dismiss) private var dismiss
+    @State private var startError: String?
 
     private var orders: [OrderRecord] {
         let all = store.allOrders()
@@ -258,6 +261,14 @@ struct OrdersListView: View {
                                 .foregroundStyle(order.isClosed ? .green : (order.isInProgress ? .orange : AppTheme.accent))
                         }
                         .listRowBackground(AppTheme.botBubble.opacity(0.55))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if !adminMode, order.isAssignedPending {
+                                Button("Начать заказ") {
+                                    startAssigned(order)
+                                }
+                                .tint(AppTheme.accent)
+                            }
+                        }
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -265,6 +276,26 @@ struct OrdersListView: View {
         }
         .navigationTitle("Заявки")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Нельзя начать заказ", isPresented: Binding(
+            get: { startError != nil },
+            set: { if !$0 { startError = nil } }
+        )) {
+            Button("OK", role: .cancel) { startError = nil }
+        } message: {
+            Text(startError ?? "")
+        }
+    }
+
+    private func startAssigned(_ order: OrderRecord) {
+        guard let chatViewModel else {
+            startError = "Сначала откройте смену и пройдите ЕТО"
+            return
+        }
+        if let err = chatViewModel.beginAssignedOrder(order) {
+            startError = err
+        } else {
+            dismiss()
+        }
     }
 
     private func formatMoney(_ value: Double) -> String {
