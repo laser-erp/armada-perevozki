@@ -57,10 +57,19 @@
     table.admin th{position:sticky;top:0;background:#1a1a1a;color:var(--accent);z-index:1}
     table.admin tr{cursor:pointer}
     table.admin tr:hover td{background:rgba(230,26,31,.12)}
-    .form-grid{display:flex;flex-direction:column;gap:8px;width:100%;max-width:420px;margin:0 auto;padding:16px 16px 32px;text-align:left;overflow:auto;-webkit-overflow-scrolling:touch}
+    .form-grid{display:flex;flex-direction:column;gap:8px;width:100%;max-width:520px;margin:0 auto;padding:16px 16px 40px;text-align:left}
     .form-grid label{font-size:.8rem;color:var(--muted)}
     .form-grid input,.form-grid select,.form-grid textarea{width:100%}
-    #admin-detail,#admin-create,#admin-catalogs-screen{overflow:auto}
+    /* Админ-формы: экран не сжимает контент — скролл внутри body */
+    #admin-detail,#admin-create,#admin-catalogs-screen{
+      overflow:hidden; min-height:0;
+    }
+    .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:520px;margin:0 auto}
+    .admin-form-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px}
+    .admin-form-actions{flex-shrink:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0));border-top:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.92);display:flex;flex-direction:column;gap:8px}
+    .admin-form-scroll h2{margin:0 0 4px;font-size:1.2rem}
+    .field-block{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .field-block:last-child{border-bottom:0}
     .calc{background:rgba(46,46,46,.9);border-radius:12px;padding:10px 12px;font-size:.9rem}
     .calc div{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
     .ok{color:#7dffa0;font-size:.85rem}
@@ -124,36 +133,59 @@
   </div>
 
   <div id="admin-create" class="screen">
-    <div class="form-grid">
-      <button id="create-back" class="secondary">Назад</button>
-      <h2 style="margin:0">Назначить заказ</h2>
-      <label>Номер за день</label>
-      <div class="nums" id="create-day"><button data-cday="1">1</button><button data-cday="2">2</button><button data-cday="3">3</button><button data-cday="4">4</button><button data-cday="5">5</button></div>
-      <label>Автомобиль</label>
-      <select id="create-plate"></select>
-      <label>Водитель</label>
-      <select id="create-driver"></select>
-      <label>Заказчик</label>
-      <input id="create-customer" list="customer-list" placeholder="Заказчик" />
-      <select id="create-customer-pick"><option value="">— выбрать сохранённого —</option></select>
-      <label>Адрес загрузки</label>
-      <textarea id="create-load" rows="2" placeholder="Адрес загрузки"></textarea>
-      <select id="create-load-pick"><option value="">— сохранённые загрузки —</option></select>
-      <label>Адрес выгрузки</label>
-      <textarea id="create-unload" rows="2" placeholder="Адрес выгрузки"></textarea>
-      <select id="create-unload-pick"><option value="">— сохранённые выгрузки —</option></select>
-      <datalist id="customer-list"></datalist>
-      <div class="error" id="create-error"></div>
-      <button class="primary" id="create-save">Назначить водителю</button>
+    <div class="admin-form-shell">
+      <div class="admin-form-scroll">
+        <button id="create-back" class="secondary">← Назад</button>
+        <h2>Назначить заказ</h2>
+        <div class="hint">Прокрутите вниз — кнопка «Назначить» всегда внизу экрана</div>
+        <div class="field-block">
+          <label>Номер за день</label>
+          <div class="nums" id="create-day"><button data-cday="1">1</button><button data-cday="2">2</button><button data-cday="3">3</button><button data-cday="4">4</button><button data-cday="5">5</button></div>
+        </div>
+        <div class="field-block">
+          <label>Автомобиль</label>
+          <select id="create-plate"></select>
+          <label>Водитель</label>
+          <select id="create-driver"></select>
+        </div>
+        <div class="field-block">
+          <label>Заказчик</label>
+          <input id="create-customer" list="customer-list" placeholder="Имя заказчика" />
+          <select id="create-customer-pick"><option value="">или выбрать сохранённого</option></select>
+          <datalist id="customer-list"></datalist>
+        </div>
+        <div class="field-block">
+          <label>Адрес загрузки</label>
+          <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
+          <select id="create-load-pick"><option value="">или из сохранённых</option></select>
+        </div>
+        <div class="field-block">
+          <label>Адрес выгрузки</label>
+          <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
+          <select id="create-unload-pick"><option value="">или из сохранённых</option></select>
+        </div>
+      </div>
+      <div class="admin-form-actions">
+        <div class="error" id="create-error"></div>
+        <button class="primary" id="create-save">Назначить водителю</button>
+      </div>
     </div>
   </div>
 
   <div id="admin-detail" class="screen">
-    <div class="form-grid" id="detail-form"></div>
+    <div class="admin-form-shell">
+      <div class="admin-form-scroll form-grid" id="detail-form" style="max-width:none;padding:0;margin:0;width:100%"></div>
+      <div class="admin-form-actions" id="detail-actions" style="display:none">
+        <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
+        <button class="primary" id="detail-save">Сохранить</button>
+      </div>
+    </div>
   </div>
 
   <div id="admin-catalogs-screen" class="screen">
-    <div class="form-grid" id="catalogs-form"></div>
+    <div class="admin-form-shell">
+      <div class="admin-form-scroll form-grid" id="catalogs-form" style="max-width:none;padding:0;margin:0;width:100%"></div>
+    </div>
   </div>
 
   <div id="driver" class="screen">
