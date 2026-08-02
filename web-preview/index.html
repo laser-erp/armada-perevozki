@@ -12,8 +12,13 @@
     *{box-sizing:border-box} html,body{margin:0;height:100%;font-family:"Segoe UI","Trebuchet MS",sans-serif;background:#000;color:var(--text)}
     .phone{max-width:430px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1));position:relative}
     .phone.wide{max-width:100%}
-    .screen{position:absolute;inset:0;display:none;flex-direction:column}
+    .screen{position:absolute;inset:0;display:none;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1))}
     .screen.show{display:flex}
+    /* Полноэкранные панели внутри водителя — поверх чата */
+    .driver-panel{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1))}
+    .driver-panel.show{display:flex}
+    .driver-panel header{background:rgba(0,0,0,.92);position:sticky;top:0;z-index:2}
+    .driver-panel .panel-body{background:transparent;flex:1;min-height:0}
     .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center}
     .logo{width:120px;height:auto}
     .brand{font-size:2rem;font-weight:800;letter-spacing:.25em}
@@ -145,16 +150,16 @@
     </header>
     <div id="chat"></div>
     <div id="input-bar"></div>
-    <div id="cabinet-panel" class="screen">
-      <header><h1>Личный кабинет</h1><button class="back-driver">Назад</button></header>
+    <div id="cabinet-panel" class="driver-panel">
+      <header><button type="button" class="back-driver">← Назад</button><h1>Личный кабинет</h1><span></span></header>
       <div class="panel-body" id="cabinet-list"></div>
     </div>
-    <div id="orders-panel" class="screen">
-      <header><h1>Заявки</h1><button class="back-driver">Назад</button></header>
+    <div id="orders-panel" class="driver-panel">
+      <header><button type="button" class="back-driver">← Назад</button><h1>Заявки</h1><span></span></header>
       <div class="panel-body" id="orders-list"></div>
     </div>
-    <div id="shifts-panel" class="screen">
-      <header><h1>Смены</h1><button class="back-driver">Назад</button></header>
+    <div id="shifts-panel" class="driver-panel">
+      <header><button type="button" class="back-driver">← Назад</button><h1>Смены</h1><span></span></header>
       <div class="panel-body" id="shifts-list"></div>
     </div>
   </div>
@@ -500,7 +505,9 @@ function showCabinet(){
   $('cabinet-list').innerHTML=html;
 }
 function hideDriverPanels(){
-  ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>$(id).classList.remove('show'));
+  ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
+    const el=$(id); if(el) el.classList.remove('show');
+  });
 }
 function showOrders(){
   hideDriverPanels();
@@ -643,7 +650,9 @@ $('driver-exit').onclick=()=>show('roles');
 $('btn-cabinet').onclick=showCabinet;
 $('btn-orders').onclick=showOrders;
 $('btn-shifts').onclick=showShifts;
-document.querySelectorAll('.back-driver').forEach(b=>b.onclick=hideDriverPanels);
+document.querySelectorAll('.back-driver').forEach(b=>{
+  b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
+});
 document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{ state.adminFilter=b.dataset.filter; document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b)); renderAdmin(); });
 bindAdminCreate();
 </script>
