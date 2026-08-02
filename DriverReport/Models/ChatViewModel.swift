@@ -715,7 +715,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private static let defaultRemainingFuelLiters: Double = 80
+    private static let defaultFuelPricePerLiter: Double = 80
 
     private func lastFuelPricePerLiter(plate: String?, except orderId: UUID?) -> Double? {
         let candidates = store.allOrders()
@@ -735,6 +735,10 @@ final class ChatViewModel: ObservableObject {
         return candidates.first?.fuelPricePerLiter
     }
 
+    private func resolveFuelPriceWithoutRefuel(plate: String?, except orderId: UUID?) -> Double {
+        lastFuelPricePerLiter(plate: plate, except: orderId) ?? Self.defaultFuelPricePerLiter
+    }
+
     func answerRefuel(_ yes: Bool) {
         guard orderStep == .askRefuel else { return }
         append(.driver, yes ? "Да" : "Нет")
@@ -748,22 +752,13 @@ final class ChatViewModel: ObservableObject {
         } else {
             let order = openOrder
             let prev = lastFuelPricePerLiter(plate: order?.vehiclePlate, except: order?.id)
-            if let prev {
-                append(
-                    .bot,
-                    "Заправки не было — остаток топлива \(Int(Self.defaultRemainingFuelLiters)) л, цена литра с прошлой заправки: \(formatDecimal(prev)) ₽/л."
-                )
+            let price = prev ?? Self.defaultFuelPricePerLiter
+            if prev != nil {
+                append(.bot, "Заправки не было — цена литра с прошлой заправки: \(formatDecimal(price)) ₽/л.")
             } else {
-                append(
-                    .bot,
-                    "Заправки не было — в заказ записан остаток \(Int(Self.defaultRemainingFuelLiters)) л. Цены литра ещё не было — админ может указать позже."
-                )
+                append(.bot, "Заправки не было — подставлена цена по умолчанию: \(formatDecimal(price)) ₽/л.")
             }
-            askClosingEmptyAfter(
-                refueled: false,
-                price: prev,
-                liters: Self.defaultRemainingFuelLiters
-            )
+            askClosingEmptyAfter(refueled: false, price: price, liters: nil)
         }
     }
 
@@ -848,11 +843,11 @@ final class ChatViewModel: ObservableObject {
             order.fuelLiters = liters
             order.fuelTotalCost = (price * liters * 100).rounded() / 100
         } else {
-            // Без заправки: остаток 80 л + цена с прошлой заправки (для расчёта ГСМ)
-            order.fuelLiters = (liters ?? 0) > 0 ? liters : Self.defaultRemainingFuelLiters
+            // Без заправки: ₽/л с прошлой заправки, иначе 80 ₽/л (для расчёта ГСМ)
+            order.fuelLiters = nil
             order.fuelPricePerLiter = (price ?? 0) > 0
                 ? price
-                : lastFuelPricePerLiter(plate: order.vehiclePlate, except: order.id)
+                : resolveFuelPriceWithoutRefuel(plate: order.vehiclePlate, except: order.id)
             order.fuelTotalCost = nil
         }
         order.closedAt = Date()
@@ -860,13 +855,8 @@ final class ChatViewModel: ObservableObject {
         store.attachOrder(order, to: shift.id)
 
         var fuelNote = ""
-        if !refueled {
-            let litersText = order.fuelLiters.map { formatDecimal($0) } ?? "\(Int(Self.defaultRemainingFuelLiters))"
-            if let price = order.fuelPricePerLiter {
-                fuelNote = "\nТопливо: остаток \(litersText) л, \(formatDecimal(price)) ₽/л (с прошлой заправки)"
-            } else {
-                fuelNote = "\nТопливо: остаток \(litersText) л"
-            }
+        if !refueled, let price = order.fuelPricePerLiter {
+            fuelNote = "\nТопливо: \(formatDecimal(price)) ₽/л (без заправки)"
         }
         append(
             .bot,

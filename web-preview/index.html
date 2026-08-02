@@ -239,7 +239,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-02-fuel80";
+const APP_BUILD="2026-08-02-fuel80rub";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 console.info("АРМАДА build", APP_BUILD);
@@ -971,7 +971,7 @@ function answerYesNo(yes){
   }
   answerRefuel(yes);
 }
-const DEFAULT_REMAINING_FUEL_LITERS=80;
+const DEFAULT_FUEL_PRICE_PER_LITER=80;
 function lastFuelPricePerLiter(plate, exceptId){
   const scored=allOrders()
     .filter(o=>o.id!==exceptId && o.fuelPricePerLiter!=null && +o.fuelPricePerLiter>0)
@@ -983,17 +983,21 @@ function lastFuelPricePerLiter(plate, exceptId){
     .sort((a,b)=> (b.samePlate-a.samePlate) || (b.t-a.t));
   return scored.length?+scored[0].o.fuelPricePerLiter:null;
 }
+function resolveFuelPriceWithoutRefuel(plate, exceptId){
+  return lastFuelPricePerLiter(plate, exceptId) ?? DEFAULT_FUEL_PRICE_PER_LITER;
+}
 function answerRefuel(yes){
   add('driver', yes?'Да':'Нет');
   if(yes){ add('bot','Укажите стоимость литра.'); state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); return; }
   const order=openOrder();
   const prev=lastFuelPricePerLiter(order&&order.vehiclePlate, order&&order.id);
+  const price=prev ?? DEFAULT_FUEL_PRICE_PER_LITER;
   if(prev!=null){
-    add('bot',`Заправки не было — остаток топлива ${DEFAULT_REMAINING_FUEL_LITERS} л, цена литра с прошлой заправки: ${fmt(prev)} ₽/л.`);
+    add('bot',`Заправки не было — цена литра с прошлой заправки: ${fmt(price)} ₽/л.`);
   } else {
-    add('bot',`Заправки не было — в заказ записан остаток ${DEFAULT_REMAINING_FUEL_LITERS} л. Цены литра ещё не было — админ может указать позже.`);
+    add('bot',`Заправки не было — подставлена цена по умолчанию: ${fmt(price)} ₽/л.`);
   }
-  askClosingEmptyAfter(false, prev, DEFAULT_REMAINING_FUEL_LITERS);
+  askClosingEmptyAfter(false, price, null);
 }
 function askClosingEmptyAfter(refueled, price, liters){
   state.draft.closeRefueled=refueled; state.draft.fuelPrice=price; state.draft.closeLiters=liters;
@@ -1008,9 +1012,9 @@ function finalizeClose(refueled,price,liters){
   if(refueled){
     order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters);
   } else {
-    // Без заправки: остаток 80 л + цена с прошлой заправки (для расчёта ГСМ)
-    order.fuelLiters=(liters!=null && liters>0)?liters:DEFAULT_REMAINING_FUEL_LITERS;
-    order.fuelPricePerLiter=(price!=null && price>0)?price:lastFuelPricePerLiter(order.vehiclePlate, order.id);
+    // Без заправки: ₽/л с прошлой заправки, иначе 80 ₽/л (для расчёта ГСМ)
+    order.fuelLiters=null;
+    order.fuelPricePerLiter=(price!=null && price>0)?price:resolveFuelPriceWithoutRefuel(order.vehiclePlate, order.id);
     order.fuelTotalCost=null;
   }
   const park=state.draft.parkingAfterOdo;
@@ -1021,8 +1025,8 @@ function finalizeClose(refueled,price,liters){
   applyClientTariff(order);
   upsertOrder(order);
   const fuelNote=!refueled && order.fuelPricePerLiter!=null
-    ? `\nТопливо: остаток ${order.fuelLiters} л, ${fmt(order.fuelPricePerLiter)} ₽/л (с прошлой заправки)`
-    : (!refueled ? `\nТопливо: остаток ${order.fuelLiters||DEFAULT_REMAINING_FUEL_LITERS} л` : '');
+    ? `\nТопливо: ${fmt(order.fuelPricePerLiter)} ₽/л (без заправки)`
+    : '';
   add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nДо стоянки / след. заказа: ${order.emptyKmAfter??0} км${fuelNote}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
