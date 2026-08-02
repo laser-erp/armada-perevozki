@@ -37,6 +37,11 @@ struct AdminHomeView: View {
                     .pickerStyle(.segmented)
                     .padding(12)
 
+                    Text("Нажмите строку заявки → поля ставок и финансов")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .padding(.horizontal, 12)
+
                     if filtered.isEmpty {
                         Spacer()
                         Text("Нет заявок")
