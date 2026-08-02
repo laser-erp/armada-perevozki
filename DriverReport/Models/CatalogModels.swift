@@ -341,12 +341,20 @@ enum OrderFinance {
         Double(km) * consumptionPer100 / 100.0
     }
 
+    /// Ставка для ЗП / подушки / прибыли — всегда наличные
+    /// (в «с НДС» заложен НДС 22%, в «без НДС» — 8% относительно нал).
     static func selectedRate(_ order: OrderRecord) -> Double? {
-        guard let form = order.paymentForm else { return order.freight }
+        if let cash = order.rateCash { return cash }
+        return order.freight
+    }
+
+    /// Ставка по форме оплаты клиента (для документов / отображения).
+    static func clientRate(_ order: OrderRecord) -> Double? {
+        guard let form = order.paymentForm else { return selectedRate(order) }
         switch form {
-        case .withVat: return order.rateWithVat
-        case .withoutVat: return order.rateWithoutVat
-        case .cash: return order.rateCash
+        case .withVat: return order.rateWithVat ?? selectedRate(order)
+        case .withoutVat: return order.rateWithoutVat ?? selectedRate(order)
+        case .cash: return order.rateCash ?? selectedRate(order)
         }
     }
 

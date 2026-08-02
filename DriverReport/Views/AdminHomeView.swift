@@ -375,7 +375,10 @@ struct AdminOrderDetailView: View {
                             row("Сумма без НДС", "\(format(preview.withoutVat)) ₽")
                             row("Сумма с НДС", "\(format(preview.withVat)) ₽")
                         }
-                        Picker("Форма (какая ставка в расчётах ЗП)", selection: $paymentForm) {
+                        Text("ЗП, подушка и прибыль считаются всегда от ставки наличные.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                        Picker("Форма для клиента (документы)", selection: $paymentForm) {
                             ForEach(PaymentForm.allCases) { Text($0.rawValue).tag($0) }
                         }
                         TextField("Ставка с НДС", text: $rateWithVat)

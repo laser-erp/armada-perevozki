@@ -271,11 +271,17 @@ function kmParkingToEnd(o){
   if(o.emptyKmBefore!=null || o.loadedKm!=null) return (o.emptyKmBefore||0)+(o.loadedKm||0);
   return null;
 }
+/** Ставка для ЗП / подушки / прибыли — всегда наличные */
 function selectedRate(o){
-  if(o.paymentForm==='withVat') return o.rateWithVat??null;
-  if(o.paymentForm==='withoutVat') return o.rateWithoutVat??null;
-  if(o.paymentForm==='cash') return o.rateCash??null;
+  if(o.rateCash!=null) return o.rateCash;
   return o.freight??null;
+}
+/** Ставка по форме клиента (документы) */
+function clientRate(o){
+  if(o.paymentForm==='withVat') return o.rateWithVat??selectedRate(o);
+  if(o.paymentForm==='withoutVat') return o.rateWithoutVat??selectedRate(o);
+  if(o.paymentForm==='cash') return o.rateCash??selectedRate(o);
+  return selectedRate(o);
 }
 const VAT_MARKUP=0.22;   // с НДС = без НДС + 22%
 const CASH_DISCOUNT=0.08; // нал = без НДС − 8%
@@ -835,7 +841,7 @@ function renderAdmin(){
       <p>${esc(routeText(o))}</p>
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
       ${hasRate
-        ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Ставка: ${fmt(selectedRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
+        ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
         : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
       <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
     </div>`;
@@ -965,7 +971,8 @@ function openDetail(id){
     <label>Ориентир часов работы</label><input id="d-estimate-hours" inputmode="decimal" value="${o.estimateWorkHours??''}" placeholder="например 4" />
     <label>Факт часов работы</label><input id="d-work-hours" inputmode="decimal" value="${o.workHours??''}" placeholder="после закрытия" />
     <div class="calc" id="perkm-preview"></div>
-    <label>Форма оплаты (какая ставка в расчётах ЗП/прибыли)</label>
+    <div class="hint">ЗП, подушка и прибыль всегда от ставки наличные. С НДС = без НДС +22%.</div>
+    <label>Форма для клиента (документы)</label>
     <select id="d-form">
       <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
       <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
