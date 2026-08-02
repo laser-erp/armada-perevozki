@@ -466,6 +466,19 @@ final class ChatViewModel: ObservableObject {
         if activeShift == nil, let open = store.openShift() {
             resume(open)
         }
+        // Если UI уже после ЕТО — не блокируем старт заказа.
+        if step == .done {
+            if var shift = activeShift ?? store.openShift() {
+                if shift.completedAt == nil {
+                    shift.completedAt = Date()
+                    activeShift = shift
+                    store.upsert(shift)
+                }
+            } else {
+                return "Сначала откройте смену"
+            }
+            return nil
+        }
         guard var shift = activeShift ?? store.openShift() else {
             return "Сначала откройте смену"
         }
