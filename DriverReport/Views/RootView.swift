@@ -186,7 +186,10 @@ struct DriverShellView: View {
                         .foregroundStyle(AppTheme.accent)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        NavigationLink("Кабинет") {
+                            DriverCabinetView(store: store)
+                        }
                         NavigationLink("Заявки") {
                             OrdersListView(store: store, adminMode: false)
                         }

@@ -61,6 +61,142 @@ struct ShiftsListView: View {
     }()
 }
 
+struct DriverCabinetView: View {
+    @ObservedObject var store: ShiftStore
+    var driverName: String = AppDefaults.driverName
+
+    private var myOrders: [OrderRecord] {
+        store.allOrders().filter { $0.driverName == driverName }
+    }
+
+    /// Заказы с начисленной ЗП (админ ввёл ставку).
+    private var paidOrders: [OrderRecord] {
+        myOrders
+            .filter { effectivePay(for: $0) != nil }
+            .sorted { earningsDate($0) > earningsDate($1) }
+    }
+
+    private var pendingOrders: [OrderRecord] {
+        myOrders.filter { $0.isClosed && effectivePay(for: $0) == nil }
+            .sorted { ($0.closedAt ?? $0.createdAt) > ($1.closedAt ?? $1.createdAt) }
+    }
+
+    private var totalEarned: Double {
+        paidOrders.compactMap { effectivePay(for: $0) }.reduce(0, +)
+    }
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [AppTheme.canvasTop, AppTheme.canvasBottom],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(driverName)
+                            .font(.system(.headline, design: .rounded))
+                        Text("Заработано")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                        Text("\(formatMoney(totalEarned)) ₽")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.accent)
+                        Text("По \(paidOrders.count) заказам с расчётом")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listRowBackground(AppTheme.botBubble.opacity(0.75))
+
+                if paidOrders.isEmpty && pendingOrders.isEmpty {
+                    Section {
+                        Text("Пока нет начислений. После закрытия заказа и расчёта администратором суммы появятся здесь.")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+                    .listRowBackground(AppTheme.botBubble.opacity(0.55))
+                }
+
+                if !paidOrders.isEmpty {
+                    Section("Начисления") {
+                        ForEach(paidOrders) { order in
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(Self.dayFormatter.string(from: earningsDate(order)))
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(AppTheme.textMuted)
+                                    Text("Заказ №\(order.sequentialNumber)")
+                                        .font(.system(.headline, design: .rounded))
+                                    Text("День №\(order.dayNumber) · \(order.vehiclePlate)")
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(AppTheme.textMuted)
+                                    Text(order.routeText)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Spacer(minLength: 8)
+                                Text("\(formatMoney(effectivePay(for: order) ?? 0)) ₽")
+                                    .font(.system(.headline, design: .rounded))
+                                    .foregroundStyle(AppTheme.accent)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .listRowBackground(AppTheme.botBubble.opacity(0.55))
+                }
+
+                if !pendingOrders.isEmpty {
+                    Section("Ожидают расчёта") {
+                        ForEach(pendingOrders) { order in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(Self.dayFormatter.string(from: order.closedAt ?? order.createdAt))
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(AppTheme.textMuted)
+                                Text("Заказ №\(order.sequentialNumber) · день \(order.dayNumber)")
+                                    .font(.system(.body, design: .rounded))
+                                Text("ЗП ещё не начислена")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(AppTheme.textMuted)
+                            }
+                        }
+                    }
+                    .listRowBackground(AppTheme.botBubble.opacity(0.45))
+                }
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .navigationTitle("Личный кабинет")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func effectivePay(for order: OrderRecord) -> Double? {
+        if let e = order.earnings { return e }
+        return store.metrics(for: order).driverPay
+    }
+
+    private func earningsDate(_ order: OrderRecord) -> Date {
+        order.closedAt ?? order.createdAt
+    }
+
+    private func formatMoney(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "dd.MM.yyyy"
+        return f
+    }()
+}
+
 struct OrdersListView: View {
     @ObservedObject var store: ShiftStore
     var adminMode: Bool = false
@@ -70,10 +206,6 @@ struct OrdersListView: View {
         let all = store.allOrders()
         if adminMode { return all }
         return all.filter { $0.driverName == driverName }
-    }
-
-    private var earningsTotal: Double {
-        orders.compactMap(\.earnings).reduce(0, +)
     }
 
     var body: some View {
@@ -91,23 +223,6 @@ struct OrdersListView: View {
                     .foregroundStyle(AppTheme.textMuted)
             } else {
                 List {
-                    if !adminMode {
-                        Section {
-                            HStack {
-                                Text("Моя ЗП (посчитано)")
-                                Spacer()
-                                Text(formatMoney(earningsTotal) + " ₽")
-                                    .foregroundStyle(AppTheme.accent)
-                                    .fontWeight(.bold)
-                            }
-                            .font(.system(.body, design: .rounded))
-                            Text("Сумма по заказам, где администратор уже ввёл ставку.")
-                                .font(.system(.caption2, design: .rounded))
-                                .foregroundStyle(AppTheme.textMuted)
-                        }
-                        .listRowBackground(AppTheme.botBubble.opacity(0.7))
-                    }
-
                     ForEach(orders) { order in
                         VStack(alignment: .leading, spacing: 6) {
                             Text("№\(order.sequentialNumber) · за день \(order.dayNumber)")
@@ -129,10 +244,14 @@ struct OrdersListView: View {
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(AppTheme.accent)
                                 }
-                            } else {
-                                Text(driverPayText(for: order))
+                            } else if let pay = order.earnings ?? store.metrics(for: order).driverPay {
+                                Text("ЗП: \(formatMoney(pay)) ₽")
                                     .font(.system(.subheadline, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(order.earnings != nil ? AppTheme.accent : AppTheme.textMuted)
+                                    .foregroundStyle(AppTheme.accent)
+                            } else if order.isClosed {
+                                Text("ЗП: ожидает расчёта")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(AppTheme.textMuted)
                             }
                             Text(order.statusText)
                                 .font(.system(.caption, design: .rounded))
@@ -146,16 +265,6 @@ struct OrdersListView: View {
         }
         .navigationTitle("Заявки")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func driverPayText(for order: OrderRecord) -> String {
-        if let pay = order.earnings {
-            return "ЗП: \(formatMoney(pay)) ₽"
-        }
-        if order.isClosed {
-            return "ЗП: ожидает расчёта администратора"
-        }
-        return "ЗП: —"
     }
 
     private func formatMoney(_ value: Double) -> String {

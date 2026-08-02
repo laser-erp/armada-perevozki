@@ -138,12 +138,17 @@
       <button id="driver-exit">Выход</button>
       <h1>Водитель</h1>
       <div>
+        <button id="btn-cabinet">Кабинет</button>
         <button id="btn-orders">Заявки</button>
         <button id="btn-shifts">Смены</button>
       </div>
     </header>
     <div id="chat"></div>
     <div id="input-bar"></div>
+    <div id="cabinet-panel" class="screen">
+      <header><h1>Личный кабинет</h1><button class="back-driver">Назад</button></header>
+      <div class="panel-body" id="cabinet-list"></div>
+    </div>
     <div id="orders-panel" class="screen">
       <header><h1>Заявки</h1><button class="back-driver">Назад</button></header>
       <div class="panel-body" id="orders-list"></div>
@@ -451,24 +456,63 @@ function resetChat(){
   state.step='idle'; state.orderStep='idle'; state.shift=null; state.draft={}; state.error=''; state.light={}; state.messages=[];
   add('bot','Здравствуйте! Чтобы начать работу, откройте смену. Затем пройдём ежедневный технический осмотр (ЕТО).');
 }
+function effectivePay(o){ return o.earnings??metrics(o).driverPay??null; }
+function payDate(o){ return o.closedAt||o.createdAt; }
+function dayOnly(d){ return new Date(d).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'}); }
 function driverPayText(o){
-  const m=metrics(o);
-  const pay=o.earnings??m.driverPay;
+  const pay=effectivePay(o);
   if(pay!=null) return `ЗП: ${fmt(pay)} ₽`;
   if(o.closedAt) return 'ЗП: ожидает расчёта администратора';
   return 'ЗП: —';
 }
+function showCabinet(){
+  hideDriverPanels();
+  $('cabinet-panel').classList.add('show');
+  const mine=allOrders().filter(o=>o.driverName===DRIVER);
+  const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
+  const pending=mine.filter(o=>o.closedAt && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
+  const total=paid.reduce((s,o)=>s+(effectivePay(o)||0),0);
+  let html=`<div class="card"><h3>${esc(DRIVER)}</h3><p>Заработано</p>
+    <p style="color:var(--accent);font-size:1.8rem;font-weight:800;margin:6px 0">${fmt(total)} ₽</p>
+    <p>По ${paid.length} заказам с расчётом</p></div>`;
+  if(!paid.length && !pending.length){
+    html+=`<div class="empty">Пока нет начислений. После закрытия заказа и расчёта администратором суммы появятся здесь.</div>`;
+  } else {
+    if(paid.length){
+      html+=`<div class="hint" style="margin-top:8px">Начисления</div>`;
+      html+=paid.map(o=>`<div class="card">
+        <p>${esc(dayOnly(payDate(o)))}</p>
+        <h3>Заказ №${o.sequentialNumber}</h3>
+        <p>День №${o.dayNumber} · ${esc(o.vehiclePlate)}</p>
+        <p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p>
+        <p style="color:var(--accent);font-weight:800;font-size:1.15rem;margin-top:6px">${fmt(effectivePay(o))} ₽</p>
+      </div>`).join('');
+    }
+    if(pending.length){
+      html+=`<div class="hint" style="margin-top:8px">Ожидают расчёта</div>`;
+      html+=pending.map(o=>`<div class="card">
+        <p>${esc(dayOnly(payDate(o)))}</p>
+        <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber}</h3>
+        <p>ЗП ещё не начислена</p>
+      </div>`).join('');
+    }
+  }
+  $('cabinet-list').innerHTML=html;
+}
+function hideDriverPanels(){
+  ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>$(id).classList.remove('show'));
+}
 function showOrders(){
+  hideDriverPanels();
   $('orders-panel').classList.add('show');
   const orders=allOrders().filter(o=>o.driverName===DRIVER);
-  if(!orders.length){ $('orders-list').innerHTML=`<div class="empty">Пока нет заявок</div>`; return; }
-  const total=orders.reduce((s,o)=>{ const p=o.earnings??metrics(o).driverPay; return s+(p||0); },0);
-  const head=`<div class="card"><h3>Моя ЗП (посчитано)</h3><p style="color:var(--accent);font-size:1.2rem;font-weight:800;margin-top:6px">${fmt(total)} ₽</p><p>Сумма по заказам, где администратор уже ввёл ставку.</p></div>`;
-  $('orders-list').innerHTML = head + orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
+  $('orders-list').innerHTML = !orders.length ? `<div class="empty">Пока нет заявок</div>` :
+    orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
       <p>${esc(dateTime(o.createdAt))}</p><p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p><p>${esc(o.vehiclePlate)}</p>
       <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(driverPayText(o))}</p></div>`).join('');
 }
 function showShifts(){
+  hideDriverPanels();
   $('shifts-panel').classList.add('show');
   $('shifts-list').innerHTML = !state.shifts.length ? `<div class="empty">Пока нет смен</div>` :
     state.shifts.map(s=>{
@@ -596,9 +640,10 @@ $('pin-ok').onclick=()=>{ if(($('pin-input').value||'').trim()===ADMIN_PIN){ sho
 $('admin-exit').onclick=()=>show('roles');
 $('admin-catalogs').onclick=openCatalogs;
 $('driver-exit').onclick=()=>show('roles');
+$('btn-cabinet').onclick=showCabinet;
 $('btn-orders').onclick=showOrders;
 $('btn-shifts').onclick=showShifts;
-document.querySelectorAll('.back-driver').forEach(b=>b.onclick=()=>{ $('orders-panel').classList.remove('show'); $('shifts-panel').classList.remove('show'); });
+document.querySelectorAll('.back-driver').forEach(b=>b.onclick=hideDriverPanels);
 document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{ state.adminFilter=b.dataset.filter; document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b)); renderAdmin(); });
 bindAdminCreate();
 </script>
