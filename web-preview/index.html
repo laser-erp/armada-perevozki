@@ -220,7 +220,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-02-eto3";
+const APP_BUILD="2026-08-02-formscroll2";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 console.info("АРМАДА build", APP_BUILD);
@@ -1363,7 +1363,9 @@ function openDetail(id){
     </div>
   `;
   show('admin-detail');
-  $('admin-detail').scrollTop=0;
+  const detailScroll=$('detail-form'); if(detailScroll) detailScroll.scrollTop=0;
+  const detailActions=$('detail-actions'); if(detailActions) detailActions.style.display='flex';
+  const detailOk=$('detail-ok'); if(detailOk) detailOk.style.display='none';
   renderRouteEditor();
   wirePerKmInputs(o);
   wireRateAutoFill(o);
@@ -1374,7 +1376,7 @@ function openDetail(id){
     }
   });
   $('d-customer')&&($('d-customer').oninput=()=>renderRouteEditor());
-  $('detail-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  $('detail-back').onclick=()=>{ if(detailActions) detailActions.style.display='none'; show('admin'); renderAdmin(); };
   $('detail-save').onclick=()=>{
     const order=state.orders.find(x=>x.id===id); if(!order) return;
     const cleaned=readPointsFromDom().filter(p=>p.address);
