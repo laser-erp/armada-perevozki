@@ -340,10 +340,37 @@ function statusText(o){
   if(o.startOdometer!=null) return 'В работе';
   return 'Назначен';
 }
-function canStartAssignedMessage(){
+function syncOpenShiftRuntime(){
   const shift=findOpenShift();
+  if(!shift) return null;
+  // Живой объект смены может быть актуальнее клона в state.shifts
+  if(state.shift && state.shift.id===shift.id){
+    const live=state.shift;
+    if(live.completedAt && !shift.completedAt) shift.completedAt=live.completedAt;
+    if(live.oil && !shift.oil) shift.oil=live.oil;
+    if(live.engineOilLevel && !shift.engineOilLevel) shift.engineOilLevel=live.engineOilLevel;
+    if(live.gur && !shift.gur) shift.gur=live.gur;
+    if(live.coolant && !shift.coolant) shift.coolant=live.coolant;
+    if(live.vehiclePlate && !shift.vehiclePlate) shift.vehiclePlate=live.vehiclePlate;
+    if(live.odometer!=null && shift.odometer==null) shift.odometer=live.odometer;
+    if(live.fuelLiters!=null && shift.fuelLiters==null) shift.fuelLiters=live.fuelLiters;
+    if(live.lastOdometerPoint!=null) shift.lastOdometerPoint=live.lastOdometerPoint;
+    if(live.light) shift.light=live.light;
+  } else {
+    state.shift=shift;
+  }
+  if(isEtoDone(state.shift) || isEtoDone(shift)){
+    state.step='done';
+    if(!state.shift.completedAt) state.shift.completedAt=shift.completedAt||new Date().toISOString();
+    if(!shift.completedAt) shift.completedAt=state.shift.completedAt;
+  }
+  return state.shift;
+}
+function canStartAssignedMessage(){
+  const shift=syncOpenShiftRuntime();
   if(!shift) return 'Сначала откройте смену';
-  if(!isEtoDone(shift) || state.step!=='done') return 'Сначала завершите ЕТО';
+  if(!isEtoDone(shift) && !isEtoDone(state.shift||{})) return 'Сначала завершите ЕТО';
+  state.step='done';
   if(hasOpenOrder()) return 'Сначала закройте текущий заказ';
   return null;
 }
@@ -768,19 +795,26 @@ function acceptStartAssigned(value){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
 }
 function startCreateOrder(){
-  if(!findOpenShift()){state.error='Сначала откройте смену';renderInput();return;}
-  if(state.step!=='done'||!state.shift){state.error='Сначала завершите ЕТО';renderInput();return;}
-  if(hasOpenOrder()){state.error='Сначала закройте текущий заказ';renderInput();return;}
+  const gate=canStartAssignedMessage();
+  if(gate){state.error=gate;renderInput();return;}
   state.draft={}; state.orderStep='chooseVehicle'; add('driver','Создать заказ'); add('bot','Выберите автомобиль для заказа.'); state.error=''; upsertShift(); renderInput();
 }
 function startCloseOrder(){
+  syncOpenShiftRuntime();
   const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  if(!findOpenShift() || (!isEtoDone(state.shift||{}) && state.step!=='done')){
+    state.error='Сначала завершите ЕТО'; renderInput(); return;
+  }
   add('driver','Закрыть заказ');
   add('bot',`Заказ №${order.sequentialNumber} (за день ${order.dayNumber}).\nУкажите показания одометра по окончании перевозки.`);
   state.orderStep='closingOdometer'; state.error=''; upsertShift(); renderInput();
 }
 function startCloseShift(){
-  if(state.step!=='done'||!state.shift){state.error='Сначала завершите ЕТО';renderInput();return;}
+  const shift=syncOpenShiftRuntime();
+  if(!shift || (!isEtoDone(shift) && !isEtoDone(state.shift||{}))){
+    state.error='Сначала завершите ЕТО';renderInput();return;
+  }
+  state.step='done';
   add('driver','Закрыть смену');
   const open=inProgressOrder();
   if(open){

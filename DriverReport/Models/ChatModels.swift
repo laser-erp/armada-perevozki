@@ -118,7 +118,15 @@ struct ShiftRecord: Identifiable, Codable, Equatable {
         self.endedAt = endedAt
     }
 
-    var isETOComplete: Bool { completedAt != nil }
+    var isETOComplete: Bool {
+        if completedAt != nil { return true }
+        return vehiclePlate != nil
+            && odometer != nil
+            && fuelLiters != nil
+            && powerSteeringLevel != nil
+            && coolantLevel != nil
+            && engineOilLevel != nil
+    }
     var isClosed: Bool { endedAt != nil }
 }
 

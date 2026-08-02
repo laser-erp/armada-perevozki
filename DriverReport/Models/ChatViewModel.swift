@@ -443,15 +443,8 @@ final class ChatViewModel: ObservableObject {
     }
 
     func startCreateOrder() {
-        if activeShift == nil, let open = store.openShift() {
-            resume(open)
-        }
-        guard activeShift != nil else {
-            numberError = "Сначала откройте смену"
-            return
-        }
-        guard step == .done else {
-            numberError = "Сначала завершите ЕТО"
+        if let msg = ensureShiftReadyForOrders() {
+            numberError = msg
             return
         }
         guard !hasOpenOrder else {
@@ -467,19 +460,38 @@ final class ChatViewModel: ObservableObject {
         persistMessages()
     }
 
-    /// Возвращает текст ошибки или nil при успехе.
+    /// Подтянуть открытую смену и выровнять step по факту ЕТО.
     @discardableResult
-    func beginAssignedOrder(_ order: OrderRecord) -> String? {
+    private func ensureShiftReadyForOrders() -> String? {
         if activeShift == nil, let open = store.openShift() {
             resume(open)
         }
-        guard activeShift != nil else {
-            let msg = "Сначала откройте смену"
-            numberError = msg
-            return msg
+        guard var shift = activeShift ?? store.openShift() else {
+            return "Сначала откройте смену"
         }
-        guard step == .done else {
-            let msg = "Сначала завершите ЕТО"
+        if let fresh = store.openShift(), fresh.id == shift.id {
+            shift = fresh
+            activeShift = fresh
+        }
+        guard shift.isETOComplete else {
+            return "Сначала завершите ЕТО"
+        }
+        if shift.completedAt == nil {
+            shift.completedAt = Date()
+            activeShift = shift
+            store.upsert(shift)
+        }
+        if step != .done {
+            step = .done
+            inputMode = .afterETO
+        }
+        return nil
+    }
+
+    /// Возвращает текст ошибки или nil при успехе.
+    @discardableResult
+    func beginAssignedOrder(_ order: OrderRecord) -> String? {
+        if let msg = ensureShiftReadyForOrders() {
             numberError = msg
             return msg
         }
@@ -820,8 +832,8 @@ final class ChatViewModel: ObservableObject {
     }
 
     func startCloseShift() {
-        guard step == .done, activeShift != nil else {
-            numberError = "Сначала завершите ЕТО"
+        if let msg = ensureShiftReadyForOrders() {
+            numberError = msg
             return
         }
         append(.driver, "Закрыть смену")
