@@ -971,10 +971,29 @@ function answerYesNo(yes){
   }
   answerRefuel(yes);
 }
+const DEFAULT_REMAINING_FUEL_LITERS=80;
+function lastFuelPricePerLiter(plate, exceptId){
+  const scored=allOrders()
+    .filter(o=>o.id!==exceptId && o.fuelPricePerLiter!=null && +o.fuelPricePerLiter>0)
+    .map(o=>({
+      o,
+      samePlate: plate && o.vehiclePlate===plate ? 1 : 0,
+      t: new Date(o.closedAt||o.createdAt).getTime()
+    }))
+    .sort((a,b)=> (b.samePlate-a.samePlate) || (b.t-a.t));
+  return scored.length?+scored[0].o.fuelPricePerLiter:null;
+}
 function answerRefuel(yes){
   add('driver', yes?'Да':'Нет');
-  if(yes){ add('bot','Укажите стоимость литра.'); state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); }
-  else askClosingEmptyAfter(false,null,null);
+  if(yes){ add('bot','Укажите стоимость литра.'); state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); return; }
+  const order=openOrder();
+  const prev=lastFuelPricePerLiter(order&&order.vehiclePlate, order&&order.id);
+  if(prev!=null){
+    add('bot',`Заправки не было — остаток топлива ${DEFAULT_REMAINING_FUEL_LITERS} л, цена литра с прошлой заправки: ${fmt(prev)} ₽/л.`);
+  } else {
+    add('bot',`Заправки не было — в заказ записан остаток ${DEFAULT_REMAINING_FUEL_LITERS} л. Цены литра ещё не было — админ может указать позже.`);
+  }
+  askClosingEmptyAfter(false, prev, DEFAULT_REMAINING_FUEL_LITERS);
 }
 function askClosingEmptyAfter(refueled, price, liters){
   state.draft.closeRefueled=refueled; state.draft.fuelPrice=price; state.draft.closeLiters=liters;
@@ -986,7 +1005,14 @@ function finalizeClose(refueled,price,liters){
   const end=state.draft.closeOdo; const loaded=end-order.startOdometer;
   order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=new Date().toISOString();
   order.staysLoadedOvernight=null;
-  if(refueled){ order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters); }
+  if(refueled){
+    order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters);
+  } else {
+    // Без заправки: остаток 80 л + цена с прошлой заправки (для расчёта ГСМ)
+    order.fuelLiters=(liters!=null && liters>0)?liters:DEFAULT_REMAINING_FUEL_LITERS;
+    order.fuelPricePerLiter=(price!=null && price>0)?price:lastFuelPricePerLiter(order.vehiclePlate, order.id);
+    order.fuelTotalCost=null;
+  }
   const park=state.draft.parkingAfterOdo;
   if(park!=null && park>=end){
     order.emptyKmAfter=Math.max(0, park-end);
@@ -994,7 +1020,10 @@ function finalizeClose(refueled,price,liters){
   } else if(state.shift) state.shift.lastOdometerPoint=end;
   applyClientTariff(order);
   upsertOrder(order);
-  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nДо стоянки / след. заказа: ${order.emptyKmAfter??0} км\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
+  const fuelNote=!refueled && order.fuelPricePerLiter!=null
+    ? `\nТопливо: остаток ${order.fuelLiters} л, ${fmt(order.fuelPricePerLiter)} ₽/л (с прошлой заправки)`
+    : (!refueled ? `\nТопливо: остаток ${order.fuelLiters||DEFAULT_REMAINING_FUEL_LITERS} л` : '');
+  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nДо стоянки / след. заказа: ${order.emptyKmAfter??0} км${fuelNote}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }

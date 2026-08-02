@@ -715,6 +715,26 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    private static let defaultRemainingFuelLiters: Double = 80
+
+    private func lastFuelPricePerLiter(plate: String?, except orderId: UUID?) -> Double? {
+        let candidates = store.allOrders()
+            .filter { order in
+                if let orderId, order.id == orderId { return false }
+                guard let price = order.fuelPricePerLiter, price > 0 else { return false }
+                return true
+            }
+            .sorted { a, b in
+                let aSame = (plate != nil && a.vehiclePlate == plate) ? 1 : 0
+                let bSame = (plate != nil && b.vehiclePlate == plate) ? 1 : 0
+                if aSame != bSame { return aSame > bSame }
+                let aDate = a.closedAt ?? a.createdAt
+                let bDate = b.closedAt ?? b.createdAt
+                return aDate > bDate
+            }
+        return candidates.first?.fuelPricePerLiter
+    }
+
     func answerRefuel(_ yes: Bool) {
         guard orderStep == .askRefuel else { return }
         append(.driver, yes ? "Да" : "Нет")
@@ -726,7 +746,24 @@ final class ChatViewModel: ObservableObject {
             numberError = nil
             persistMessages()
         } else {
-            askClosingEmptyAfter(refueled: false, price: nil, liters: nil)
+            let order = openOrder
+            let prev = lastFuelPricePerLiter(plate: order?.vehiclePlate, except: order?.id)
+            if let prev {
+                append(
+                    .bot,
+                    "Заправки не было — остаток топлива \(Int(Self.defaultRemainingFuelLiters)) л, цена литра с прошлой заправки: \(formatDecimal(prev)) ₽/л."
+                )
+            } else {
+                append(
+                    .bot,
+                    "Заправки не было — в заказ записан остаток \(Int(Self.defaultRemainingFuelLiters)) л. Цены литра ещё не было — админ может указать позже."
+                )
+            }
+            askClosingEmptyAfter(
+                refueled: false,
+                price: prev,
+                liters: Self.defaultRemainingFuelLiters
+            )
         }
     }
 
@@ -810,17 +847,33 @@ final class ChatViewModel: ObservableObject {
             order.fuelPricePerLiter = price
             order.fuelLiters = liters
             order.fuelTotalCost = (price * liters * 100).rounded() / 100
+        } else {
+            // Без заправки: остаток 80 л + цена с прошлой заправки (для расчёта ГСМ)
+            order.fuelLiters = (liters ?? 0) > 0 ? liters : Self.defaultRemainingFuelLiters
+            order.fuelPricePerLiter = (price ?? 0) > 0
+                ? price
+                : lastFuelPricePerLiter(plate: order.vehiclePlate, except: order.id)
+            order.fuelTotalCost = nil
         }
         order.closedAt = Date()
         shift.lastOdometerPoint = parkingOrNextOdometer
         store.attachOrder(order, to: shift.id)
 
+        var fuelNote = ""
+        if !refueled {
+            let litersText = order.fuelLiters.map { formatDecimal($0) } ?? "\(Int(Self.defaultRemainingFuelLiters))"
+            if let price = order.fuelPricePerLiter {
+                fuelNote = "\nТопливо: остаток \(litersText) л, \(formatDecimal(price)) ₽/л (с прошлой заправки)"
+            } else {
+                fuelNote = "\nТопливо: остаток \(litersText) л"
+            }
+        }
         append(
             .bot,
             """
             Заказ №\(order.sequentialNumber) закрыт.
             Одометр окончания: \(endOdo)
-            До стоянки / след. заказа: \(order.emptyKmAfter ?? 0) км
+            До стоянки / след. заказа: \(order.emptyKmAfter ?? 0) км\(fuelNote)
             ЗП по заказу появится в «Заявки» после расчёта администратором.
             """
         )
