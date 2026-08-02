@@ -429,7 +429,7 @@ function finalizeClose(refueled,price,liters){
   if(refueled){ order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters); }
   if(state.shift) state.shift.lastOdometerPoint=end;
   upsertOrder(order);
-  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}`);
+  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
@@ -451,12 +451,22 @@ function resetChat(){
   state.step='idle'; state.orderStep='idle'; state.shift=null; state.draft={}; state.error=''; state.light={}; state.messages=[];
   add('bot','Здравствуйте! Чтобы начать работу, откройте смену. Затем пройдём ежедневный технический осмотр (ЕТО).');
 }
+function driverPayText(o){
+  const m=metrics(o);
+  const pay=o.earnings??m.driverPay;
+  if(pay!=null) return `ЗП: ${fmt(pay)} ₽`;
+  if(o.closedAt) return 'ЗП: ожидает расчёта администратора';
+  return 'ЗП: —';
+}
 function showOrders(){
   $('orders-panel').classList.add('show');
-  const orders=allOrders();
-  $('orders-list').innerHTML = !orders.length ? `<div class="empty">Пока нет заявок</div>` :
-    orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
-      <p>${esc(dateTime(o.createdAt))}</p><p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p><p>${esc(o.vehiclePlate)}</p></div>`).join('');
+  const orders=allOrders().filter(o=>o.driverName===DRIVER);
+  if(!orders.length){ $('orders-list').innerHTML=`<div class="empty">Пока нет заявок</div>`; return; }
+  const total=orders.reduce((s,o)=>{ const p=o.earnings??metrics(o).driverPay; return s+(p||0); },0);
+  const head=`<div class="card"><h3>Моя ЗП (посчитано)</h3><p style="color:var(--accent);font-size:1.2rem;font-weight:800;margin-top:6px">${fmt(total)} ₽</p><p>Сумма по заказам, где администратор уже ввёл ставку.</p></div>`;
+  $('orders-list').innerHTML = head + orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
+      <p>${esc(dateTime(o.createdAt))}</p><p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p><p>${esc(o.vehiclePlate)}</p>
+      <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(driverPayText(o))}</p></div>`).join('');
 }
 function showShifts(){
   $('shifts-panel').classList.add('show');
@@ -558,7 +568,7 @@ function openDetail(id){
     order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
     order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
     order.freight=selectedRate(order);
-    const pay=metrics(order).driverPay; if(pay!=null) order.earnings=pay;
+    const pay=metrics(order).driverPay; if(pay!=null) order.earnings=pay; else order.earnings=null;
     upsertOrder(order); $('detail-ok').style.display='block'; openDetail(id);
   };
 }

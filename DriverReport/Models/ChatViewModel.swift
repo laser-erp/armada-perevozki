@@ -599,6 +599,7 @@ final class ChatViewModel: ObservableObject {
             """
             Заказ №\(order.sequentialNumber) закрыт.
             Одометр окончания: \(endOdo)
+            ЗП по заказу появится в «Заявки» после расчёта администратором.
             """
         )
 
