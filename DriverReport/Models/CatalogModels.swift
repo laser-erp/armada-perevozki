@@ -33,6 +33,28 @@ struct DriverProfile: Identifiable, Codable, Equatable {
 
 enum OrderFinance {
     static let cushionPercent: Double = 10
+    /// Ставка с НДС = без НДС + 22%
+    static let vatMarkup: Double = 0.22
+    /// Наличные = без НДС − 8%
+    static let cashDiscount: Double = 0.08
+
+    /// По одной введённой ставке заполняет остальные две.
+    static func fillRates(from form: PaymentForm, amount: Double) -> (withVat: Double, withoutVat: Double, cash: Double) {
+        let without: Double
+        switch form {
+        case .withoutVat:
+            without = amount
+        case .withVat:
+            without = amount / (1 + vatMarkup)
+        case .cash:
+            without = amount / (1 - cashDiscount)
+        }
+        return (
+            round2(without * (1 + vatMarkup)),
+            round2(without),
+            round2(without * (1 - cashDiscount))
+        )
+    }
 
     /// км от стоянки до окончания заказа
     static func kmParkingToEnd(_ order: OrderRecord) -> Int? {

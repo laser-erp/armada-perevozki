@@ -251,6 +251,7 @@ struct AdminOrderDetailView: View {
     @State private var vehicleRent = ""
     @State private var emptyKmAfter = ""
     @State private var saved = false
+    @State private var syncingRates = false
 
     private var order: OrderRecord? {
         store.allOrders().first { $0.id == orderId }
@@ -279,12 +280,21 @@ struct AdminOrderDetailView: View {
                         row("Общий за день (по полям)", "\(order.dayTotalKm.map(String.init) ?? "—") км")
                     }
                     Section("Ставка / оплата") {
-                        Picker("Форма", selection: $paymentForm) {
+                        Text("Введите сумму в одно поле — остальные заполнятся: с НДС = без НДС +22%, нал = без НДС −8%.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                        Picker("Форма (какая ставка в расчётах)", selection: $paymentForm) {
                             ForEach(PaymentForm.allCases) { Text($0.rawValue).tag($0) }
                         }
-                        TextField("Ставка с НДС", text: $rateWithVat).keyboardType(.decimalPad)
-                        TextField("Ставка без НДС", text: $rateWithoutVat).keyboardType(.decimalPad)
-                        TextField("Ставка наличные", text: $rateCash).keyboardType(.decimalPad)
+                        TextField("Ставка с НДС", text: $rateWithVat)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: rateWithVat) { _, new in syncRates(from: .withVat, text: new) }
+                        TextField("Ставка без НДС", text: $rateWithoutVat)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: rateWithoutVat) { _, new in syncRates(from: .withoutVat, text: new) }
+                        TextField("Ставка наличные", text: $rateCash)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: rateCash) { _, new in syncRates(from: .cash, text: new) }
                         TextField("Доплата к ЗП", text: $salaryBonus).keyboardType(.decimalPad)
                         TextField("Аренда ТС", text: $vehicleRent).keyboardType(.decimalPad)
                     }
@@ -315,6 +325,7 @@ struct AdminOrderDetailView: View {
     }
 
     private func load(_ order: OrderRecord) {
+        syncingRates = true
         customer = order.customer
         paymentForm = order.paymentForm ?? .withVat
         rateWithVat = order.rateWithVat.map(format) ?? ""
@@ -323,6 +334,21 @@ struct AdminOrderDetailView: View {
         salaryBonus = order.salaryBonus.map(format) ?? ""
         vehicleRent = order.vehicleRent.map(format) ?? ""
         emptyKmAfter = order.emptyKmAfter.map(String.init) ?? ""
+        syncingRates = false
+    }
+
+    private func syncRates(from form: PaymentForm, text: String) {
+        guard !syncingRates else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")
+        guard let amount = Double(trimmed), amount > 0 else { return }
+        let triad = OrderFinance.fillRates(from: form, amount: amount)
+        syncingRates = true
+        paymentForm = form
+        rateWithVat = format(triad.withVat)
+        rateWithoutVat = format(triad.withoutVat)
+        rateCash = format(triad.cash)
+        syncingRates = false
     }
 
     private func save(_ original: OrderRecord) {
@@ -335,7 +361,6 @@ struct AdminOrderDetailView: View {
         order.salaryBonus = Double(salaryBonus.replacingOccurrences(of: ",", with: "."))
         order.vehicleRent = Double(vehicleRent.replacingOccurrences(of: ",", with: "."))
         order.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber))
-        // sync selected rate into freight for compatibility
         order.freight = OrderFinance.selectedRate(order)
         store.upsertOrder(order)
         saved = true

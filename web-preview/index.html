@@ -229,6 +229,35 @@ function selectedRate(o){
   if(o.paymentForm==='cash') return o.rateCash??null;
   return o.freight??null;
 }
+const VAT_MARKUP=0.22;   // с НДС = без НДС + 22%
+const CASH_DISCOUNT=0.08; // нал = без НДС − 8%
+function fillRatesFrom(form, amount){
+  let without;
+  if(form==='withoutVat') without=amount;
+  else if(form==='withVat') without=amount/(1+VAT_MARKUP);
+  else without=amount/(1-CASH_DISCOUNT);
+  return {
+    withVat: round2(without*(1+VAT_MARKUP)),
+    withoutVat: round2(without),
+    cash: round2(without*(1-CASH_DISCOUNT))
+  };
+}
+function wireRateAutoFill(){
+  const map={ 'd-vat':'withVat', 'd-novat':'withoutVat', 'd-cash':'cash' };
+  Object.keys(map).forEach(id=>{
+    const el=$(id); if(!el) return;
+    el.oninput=()=>{
+      const raw=(el.value||'').trim().replace(',','.');
+      const amount=+raw; if(!(amount>0)) return;
+      const form=map[id];
+      const t=fillRatesFrom(form, amount);
+      $('d-form').value=form;
+      if(id!=='d-vat') $('d-vat').value=String(t.withVat);
+      if(id!=='d-novat') $('d-novat').value=String(t.withoutVat);
+      if(id!=='d-cash') $('d-cash').value=String(t.cash);
+    };
+  });
+}
 function metrics(o){
   const cons=vehicle(o.vehiclePlate).consumptionPer100Km;
   const km=kmParkingToEnd(o);
@@ -645,19 +674,19 @@ function openDetail(id){
     <button class="secondary" id="detail-back">← Назад</button>
     <h2 style="margin:0">Заявка №${o.sequentialNumber}</h2>
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
-    <div class="hint" style="color:var(--accent)">Заполните форму оплаты и нужную ставку, затем «Сохранить».</div>
+    <div class="hint" style="color:var(--accent)">Введите сумму в одно поле ставки — два других заполнятся сами (с НДС = без НДС +22%, нал = без НДС −8%).</div>
     <label>Заказчик</label><input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название заказчика" />
     <label>Маршрут</label><div class="calc">${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</div>
     <label>Пробег до стоянки, км</label><input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
-    <label>Форма оплаты (какая ставка действует)</label>
+    <label>Форма оплаты (какая ставка в расчётах ЗП/прибыли)</label>
     <select id="d-form">
       <option value="withVat" ${o.paymentForm==='withVat'||!o.paymentForm?'selected':''}>С НДС</option>
       <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
       <option value="cash" ${o.paymentForm==='cash'?'selected':''}>Наличные</option>
     </select>
-    <label>Ставка с НДС, ₽</label><input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="например 25000" />
-    <label>Ставка без НДС, ₽</label><input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="например 20833" />
-    <label>Ставка наличные, ₽</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="например 20000" />
+    <label>Ставка с НДС, ₽</label><input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="введите сюда или в другое поле" />
+    <label>Ставка без НДС, ₽</label><input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="введите сюда или в другое поле" />
+    <label>Ставка наличные, ₽</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="введите сюда или в другое поле" />
     <label>Доплата к ЗП, ₽</label><input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
     <label>Аренда ТС, ₽</label><input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
     <button class="primary" id="detail-save">Сохранить ставки</button>
@@ -678,6 +707,7 @@ function openDetail(id){
   `;
   show('admin-detail');
   $('admin-detail').scrollTop=0;
+  wireRateAutoFill();
   $('detail-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('detail-save').onclick=()=>{
     const order=state.orders.find(x=>x.id===id); if(!order) return;
@@ -686,7 +716,15 @@ function openDetail(id){
     const after=($('d-empty-after').value||'').replace(/\D/g,'');
     order.emptyKmAfter=after?+after:null;
     order.paymentForm=$('d-form').value;
-    order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+    // на всякий случай пересчитать триаду от выбранной формы, если там есть число
+    const form=order.paymentForm;
+    const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
+    if(seed!=null && seed>0){
+      const t=fillRatesFrom(form, seed);
+      order.rateWithVat=t.withVat; order.rateWithoutVat=t.withoutVat; order.rateCash=t.cash;
+    } else {
+      order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+    }
     order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
     order.freight=selectedRate(order);
     const pay=metrics(order).driverPay; order.earnings=pay!=null?pay:null;
