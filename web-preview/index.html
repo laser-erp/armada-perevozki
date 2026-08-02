@@ -748,8 +748,16 @@ function submitNumber(){
 function selectFluid(level){
   if(state.step==='gur'){ state.shift.gur=level; add('driver',`ГУР: ${level}`); add('bot','Проверьте и укажите уровень ОЖ:\n• Максимум\n• Середина\n• Минимум'); state.step='coolant'; }
   else if(state.step==='coolant'){ state.shift.coolant=level; add('driver',`ОЖ: ${level}`); add('bot','Проверьте осветительные приборы. Отметьте каждый пункт.'); state.light={}; state.step='lights'; }
-  else if(state.step==='oil'){ state.shift.oil=level; state.shift.completedAt=new Date().toISOString(); state.step='done'; state.orderStep='idle'; add('driver',`Масло ДВС: ${level}`); add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Создайте заказ, когда приедете на загрузку.'); }
-  state.error=''; upsertShift(); renderInput();
+  else if(state.step==='oil'){
+    state.shift.oil=level;
+    state.shift.engineOilLevel=level;
+    state.shift.completedAt=new Date().toISOString();
+    state.step='done';
+    state.orderStep='idle';
+    add('driver',`Масло ДВС: ${level}`);
+    add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Создайте заказ, когда приедете на загрузку.');
+  }
+  state.error=''; upsertShift(); syncOpenShiftRuntime(); persist(); renderInput();
 }
 function submitLights(){
   const {lowBeam,brake,turn}=state.light; if(!lowBeam||!brake||!turn){state.error='Отметьте все пункты';renderInput();return;}
@@ -769,11 +777,12 @@ function beginAssigned(id, fromOrders){
     if(fromOrders){ showOrdersError(msg); return false; }
     state.error=msg; renderInput(); return false;
   }
-  if(!state.shift) state.shift=findOpenShift();
+  syncOpenShiftRuntime();
   hideDriverPanels();
   state.draft.assignedId=id; add('driver',`Начать заказ №${order.sequentialNumber}`);
   add('bot',`Заказ №${order.sequentialNumber} (день ${order.dayNumber})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите показания одометра по прибытию на загрузку.`);
-  state.orderStep='startAssignedOdometer'; state.error=''; upsertShift(); renderChat();
+  state.orderStep='startAssignedOdometer'; state.error=''; state.step='done';
+  upsertShift(); renderChat();
   return true;
 }
 function showOrdersError(msg){
