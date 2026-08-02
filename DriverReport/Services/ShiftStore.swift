@@ -66,6 +66,11 @@ final class ShiftStore: ObservableObject {
         shifts.sorted { $0.startedAt > $1.startedAt }
     }
 
+    /// Открытая смена (ещё не закрыта одометром на стоянке).
+    func openShift() -> ShiftRecord? {
+        allShifts().first { !$0.isClosed }
+    }
+
     func allOrders() -> [OrderRecord] {
         orders.sorted { $0.createdAt > $1.createdAt }
     }

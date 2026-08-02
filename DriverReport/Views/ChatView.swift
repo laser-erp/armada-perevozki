@@ -158,8 +158,10 @@ struct InputBar: View {
                             viewModel.startCloseShift()
                         }
                     }
-                    PrimaryButton(title: "Новая смена", style: .secondary) {
-                        viewModel.startNewShift()
+                    if viewModel.canStartNewShift {
+                        PrimaryButton(title: "Новая смена", style: .secondary) {
+                            viewModel.startNewShift()
+                        }
                     }
                 }
 

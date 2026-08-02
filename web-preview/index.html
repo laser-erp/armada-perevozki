@@ -276,7 +276,7 @@ function renderInput(){
       html+=`<button class="secondary" id="create-order">Создать заказ сам</button>`;
       html+=`<button class="primary" id="close-shift">Закрыть смену</button>`;
     }
-    html+=`<button class="secondary" id="new-shift">Новая смена</button>`;
+    if(!findOpenShift()) html+=`<button class="secondary" id="new-shift">Новая смена</button>`;
   }
   $('input-bar').innerHTML=html; wireInput();
 }
@@ -291,15 +291,48 @@ function wireInput(){
   $('close-order')&&($('close-order').onclick=startCloseOrder);
   $('close-shift')&&($('close-shift').onclick=startCloseShift);
   document.querySelectorAll('.start-assigned').forEach(b=>b.onclick=()=>beginAssigned(b.dataset.id));
-  $('new-shift')&&($('new-shift').onclick=resetChat);
+  $('new-shift')&&($('new-shift').onclick=startNewShiftClick);
   document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>selectDayNumber(+b.dataset.day));
   $('text-ok')&&($('text-ok').onclick=submitText);
   $('refuel-yes')&&($('refuel-yes').onclick=()=>answerRefuel(true));
   $('refuel-no')&&($('refuel-no').onclick=()=>answerRefuel(false));
 }
 
+function findOpenShift(){ return (state.shifts||[]).slice().sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt)).find(s=>!s.endedAt) || null; }
+function isEtoDone(shift){
+  if(shift.completedAt) return true;
+  return !!(shift.vehiclePlate && shift.odometer!=null && shift.fuelLiters!=null && (shift.gur||shift.powerSteeringLevel) && (shift.coolant||shift.coolantLevel) && (shift.oil||shift.engineOilLevel));
+}
+function resumeOpenShift(shift){
+  state.shift=shift;
+  state.messages=(shift.messages&&shift.messages.length)?shift.messages.slice():[];
+  state.orderStep='idle'; state.draft={}; state.error=''; state.light=shift.light||{};
+  if(isEtoDone(shift)){
+    state.step='done';
+    const noted=(state.messages||[]).some(m=>String(m.text||'').includes('Смена уже открыта')||String(m.text||'').includes('Продолжаем открытую смену'));
+    if(!state.messages.length){
+      state.messages=[{author:'bot',text:`Продолжаем открытую смену от ${dateTime(shift.startedAt)}.`}];
+    } else if(!noted){
+      state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО пройден — можно работать с заказами или закрыть смену.`});
+    }
+    upsertShift(); persist(); renderChat(); return;
+  }
+  if(!shift.vehiclePlate) state.step='chooseVehicle';
+  else if(shift.odometer==null) state.step='odometer';
+  else if(shift.fuelLiters==null) state.step='fuel';
+  else if(!(shift.gur||shift.powerSteeringLevel)) state.step='gur';
+  else if(!(shift.coolant||shift.coolantLevel)) state.step='coolant';
+  else if(!state.light.lowBeam || !state.light.brake || !state.light.turn) state.step='lights';
+  else state.step='oil';
+  if(!state.messages.length){
+    state.messages=[{author:'bot',text:'Смена открыта, но ЕТО не завершён. Продолжим с того места, где остановились.'}];
+  }
+  upsertShift(); persist(); renderChat();
+}
 function openShift(){
-  state.shift={id:crypto.randomUUID(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null};
+  const existing=findOpenShift();
+  if(existing){ resumeOpenShift(existing); return; }
+  state.shift={id:crypto.randomUUID(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null,completedAt:null};
   add('driver','Открыть смену');
   add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.`);
   state.step='chooseVehicle'; state.orderStep='idle'; state.error=''; upsertShift(); renderInput();
@@ -361,9 +394,9 @@ function submitNumber(){
   state.error=''; upsertShift(); renderInput();
 }
 function selectFluid(level){
-  if(state.step==='gur'){ add('driver',`ГУР: ${level}`); add('bot','Проверьте и укажите уровень ОЖ:\n• Максимум\n• Середина\n• Минимум'); state.step='coolant'; }
-  else if(state.step==='coolant'){ add('driver',`ОЖ: ${level}`); add('bot','Проверьте осветительные приборы. Отметьте каждый пункт.'); state.light={}; state.step='lights'; }
-  else if(state.step==='oil'){ state.step='done'; state.orderStep='idle'; add('driver',`Масло ДВС: ${level}`); add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Создайте заказ, когда приедете на загрузку.'); }
+  if(state.step==='gur'){ state.shift.gur=level; add('driver',`ГУР: ${level}`); add('bot','Проверьте и укажите уровень ОЖ:\n• Максимум\n• Середина\n• Минимум'); state.step='coolant'; }
+  else if(state.step==='coolant'){ state.shift.coolant=level; add('driver',`ОЖ: ${level}`); add('bot','Проверьте осветительные приборы. Отметьте каждый пункт.'); state.light={}; state.step='lights'; }
+  else if(state.step==='oil'){ state.shift.oil=level; state.shift.completedAt=new Date().toISOString(); state.step='done'; state.orderStep='idle'; add('driver',`Масло ДВС: ${level}`); add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Создайте заказ, когда приедете на загрузку.'); }
   state.error=''; upsertShift(); renderInput();
 }
 function submitLights(){
@@ -458,8 +491,14 @@ function finishOrder(unloading){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
 }
 function resetChat(){
+  const existing=findOpenShift();
+  if(existing){ resumeOpenShift(existing); return; }
   state.step='idle'; state.orderStep='idle'; state.shift=null; state.draft={}; state.error=''; state.light={}; state.messages=[];
   add('bot','Здравствуйте! Чтобы начать работу, откройте смену. Затем пройдём ежедневный технический осмотр (ЕТО).');
+}
+function startNewShiftClick(){
+  if(findOpenShift()){ state.error='Сначала закройте текущую смену'; renderInput(); return; }
+  resetChat();
 }
 function effectivePay(o){ return o.earnings??metrics(o).driverPay??null; }
 function payDate(o){ return o.closedAt||o.createdAt; }

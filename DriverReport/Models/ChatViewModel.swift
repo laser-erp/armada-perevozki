@@ -25,23 +25,104 @@ final class ChatViewModel: ObservableObject {
 
     init(store: ShiftStore) {
         self.store = store
-        bootstrapWelcome()
+        bootstrap()
     }
 
-    private func bootstrapWelcome() {
+    private func bootstrap() {
+        clearOrderDraft()
+        draftNumber = ""
+        draftText = ""
+        numberError = nil
+        lightDraft = LightChecklistAnswers()
+        orderStep = .idle
+
+        if let open = store.openShift() {
+            resume(open)
+            return
+        }
+
         messages = [
             ChatMessage(
                 author: .bot,
                 text: "Здравствуйте! Чтобы начать работу, откройте смену. Затем пройдём ежедневный технический осмотр (ЕТО)."
             )
         ]
+        activeShift = nil
         inputMode = .openShift
         step = .idle
-        orderStep = .idle
-        clearOrderDraft()
+    }
+
+    private func resume(_ shift: ShiftRecord) {
+        activeShift = shift
+        messages = shift.messages
+        if messages.isEmpty {
+            messages = [
+                ChatMessage(
+                    author: .bot,
+                    text: "Продолжаем открытую смену от \(Self.dateTimeFormatter.string(from: shift.startedAt))."
+                )
+            ]
+        }
+
+        if shift.isETOComplete {
+            step = .done
+            inputMode = .afterETO
+            let noted = messages.contains {
+                $0.text.contains("Смена уже открыта") || $0.text.contains("Продолжаем открытую смену")
+            }
+            if !noted {
+                append(
+                    .bot,
+                    "Смена уже открыта (\(shift.vehiclePlate ?? "авто")). ЕТО пройден — можно работать с заказами или закрыть смену."
+                )
+                persistMessages()
+            }
+            return
+        }
+
+        // Дозаполнить ЕТО с места остановки (без лишних сообщений, если история уже есть)
+        let hint: String
+        if shift.vehiclePlate == nil {
+            step = .chooseVehicle
+            inputMode = .chooseVehicle(FleetCatalog.plates)
+            hint = "Смена открыта, но ЕТО не завершён. Выберите автомобиль."
+        } else if shift.odometer == nil {
+            step = .odometer
+            inputMode = .number(placeholder: "Например, 125430")
+            hint = "Продолжим ЕТО. Укажите одометр до выезда со стоянки."
+        } else if shift.fuelLiters == nil {
+            step = .fuel
+            inputMode = .number(placeholder: "Например, 42")
+            hint = "Продолжим ЕТО. Введите остаток топлива в литрах."
+        } else if shift.powerSteeringLevel == nil {
+            step = .powerSteering
+            inputMode = .fluidLevel(title: "Уровень жидкости ГУР")
+            hint = "Продолжим ЕТО. Укажите уровень жидкости ГУР."
+        } else if shift.coolantLevel == nil {
+            step = .coolant
+            inputMode = .fluidLevel(title: "Уровень ОЖ")
+            hint = "Продолжим ЕТО. Укажите уровень ОЖ."
+        } else if !shift.lights.isComplete {
+            step = .lights
+            lightDraft = shift.lights
+            inputMode = .lightChecklist
+            hint = "Продолжим ЕТО. Отметьте осветительные приборы."
+        } else {
+            step = .engineOil
+            inputMode = .fluidLevel(title: "Уровень масла в ДВС")
+            hint = "Продолжим ЕТО. Укажите уровень масла в ДВС."
+        }
+        if messages.last?.text != hint {
+            append(.bot, hint)
+            persistMessages()
+        }
     }
 
     func openShift() {
+        if let open = store.openShift() {
+            resume(open)
+            return
+        }
         guard step == .idle else { return }
 
         let now = Date()
@@ -681,7 +762,17 @@ final class ChatViewModel: ObservableObject {
         startNewShift()
     }
 
+    /// Начать новую смену можно только если текущая закрыта.
     func startNewShift() {
+        if let open = store.openShift(), !open.isClosed {
+            numberError = "Сначала закройте текущую смену"
+            if open.isETOComplete {
+                step = .done
+                inputMode = .afterETO
+            }
+            objectWillChange.send()
+            return
+        }
         activeShift = nil
         draftNumber = ""
         draftText = ""
@@ -690,7 +781,11 @@ final class ChatViewModel: ObservableObject {
         clearOrderDraft()
         step = .idle
         orderStep = .idle
-        bootstrapWelcome()
+        bootstrap()
+    }
+
+    var canStartNewShift: Bool {
+        store.openShift() == nil
     }
 
     private func clearOrderDraft() {
