@@ -63,6 +63,32 @@ enum OrderFinance {
         )
     }
 
+    /// Км для расчёта суммы: факт с грузом, иначе ориентир.
+    static func billableKm(loadedKm: Int?, estimateKm: Int?) -> Int? {
+        if let loaded = loadedKm, loaded > 0 { return loaded }
+        if let estimate = estimateKm, estimate > 0 { return estimate }
+        return nil
+    }
+
+    /// Суммы заказа из ₽/км (нал) × км; остальные формы — через триаду.
+    static func amountsFromPerKmCash(perKmCash: Double, km: Int) -> (withVat: Double, withoutVat: Double, cash: Double)? {
+        guard perKmCash > 0, km > 0 else { return nil }
+        let cashTotal = round2(perKmCash * Double(km))
+        return fillRates(from: .cash, amount: cashTotal)
+    }
+
+    /// Если заданы ₽/км нал и км — пересчитать ставки заказа.
+    static func applyPerKmCash(to order: inout OrderRecord) {
+        guard let perKm = order.ratePerKmCash, perKm > 0 else { return }
+        guard let km = billableKm(loadedKm: order.loadedKm, estimateKm: order.estimateKm) else { return }
+        guard let triad = amountsFromPerKmCash(perKmCash: perKm, km: km) else { return }
+        order.rateCash = triad.cash
+        order.rateWithoutVat = triad.withoutVat
+        order.rateWithVat = triad.withVat
+        if order.paymentForm == nil { order.paymentForm = .cash }
+        order.freight = selectedRate(order)
+    }
+
     /// Доля ставки, уходящая в ЗП% + подушку%
     static func variableShare(driverPercent: Double) -> Double {
         driverPercent / 100.0 + cushionPercent / 100.0

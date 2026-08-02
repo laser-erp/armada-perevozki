@@ -173,6 +173,7 @@ final class ShiftStore: ObservableObject {
             }
             _ = liters
         }
+        OrderFinance.applyPerKmCash(to: &o)
         if let rate = OrderFinance.selectedRate(o) {
             let bonus = o.salaryBonus ?? 0
             o.earnings = OrderFinance.round2(

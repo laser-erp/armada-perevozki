@@ -92,7 +92,7 @@ struct AdminHomeView: View {
         [
             "Дата", "Госномер", "Водитель", "Заказчик", "Маршрут", "№ дня",
             "Нулевой", "С грузом", "До стоянки", "Общий день",
-            "₽/л", "С НДС", "Без НДС", "Нал", "Доплата ЗП",
+            "₽/л", "₽/км нал", "С НДС", "Без НДС", "Нал", "Доплата ЗП",
             "ГСМ л", "₽/км без НДС", "ГСМ ₽", "Аренда", "Подушка", "Прибыль", "№ базы"
         ]
     }
@@ -125,6 +125,7 @@ struct AdminHomeView: View {
             cell(num(order.emptyKmAfter), "До стоянки")
             cell(num(order.dayTotalKm), "Общий день")
             cell(dec(order.fuelPricePerLiter), "₽/л")
+            cell(dec(order.ratePerKmCash), "₽/км нал")
             cell(dec(order.rateWithVat), "С НДС")
             cell(dec(order.rateWithoutVat), "Без НДС")
             cell(dec(order.rateCash), "Нал")
@@ -244,7 +245,9 @@ struct AdminOrderDetailView: View {
 
     @State private var customer = ""
     @State private var routePoints: [RoutePoint] = OrderRecord.defaultRoutePoints(loading: "", unloading: "")
-    @State private var paymentForm: PaymentForm = .withVat
+    @State private var paymentForm: PaymentForm = .cash
+    @State private var ratePerKmCash = ""
+    @State private var estimateKm = ""
     @State private var rateWithVat = ""
     @State private var rateWithoutVat = ""
     @State private var rateCash = ""
@@ -338,10 +341,26 @@ struct AdminOrderDetailView: View {
                         row("Общий за день (по полям)", "\(order.dayTotalKm.map(String.init) ?? "—") км")
                     }
                     Section("Ставка / оплата") {
-                        Text("Введите сумму в одно поле — остальные заполнятся: с НДС = без НДС +22%, нал = без НДС −8%.")
+                        Text("База для клиента — ₽/км наличными. Сумма = ₽/км × км (факт с грузом или ориентир). Без НДС и с НДС считаются от нал (−8% / +22%).")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
-                        Picker("Форма (какая ставка в расчётах)", selection: $paymentForm) {
+                        TextField("₽/км наличные", text: $ratePerKmCash)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: ratePerKmCash) { _, _ in syncFromPerKm() }
+                        if order.loadedKm == nil {
+                            TextField("Ориентир км (пока нет факта)", text: $estimateKm)
+                                .keyboardType(.numberPad)
+                                .onChange(of: estimateKm) { _, _ in syncFromPerKm() }
+                        } else {
+                            row("Ориентир км", estimateKm.isEmpty ? "—" : "\(estimateKm) км")
+                        }
+                        row("Км для расчёта", billableKmLabel(for: order))
+                        if let preview = perKmPreviewTotals(for: order) {
+                            row("Сумма нал (расчёт)", "\(format(preview.cash)) ₽")
+                            row("Сумма без НДС", "\(format(preview.withoutVat)) ₽")
+                            row("Сумма с НДС", "\(format(preview.withVat)) ₽")
+                        }
+                        Picker("Форма (какая ставка в расчётах ЗП)", selection: $paymentForm) {
                             ForEach(PaymentForm.allCases) { Text($0.rawValue).tag($0) }
                         }
                         TextField("Ставка с НДС", text: $rateWithVat)
@@ -403,13 +422,61 @@ struct AdminOrderDetailView: View {
             unloading: order.unloadingAddress
         )
         routeError = nil
-        paymentForm = order.paymentForm ?? .withVat
+        paymentForm = order.paymentForm ?? (order.ratePerKmCash != nil ? .cash : .withVat)
+        ratePerKmCash = order.ratePerKmCash.map(format) ?? ""
+        estimateKm = order.estimateKm.map(String.init) ?? ""
         rateWithVat = order.rateWithVat.map(format) ?? ""
         rateWithoutVat = order.rateWithoutVat.map(format) ?? ""
         rateCash = order.rateCash.map(format) ?? ""
         salaryBonus = order.salaryBonus.map(format) ?? ""
         vehicleRent = order.vehicleRent.map(format) ?? ""
         emptyKmAfter = order.emptyKmAfter.map(String.init) ?? ""
+        syncingRates = false
+        syncFromPerKm()
+    }
+
+    private func parsedPerKm() -> Double? {
+        let raw = ratePerKmCash.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(raw), value > 0 else { return nil }
+        return value
+    }
+
+    private func parsedEstimateKm() -> Int? {
+        let digits = estimateKm.filter(\.isNumber)
+        guard let value = Int(digits), value > 0 else { return nil }
+        return value
+    }
+
+    private func billableKmLabel(for order: OrderRecord) -> String {
+        if let loaded = order.loadedKm, loaded > 0 {
+            return "\(loaded) км (факт с грузом)"
+        }
+        if let est = parsedEstimateKm() {
+            return "\(est) км (ориентир)"
+        }
+        return "— (укажите ориентир км)"
+    }
+
+    private func perKmPreviewTotals(for order: OrderRecord) -> (withVat: Double, withoutVat: Double, cash: Double)? {
+        guard let perKm = parsedPerKm() else { return nil }
+        let km = OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: parsedEstimateKm())
+        guard let km else { return nil }
+        return OrderFinance.amountsFromPerKmCash(perKmCash: perKm, km: km)
+    }
+
+    private func syncFromPerKm() {
+        guard !syncingRates else { return }
+        guard let perKm = parsedPerKm() else { return }
+        // Даже без км показываем соотношение ₽/км по формам не обязательно — ждём км для сумм.
+        guard let order else { return }
+        let km = OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: parsedEstimateKm())
+        guard let km, let triad = OrderFinance.amountsFromPerKmCash(perKmCash: perKm, km: km) else { return }
+        syncingRates = true
+        paymentForm = .cash
+        rateCash = format(triad.cash)
+        rateWithoutVat = format(triad.withoutVat)
+        rateWithVat = format(triad.withVat)
         syncingRates = false
     }
 
@@ -444,6 +511,11 @@ struct AdminOrderDetailView: View {
             rateWithVat = format(triad.withVat)
             rateWithoutVat = format(triad.withoutVat)
         }
+        // Обратный пересчёт ₽/км нал, если известен км
+        if let order,
+           let km = OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: parsedEstimateKm()) {
+            ratePerKmCash = format(OrderFinance.round2(triad.cash / Double(km)))
+        }
         syncingRates = false
     }
 
@@ -469,16 +541,29 @@ struct AdminOrderDetailView: View {
         var order = original
         order.customer = customer.trimmingCharacters(in: .whitespacesAndNewlines)
         order.applyRoutePoints(cleaned)
+        order.ratePerKmCash = parsedPerKm()
+        order.estimateKm = parsedEstimateKm()
         order.paymentForm = paymentForm
-        order.rateWithVat = Double(rateWithVat.replacingOccurrences(of: ",", with: "."))
-        order.rateWithoutVat = Double(rateWithoutVat.replacingOccurrences(of: ",", with: "."))
-        order.rateCash = Double(rateCash.replacingOccurrences(of: ",", with: "."))
+        OrderFinance.applyPerKmCash(to: &order)
+        if order.ratePerKmCash == nil {
+            order.rateWithVat = Double(rateWithVat.replacingOccurrences(of: ",", with: "."))
+            order.rateWithoutVat = Double(rateWithoutVat.replacingOccurrences(of: ",", with: "."))
+            order.rateCash = Double(rateCash.replacingOccurrences(of: ",", with: "."))
+        } else if OrderFinance.billableKm(loadedKm: order.loadedKm, estimateKm: order.estimateKm) == nil {
+            // ₽/км задан, км ещё нет — суммы вручную не затираем, если уже были
+            order.rateWithVat = Double(rateWithVat.replacingOccurrences(of: ",", with: "."))
+            order.rateWithoutVat = Double(rateWithoutVat.replacingOccurrences(of: ",", with: "."))
+            order.rateCash = Double(rateCash.replacingOccurrences(of: ",", with: "."))
+        }
         order.salaryBonus = Double(salaryBonus.replacingOccurrences(of: ",", with: "."))
         order.vehicleRent = Double(vehicleRent.replacingOccurrences(of: ",", with: "."))
         order.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber))
         order.freight = OrderFinance.selectedRate(order)
         store.upsertOrder(order)
         routePoints = order.routePoints
+        rateWithVat = order.rateWithVat.map(format) ?? rateWithVat
+        rateWithoutVat = order.rateWithoutVat.map(format) ?? rateWithoutVat
+        rateCash = order.rateCash.map(format) ?? rateCash
         saved = true
     }
 

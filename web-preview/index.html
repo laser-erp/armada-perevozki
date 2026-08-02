@@ -285,7 +285,27 @@ function fillRatesFrom(form, amount){
     cash: round2(without*(1-CASH_DISCOUNT))
   };
 }
-function wireRateAutoFill(){
+function billableKm(o, estimateOverride){
+  if(o.loadedKm!=null && +o.loadedKm>0) return +o.loadedKm;
+  const est=estimateOverride!=null?estimateOverride:o.estimateKm;
+  if(est!=null && +est>0) return +est;
+  return null;
+}
+function amountsFromPerKmCash(perKmCash, km){
+  if(!(perKmCash>0) || !(km>0)) return null;
+  return fillRatesFrom('cash', round2(perKmCash*km));
+}
+function applyPerKmCash(o){
+  const per=+o.ratePerKmCash;
+  const km=billableKm(o);
+  const t=amountsFromPerKmCash(per, km);
+  if(!t) return false;
+  o.rateCash=t.cash; o.rateWithoutVat=t.withoutVat; o.rateWithVat=t.withVat;
+  if(!o.paymentForm) o.paymentForm='cash';
+  o.freight=selectedRate(o);
+  return true;
+}
+function wireRateAutoFill(order){
   const map={ 'd-vat':'withVat', 'd-novat':'withoutVat', 'd-cash':'cash' };
   Object.keys(map).forEach(id=>{
     const el=$(id); if(!el) return;
@@ -298,8 +318,47 @@ function wireRateAutoFill(){
       if(id!=='d-vat') $('d-vat').value=String(t.withVat);
       if(id!=='d-novat') $('d-novat').value=String(t.withoutVat);
       if(id!=='d-cash') $('d-cash').value=String(t.cash);
+      const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
+      const km=billableKm(order||{}, estRaw?+estRaw:null);
+      if(km && $('d-perkm')) $('d-perkm').value=String(round2(t.cash/km));
+      updatePerKmPreview(order);
     };
   });
+}
+function updatePerKmPreview(order){
+  const box=$('perkm-preview'); if(!box) return;
+  const per=+((($('d-perkm')||{}).value||'').trim().replace(',','.'));
+  const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
+  const km=billableKm(order||{}, estRaw?+estRaw:null);
+  const kmLabel=order&&order.loadedKm>0
+    ? `${order.loadedKm} км (факт с грузом)`
+    : (km?`${km} км (ориентир)`:'— (укажите ориентир км)');
+  const t=amountsFromPerKmCash(per, km);
+  box.innerHTML=`
+    <div><span>Км для расчёта</span><span>${esc(kmLabel)}</span></div>
+    ${t?`
+      <div><span>Сумма нал (расчёт)</span><span>${fmt(t.cash)} ₽</span></div>
+      <div><span>Сумма без НДС</span><span>${fmt(t.withoutVat)} ₽</span></div>
+      <div><span>Сумма с НДС</span><span>${fmt(t.withVat)} ₽</span></div>
+    `:`<div class="hint">Введите ₽/км и ориентир км — появится сумма для клиента</div>`}
+  `;
+}
+function wirePerKmInputs(order){
+  const apply=()=>{
+    const per=+((($('d-perkm')||{}).value||'').trim().replace(',','.'));
+    const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
+    const km=billableKm(order||{}, estRaw?+estRaw:null);
+    const t=amountsFromPerKmCash(per, km);
+    updatePerKmPreview(order);
+    if(!t) return;
+    $('d-form').value='cash';
+    $('d-cash').value=String(t.cash);
+    $('d-novat').value=String(t.withoutVat);
+    $('d-vat').value=String(t.withVat);
+  };
+  $('d-perkm')&&($('d-perkm').oninput=apply);
+  $('d-estimate-km')&&($('d-estimate-km').oninput=apply);
+  apply();
 }
 function variableShare(driverPercent){ return driverPercent/100 + 0.10; }
 function fixedCosts(fuelCost, rent, bonus){ return (fuelCost||0)+(rent||0)+(bonus||0); }
@@ -572,6 +631,7 @@ function finalizeClose(refueled,price,liters){
   const end=state.draft.closeOdo; const loaded=end-order.startOdometer;
   order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=new Date().toISOString();
   if(refueled){ order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters); }
+  applyPerKmCash(order);
   if(state.shift) state.shift.lastOdometerPoint=end;
   upsertOrder(order);
   add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
@@ -670,7 +730,7 @@ function showShifts(){
     }).join('');
 }
 
-const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","№ дня","Нулевой","С грузом","До стоянки","Общий день","₽/л","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
+const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","№ дня","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 function filteredOrders(){
   return allOrders().filter(o=>{
     if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null;
@@ -701,7 +761,7 @@ function renderAdmin(){
   const head=COLS.map(c=>`<th>${c}</th>`).join('');
   const rows=orders.map(o=>{
     const m=metrics(o);
-    const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', routeText(o), o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
+    const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', routeText(o), o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.ratePerKmCash), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
     return `<tr data-id="${o.id}"><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
   }).join('');
   $('admin-list').innerHTML=`
@@ -810,20 +870,25 @@ function openDetail(id){
     <button class="secondary" id="detail-back">← Назад</button>
     <h2 style="margin:0">Заявка №${o.sequentialNumber}</h2>
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
-    <div class="hint" style="color:var(--accent)">Введите сумму в одно поле ставки — два других заполнятся сами (с НДС = без НДС +22%, нал = без НДС −8%).</div>
+    <div class="hint" style="color:var(--accent)">База для клиента — ₽/км наличными. Сумма = ₽/км × км (факт или ориентир). Без НДС и с НДС считаются от нал.</div>
     <label>Заказчик</label><input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название заказчика" />
     <h3 style="margin:12px 0 0">Маршрут</h3>
     <div id="route-editor"></div>
     <label>Пробег до стоянки, км</label><input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
+    <h3 style="margin:12px 0 0">Ставка клиенту</h3>
+    <label>₽/км наличные</label><input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 110" />
+    ${o.loadedKm?`<div class="hint">Факт с грузом: ${fmt(o.loadedKm)} км — суммы пересчитаются от него</div>`
+      :`<label>Ориентир км (пока нет факта)</label><input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 800" />`}
+    <div class="calc" id="perkm-preview"></div>
     <label>Форма оплаты (какая ставка в расчётах ЗП/прибыли)</label>
     <select id="d-form">
-      <option value="withVat" ${o.paymentForm==='withVat'||!o.paymentForm?'selected':''}>С НДС</option>
+      <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
+      <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
       <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
-      <option value="cash" ${o.paymentForm==='cash'?'selected':''}>Наличные</option>
     </select>
-    <label>Ставка с НДС, ₽</label><input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="введите сюда или в другое поле" />
-    <label>Ставка без НДС, ₽</label><input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="введите сюда или в другое поле" />
-    <label>Ставка наличные, ₽</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="введите сюда или в другое поле" />
+    <label>Ставка с НДС, ₽</label><input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="считается от ₽/км" />
+    <label>Ставка без НДС, ₽</label><input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="считается от ₽/км" />
+    <label>Ставка наличные, ₽</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="₽/км × км" />
     <label>Доплата к ЗП, ₽</label><input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
     <label>Аренда ТС, ₽</label><input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
     <button class="primary" id="detail-save">Сохранить</button>
@@ -850,7 +915,8 @@ function openDetail(id){
   show('admin-detail');
   $('admin-detail').scrollTop=0;
   renderRouteEditor();
-  wireRateAutoFill();
+  wirePerKmInputs(o);
+  wireRateAutoFill(o);
   $('detail-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('detail-save').onclick=()=>{
     const order=state.orders.find(x=>x.id===id); if(!order) return;
@@ -866,14 +932,20 @@ function openDetail(id){
     ensureRoutePoints(order);
     const after=($('d-empty-after').value||'').replace(/\D/g,'');
     order.emptyKmAfter=after?+after:null;
+    const per=num('d-perkm');
+    order.ratePerKmCash=(per!=null && per>0)?per:null;
+    const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
+    order.estimateKm=estRaw?+estRaw:order.estimateKm||null;
     order.paymentForm=$('d-form').value;
-    const form=order.paymentForm;
-    const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
-    if(seed!=null && seed>0){
-      const t=fillRatesFrom(form, seed);
-      order.rateWithVat=t.withVat; order.rateWithoutVat=t.withoutVat; order.rateCash=t.cash;
-    } else {
-      order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+    if(!applyPerKmCash(order)){
+      const form=order.paymentForm;
+      const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
+      if(seed!=null && seed>0){
+        const t=fillRatesFrom(form, seed);
+        order.rateWithVat=t.withVat; order.rateWithoutVat=t.withoutVat; order.rateCash=t.cash;
+      } else {
+        order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+      }
     }
     order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
     order.freight=selectedRate(order);
