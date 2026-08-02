@@ -57,21 +57,25 @@
     table.admin th{position:sticky;top:0;background:#1a1a1a;color:var(--accent);z-index:1}
     table.admin tr{cursor:pointer}
     table.admin tr:hover td{background:rgba(230,26,31,.12)}
-    .form-grid{display:flex;flex-direction:column;gap:8px;width:100%;max-width:520px;margin:0 auto;padding:16px 16px 40px;text-align:left}
-    .form-grid label{font-size:.8rem;color:var(--muted)}
-    .form-grid input,.form-grid select,.form-grid textarea{width:100%}
+    .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;max-width:520px;margin:0 auto;padding:16px 16px 40px;text-align:left;direction:ltr}
+    .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.8rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
+    .form-grid input,.form-grid select,.form-grid textarea,
+    .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
     /* Админ-формы: экран не сжимает контент — скролл внутри body */
     #admin-detail,#admin-create,#admin-catalogs-screen{
       overflow:hidden; min-height:0;
     }
     .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:520px;margin:0 auto}
-    .admin-form-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 20px;display:flex;flex-direction:column;gap:8px}
+    .admin-form-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 20px;display:flex;flex-direction:column;align-items:stretch;gap:8px;text-align:left;direction:ltr}
     .admin-form-actions{flex-shrink:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0));border-top:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.92);display:flex;flex-direction:column;gap:8px}
-    .admin-form-scroll h2{margin:0 0 4px;font-size:1.2rem}
-    .field-block{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .admin-form-scroll h2,.admin-form-scroll h3{margin:0 0 4px;font-size:1.15rem;text-align:left;width:100%}
+    .field-block{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);width:100%}
     .field-block:last-child{border-bottom:0}
-    .calc{background:rgba(46,46,46,.9);border-radius:12px;padding:10px 12px;font-size:.9rem}
-    .calc div{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+    .calc{background:rgba(46,46,46,.9);border-radius:12px;padding:10px 12px;font-size:.9rem;width:100%;text-align:left;direction:ltr}
+    .calc .calc-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:3px 0;width:100%}
+    .calc .calc-row span:first-child{flex:1;min-width:0;text-align:left}
+    .calc .calc-row span:last-child{flex:0 1 auto;text-align:right;white-space:nowrap}
+    .calc .hint{display:block;width:100%;text-align:left;white-space:normal}
     .ok{color:#7dffa0;font-size:.85rem}
     .admin-cards{display:flex;flex-direction:column;gap:10px;padding:12px 16px 24px}
     .admin-cards .card button{margin-top:10px}
@@ -220,7 +224,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-02-formscroll2";
+const APP_BUILD="2026-08-02-tariff-align";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 console.info("АРМАДА build", APP_BUILD);
@@ -597,13 +601,13 @@ function updatePerKmPreview(order){
   const total=totalOrderKm(d);
   const empty=emptyKmOf(d);
   box.innerHTML=`
-    <div><span>Цепочка км</span><span>${total!=null?`${total} (нулевой ${empty} + груз ${d.loadedKm||0})`:'—'}</span></div>
+    <div class="calc-row"><span>Цепочка км</span><span>${total!=null?`${total} (нулевой ${empty} + груз ${d.loadedKm||0})`:'—'}</span></div>
     ${b?`
       <div class="hint">${esc(b.summary)}</div>
-      <div><span>Сумма нал (расчёт)</span><span>${fmt(b.totalCash)} ₽</span></div>
-      <div><span>Сумма без НДС</span><span>${fmt(fillRatesFrom('cash', b.totalCash).withoutVat)} ₽</span></div>
-      <div><span>Сумма с НДС</span><span>${fmt(fillRatesFrom('cash', b.totalCash).withVat)} ₽</span></div>
-    `:`<div class="hint">Задайте ₽/км и/или ₽/час — появится сумма</div>`}
+      <div class="calc-row"><span>Сумма нал (расчёт)</span><span>${fmt(b.totalCash)} руб</span></div>
+      <div class="calc-row"><span>Сумма без НДС</span><span>${fmt(fillRatesFrom('cash', b.totalCash).withoutVat)} руб</span></div>
+      <div class="calc-row"><span>Сумма с НДС</span><span>${fmt(fillRatesFrom('cash', b.totalCash).withVat)} руб</span></div>
+    `:`<div class="hint">Задайте руб/км и/или руб/час — появится сумма</div>`}
   `;
 }
 function wirePerKmInputs(order){
@@ -1312,54 +1316,72 @@ function openDetail(id){
   };
   $('detail-form').innerHTML=`
     <button class="secondary" id="detail-back">← Назад</button>
-    <h2 style="margin:0">Заявка №${o.sequentialNumber}</h2>
+    <h2>Заявка №${o.sequentialNumber}</h2>
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
-    <div class="hint" style="color:var(--accent)">База для клиента — ₽/км наличными. Сумма = ₽/км × км (факт или ориентир). Без НДС и с НДС считаются от нал.</div>
-    <label>Заказчик</label><input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Название заказчика" />
-    <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
-    <select id="d-customer-pick"><option value="">— выбрать сохранённого —</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
-    <h3 style="margin:12px 0 0">Маршрут</h3>
-    <div id="route-editor"></div>
-    <label>Пробег до стоянки, км</label><input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
-    <h3 style="margin:12px 0 0">Тариф клиенту</h3>
-    <div class="hint">Город ≤${state.finance.cityKmThreshold} км: мин ${state.finance.minWorkHours} ч + подача ${state.finance.podachaHours} ч. Если нулевой×₽/км > подачи — добавляем ₽/км нулевого.</div>
-    <label>₽/км наличные</label><input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 50" />
-    <label>₽/час работы</label><input id="d-perhour" inputmode="decimal" value="${o.ratePerHourWork??''}" placeholder="например 2000" />
-    <label>Ориентир км (цепочка)</label><input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 80" />
-    <label>Ориентир часов работы</label><input id="d-estimate-hours" inputmode="decimal" value="${o.estimateWorkHours??''}" placeholder="например 4" />
-    <label>Факт часов работы</label><input id="d-work-hours" inputmode="decimal" value="${o.workHours??''}" placeholder="после закрытия" />
-    <div class="calc" id="perkm-preview"></div>
-    <div class="hint">ЗП, подушка и прибыль всегда от ставки наличные. С НДС = без НДС +22%.</div>
-    <label>Форма для клиента (документы)</label>
-    <select id="d-form">
-      <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
-      <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
-      <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
-    </select>
-    <label>Ставка с НДС, ₽</label><input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="считается от ₽/км" />
-    <label>Ставка без НДС, ₽</label><input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="считается от ₽/км" />
-    <label>Ставка наличные, ₽</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="₽/км × км" />
-    <label>Доплата к ЗП, ₽</label><input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
-    <label>Аренда ТС, ₽</label><input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
-    <button class="primary" id="detail-save">Сохранить</button>
-    <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
+    <div class="hint" style="color:var(--accent)">База для клиента — руб/км наличными. Сумма = руб/км × км. Без НДС и с НДС считаются от нал.</div>
+    <div class="field-block">
+      <label for="d-customer">Заказчик</label>
+      <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
+      <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
+      <select id="d-customer-pick"><option value="">или выбрать сохранённого</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
+    </div>
+    <div class="field-block">
+      <h3>Маршрут</h3>
+      <div id="route-editor"></div>
+      <label for="d-empty-after">Пробег до стоянки, км</label>
+      <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
+    </div>
+    <div class="field-block">
+      <h3>Тариф клиенту</h3>
+      <div class="hint">Город до ${state.finance.cityKmThreshold} км: мин ${state.finance.minWorkHours} ч + подача ${state.finance.podachaHours} ч. Если нулевой × руб/км больше подачи — добавляем руб/км нулевого.</div>
+      <label for="d-perkm">руб/км наличные</label>
+      <input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 50" />
+      <label for="d-perhour">руб/час работы</label>
+      <input id="d-perhour" inputmode="decimal" value="${o.ratePerHourWork??''}" placeholder="например 2000" />
+      <label for="d-estimate-km">Ориентир км (цепочка)</label>
+      <input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 80" />
+      <label for="d-estimate-hours">Ориентир часов работы</label>
+      <input id="d-estimate-hours" inputmode="decimal" value="${o.estimateWorkHours??''}" placeholder="например 4" />
+      <label for="d-work-hours">Факт часов работы</label>
+      <input id="d-work-hours" inputmode="decimal" value="${o.workHours??''}" placeholder="после закрытия" />
+      <div class="calc" id="perkm-preview"></div>
+    </div>
+    <div class="field-block">
+      <div class="hint">ЗП, подушка и прибыль всегда от ставки наличные. С НДС = без НДС +22%.</div>
+      <label for="d-form">Форма для клиента (документы)</label>
+      <select id="d-form">
+        <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
+        <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
+        <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
+      </select>
+      <label for="d-vat">Ставка с НДС, руб</label>
+      <input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="считается от руб/км" />
+      <label for="d-novat">Ставка без НДС, руб</label>
+      <input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="считается от руб/км" />
+      <label for="d-cash">Ставка наличные, руб</label>
+      <input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="руб/км × км" />
+      <label for="d-bonus">Доплата к ЗП, руб</label>
+      <input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
+      <label for="d-rent">Аренда ТС, руб</label>
+      <input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
+    </div>
     <div class="calc">
-      <div><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
-      <div><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
-      <div><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
-      <div><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
-      <div><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
-      <div><span>₽/л (факт)</span><span>${fmt(o.fuelPricePerLiter)}</span></div>
-      <div><span>Стоимость ГСМ</span><span>${fmt(m.fuelCostCalc)} ₽</span></div>
-      <div><span>₽/км без НДС</span><span>${fmt(m.costPerKmNoVat)}</span></div>
-      <div><span>Подушка 10%</span><span>${fmt(m.cushion)} ₽</span></div>
-      <div><span>ЗП водителя</span><span>${fmt(m.driverPay)} ₽</span></div>
-      <div><span>Чистая прибыль</span><span>${fmt(m.netProfit)} ₽</span></div>
-      <div style="margin-top:8px;opacity:.7;font-size:12px">Себестоимость / ставка</div>
-      <div><span>Себестоимость (фикс)</span><span>${fmt(m.fixedCosts)} ₽</span></div>
-      <div><span>Полная себестоимость</span><span>${fmt(m.totalCost)} ₽</span></div>
-      <div><span>Безубыток</span><span>${fmt(m.breakEvenRate)} ₽</span></div>
-      <div><span>Рекомендация +${Math.round(m.markupPercent)}%</span><span>${fmt(m.recommendedRate)} ₽</span></div>
+      <div class="calc-row"><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
+      <div class="calc-row"><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
+      <div class="calc-row"><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
+      <div class="calc-row"><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
+      <div class="calc-row"><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
+      <div class="calc-row"><span>руб/л (факт)</span><span>${fmt(o.fuelPricePerLiter)}</span></div>
+      <div class="calc-row"><span>Стоимость ГСМ</span><span>${fmt(m.fuelCostCalc)} руб</span></div>
+      <div class="calc-row"><span>руб/км без НДС</span><span>${fmt(m.costPerKmNoVat)}</span></div>
+      <div class="calc-row"><span>Подушка 10%</span><span>${fmt(m.cushion)} руб</span></div>
+      <div class="calc-row"><span>ЗП водителя</span><span>${fmt(m.driverPay)} руб</span></div>
+      <div class="calc-row"><span>Чистая прибыль</span><span>${fmt(m.netProfit)} руб</span></div>
+      <div class="hint" style="margin-top:8px">Себестоимость / ставка</div>
+      <div class="calc-row"><span>Себестоимость (фикс)</span><span>${fmt(m.fixedCosts)} руб</span></div>
+      <div class="calc-row"><span>Полная себестоимость</span><span>${fmt(m.totalCost)} руб</span></div>
+      <div class="calc-row"><span>Безубыток</span><span>${fmt(m.breakEvenRate)} руб</span></div>
+      <div class="calc-row"><span>Рекомендация +${Math.round(m.markupPercent)}%</span><span>${fmt(m.recommendedRate)} руб</span></div>
     </div>
   `;
   show('admin-detail');
