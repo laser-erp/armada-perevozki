@@ -190,7 +190,24 @@ const state={
 if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
 if(state.finance.markupPercent>80) state.finance.markupPercent=80;
 if(!state.orders.length && state.shifts.length){ state.orders = state.shifts.flatMap(s => s.orders||[]); }
-state.orders.forEach(o=>{ if(o.customer==null) o.customer=""; if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER); });
+function ensureRoutePoints(o){
+  let pts=Array.isArray(o.routePoints)?o.routePoints.map(p=>String(p||'').trim()).filter(Boolean):[];
+  if(pts.length<2){
+    const load=String(o.loadingAddress||'').trim()||'Загрузка';
+    const unload=String(o.unloadingAddress||'').trim()||'Выгрузка';
+    pts=[load, unload];
+  }
+  o.routePoints=pts;
+  o.loadingAddress=pts[0];
+  o.unloadingAddress=pts[pts.length-1];
+  return pts;
+}
+function routeText(o){ return ensureRoutePoints(o).join(' → '); }
+state.orders.forEach(o=>{
+  if(o.customer==null) o.customer="";
+  if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
+  ensureRoutePoints(o);
+});
 const $ = id => document.getElementById(id);
 function show(id){
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
@@ -471,7 +488,7 @@ function beginAssigned(id){
   if(hasOpenOrder()){ state.error='Сначала закройте текущий заказ'; renderInput(); return; }
   const order=state.orders.find(o=>o.id===id); if(!order||order.startOdometer!=null){ state.error='Заказ недоступен'; renderInput(); return; }
   state.draft.assignedId=id; add('driver',`Начать заказ №${order.sequentialNumber}`);
-  add('bot',`Заказ №${order.sequentialNumber} (день ${order.dayNumber})\nАвто: ${order.vehiclePlate}\nМаршрут: ${order.loadingAddress} — ${order.unloadingAddress}\nУкажите показания одометра по прибытию на загрузку.`);
+  add('bot',`Заказ №${order.sequentialNumber} (день ${order.dayNumber})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите показания одометра по прибытию на загрузку.`);
   state.orderStep='startAssignedOdometer'; state.error=''; upsertShift(); renderInput();
 }
 function acceptStartAssigned(value){
@@ -483,7 +500,7 @@ function acceptStartAssigned(value){
   if(!state.shift.orders) state.shift.orders=[];
   if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
   upsertOrder(order); add('driver',String(value));
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · день ${order.dayNumber}\n${order.loadingAddress} — ${order.unloadingAddress}\nОдометр: ${value}`);
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · день ${order.dayNumber}\n${routeText(order)}\nОдометр: ${value}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
 }
@@ -546,9 +563,10 @@ function submitText(){
 }
 function finishOrder(unloading){
   const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
-  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
+  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:[d.loading,unloading],driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
+  ensureRoutePoints(order);
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order); upsertOrder(order);
-  const route=`${order.loadingAddress} — ${order.unloadingAddress}`;
+  const route=routeText(order);
   add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа за день - ${order.dayNumber}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
@@ -591,7 +609,7 @@ function showCabinet(){
         <p>${esc(dayOnly(payDate(o)))}</p>
         <h3>Заказ №${o.sequentialNumber}</h3>
         <p>День №${o.dayNumber} · ${esc(o.vehiclePlate)}</p>
-        <p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p>
+        <p>${esc(routeText(o))}</p>
         <p style="color:var(--accent);font-weight:800;font-size:1.15rem;margin-top:6px">${fmt(effectivePay(o))} ₽</p>
       </div>`).join('');
     }
@@ -617,7 +635,7 @@ function showOrders(){
   const orders=allOrders().filter(o=>o.driverName===DRIVER);
   $('orders-list').innerHTML = !orders.length ? `<div class="empty">Пока нет заявок</div>` :
     orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
-      <p>${esc(dateTime(o.createdAt))}</p><p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p><p>${esc(o.vehiclePlate)}</p>
+      <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
       <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(driverPayText(o))}</p></div>`).join('');
 }
 function showShifts(){
@@ -650,7 +668,7 @@ function renderAdmin(){
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
-      <p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p>
+      <p>${esc(routeText(o))}</p>
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
       ${hasRate
         ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Ставка: ${fmt(selectedRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
@@ -661,7 +679,7 @@ function renderAdmin(){
   const head=COLS.map(c=>`<th>${c}</th>`).join('');
   const rows=orders.map(o=>{
     const m=metrics(o);
-    const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', `${o.loadingAddress} — ${o.unloadingAddress}`, o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
+    const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', routeText(o), o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
     return `<tr data-id="${o.id}"><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
   }).join('');
   $('admin-list').innerHTML=`
@@ -690,20 +708,73 @@ function saveDispatcherOrder(){
   const customer=($('create-customer').value||'').trim();
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
   state.seq+=1;
-  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,startOdometer:null,driverPercent:driverPercent(driver)};
+  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,routePoints:[load,unload],startOdometer:null,driverPercent:driverPercent(driver)};
+  ensureRoutePoints(order);
   upsertOrder(order); show('admin'); renderAdmin();
 }
 function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
   const m=metrics(o);
+  let editPoints=ensureRoutePoints(o).slice();
+  const pointLabel=(i,n)=> i===0?`${i+1}. Загрузка`: (i===n-1?`${i+1}. Выгрузка`:`${i+1}. Промежуточная`);
+  const readPointsFromDom=()=>{
+    const inputs=[...document.querySelectorAll('#route-editor [data-route-i]')];
+    if(!inputs.length) return editPoints.slice();
+    return inputs.map(el=>(el.value||'').trim());
+  };
+  const renderRouteEditor=()=>{
+    const preview=editPoints.map(p=>String(p||'').trim()).filter(Boolean).join(' → ');
+    $('route-editor').innerHTML=`
+      <div class="hint">Править адреса, «+ Точка», менять местами ↑ ↓. Первая — загрузка, последняя — выгрузка.</div>
+      ${preview?`<div class="calc" style="margin:6px 0">${esc(preview)}</div>`:''}
+      ${editPoints.map((p,i)=>`
+        <label>${pointLabel(i, editPoints.length)}</label>
+        <input data-route-i="${i}" value="${esc(p)}" placeholder="Город, улица, дом" />
+        <div class="row" style="margin:4px 0 10px">
+          <button type="button" class="secondary" data-route-up="${i}" ${i===0?'disabled':''}>↑</button>
+          <button type="button" class="secondary" data-route-down="${i}" ${i>=editPoints.length-1?'disabled':''}>↓</button>
+          ${editPoints.length>2?`<button type="button" class="secondary" data-route-del="${i}">Удалить</button>`:''}
+        </div>`).join('')}
+      <button type="button" class="secondary" id="route-add">+ Точка</button>
+      <div class="error" id="route-error" style="display:none"></div>
+    `;
+    $('route-add').onclick=()=>{
+      editPoints=readPointsFromDom();
+      const insertAt=Math.max(1, editPoints.length-1);
+      editPoints.splice(insertAt, 0, '');
+      renderRouteEditor();
+    };
+    document.querySelectorAll('[data-route-up]').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.routeUp;
+      editPoints=readPointsFromDom();
+      if(i<=0) return;
+      const t=editPoints[i-1]; editPoints[i-1]=editPoints[i]; editPoints[i]=t;
+      renderRouteEditor();
+    });
+    document.querySelectorAll('[data-route-down]').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.routeDown;
+      editPoints=readPointsFromDom();
+      if(i>=editPoints.length-1) return;
+      const t=editPoints[i+1]; editPoints[i+1]=editPoints[i]; editPoints[i]=t;
+      renderRouteEditor();
+    });
+    document.querySelectorAll('[data-route-del]').forEach(b=>b.onclick=()=>{
+      const i=+b.dataset.routeDel;
+      editPoints=readPointsFromDom();
+      if(editPoints.length<=2) return;
+      editPoints.splice(i,1);
+      renderRouteEditor();
+    });
+  };
   $('detail-form').innerHTML=`
     <button class="secondary" id="detail-back">← Назад</button>
     <h2 style="margin:0">Заявка №${o.sequentialNumber}</h2>
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
     <div class="hint" style="color:var(--accent)">Введите сумму в одно поле ставки — два других заполнятся сами (с НДС = без НДС +22%, нал = без НДС −8%).</div>
     <label>Заказчик</label><input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название заказчика" />
-    <label>Маршрут</label><div class="calc">${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</div>
+    <h3 style="margin:12px 0 0">Маршрут</h3>
+    <div id="route-editor"></div>
     <label>Пробег до стоянки, км</label><input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
     <label>Форма оплаты (какая ставка в расчётах ЗП/прибыли)</label>
     <select id="d-form">
@@ -716,8 +787,8 @@ function openDetail(id){
     <label>Ставка наличные, ₽</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="введите сюда или в другое поле" />
     <label>Доплата к ЗП, ₽</label><input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
     <label>Аренда ТС, ₽</label><input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
-    <button class="primary" id="detail-save">Сохранить ставки</button>
-    <div class="ok" id="detail-ok" style="display:none">Сохранено — ЗП водителя пересчитана</div>
+    <button class="primary" id="detail-save">Сохранить</button>
+    <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
     <div class="calc">
       <div><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
       <div><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
@@ -739,16 +810,25 @@ function openDetail(id){
   `;
   show('admin-detail');
   $('admin-detail').scrollTop=0;
+  renderRouteEditor();
   wireRateAutoFill();
   $('detail-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('detail-save').onclick=()=>{
     const order=state.orders.find(x=>x.id===id); if(!order) return;
+    const cleaned=readPointsFromDom().filter(Boolean);
+    const err=$('route-error');
+    if(cleaned.length<2){
+      if(err){ err.style.display='block'; err.textContent='Нужны минимум 2 точки маршрута'; }
+      return;
+    }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
+    order.routePoints=cleaned;
+    order.loadingAddress=cleaned[0];
+    order.unloadingAddress=cleaned[cleaned.length-1];
     const after=($('d-empty-after').value||'').replace(/\D/g,'');
     order.emptyKmAfter=after?+after:null;
     order.paymentForm=$('d-form').value;
-    // на всякий случай пересчитать триаду от выбранной формы, если там есть число
     const form=order.paymentForm;
     const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
     if(seed!=null && seed>0){

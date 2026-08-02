@@ -16,6 +16,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var customer: String
     var loadingAddress: String
     var unloadingAddress: String
+    /// Полный маршрут: [загрузка, …промежуточные…, выгрузка]. Минимум 2 точки.
+    var routePoints: [String]
     var startOdometer: Int?
     var previousOdometer: Int?
     var emptyKmBefore: Int?
@@ -39,7 +41,31 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var earnings: Double?
 
     var routeText: String {
-        "\(loadingAddress) — \(unloadingAddress)"
+        let points = Self.normalizedRoutePoints(routePoints, loading: loadingAddress, unloading: unloadingAddress)
+        return points.joined(separator: " → ")
+    }
+
+    /// Гарантирует ≥2 точки и синхронизирует loading/unloading с первой/последней.
+    mutating func applyRoutePoints(_ points: [String]) {
+        let normalized = Self.normalizedRoutePoints(points, loading: loadingAddress, unloading: unloadingAddress)
+        routePoints = normalized
+        loadingAddress = normalized[0]
+        unloadingAddress = normalized[normalized.count - 1]
+    }
+
+    static func normalizedRoutePoints(_ points: [String], loading: String, unloading: String) -> [String] {
+        var cleaned = points
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if cleaned.count < 2 {
+            let load = loading.trimmingCharacters(in: .whitespacesAndNewlines)
+            let unload = unloading.trimmingCharacters(in: .whitespacesAndNewlines)
+            cleaned = [
+                load.isEmpty ? "Загрузка" : load,
+                unload.isEmpty ? "Выгрузка" : unload
+            ]
+        }
+        return cleaned
     }
 
     var isClosed: Bool { closedAt != nil }
@@ -71,6 +97,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         customer: String = "",
         loadingAddress: String,
         unloadingAddress: String,
+        routePoints: [String]? = nil,
         startOdometer: Int? = nil,
         previousOdometer: Int? = nil,
         emptyKmBefore: Int? = nil,
@@ -100,8 +127,14 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.vehiclePlate = vehiclePlate
         self.driverName = driverName
         self.customer = customer
-        self.loadingAddress = loadingAddress
-        self.unloadingAddress = unloadingAddress
+        let points = Self.normalizedRoutePoints(
+            routePoints ?? [loadingAddress, unloadingAddress],
+            loading: loadingAddress,
+            unloading: unloadingAddress
+        )
+        self.routePoints = points
+        self.loadingAddress = points[0]
+        self.unloadingAddress = points[points.count - 1]
         self.startOdometer = startOdometer
         self.previousOdometer = previousOdometer
         self.emptyKmBefore = emptyKmBefore
@@ -126,7 +159,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, sequentialNumber, dayNumber, createdAt, source, vehiclePlate, driverName
-        case customer, loadingAddress, unloadingAddress, startOdometer, previousOdometer
+        case customer, loadingAddress, unloadingAddress, routePoints, startOdometer, previousOdometer
         case emptyKmBefore, loadedKm, emptyKmAfter, endOdometer, closedAt
         case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, freight
         case paymentForm, rateWithVat, rateWithoutVat, rateCash
@@ -143,8 +176,17 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         vehiclePlate = try c.decode(String.self, forKey: .vehiclePlate)
         driverName = try c.decodeIfPresent(String.self, forKey: .driverName) ?? AppDefaults.driverName
         customer = try c.decodeIfPresent(String.self, forKey: .customer) ?? ""
-        loadingAddress = try c.decode(String.self, forKey: .loadingAddress)
-        unloadingAddress = try c.decode(String.self, forKey: .unloadingAddress)
+        let loading = try c.decode(String.self, forKey: .loadingAddress)
+        let unloading = try c.decode(String.self, forKey: .unloadingAddress)
+        let decodedPoints = try c.decodeIfPresent([String].self, forKey: .routePoints)
+        let points = Self.normalizedRoutePoints(
+            decodedPoints ?? [loading, unloading],
+            loading: loading,
+            unloading: unloading
+        )
+        routePoints = points
+        loadingAddress = points[0]
+        unloadingAddress = points[points.count - 1]
         startOdometer = try c.decodeIfPresent(Int.self, forKey: .startOdometer)
         previousOdometer = try c.decodeIfPresent(Int.self, forKey: .previousOdometer)
         emptyKmBefore = try c.decodeIfPresent(Int.self, forKey: .emptyKmBefore)
@@ -179,6 +221,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encode(customer, forKey: .customer)
         try c.encode(loadingAddress, forKey: .loadingAddress)
         try c.encode(unloadingAddress, forKey: .unloadingAddress)
+        try c.encode(routePoints, forKey: .routePoints)
         try c.encodeIfPresent(startOdometer, forKey: .startOdometer)
         try c.encodeIfPresent(previousOdometer, forKey: .previousOdometer)
         try c.encodeIfPresent(emptyKmBefore, forKey: .emptyKmBefore)

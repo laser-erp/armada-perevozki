@@ -243,6 +243,7 @@ struct AdminOrderDetailView: View {
     let orderId: UUID
 
     @State private var customer = ""
+    @State private var routePoints: [String] = ["", ""]
     @State private var paymentForm: PaymentForm = .withVat
     @State private var rateWithVat = ""
     @State private var rateWithoutVat = ""
@@ -252,9 +253,17 @@ struct AdminOrderDetailView: View {
     @State private var emptyKmAfter = ""
     @State private var saved = false
     @State private var syncingRates = false
+    @State private var routeError: String?
 
     private var order: OrderRecord? {
         store.allOrders().first { $0.id == orderId }
+    }
+
+    private var routePreview: String {
+        routePoints
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " → ")
     }
 
     var body: some View {
@@ -268,8 +277,46 @@ struct AdminOrderDetailView: View {
                         row("Статус", order.statusText)
                         row("Водитель", "\(order.driverName) (% \(Int(order.driverPercent)))")
                         row("Авто", order.vehiclePlate)
-                        row("Маршрут", order.routeText)
                         TextField("Заказчик", text: $customer)
+                    }
+                    Section("Маршрут") {
+                        Text("Можно править адреса, добавлять точки и менять их местами (↑ ↓). Первая — загрузка, последняя — выгрузка.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                        if !routePreview.isEmpty {
+                            Text(routePreview)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        ForEach(routePoints.indices, id: \.self) { index in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(pointLabel(index))
+                                    .font(.system(.caption2, design: .rounded))
+                                    .foregroundStyle(AppTheme.textMuted)
+                                TextField("Адрес точки", text: $routePoints[index])
+                                HStack(spacing: 12) {
+                                    Button("↑") { movePoint(from: index, by: -1) }
+                                        .disabled(index == 0)
+                                    Button("↓") { movePoint(from: index, by: 1) }
+                                        .disabled(index >= routePoints.count - 1)
+                                    Spacer()
+                                    if routePoints.count > 2 {
+                                        Button("Удалить", role: .destructive) {
+                                            routePoints.remove(at: index)
+                                        }
+                                    }
+                                }
+                                .font(.system(.caption, design: .rounded))
+                            }
+                        }
+                        Button("+ Точка") {
+                            let insertAt = max(1, routePoints.count - 1)
+                            routePoints.insert("", at: insertAt)
+                        }
+                        .foregroundStyle(AppTheme.accent)
+                        if let routeError {
+                            Text(routeError).foregroundStyle(.red).font(.caption)
+                        }
                     }
                     Section("Пробеги") {
                         row("Нулевой до заказа", "\(order.emptyKmBefore.map(String.init) ?? "—") км")
@@ -339,6 +386,12 @@ struct AdminOrderDetailView: View {
     private func load(_ order: OrderRecord) {
         syncingRates = true
         customer = order.customer
+        routePoints = OrderRecord.normalizedRoutePoints(
+            order.routePoints,
+            loading: order.loadingAddress,
+            unloading: order.unloadingAddress
+        )
+        routeError = nil
         paymentForm = order.paymentForm ?? .withVat
         rateWithVat = order.rateWithVat.map(format) ?? ""
         rateWithoutVat = order.rateWithoutVat.map(format) ?? ""
@@ -347,6 +400,18 @@ struct AdminOrderDetailView: View {
         vehicleRent = order.vehicleRent.map(format) ?? ""
         emptyKmAfter = order.emptyKmAfter.map(String.init) ?? ""
         syncingRates = false
+    }
+
+    private func pointLabel(_ index: Int) -> String {
+        if index == 0 { return "1. Загрузка" }
+        if index == routePoints.count - 1 { return "\(index + 1). Выгрузка" }
+        return "\(index + 1). Промежуточная"
+    }
+
+    private func movePoint(from index: Int, by delta: Int) {
+        let target = index + delta
+        guard routePoints.indices.contains(index), routePoints.indices.contains(target) else { return }
+        routePoints.swapAt(index, target)
     }
 
     private func syncRates(from form: PaymentForm, text: String) {
@@ -373,8 +438,17 @@ struct AdminOrderDetailView: View {
     }
 
     private func save(_ original: OrderRecord) {
+        let cleaned = routePoints
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard cleaned.count >= 2 else {
+            routeError = "Нужны минимум 2 точки маршрута"
+            return
+        }
+        routeError = nil
         var order = original
         order.customer = customer.trimmingCharacters(in: .whitespacesAndNewlines)
+        order.applyRoutePoints(cleaned)
         order.paymentForm = paymentForm
         order.rateWithVat = Double(rateWithVat.replacingOccurrences(of: ",", with: "."))
         order.rateWithoutVat = Double(rateWithoutVat.replacingOccurrences(of: ",", with: "."))
@@ -384,6 +458,7 @@ struct AdminOrderDetailView: View {
         order.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber))
         order.freight = OrderFinance.selectedRate(order)
         store.upsertOrder(order)
+        routePoints = order.routePoints
         saved = true
     }
 
