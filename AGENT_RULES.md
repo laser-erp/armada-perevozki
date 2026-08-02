@@ -1,20 +1,27 @@
 # Правила агента — АРМАДА
 
-## Обязательный бэкап
-1. **После каждого завершённого блока работ** — сразу zip в `/agent/backups/`.
-2. Имя: `DriverReport-backup-YYYYMMDD-HHMM.zip` + копия `DriverReport-backup-latest.zip`.
-3. В бэкап класть: весь `/agent/DriverReport/`, `HANDOFF.md`, `PREVIEW_URL.txt`, этот файл `AGENT_RULES.md`.
-4. **Перед рискованными правками** (перепись большого файла, смена моделей) — бэкап заранее.
-5. При старте сессии: если `/agent/DriverReport` пуст — **сначала** восстановить из `DriverReport-backup-latest.zip`, не собирать по транскрипту.
+## Источник правды (главное)
+- **Брать код:** `https://github.com/laser-erp/armada-perevozki` (ветка `main`)
+- **Сохранять код:** туда же — `git add && git commit && git push origin main` после каждого блока работ
+- Аккаунт GitHub CLI в среде: `laser-erp`
+
+При старте сессии, если `/agent/DriverReport` пуст или устарел:
+```bash
+gh auth status || true
+git clone https://github.com/laser-erp/armada-perevozki.git /agent/DriverReport
+# или: cd /agent/DriverReport && git pull origin main
+```
+
+## Обязательный бэкап (дополнительно к GitHub)
+1. После каждого блока: push в GitHub **и** zip в `/agent/backups/DriverReport-backup-latest.zip`
+2. В бэкап: `/agent/DriverReport/`, `HANDOFF.md`, `AGENT_RULES.md`, `PREVIEW_URL.txt`, `GITHUB_URL.txt`
+3. Перед рискованными правками — commit/push заранее
 
 ## Процесс с пользователем
-- Сначала план → ждать «ок» / «ок, делай» → код.
-- Не оценивать сроки в днях/неделях; говорить объём работ по сути.
-- При прощании — бэкап + актуальный `HANDOFF.md`.
+- Сначала план → ждать «ок» / «ок, делай» → код
+- Не оценивать сроки в днях/неделях
+- При прощании — push + zip + актуальный `HANDOFF.md`
 
-## Восстановление
-```bash
-mkdir -p /agent && unzip -o /agent/backups/DriverReport-backup-latest.zip -d /
-# или, если zip с абсолютными путями уже разложился корректно:
-unzip -l /agent/backups/DriverReport-backup-latest.zip | head
-```
+## URL
+- GitHub: https://github.com/laser-erp/armada-perevozki
+- Записано также в `/agent/backups/GITHUB_URL.txt`

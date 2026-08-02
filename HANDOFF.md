@@ -1,0 +1,31 @@
+# Handoff — АРМАДА учёт перевозок
+
+## ⚠ Правило агента (обязательно)
+См. `AGENT_RULES.md`.
+
+1. **Брать:** `https://github.com/laser-erp/armada-perevozki` (`git clone` / `git pull`)
+2. **Сохранять:** туда же (`git push origin main`) после каждого блока + zip в `/agent/backups/…-latest.zip`
+3. План → «ок» → код. Не восстанавливать проект по чату.
+
+## Роли
+- Splash → Водитель / Администратор
+- Админ PIN: `2580`
+- Водитель не видит: нулевой км, с грузом, до стоянки, сумму заправки, финансы
+
+## Закрытие смены (готово)
+- «Закрыть смену» → одометр на стоянке → `emptyKmAfter` в последний закрытый заказ
+
+## Админ-таблица
+Ставки, ГСМ, подушка 10%, ЗП, аренда, прибыль, справочники.
+
+## Ещё не сделано
+- Показ заработка водителю
+- Экспорт CSV / Google Sheets
+
+## Пути
+- iOS / web: `/agent/DriverReport/`
+- Бэкапы: `/agent/backups/DriverReport-backup-latest.zip`
+
+## GitHub
+- Repo: https://github.com/laser-erp/armada-perevozki
+- Account: laser-erp
