@@ -187,6 +187,10 @@ struct AdminCreateOrderView: View {
     @State private var unloading = ""
     @State private var error: String?
 
+    private var selectedCustomer: CustomerProfile? {
+        store.customer(for: customer)
+    }
+
     var body: some View {
         Form {
             Section("Назначение") {
@@ -200,10 +204,31 @@ struct AdminCreateOrderView: View {
                     ForEach(store.vehicles.map(\.plate), id: \.self) { Text($0).tag($0) }
                 }
                 TextField("Заказчик", text: $customer)
+                if !store.customerNames().isEmpty {
+                    Menu("Выбрать заказчика") {
+                        ForEach(store.customerNames(), id: \.self) { name in
+                            Button(name) { customer = name }
+                        }
+                    }
+                }
             }
             Section("Маршрут") {
                 TextField("Адрес загрузки", text: $loading, axis: .vertical)
+                if let loads = selectedCustomer?.loadingAddresses, !loads.isEmpty {
+                    Menu("Из сохранённых загрузок") {
+                        ForEach(loads, id: \.self) { addr in
+                            Button(addr) { loading = addr }
+                        }
+                    }
+                }
                 TextField("Адрес выгрузки", text: $unloading, axis: .vertical)
+                if let unloads = selectedCustomer?.unloadingAddresses, !unloads.isEmpty {
+                    Menu("Из сохранённых выгрузок") {
+                        ForEach(unloads, id: \.self) { addr in
+                            Button(addr) { unloading = addr }
+                        }
+                    }
+                }
             }
             if let error { Text(error).foregroundStyle(.red).font(.caption) }
             Button("Назначить водителю") {
@@ -289,9 +314,16 @@ struct AdminOrderDetailView: View {
                         row("Водитель", "\(order.driverName) (% \(Int(order.driverPercent)))")
                         row("Авто", order.vehiclePlate)
                         TextField("Заказчик", text: $customer)
+                        if !store.customerNames().isEmpty {
+                            Menu("Выбрать заказчика") {
+                                ForEach(store.customerNames(), id: \.self) { name in
+                                    Button(name) { customer = name }
+                                }
+                            }
+                        }
                     }
                     Section("Маршрут") {
-                        Text("У каждой точки тип: загрузка или выгрузка. Можно менять тип, адрес и порядок (↑ ↓).")
+                        Text("У каждой точки тип: загрузка или выгрузка. Можно менять тип, адрес и порядок (↑ ↓). Адреса заказчика запоминаются.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
                         if !routePreview.isEmpty {
@@ -311,6 +343,14 @@ struct AdminOrderDetailView: View {
                                 }
                                 .pickerStyle(.segmented)
                                 TextField("Адрес", text: $routePoints[index].address)
+                                let suggestions = addressSuggestions(for: routePoints[index].kind)
+                                if !suggestions.isEmpty {
+                                    Menu("Сохранённые адреса") {
+                                        ForEach(suggestions, id: \.self) { addr in
+                                            Button(addr) { routePoints[index].address = addr }
+                                        }
+                                    }
+                                }
                                 HStack(spacing: 12) {
                                     Button("↑") { movePoint(from: index, by: -1) }
                                         .disabled(index == 0)
@@ -521,6 +561,14 @@ struct AdminOrderDetailView: View {
         syncingRates = false
     }
 
+    private func addressSuggestions(for kind: RoutePointKind) -> [String] {
+        guard let profile = store.customer(for: customer) else { return [] }
+        switch kind {
+        case .loading: return profile.loadingAddresses
+        case .unloading: return profile.unloadingAddresses
+        }
+    }
+
     private func addPoint(kind: RoutePointKind) {
         let insertAt = max(1, routePoints.count - 1)
         routePoints.insert(RoutePoint(address: "", kind: kind), at: insertAt)
@@ -641,6 +689,26 @@ struct AdminCatalogView: View {
                 }
                 .listRowBackground(AppTheme.botBubble.opacity(0.7))
             }
+            Section("Заказчики") {
+                if store.customers.isEmpty {
+                    Text("Появятся после сохранения заявок с заказчиком")
+                        .foregroundStyle(AppTheme.textMuted)
+                        .listRowBackground(AppTheme.botBubble.opacity(0.7))
+                }
+                ForEach(store.customers) { customer in
+                    NavigationLink {
+                        CustomerEditView(store: store, name: customer.name)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(customer.name)
+                            Text("загрузок: \(customer.loadingAddresses.count) · выгрузок: \(customer.unloadingAddresses.count)")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.textMuted)
+                        }
+                    }
+                    .listRowBackground(AppTheme.botBubble.opacity(0.7))
+                }
+            }
             Section("Авто (л/100 км)") {
                 ForEach(store.vehicles) { vehicle in
                     NavigationLink {
@@ -736,6 +804,95 @@ struct FinanceSettingsEditView: View {
             perHour = s.defaultRatePerHourWork > 0 ? String(format: "%g", s.defaultRatePerHourWork) : ""
             perKm = s.defaultRatePerKmCash > 0 ? String(format: "%g", s.defaultRatePerKmCash) : ""
         }
+    }
+}
+
+struct CustomerEditView: View {
+    @ObservedObject var store: ShiftStore
+    let name: String
+    @State private var newLoading = ""
+    @State private var newUnloading = ""
+    @Environment(\.dismiss) private var dismiss
+
+    private var profile: CustomerProfile? { store.customer(for: name) }
+
+    var body: some View {
+        Form {
+            Section("Заказчик") {
+                Text(name)
+            }
+            Section("Адреса загрузки") {
+                if let loads = profile?.loadingAddresses, !loads.isEmpty {
+                    ForEach(loads, id: \.self) { addr in
+                        HStack {
+                            Text(addr)
+                            Spacer()
+                            Button("Удалить", role: .destructive) {
+                                removeAddress(addr, kind: .loading)
+                            }
+                            .font(.caption)
+                        }
+                    }
+                } else {
+                    Text("Пока нет").foregroundStyle(AppTheme.textMuted)
+                }
+                TextField("Добавить загрузку", text: $newLoading, axis: .vertical)
+                Button("Добавить") {
+                    addAddress(newLoading, kind: .loading)
+                    newLoading = ""
+                }
+                .foregroundStyle(AppTheme.accent)
+            }
+            Section("Адреса выгрузки") {
+                if let unloads = profile?.unloadingAddresses, !unloads.isEmpty {
+                    ForEach(unloads, id: \.self) { addr in
+                        HStack {
+                            Text(addr)
+                            Spacer()
+                            Button("Удалить", role: .destructive) {
+                                removeAddress(addr, kind: .unloading)
+                            }
+                            .font(.caption)
+                        }
+                    }
+                } else {
+                    Text("Пока нет").foregroundStyle(AppTheme.textMuted)
+                }
+                TextField("Добавить выгрузку", text: $newUnloading, axis: .vertical)
+                Button("Добавить") {
+                    addAddress(newUnloading, kind: .unloading)
+                    newUnloading = ""
+                }
+                .foregroundStyle(AppTheme.accent)
+            }
+            Button("Удалить заказчика", role: .destructive) {
+                store.deleteCustomer(named: name)
+                dismiss()
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.canvasTop)
+        .navigationTitle("Заказчик")
+    }
+
+    private func addAddress(_ raw: String, kind: RoutePointKind) {
+        var profile = store.customer(for: name) ?? CustomerProfile(name: name)
+        switch kind {
+        case .loading: profile.remember(loading: raw, unloading: nil)
+        case .unloading: profile.remember(loading: nil, unloading: raw)
+        }
+        store.updateCustomer(profile)
+    }
+
+    private func removeAddress(_ addr: String, kind: RoutePointKind) {
+        guard var profile = store.customer(for: name) else { return }
+        switch kind {
+        case .loading:
+            profile.loadingAddresses.removeAll { $0 == addr }
+        case .unloading:
+            profile.unloadingAddresses.removeAll { $0 == addr }
+        }
+        store.updateCustomer(profile)
     }
 }
 

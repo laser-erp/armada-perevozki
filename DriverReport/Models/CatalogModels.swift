@@ -31,6 +31,65 @@ struct DriverProfile: Identifiable, Codable, Equatable {
     ]
 }
 
+struct CustomerProfile: Identifiable, Codable, Equatable {
+    var id: String { name }
+    var name: String
+    var loadingAddresses: [String]
+    var unloadingAddresses: [String]
+
+    init(name: String, loadingAddresses: [String] = [], unloadingAddresses: [String] = []) {
+        self.name = name
+        self.loadingAddresses = Self.uniqueSorted(loadingAddresses)
+        self.unloadingAddresses = Self.uniqueSorted(unloadingAddresses)
+    }
+
+    mutating func remember(loading: String?, unloading: String?) {
+        if let loading {
+            let trimmed = loading.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, !loadingAddresses.contains(trimmed) {
+                loadingAddresses.insert(trimmed, at: 0)
+            }
+        }
+        if let unloading {
+            let trimmed = unloading.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, !unloadingAddresses.contains(trimmed) {
+                unloadingAddresses.insert(trimmed, at: 0)
+            }
+        }
+        loadingAddresses = Self.uniqueSorted(loadingAddresses)
+        unloadingAddresses = Self.uniqueSorted(unloadingAddresses)
+    }
+
+    mutating func remember(routePoints: [RoutePoint]) {
+        for point in routePoints {
+            let addr = point.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !addr.isEmpty else { continue }
+            switch point.kind {
+            case .loading:
+                if !loadingAddresses.contains(addr) { loadingAddresses.insert(addr, at: 0) }
+            case .unloading:
+                if !unloadingAddresses.contains(addr) { unloadingAddresses.insert(addr, at: 0) }
+            }
+        }
+        loadingAddresses = Self.uniqueSorted(loadingAddresses)
+        unloadingAddresses = Self.uniqueSorted(unloadingAddresses)
+    }
+
+    private static func uniqueSorted(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for raw in values {
+            let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !v.isEmpty else { continue }
+            let key = v.lowercased()
+            if seen.insert(key).inserted {
+                result.append(v)
+            }
+        }
+        return result
+    }
+}
+
 struct FinanceSettings: Codable, Equatable {
     /// Целевая чистая маржа от ставки, %
     var markupPercent: Double

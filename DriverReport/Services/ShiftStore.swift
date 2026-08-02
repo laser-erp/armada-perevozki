@@ -10,12 +10,14 @@ final class ShiftStore: ObservableObject {
     @Published private(set) var orders: [OrderRecord] = []
     @Published private(set) var vehicles: [VehicleProfile] = VehicleProfile.defaults
     @Published private(set) var drivers: [DriverProfile] = DriverProfile.defaults
+    @Published private(set) var customers: [CustomerProfile] = []
     @Published private(set) var financeSettings: FinanceSettings = .default
 
     private let shiftsKey = "driver_shifts_v4"
     private let ordersKey = "driver_orders_v4"
     private let vehiclesKey = "driver_vehicles_v4"
     private let driversKey = "driver_drivers_v4"
+    private let customersKey = "driver_customers_v1"
     private let financeKey = "driver_finance_v1"
     private let seqKey = "driver_order_seq_v1"
     private let encoder = JSONEncoder()
@@ -47,6 +49,7 @@ final class ShiftStore: ObservableObject {
                 shifts[sIdx].orders[oIdx] = updated
             }
         }
+        rememberCustomer(from: updated)
         persist()
     }
 
@@ -126,6 +129,56 @@ final class ShiftStore: ObservableObject {
             var o = order
             o.driverPercent = profile.salaryPercent
             upsertOrder(o)
+        }
+    }
+
+    func customer(for name: String) -> CustomerProfile? {
+        let key = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        return customers.first { $0.name.compare(key, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+    }
+
+    func customerNames() -> [String] {
+        customers.map(\.name).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    func updateCustomer(_ profile: CustomerProfile) {
+        let name = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        var cleaned = profile
+        cleaned.name = name
+        if let i = customers.firstIndex(where: {
+            $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }) {
+            customers[i] = cleaned
+        } else {
+            customers.append(cleaned)
+            customers.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+        persist()
+    }
+
+    func deleteCustomer(named name: String) {
+        customers.removeAll {
+            $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }
+        persist()
+    }
+
+    func rememberCustomer(from order: OrderRecord) {
+        let name = order.customer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        var profile = customer(for: name) ?? CustomerProfile(name: name)
+        profile.name = name
+        profile.remember(routePoints: order.routePoints)
+        profile.remember(loading: order.loadingAddress, unloading: order.unloadingAddress)
+        updateCustomer(profile)
+    }
+
+    private func migrateCustomersFromOrders() {
+        guard customers.isEmpty else { return }
+        for order in orders {
+            rememberCustomer(from: order)
         }
     }
 
@@ -270,6 +323,9 @@ final class ShiftStore: ObservableObject {
         if let data = try? encoder.encode(drivers) {
             UserDefaults.standard.set(data, forKey: driversKey)
         }
+        if let data = try? encoder.encode(customers) {
+            UserDefaults.standard.set(data, forKey: customersKey)
+        }
         if let data = try? encoder.encode(financeSettings) {
             UserDefaults.standard.set(data, forKey: financeKey)
         }
@@ -300,12 +356,19 @@ final class ShiftStore: ObservableObject {
         } else {
             drivers = DriverProfile.defaults
         }
+        if let data = UserDefaults.standard.data(forKey: customersKey),
+           let decoded = try? decoder.decode([CustomerProfile].self, from: data) {
+            customers = decoded
+        } else {
+            customers = []
+        }
         if let data = UserDefaults.standard.data(forKey: financeKey),
            let decoded = try? decoder.decode(FinanceSettings.self, from: data) {
             financeSettings = decoded
         } else {
             financeSettings = .default
         }
+        migrateCustomersFromOrders()
     }
 }
 
