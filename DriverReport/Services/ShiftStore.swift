@@ -10,11 +10,13 @@ final class ShiftStore: ObservableObject {
     @Published private(set) var orders: [OrderRecord] = []
     @Published private(set) var vehicles: [VehicleProfile] = VehicleProfile.defaults
     @Published private(set) var drivers: [DriverProfile] = DriverProfile.defaults
+    @Published private(set) var financeSettings: FinanceSettings = .default
 
     private let shiftsKey = "driver_shifts_v4"
     private let ordersKey = "driver_orders_v4"
     private let vehiclesKey = "driver_vehicles_v4"
     private let driversKey = "driver_drivers_v4"
+    private let financeKey = "driver_finance_v1"
     private let seqKey = "driver_order_seq_v1"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -127,6 +129,14 @@ final class ShiftStore: ObservableObject {
         }
     }
 
+    func updateFinanceSettings(_ settings: FinanceSettings) {
+        var s = settings
+        if s.markupPercent < 0 { s.markupPercent = 0 }
+        if s.markupPercent > 80 { s.markupPercent = 80 }
+        financeSettings = s
+        persist()
+    }
+
     func createDispatcherOrder(
         dayNumber: Int,
         vehiclePlate: String,
@@ -189,6 +199,23 @@ final class ShiftStore: ObservableObject {
             OrderFinance.round2(OrderFinance.driverPay(rate: $0, percent: order.driverPercent, bonus: bonus))
         }
         let rent = order.vehicleRent ?? 0
+        let fuel = fuelCost ?? 0
+        let fixed = OrderFinance.fixedCosts(fuelCost: fuel, rent: rent, bonus: bonus)
+        let breakEven = OrderFinance.breakEvenRate(fixedCosts: fixed, driverPercent: order.driverPercent)
+        let recommended = OrderFinance.recommendedRate(
+            fixedCosts: fixed,
+            driverPercent: order.driverPercent,
+            markupPercent: financeSettings.markupPercent
+        )
+        let totalCost = rate.map {
+            OrderFinance.totalCost(
+                rate: $0,
+                fuelCost: fuel,
+                rent: rent,
+                driverPercent: order.driverPercent,
+                bonus: bonus
+            )
+        }
         let profit: Double? = {
             guard let rate, let pay, let cushion else { return nil }
             return OrderFinance.round2(
@@ -196,7 +223,7 @@ final class ShiftStore: ObservableObject {
                     rate: rate,
                     driverPay: pay,
                     cushion: cushion,
-                    fuelCost: fuelCost ?? 0,
+                    fuelCost: fuel,
                     rent: rent
                 )
             )
@@ -215,7 +242,12 @@ final class ShiftStore: ObservableObject {
             driverPay: pay,
             costPerKmNoVat: perKm,
             netProfit: profit,
-            consumptionPer100: consumption
+            consumptionPer100: consumption,
+            fixedCosts: OrderFinance.round2(fixed),
+            totalCost: totalCost,
+            breakEvenRate: breakEven,
+            recommendedRate: recommended,
+            markupPercent: financeSettings.markupPercent
         )
     }
 
@@ -231,6 +263,9 @@ final class ShiftStore: ObservableObject {
         }
         if let data = try? encoder.encode(drivers) {
             UserDefaults.standard.set(data, forKey: driversKey)
+        }
+        if let data = try? encoder.encode(financeSettings) {
+            UserDefaults.standard.set(data, forKey: financeKey)
         }
     }
 
@@ -259,6 +294,12 @@ final class ShiftStore: ObservableObject {
         } else {
             drivers = DriverProfile.defaults
         }
+        if let data = UserDefaults.standard.data(forKey: financeKey),
+           let decoded = try? decoder.decode(FinanceSettings.self, from: data) {
+            financeSettings = decoded
+        } else {
+            financeSettings = .default
+        }
     }
 }
 
@@ -272,4 +313,9 @@ struct OrderMetrics {
     var costPerKmNoVat: Double?
     var netProfit: Double?
     var consumptionPer100: Double
+    var fixedCosts: Double
+    var totalCost: Double?
+    var breakEvenRate: Double?
+    var recommendedRate: Double?
+    var markupPercent: Double
 }

@@ -308,6 +308,18 @@ struct AdminOrderDetailView: View {
                         row("ЗП водителя", m.driverPay.map { "\(format($0)) ₽" } ?? "—")
                         row("Чистая прибыль", m.netProfit.map { "\(format($0)) ₽" } ?? "—")
                     }
+                    Section("Себестоимость / ставка") {
+                        Text("Фикс = ГСМ + аренда + доплата. Безубыток и рекомендация учитывают % ЗП и подушку 10%.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                        row("Себестоимость (фикс)", "\(format(m.fixedCosts)) ₽")
+                        row("Полная себестоимость", m.totalCost.map { "\(format($0)) ₽" } ?? "—")
+                        row("Безубыток", m.breakEvenRate.map { "\(format($0)) ₽" } ?? "—")
+                        row(
+                            "Рекомендация +\(Int(m.markupPercent.rounded()))%",
+                            m.recommendedRate.map { "\(format($0)) ₽" } ?? "—"
+                        )
+                    }
                     if saved {
                         Text("Сохранено").foregroundStyle(.green).font(.caption)
                     }
@@ -345,9 +357,18 @@ struct AdminOrderDetailView: View {
         let triad = OrderFinance.fillRates(from: form, amount: amount)
         syncingRates = true
         paymentForm = form
-        rateWithVat = format(triad.withVat)
-        rateWithoutVat = format(triad.withoutVat)
-        rateCash = format(triad.cash)
+        // Не перезаписываем поле, которое сейчас вводит пользователь
+        switch form {
+        case .withVat:
+            rateWithoutVat = format(triad.withoutVat)
+            rateCash = format(triad.cash)
+        case .withoutVat:
+            rateWithVat = format(triad.withVat)
+            rateCash = format(triad.cash)
+        case .cash:
+            rateWithVat = format(triad.withVat)
+            rateWithoutVat = format(triad.withoutVat)
+        }
         syncingRates = false
     }
 
@@ -385,6 +406,19 @@ struct AdminCatalogView: View {
 
     var body: some View {
         List {
+            Section("Финансы") {
+                NavigationLink {
+                    MarkupEditView(store: store)
+                } label: {
+                    HStack {
+                        Text("Наценка к себестоимости")
+                        Spacer()
+                        Text("\(Int(store.financeSettings.markupPercent.rounded()))%")
+                            .foregroundStyle(AppTheme.accent)
+                    }
+                }
+                .listRowBackground(AppTheme.botBubble.opacity(0.7))
+            }
             Section("Авто (л/100 км)") {
                 ForEach(store.vehicles) { vehicle in
                     NavigationLink {
@@ -419,6 +453,35 @@ struct AdminCatalogView: View {
         .scrollContentBackground(.hidden)
         .background(AppTheme.canvasTop)
         .navigationTitle("Справочники")
+    }
+}
+
+struct MarkupEditView: View {
+    @ObservedObject var store: ShiftStore
+    @State private var value = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Form {
+            Text("Целевая маржа в рекомендуемой ставке. По умолчанию 15%. Можно менять от 0 до 80.")
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
+            TextField("Наценка, %", text: $value)
+                .keyboardType(.decimalPad)
+            Button("Сохранить") {
+                let raw = Double(value.replacingOccurrences(of: ",", with: ".")) ?? 15
+                let clamped = min(80, max(0, raw))
+                store.updateFinanceSettings(FinanceSettings(markupPercent: clamped))
+                dismiss()
+            }
+            .foregroundStyle(AppTheme.accent)
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.canvasTop)
+        .navigationTitle("Наценка")
+        .onAppear {
+            value = String(format: "%g", store.financeSettings.markupPercent)
+        }
     }
 }
 

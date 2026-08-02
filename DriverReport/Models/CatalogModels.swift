@@ -31,6 +31,13 @@ struct DriverProfile: Identifiable, Codable, Equatable {
     ]
 }
 
+struct FinanceSettings: Codable, Equatable {
+    /// Целевая чистая маржа от ставки, %
+    var markupPercent: Double
+
+    static let `default` = FinanceSettings(markupPercent: 15)
+}
+
 enum OrderFinance {
     static let cushionPercent: Double = 10
     /// Ставка с НДС = без НДС + 22%
@@ -54,6 +61,43 @@ enum OrderFinance {
             round2(without),
             round2(without * (1 - cashDiscount))
         )
+    }
+
+    /// Доля ставки, уходящая в ЗП% + подушку%
+    static func variableShare(driverPercent: Double) -> Double {
+        driverPercent / 100.0 + cushionPercent / 100.0
+    }
+
+    /// Постоянные затраты: ГСМ + аренда + доплата к ЗП
+    static func fixedCosts(fuelCost: Double, rent: Double, bonus: Double) -> Double {
+        fuelCost + rent + bonus
+    }
+
+    /// Безубыточная ставка: fixed / (1 − ЗП% − подушка%)
+    static func breakEvenRate(fixedCosts: Double, driverPercent: Double) -> Double? {
+        let den = 1 - variableShare(driverPercent: driverPercent)
+        guard den > 0.01 else { return nil }
+        return round2(fixedCosts / den)
+    }
+
+    /// Рекомендуемая ставка под целевую маржу markup% от ставки
+    static func recommendedRate(fixedCosts: Double, driverPercent: Double, markupPercent: Double) -> Double? {
+        let den = 1 - variableShare(driverPercent: driverPercent) - markupPercent / 100.0
+        guard den > 0.01 else { return nil }
+        return round2(fixedCosts / den)
+    }
+
+    /// Полная себестоимость при заданной ставке
+    static func totalCost(
+        rate: Double,
+        fuelCost: Double,
+        rent: Double,
+        driverPercent: Double,
+        bonus: Double
+    ) -> Double {
+        let pay = driverPay(rate: rate, percent: driverPercent, bonus: bonus)
+        let cush = cushion(rate: rate)
+        return round2(fuelCost + rent + pay + cush)
     }
 
     /// км от стоянки до окончания заказа
