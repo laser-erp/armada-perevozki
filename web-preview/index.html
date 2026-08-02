@@ -65,6 +65,13 @@
     .admin-cards{display:flex;flex-direction:column;gap:10px;padding:12px 16px 24px}
     .admin-cards .card button{margin-top:10px}
     .rate-missing{color:#ffb4b4;font-size:.82rem;font-weight:700}
+    .swipe-item{position:relative;overflow:hidden;border-radius:14px;touch-action:pan-y}
+    .swipe-actions{position:absolute;inset:0 0 0 auto;display:flex;z-index:0}
+    .swipe-actions button{border:0;background:var(--accent);color:#fff;font-weight:700;padding:0 16px;min-width:118px;cursor:pointer}
+    .swipe-front{position:relative;z-index:1;background:rgba(46,46,46,.96);border-radius:14px;padding:12px 14px;transition:transform .18s ease;will-change:transform}
+    .swipe-front h3{margin:0 0 4px;font-size:1rem}
+    .swipe-front p{margin:0;color:var(--muted);font-size:.85rem}
+    .orders-hint{color:var(--muted);font-size:.8rem;padding:0 2px 4px}
   </style>
 </head>
 <body>
@@ -327,7 +334,19 @@ function upsertOrder(order){
 }
 function openOrder(){ return inProgressOrder(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
-function statusText(o){ if(o.closedAt) return 'Закрыт'; if(o.startOdometer!=null) return 'В работе'; return 'Назначен'; }
+function statusText(o){
+  if(o.closedAt) return 'Закрыт';
+  if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
+  if(o.startOdometer!=null) return 'В работе';
+  return 'Назначен';
+}
+function canStartAssignedMessage(){
+  const shift=findOpenShift();
+  if(!shift) return 'Сначала откройте смену';
+  if(!isEtoDone(shift) || state.step!=='done') return 'Сначала завершите ЕТО';
+  if(hasOpenOrder()) return 'Сначала закройте текущий заказ';
+  return null;
+}
 function dayTotal(o){ if(o.emptyKmBefore==null && o.loadedKm==null && o.emptyKmAfter==null) return null; return (o.emptyKmBefore||0)+(o.loadedKm||0)+(o.emptyKmAfter||0); }
 function kmParkingToEnd(o){
   if(o.endOdometer!=null && o.previousOdometer!=null) return Math.max(0, o.endOdometer-o.previousOdometer);
@@ -555,7 +574,7 @@ function renderInput(){
     html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
   } else if(os==='dayNumber') html+=`<div class="hint">Номер заказа за день</div><div class="nums">${[1,2,3,4,5].map(n=>`<button data-day="${n}">${n}</button>`).join('')}</div>`;
   else if(os==='loading'||os==='unloading') html+=`<div class="row"><textarea id="text" rows="2" placeholder="Город, улица, дом, строение"></textarea><button id="text-ok">OK</button></div>`;
-  else if(os==='askRefuel') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
+  else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
   else if(state.step==='idle') html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
   else if(state.step==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
   else if(state.step==='odometer'||state.step==='fuel') html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${state.step==='odometer'?'Например, 125430':'Например, 42'}" /><button id="num-ok">OK</button></div>`;
@@ -564,8 +583,12 @@ function renderInput(){
   else if(state.step==='lights') html+=lightsUI();
   else if(state.step==='oil') html+=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons();
   else if(state.step==='done'){
-    if(hasOpenOrder()) html+=`<button class="primary" id="close-order">Закрыть заказ</button>`;
-    else {
+    if(hasOpenOrder()){
+      const open=inProgressOrder();
+      if(open&&open.staysLoadedOvernight) html+=`<div class="hint">Заказ №${open.sequentialNumber} перенесён (машина загружена) — закройте после выгрузки.</div>`;
+      html+=`<button class="primary" id="close-order">Закрыть заказ</button>`;
+      html+=`<button class="secondary" id="close-shift">Закрыть смену</button>`;
+    } else {
       assignedPending().forEach(o=>{ html+=`<button class="primary start-assigned" data-id="${o.id}">Начать заказ №${o.sequentialNumber}</button>`; });
       html+=`<button class="secondary" id="create-order">Создать заказ сам</button>`;
       html+=`<button class="primary" id="close-shift">Закрыть смену</button>`;
@@ -588,8 +611,8 @@ function wireInput(){
   $('new-shift')&&($('new-shift').onclick=startNewShiftClick);
   document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>selectDayNumber(+b.dataset.day));
   $('text-ok')&&($('text-ok').onclick=submitText);
-  $('refuel-yes')&&($('refuel-yes').onclick=()=>answerRefuel(true));
-  $('refuel-no')&&($('refuel-no').onclick=()=>answerRefuel(false));
+  $('refuel-yes')&&($('refuel-yes').onclick=()=>answerYesNo(true));
+  $('refuel-no')&&($('refuel-no').onclick=()=>answerYesNo(false));
 }
 
 function findOpenShift(){ return (state.shifts||[]).slice().sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt)).find(s=>!s.endedAt) || null; }
@@ -707,12 +730,29 @@ function submitLights(){
   add('driver',`Ближний свет: ${lowBeam}\nСтоп-сигналы: ${brake}\nУказатели поворотов: ${turn}`);
   add('bot','Укажите уровень масла в ДВС:\n• Максимум\n• Середина\n• Минимум'); state.step='oil'; state.error=''; upsertShift(); renderInput();
 }
-function beginAssigned(id){
-  if(hasOpenOrder()){ state.error='Сначала закройте текущий заказ'; renderInput(); return; }
-  const order=state.orders.find(o=>o.id===id); if(!order||order.startOdometer!=null){ state.error='Заказ недоступен'; renderInput(); return; }
+function beginAssigned(id, fromOrders){
+  const gate=canStartAssignedMessage();
+  if(gate){
+    if(fromOrders){ showOrdersError(gate); return false; }
+    state.error=gate; renderInput(); return false;
+  }
+  const order=state.orders.find(o=>o.id===id);
+  if(!order||order.closedAt||order.startOdometer!=null){
+    const msg='Заказ недоступен для старта';
+    if(fromOrders){ showOrdersError(msg); return false; }
+    state.error=msg; renderInput(); return false;
+  }
+  if(!state.shift) state.shift=findOpenShift();
+  hideDriverPanels();
   state.draft.assignedId=id; add('driver',`Начать заказ №${order.sequentialNumber}`);
   add('bot',`Заказ №${order.sequentialNumber} (день ${order.dayNumber})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите показания одометра по прибытию на загрузку.`);
-  state.orderStep='startAssignedOdometer'; state.error=''; upsertShift(); renderInput();
+  state.orderStep='startAssignedOdometer'; state.error=''; upsertShift(); renderChat();
+  return true;
+}
+function showOrdersError(msg){
+  const el=$('orders-error');
+  if(el) el.textContent=msg;
+  else state.error=msg;
 }
 function acceptStartAssigned(value){
   const order=state.orders.find(o=>o.id===state.draft.assignedId); if(!order){ state.error='Заказ не найден'; renderInput(); return; }
@@ -728,6 +768,7 @@ function acceptStartAssigned(value){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
 }
 function startCreateOrder(){
+  if(!findOpenShift()){state.error='Сначала откройте смену';renderInput();return;}
   if(state.step!=='done'||!state.shift){state.error='Сначала завершите ЕТО';renderInput();return;}
   if(hasOpenOrder()){state.error='Сначала закройте текущий заказ';renderInput();return;}
   state.draft={}; state.orderStep='chooseVehicle'; add('driver','Создать заказ'); add('bot','Выберите автомобиль для заказа.'); state.error=''; upsertShift(); renderInput();
@@ -740,8 +781,13 @@ function startCloseOrder(){
 }
 function startCloseShift(){
   if(state.step!=='done'||!state.shift){state.error='Сначала завершите ЕТО';renderInput();return;}
-  if(hasOpenOrder()){state.error='Сначала закройте текущий заказ';renderInput();return;}
   add('driver','Закрыть смену');
+  const open=inProgressOrder();
+  if(open){
+    add('bot',`Есть незакрытый заказ №${open.sequentialNumber}.\nМашина осталась загружена? Выгрузка на следующий день?`);
+    state.orderStep='closeShiftStaysLoaded'; state.error=''; upsertShift(); renderInput();
+    return;
+  }
   add('bot','Укажите показания одометра по возвращении на стоянку.');
   state.orderStep='closeShiftParking'; state.error=''; upsertShift(); renderInput();
 }
@@ -749,19 +795,42 @@ function acceptCloseShiftParking(value){
   const prev=state.shift.lastOdometerPoint??state.shift.odometer;
   if(prev!=null && value<prev){ state.error=`Одометр не может быть меньше предыдущего (${prev})`; renderInput(); return; }
   add('driver',String(value));
-  const closed=(state.shift.orders||[]).filter(o=>o.closedAt && o.endOdometer!=null)
-    .sort((a,b)=>new Date(a.closedAt)-new Date(b.closedAt));
-  const last=closed[closed.length-1];
-  if(last){
-    last.emptyKmAfter=Math.max(0, value-last.endOdometer);
-    upsertOrder(last);
+  const open=inProgressOrder();
+  if(open){
+    open.staysLoadedOvernight=true;
+    if(!state.shift.orders) state.shift.orders=[];
+    if(!state.shift.orders.some(o=>o.id===open.id)) state.shift.orders.push(open);
+    upsertOrder(open);
+    add('bot',`Смена закрыта. Заказ №${open.sequentialNumber} перенесён — машина загружена.\nЗавтра после ЕТО закройте заказ после выгрузки.`);
+  } else {
+    const closed=(state.shift.orders||[]).filter(o=>o.closedAt && o.endOdometer!=null)
+      .sort((a,b)=>new Date(a.closedAt)-new Date(b.closedAt));
+    const last=closed[closed.length-1];
+    if(last){
+      last.emptyKmAfter=Math.max(0, value-last.endOdometer);
+      upsertOrder(last);
+    }
+    add('bot','Смена закрыта. Хорошего отдыха!');
   }
   state.shift.parkingOdometer=value;
   state.shift.lastOdometerPoint=value;
   state.shift.endedAt=new Date().toISOString();
-  add('bot','Смена закрыта. Хорошего отдыха!');
   upsertShift(); persist();
   resetChat();
+}
+function answerYesNo(yes){
+  if(state.orderStep==='closeShiftStaysLoaded'){
+    add('driver', yes?'Да':'Нет');
+    if(!yes){
+      add('bot','Сначала закройте заказ — либо подтвердите, что машина осталась загружена до завтра.');
+      state.orderStep='idle'; state.error='Сначала закройте текущий заказ';
+      upsertShift(); renderInput(); return;
+    }
+    add('bot','Укажите показания одометра по возвращении на стоянку. Заказ останется открытым до выгрузки.');
+    state.orderStep='closeShiftParking'; state.error=''; upsertShift(); renderInput();
+    return;
+  }
+  answerRefuel(yes);
 }
 function answerRefuel(yes){
   add('driver', yes?'Да':'Нет');
@@ -777,6 +846,7 @@ function finalizeClose(refueled,price,liters){
   const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
   const end=state.draft.closeOdo; const loaded=end-order.startOdometer;
   order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=new Date().toISOString();
+  order.staysLoadedOvernight=null;
   if(refueled){ order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters); }
   const park=state.draft.parkingAfterOdo;
   if(park!=null && park>=end){
@@ -866,10 +936,92 @@ function showOrders(){
   hideDriverPanels();
   $('orders-panel').classList.add('show');
   const orders=allOrders().filter(o=>o.driverName===DRIVER);
-  $('orders-list').innerHTML = !orders.length ? `<div class="empty">Пока нет заявок</div>` :
-    orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
-      <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
-      <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(driverPayText(o))}</p></div>`).join('');
+  if(!orders.length){
+    $('orders-list').innerHTML=`<div class="empty">Пока нет заявок</div>`;
+    return;
+  }
+  $('orders-list').innerHTML =
+    `<div class="orders-hint">У назначенных: свайп влево → «Начать заказ»</div><div id="orders-error" class="error"></div>`+
+    orders.map(o=>{
+      const canStart=!o.closedAt && o.startOdometer==null;
+      return `<div class="swipe-item" data-id="${o.id}" data-can-start="${canStart?1:0}">
+        ${canStart?`<div class="swipe-actions"><button type="button" class="swipe-start" data-id="${o.id}">Начать заказ</button></div>`:''}
+        <div class="swipe-front">
+          <h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
+          <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
+          <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(driverPayText(o))}</p>
+        </div>
+      </div>`;
+    }).join('');
+  wireOrdersSwipe();
+}
+function wireOrdersSwipe(){
+  const ACTION_W=118;
+  document.querySelectorAll('#orders-list .swipe-item').forEach(item=>{
+    const front=item.querySelector('.swipe-front');
+    if(!front || item.dataset.canStart!=='1') return;
+    let startX=0, startY=0, dx=0, tracking=false, horizontal=false;
+    const setX=(x)=>{ front.style.transform=`translateX(${x}px)`; };
+    const closeOthers=()=>{
+      document.querySelectorAll('#orders-list .swipe-item').forEach(other=>{
+        if(other===item) return;
+        const f=other.querySelector('.swipe-front');
+        if(f){ f.style.transform='translateX(0)'; other.dataset.open='0'; }
+      });
+    };
+    front.addEventListener('touchstart',e=>{
+      const t=e.changedTouches[0]; startX=t.clientX; startY=t.clientY; dx=0; tracking=true; horizontal=false;
+    },{passive:true});
+    front.addEventListener('touchmove',e=>{
+      if(!tracking) return;
+      const t=e.changedTouches[0];
+      const adx=t.clientX-startX, ady=t.clientY-startY;
+      if(!horizontal){
+        if(Math.abs(adx)<8 && Math.abs(ady)<8) return;
+        if(Math.abs(ady)>Math.abs(adx)){ tracking=false; return; }
+        horizontal=true; closeOthers();
+      }
+      dx=Math.min(0, Math.max(-ACTION_W, adx));
+      setX(dx);
+    },{passive:true});
+    front.addEventListener('touchend',()=>{
+      if(!tracking && !horizontal) return;
+      tracking=false;
+      const open=dx<-ACTION_W*0.4;
+      setX(open?-ACTION_W:0);
+      item.dataset.open=open?'1':'0';
+      dx=open?-ACTION_W:0;
+    });
+    // mouse (desktop preview)
+    front.addEventListener('mousedown',e=>{
+      startX=e.clientX; startY=e.clientY; dx=0; tracking=true; horizontal=false;
+      const move=ev=>{
+        if(!tracking) return;
+        const adx=ev.clientX-startX, ady=ev.clientY-startY;
+        if(!horizontal){
+          if(Math.abs(adx)<6 && Math.abs(ady)<6) return;
+          if(Math.abs(ady)>Math.abs(adx)){ tracking=false; return; }
+          horizontal=true; closeOthers();
+        }
+        dx=Math.min(0, Math.max(-ACTION_W, adx));
+        setX(dx);
+      };
+      const up=()=>{
+        document.removeEventListener('mousemove',move);
+        document.removeEventListener('mouseup',up);
+        if(!tracking && !horizontal) return;
+        tracking=false;
+        const open=dx<-ACTION_W*0.4;
+        setX(open?-ACTION_W:0);
+        item.dataset.open=open?'1':'0';
+      };
+      document.addEventListener('mousemove',move);
+      document.addEventListener('mouseup',up);
+    });
+  });
+  document.querySelectorAll('#orders-list .swipe-start').forEach(btn=>{
+    btn.onclick=()=>beginAssigned(btn.dataset.id, true);
+  });
 }
 function showShifts(){
   hideDriverPanels();

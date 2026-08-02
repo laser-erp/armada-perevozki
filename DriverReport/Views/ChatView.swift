@@ -132,18 +132,26 @@ struct InputBar: View {
             case .yesNo:
                 HStack(spacing: 8) {
                     PrimaryButton(title: "Да") {
-                        viewModel.answerRefuel(true)
+                        viewModel.answerYesNo(true)
                     }
                     PrimaryButton(title: "Нет", style: .secondary) {
-                        viewModel.answerRefuel(false)
+                        viewModel.answerYesNo(false)
                     }
                 }
 
             case .afterETO:
                 VStack(spacing: 8) {
                     if viewModel.hasOpenOrder {
+                        if let open = viewModel.openOrder, open.isCarryOverLoaded {
+                            Text("Заказ №\(open.sequentialNumber) перенесён (машина загружена) — закройте после выгрузки.")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(AppTheme.textMuted)
+                        }
                         PrimaryButton(title: "Закрыть заказ") {
                             viewModel.startCloseOrder()
+                        }
+                        PrimaryButton(title: "Закрыть смену", style: .secondary) {
+                            viewModel.startCloseShift()
                         }
                     } else {
                         ForEach(viewModel.assignedPending) { order in
