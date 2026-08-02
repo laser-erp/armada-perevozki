@@ -243,7 +243,7 @@ struct AdminOrderDetailView: View {
     let orderId: UUID
 
     @State private var customer = ""
-    @State private var routePoints: [String] = ["", ""]
+    @State private var routePoints: [RoutePoint] = OrderRecord.defaultRoutePoints(loading: "", unloading: "")
     @State private var paymentForm: PaymentForm = .withVat
     @State private var rateWithVat = ""
     @State private var rateWithoutVat = ""
@@ -261,8 +261,12 @@ struct AdminOrderDetailView: View {
 
     private var routePreview: String {
         routePoints
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+            .map { point in
+                let addr = point.address.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !addr.isEmpty else { return nil as String? }
+                return "\(point.kind.titleRu): \(addr)"
+            }
+            .compactMap { $0 }
             .joined(separator: " → ")
     }
 
@@ -280,7 +284,7 @@ struct AdminOrderDetailView: View {
                         TextField("Заказчик", text: $customer)
                     }
                     Section("Маршрут") {
-                        Text("Можно править адреса, добавлять точки и менять их местами (↑ ↓). Первая — загрузка, последняя — выгрузка.")
+                        Text("У каждой точки тип: загрузка или выгрузка. Можно менять тип, адрес и порядок (↑ ↓).")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
                         if !routePreview.isEmpty {
@@ -288,12 +292,18 @@ struct AdminOrderDetailView: View {
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(AppTheme.accent)
                         }
-                        ForEach(routePoints.indices, id: \.self) { index in
+                        ForEach(Array(routePoints.enumerated()), id: \.element.id) { index, _ in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(pointLabel(index))
+                                Text("Точка \(index + 1)")
                                     .font(.system(.caption2, design: .rounded))
                                     .foregroundStyle(AppTheme.textMuted)
-                                TextField("Адрес точки", text: $routePoints[index])
+                                Picker("Тип", selection: $routePoints[index].kind) {
+                                    ForEach(RoutePointKind.allCases) { kind in
+                                        Text(kind.titleRu).tag(kind)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                TextField("Адрес", text: $routePoints[index].address)
                                 HStack(spacing: 12) {
                                     Button("↑") { movePoint(from: index, by: -1) }
                                         .disabled(index == 0)
@@ -309,11 +319,12 @@ struct AdminOrderDetailView: View {
                                 .font(.system(.caption, design: .rounded))
                             }
                         }
-                        Button("+ Точка") {
-                            let insertAt = max(1, routePoints.count - 1)
-                            routePoints.insert("", at: insertAt)
+                        Menu {
+                            Button("Загрузка") { addPoint(kind: .loading) }
+                            Button("Выгрузка") { addPoint(kind: .unloading) }
+                        } label: {
+                            Text("+ Точка").foregroundStyle(AppTheme.accent)
                         }
-                        .foregroundStyle(AppTheme.accent)
                         if let routeError {
                             Text(routeError).foregroundStyle(.red).font(.caption)
                         }
@@ -402,10 +413,9 @@ struct AdminOrderDetailView: View {
         syncingRates = false
     }
 
-    private func pointLabel(_ index: Int) -> String {
-        if index == 0 { return "1. Загрузка" }
-        if index == routePoints.count - 1 { return "\(index + 1). Выгрузка" }
-        return "\(index + 1). Промежуточная"
+    private func addPoint(kind: RoutePointKind) {
+        let insertAt = max(1, routePoints.count - 1)
+        routePoints.insert(RoutePoint(address: "", kind: kind), at: insertAt)
     }
 
     private func movePoint(from index: Int, by delta: Int) {
@@ -438,11 +448,21 @@ struct AdminOrderDetailView: View {
     }
 
     private func save(_ original: OrderRecord) {
-        let cleaned = routePoints
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        let cleaned = routePoints.compactMap { point -> RoutePoint? in
+            let addr = point.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !addr.isEmpty else { return nil }
+            return RoutePoint(id: point.id, address: addr, kind: point.kind)
+        }
         guard cleaned.count >= 2 else {
-            routeError = "Нужны минимум 2 точки маршрута"
+            routeError = "Нужны минимум 2 точки маршрута с адресом"
+            return
+        }
+        if !cleaned.contains(where: { $0.kind == .loading }) {
+            routeError = "Добавьте хотя бы одну точку «Загрузка»"
+            return
+        }
+        if !cleaned.contains(where: { $0.kind == .unloading }) {
+            routeError = "Добавьте хотя бы одну точку «Выгрузка»"
             return
         }
         routeError = nil

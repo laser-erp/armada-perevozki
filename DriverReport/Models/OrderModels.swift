@@ -5,6 +5,43 @@ enum OrderSource: String, Codable {
     case dispatcher
 }
 
+enum RoutePointKind: String, Codable, CaseIterable, Identifiable {
+    case loading
+    case unloading
+
+    var id: String { rawValue }
+
+    var titleRu: String {
+        switch self {
+        case .loading: return "Загрузка"
+        case .unloading: return "Выгрузка"
+        }
+    }
+}
+
+struct RoutePoint: Identifiable, Codable, Equatable {
+    var id: UUID
+    var address: String
+    var kind: RoutePointKind
+
+    init(id: UUID = UUID(), address: String, kind: RoutePointKind) {
+        self.id = id
+        self.address = address
+        self.kind = kind
+    }
+
+    var labeledText: String { "\(kind.titleRu): \(address)" }
+
+    enum CodingKeys: String, CodingKey { case id, address, kind }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        address = try c.decode(String.self, forKey: .address)
+        kind = try c.decode(RoutePointKind.self, forKey: .kind)
+    }
+}
+
 struct OrderRecord: Identifiable, Codable, Equatable {
     let id: UUID
     let sequentialNumber: Int
@@ -16,8 +53,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var customer: String
     var loadingAddress: String
     var unloadingAddress: String
-    /// Полный маршрут: [загрузка, …промежуточные…, выгрузка]. Минимум 2 точки.
-    var routePoints: [String]
+    /// Маршрут: точки с типом загрузка/выгрузка. Минимум 2.
+    var routePoints: [RoutePoint]
     var startOdometer: Int?
     var previousOdometer: Int?
     var emptyKmBefore: Int?
@@ -42,30 +79,57 @@ struct OrderRecord: Identifiable, Codable, Equatable {
 
     var routeText: String {
         let points = Self.normalizedRoutePoints(routePoints, loading: loadingAddress, unloading: unloadingAddress)
-        return points.joined(separator: " → ")
+        return points.map(\.labeledText).joined(separator: " → ")
     }
 
-    /// Гарантирует ≥2 точки и синхронизирует loading/unloading с первой/последней.
-    mutating func applyRoutePoints(_ points: [String]) {
+    /// Гарантирует ≥2 точки и синхронизирует legacy loading/unloading.
+    mutating func applyRoutePoints(_ points: [RoutePoint]) {
         let normalized = Self.normalizedRoutePoints(points, loading: loadingAddress, unloading: unloadingAddress)
         routePoints = normalized
-        loadingAddress = normalized[0]
-        unloadingAddress = normalized[normalized.count - 1]
+        loadingAddress = normalized.first(where: { $0.kind == .loading })?.address ?? normalized[0].address
+        unloadingAddress = normalized.last(where: { $0.kind == .unloading })?.address
+            ?? normalized[normalized.count - 1].address
     }
 
-    static func normalizedRoutePoints(_ points: [String], loading: String, unloading: String) -> [String] {
-        var cleaned = points
+    static func defaultRoutePoints(loading: String, unloading: String) -> [RoutePoint] {
+        let load = loading.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unload = unloading.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            RoutePoint(address: load.isEmpty ? "Адрес загрузки" : load, kind: .loading),
+            RoutePoint(address: unload.isEmpty ? "Адрес выгрузки" : unload, kind: .unloading)
+        ]
+    }
+
+    static func normalizedRoutePoints(
+        _ points: [RoutePoint],
+        loading: String,
+        unloading: String
+    ) -> [RoutePoint] {
+        let cleaned = points.compactMap { point -> RoutePoint? in
+            let addr = point.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !addr.isEmpty else { return nil }
+            return RoutePoint(id: point.id, address: addr, kind: point.kind)
+        }
+        if cleaned.count >= 2 { return cleaned }
+        return defaultRoutePoints(loading: loading, unloading: unloading)
+    }
+
+    /// Миграция старого формата [String]: первая — загрузка, последняя — выгрузка, средние — загрузка.
+    static func migrateStringRoutePoints(
+        _ strings: [String],
+        loading: String,
+        unloading: String
+    ) -> [RoutePoint] {
+        let cleaned = strings
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if cleaned.count < 2 {
-            let load = loading.trimmingCharacters(in: .whitespacesAndNewlines)
-            let unload = unloading.trimmingCharacters(in: .whitespacesAndNewlines)
-            cleaned = [
-                load.isEmpty ? "Загрузка" : load,
-                unload.isEmpty ? "Выгрузка" : unload
-            ]
+        guard cleaned.count >= 2 else {
+            return defaultRoutePoints(loading: loading, unloading: unloading)
         }
-        return cleaned
+        return cleaned.enumerated().map { index, address in
+            let kind: RoutePointKind = (index == cleaned.count - 1) ? .unloading : .loading
+            return RoutePoint(address: address, kind: kind)
+        }
     }
 
     var isClosed: Bool { closedAt != nil }
@@ -97,7 +161,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         customer: String = "",
         loadingAddress: String,
         unloadingAddress: String,
-        routePoints: [String]? = nil,
+        routePoints: [RoutePoint]? = nil,
         startOdometer: Int? = nil,
         previousOdometer: Int? = nil,
         emptyKmBefore: Int? = nil,
@@ -128,13 +192,14 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.driverName = driverName
         self.customer = customer
         let points = Self.normalizedRoutePoints(
-            routePoints ?? [loadingAddress, unloadingAddress],
+            routePoints ?? Self.defaultRoutePoints(loading: loadingAddress, unloading: unloadingAddress),
             loading: loadingAddress,
             unloading: unloadingAddress
         )
         self.routePoints = points
-        self.loadingAddress = points[0]
-        self.unloadingAddress = points[points.count - 1]
+        self.loadingAddress = points.first(where: { $0.kind == .loading })?.address ?? points[0].address
+        self.unloadingAddress = points.last(where: { $0.kind == .unloading })?.address
+            ?? points[points.count - 1].address
         self.startOdometer = startOdometer
         self.previousOdometer = previousOdometer
         self.emptyKmBefore = emptyKmBefore
@@ -178,15 +243,19 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         customer = try c.decodeIfPresent(String.self, forKey: .customer) ?? ""
         let loading = try c.decode(String.self, forKey: .loadingAddress)
         let unloading = try c.decode(String.self, forKey: .unloadingAddress)
-        let decodedPoints = try c.decodeIfPresent([String].self, forKey: .routePoints)
-        let points = Self.normalizedRoutePoints(
-            decodedPoints ?? [loading, unloading],
-            loading: loading,
-            unloading: unloading
-        )
+        let rawPoints: [RoutePoint]
+        if let typed = try? c.decode([RoutePoint].self, forKey: .routePoints), !typed.isEmpty {
+            rawPoints = typed
+        } else if let strings = try? c.decode([String].self, forKey: .routePoints) {
+            rawPoints = Self.migrateStringRoutePoints(strings, loading: loading, unloading: unloading)
+        } else {
+            rawPoints = Self.defaultRoutePoints(loading: loading, unloading: unloading)
+        }
+        let points = Self.normalizedRoutePoints(rawPoints, loading: loading, unloading: unloading)
         routePoints = points
-        loadingAddress = points[0]
-        unloadingAddress = points[points.count - 1]
+        loadingAddress = points.first(where: { $0.kind == .loading })?.address ?? points[0].address
+        unloadingAddress = points.last(where: { $0.kind == .unloading })?.address
+            ?? points[points.count - 1].address
         startOdometer = try c.decodeIfPresent(Int.self, forKey: .startOdometer)
         previousOdometer = try c.decodeIfPresent(Int.self, forKey: .previousOdometer)
         emptyKmBefore = try c.decodeIfPresent(Int.self, forKey: .emptyKmBefore)

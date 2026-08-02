@@ -190,19 +190,41 @@ const state={
 if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
 if(state.finance.markupPercent>80) state.finance.markupPercent=80;
 if(!state.orders.length && state.shifts.length){ state.orders = state.shifts.flatMap(s => s.orders||[]); }
-function ensureRoutePoints(o){
-  let pts=Array.isArray(o.routePoints)?o.routePoints.map(p=>String(p||'').trim()).filter(Boolean):[];
-  if(pts.length<2){
-    const load=String(o.loadingAddress||'').trim()||'Загрузка';
-    const unload=String(o.unloadingAddress||'').trim()||'Выгрузка';
-    pts=[load, unload];
+function kindTitle(kind){ return kind==='unloading'?'Выгрузка':'Загрузка'; }
+function normalizePoint(p, fallbackKind){
+  if(typeof p==='string'){
+    const address=String(p||'').trim();
+    return address?{id:crypto.randomUUID(),address,kind:fallbackKind||'loading'}:null;
   }
+  if(!p||typeof p!=='object') return null;
+  const address=String(p.address||'').trim();
+  if(!address) return null;
+  const kind=p.kind==='unloading'?'unloading':'loading';
+  return {id:p.id||crypto.randomUUID(),address,kind};
+}
+function defaultRoutePoints(load, unload){
+  return [
+    {id:crypto.randomUUID(),address:String(load||'').trim()||'Адрес загрузки',kind:'loading'},
+    {id:crypto.randomUUID(),address:String(unload||'').trim()||'Адрес выгрузки',kind:'unloading'}
+  ];
+}
+function ensureRoutePoints(o){
+  let raw=Array.isArray(o.routePoints)?o.routePoints:[];
+  let pts=[];
+  if(raw.length && typeof raw[0]==='string'){
+    pts=raw.map((addr,i)=>normalizePoint(addr, i===raw.length-1?'unloading':'loading')).filter(Boolean);
+  } else {
+    pts=raw.map(p=>normalizePoint(p)).filter(Boolean);
+  }
+  if(pts.length<2) pts=defaultRoutePoints(o.loadingAddress, o.unloadingAddress);
   o.routePoints=pts;
-  o.loadingAddress=pts[0];
-  o.unloadingAddress=pts[pts.length-1];
+  o.loadingAddress=(pts.find(p=>p.kind==='loading')||pts[0]).address;
+  o.unloadingAddress=( [...pts].reverse().find(p=>p.kind==='unloading')||pts[pts.length-1]).address;
   return pts;
 }
-function routeText(o){ return ensureRoutePoints(o).join(' → '); }
+function routeText(o){
+  return ensureRoutePoints(o).map(p=>`${kindTitle(p.kind)}: ${p.address}`).join(' → ');
+}
 state.orders.forEach(o=>{
   if(o.customer==null) o.customer="";
   if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
@@ -563,7 +585,7 @@ function submitText(){
 }
 function finishOrder(unloading){
   const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
-  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:[d.loading,unloading],driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
+  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:defaultRoutePoints(d.loading,unloading),driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
   ensureRoutePoints(order);
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order); upsertOrder(order);
   const route=routeText(order);
@@ -708,7 +730,7 @@ function saveDispatcherOrder(){
   const customer=($('create-customer').value||'').trim();
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
   state.seq+=1;
-  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,routePoints:[load,unload],startOdometer:null,driverPercent:driverPercent(driver)};
+  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,routePoints:defaultRoutePoints(load,unload),startOdometer:null,driverPercent:driverPercent(driver)};
   ensureRoutePoints(order);
   upsertOrder(order); show('admin'); renderAdmin();
 }
@@ -716,35 +738,52 @@ function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
   const m=metrics(o);
-  let editPoints=ensureRoutePoints(o).slice();
-  const pointLabel=(i,n)=> i===0?`${i+1}. Загрузка`: (i===n-1?`${i+1}. Выгрузка`:`${i+1}. Промежуточная`);
+  let editPoints=ensureRoutePoints(o).map(p=>({...p}));
   const readPointsFromDom=()=>{
-    const inputs=[...document.querySelectorAll('#route-editor [data-route-i]')];
-    if(!inputs.length) return editPoints.slice();
-    return inputs.map(el=>(el.value||'').trim());
+    const rows=[...document.querySelectorAll('#route-editor [data-route-row]')];
+    if(!rows.length) return editPoints.map(p=>({...p}));
+    return rows.map(row=>{
+      const i=+row.dataset.routeRow;
+      const address=((row.querySelector('[data-route-addr]')||{}).value||'').trim();
+      const kindSel=row.querySelector('[data-route-kind]');
+      const kind=(kindSel&&kindSel.value==='unloading')?'unloading':'loading';
+      const prev=editPoints[i]||{};
+      return {id:prev.id||crypto.randomUUID(),address,kind};
+    });
   };
   const renderRouteEditor=()=>{
-    const preview=editPoints.map(p=>String(p||'').trim()).filter(Boolean).join(' → ');
+    const preview=editPoints.filter(p=>p.address).map(p=>`${kindTitle(p.kind)}: ${p.address}`).join(' → ');
     $('route-editor').innerHTML=`
-      <div class="hint">Править адреса, «+ Точка», менять местами ↑ ↓. Первая — загрузка, последняя — выгрузка.</div>
+      <div class="hint">У каждой точки тип «Загрузка» или «Выгрузка». Можно менять тип, адрес и порядок ↑ ↓.</div>
       ${preview?`<div class="calc" style="margin:6px 0">${esc(preview)}</div>`:''}
       ${editPoints.map((p,i)=>`
-        <label>${pointLabel(i, editPoints.length)}</label>
-        <input data-route-i="${i}" value="${esc(p)}" placeholder="Город, улица, дом" />
-        <div class="row" style="margin:4px 0 10px">
-          <button type="button" class="secondary" data-route-up="${i}" ${i===0?'disabled':''}>↑</button>
-          <button type="button" class="secondary" data-route-down="${i}" ${i>=editPoints.length-1?'disabled':''}>↓</button>
-          ${editPoints.length>2?`<button type="button" class="secondary" data-route-del="${i}">Удалить</button>`:''}
+        <div data-route-row="${i}" style="margin-bottom:10px">
+          <label>Точка ${i+1}</label>
+          <select data-route-kind>
+            <option value="loading" ${p.kind==='loading'?'selected':''}>Загрузка</option>
+            <option value="unloading" ${p.kind==='unloading'?'selected':''}>Выгрузка</option>
+          </select>
+          <input data-route-addr value="${esc(p.address||'')}" placeholder="Город, улица, дом" />
+          <div class="row" style="margin:4px 0 0">
+            <button type="button" class="secondary" data-route-up="${i}" ${i===0?'disabled':''}>↑</button>
+            <button type="button" class="secondary" data-route-down="${i}" ${i>=editPoints.length-1?'disabled':''}>↓</button>
+            ${editPoints.length>2?`<button type="button" class="secondary" data-route-del="${i}">Удалить</button>`:''}
+          </div>
         </div>`).join('')}
-      <button type="button" class="secondary" id="route-add">+ Точка</button>
+      <div class="row">
+        <button type="button" class="secondary" id="route-add-load">+ Загрузка</button>
+        <button type="button" class="secondary" id="route-add-unload">+ Выгрузка</button>
+      </div>
       <div class="error" id="route-error" style="display:none"></div>
     `;
-    $('route-add').onclick=()=>{
+    const addKind=kind=>{
       editPoints=readPointsFromDom();
       const insertAt=Math.max(1, editPoints.length-1);
-      editPoints.splice(insertAt, 0, '');
+      editPoints.splice(insertAt, 0, {id:crypto.randomUUID(),address:'',kind});
       renderRouteEditor();
     };
+    $('route-add-load').onclick=()=>addKind('loading');
+    $('route-add-unload').onclick=()=>addKind('unloading');
     document.querySelectorAll('[data-route-up]').forEach(b=>b.onclick=()=>{
       const i=+b.dataset.routeUp;
       editPoints=readPointsFromDom();
@@ -815,17 +854,16 @@ function openDetail(id){
   $('detail-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('detail-save').onclick=()=>{
     const order=state.orders.find(x=>x.id===id); if(!order) return;
-    const cleaned=readPointsFromDom().filter(Boolean);
+    const cleaned=readPointsFromDom().filter(p=>p.address);
     const err=$('route-error');
-    if(cleaned.length<2){
-      if(err){ err.style.display='block'; err.textContent='Нужны минимум 2 точки маршрута'; }
-      return;
-    }
+    const showErr=msg=>{ if(err){ err.style.display='block'; err.textContent=msg; } };
+    if(cleaned.length<2){ showErr('Нужны минимум 2 точки маршрута с адресом'); return; }
+    if(!cleaned.some(p=>p.kind==='loading')){ showErr('Добавьте хотя бы одну точку «Загрузка»'); return; }
+    if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
     order.routePoints=cleaned;
-    order.loadingAddress=cleaned[0];
-    order.unloadingAddress=cleaned[cleaned.length-1];
+    ensureRoutePoints(order);
     const after=($('d-empty-after').value||'').replace(/\D/g,'');
     order.emptyKmAfter=after?+after:null;
     order.paymentForm=$('d-form').value;
