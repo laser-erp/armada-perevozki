@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>АРМАДА — учёт перевозок</title>
+  <style>
+    :root {
+      --bg0:#000; --bg1:#1e1e1e; --accent:#e61a1f; --bot:#2e2e2e;
+      --text:#f5f5f5; --muted:rgba(245,245,245,.72); --field:rgba(255,255,255,.1); --ink:#111;
+    }
+    *{box-sizing:border-box} html,body{margin:0;height:100%;font-family:"Segoe UI","Trebuchet MS",sans-serif;background:#000;color:var(--text)}
+    .phone{max-width:430px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1));position:relative}
+    .phone.wide{max-width:100%}
+    .screen{position:absolute;inset:0;display:none;flex-direction:column}
+    .screen.show{display:flex}
+    .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center}
+    .logo{width:120px;height:auto}
+    .brand{font-size:2rem;font-weight:800;letter-spacing:.25em}
+    .sub{color:var(--muted)}
+    button.primary,button.secondary{width:100%;border:0;border-radius:16px;padding:14px 12px;font-size:1rem;font-weight:700;cursor:pointer}
+    button.primary{background:var(--accent);color:#fff}
+    button.secondary{background:var(--field);color:var(--text)}
+    .stack{width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px}
+    header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);gap:8px;flex-wrap:wrap}
+    header h1{margin:0;font-size:1.05rem}
+    header button{background:0;border:0;color:var(--accent);font-weight:700;cursor:pointer;white-space:nowrap}
+    #chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+    .bubble{max-width:86%;padding:10px 14px;border-radius:18px;white-space:pre-wrap;line-height:1.35}
+    .bot{align-self:flex-start;background:var(--bot)}
+    .driver{align-self:flex-end;background:var(--accent);color:#fff;font-weight:600}
+    #input-bar{padding:10px 12px 16px;border-top:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.9)}
+    .error{color:#ff8d8d;font-size:.82rem}.hint{color:var(--muted);font-size:.8rem}
+    .row{display:flex;gap:8px}
+    .row input,.row textarea,select,textarea,.pin input,.form-grid input,.form-grid select,.form-grid textarea{flex:1;border:0;border-radius:14px;padding:12px;background:var(--field);color:var(--text);font-size:1rem;outline:0;font-family:inherit}
+    .row button{border:0;border-radius:14px;padding:0 16px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+    .nums,.yesno{display:flex;gap:8px}
+    .nums button,.yesno button{flex:1;border:0;border-radius:12px;padding:12px 0;background:var(--field);color:var(--text);font-weight:700;cursor:pointer}
+    .panel-body{flex:1;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+    .card{background:rgba(46,46,46,.9);border-radius:14px;padding:12px 14px}
+    .card h3{margin:0 0 4px;font-size:1rem}.card p{margin:0;color:var(--muted);font-size:.85rem}
+    .empty{color:var(--muted);text-align:center;margin-top:40px}
+    .pin{width:100%;max-width:280px;display:flex;flex-direction:column;gap:10px}
+    .filters{display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap}
+    .filters button{border:0;border-radius:10px;padding:8px 12px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.85rem}
+    .filters button.on{background:var(--accent);color:#fff}
+    .table-wrap{flex:1;overflow:auto;padding:0 0 16px}
+    table.admin{border-collapse:collapse;min-width:1800px;font-size:12px}
+    table.admin th,table.admin td{border:1px solid rgba(255,255,255,.08);padding:8px 6px;text-align:left;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+    table.admin th{position:sticky;top:0;background:#1a1a1a;color:var(--accent);z-index:1}
+    table.admin tr{cursor:pointer}
+    table.admin tr:hover td{background:rgba(230,26,31,.12)}
+    .form-grid{display:flex;flex-direction:column;gap:8px;width:100%;max-width:420px;margin:0 auto;padding:16px;text-align:left}
+    .form-grid label{font-size:.8rem;color:var(--muted)}
+    .calc{background:rgba(46,46,46,.9);border-radius:12px;padding:10px 12px;font-size:.9rem}
+    .calc div{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+    .ok{color:#7dffa0;font-size:.85rem}
+  </style>
+</head>
+<body>
+<div class="phone" id="shell">
+  <div id="splash" class="screen show"><div class="center">
+    <img class="logo" src="logo.png" alt="АРМАДА" />
+    <div class="brand">АРМАДА</div>
+    <div class="sub">Учёт перевозок</div>
+  </div></div>
+
+  <div id="roles" class="screen"><div class="center">
+    <img class="logo" src="logo.png" alt="АРМАДА" />
+    <div class="brand">АРМАДА</div>
+    <div class="sub">Выберите роль</div>
+    <div class="stack">
+      <button class="primary" id="role-driver">Водитель</button>
+      <button class="secondary" id="role-admin">Администратор</button>
+    </div>
+  </div></div>
+
+  <div id="admin-pin" class="screen"><div class="center">
+    <div class="sub" style="align-self:stretch;text-align:left"><button id="pin-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
+    <h2 style="margin:0">Вход администратора</h2>
+    <div class="sub">Введите PIN</div>
+    <div class="pin">
+      <input id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" />
+      <div class="error" id="pin-error"></div>
+      <button class="primary" id="pin-ok">Войти</button>
+    </div>
+  </div></div>
+
+  <div id="admin" class="screen">
+    <header>
+      <button id="admin-exit">Выход</button>
+      <h1>Таблица заявок</h1>
+      <div>
+        <button id="admin-catalogs">Справочники</button>
+        <button id="admin-new">+ Заказ</button>
+      </div>
+    </header>
+    <div class="filters" id="admin-filters">
+      <button data-filter="all" class="on">Все</button>
+      <button data-filter="assigned">Назначен</button>
+      <button data-filter="progress">В работе</button>
+      <button data-filter="closed">Закрыт</button>
+    </div>
+    <div class="table-wrap" id="admin-list"></div>
+  </div>
+
+  <div id="admin-create" class="screen">
+    <div class="form-grid">
+      <button id="create-back" class="secondary">Назад</button>
+      <h2 style="margin:0">Назначить заказ</h2>
+      <label>Номер за день</label>
+      <div class="nums" id="create-day"><button data-cday="1">1</button><button data-cday="2">2</button><button data-cday="3">3</button><button data-cday="4">4</button><button data-cday="5">5</button></div>
+      <label>Автомобиль</label>
+      <select id="create-plate"></select>
+      <label>Водитель</label>
+      <select id="create-driver"></select>
+      <label>Заказчик</label>
+      <input id="create-customer" placeholder="Заказчик" />
+      <label>Адрес загрузки</label>
+      <textarea id="create-load" rows="2" placeholder="Адрес загрузки"></textarea>
+      <label>Адрес выгрузки</label>
+      <textarea id="create-unload" rows="2" placeholder="Адрес выгрузки"></textarea>
+      <div class="error" id="create-error"></div>
+      <button class="primary" id="create-save">Назначить водителю</button>
+    </div>
+  </div>
+
+  <div id="admin-detail" class="screen">
+    <div class="form-grid" id="detail-form"></div>
+  </div>
+
+  <div id="admin-catalogs-screen" class="screen">
+    <div class="form-grid" id="catalogs-form"></div>
+  </div>
+
+  <div id="driver" class="screen">
+    <header>
+      <button id="driver-exit">Выход</button>
+      <h1>Водитель</h1>
+      <div>
+        <button id="btn-orders">Заявки</button>
+        <button id="btn-shifts">Смены</button>
+      </div>
+    </header>
+    <div id="chat"></div>
+    <div id="input-bar"></div>
+    <div id="orders-panel" class="screen">
+      <header><h1>Заявки</h1><button class="back-driver">Назад</button></header>
+      <div class="panel-body" id="orders-list"></div>
+    </div>
+    <div id="shifts-panel" class="screen">
+      <header><h1>Смены</h1><button class="back-driver">Назад</button></header>
+      <div class="panel-body" id="shifts-list"></div>
+    </div>
+  </div>
+</div>
+<script>
+const DEFAULT_VEHICLES=[{plate:"О 535 МВ 198",consumptionPer100Km:20},{plate:"М 277 НО 198",consumptionPer100Km:20}];
+const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
+const FLUIDS=["Максимум","Середина","Минимум"];
+const DRIVER="Наволоцкий Е.Н.";
+const ADMIN_PIN="2580";
+const KEY="armada_app_v5";
+const OLD_KEY="armada_app_v4";
+const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
+const state={
+  step:"idle", orderStep:"idle", messages:[], shift:null,
+  shifts:saved.shifts||[], orders:saved.orders||[], seq:saved.seq||0,
+  vehicles:saved.vehicles&&saved.vehicles.length?saved.vehicles:DEFAULT_VEHICLES.map(v=>({...v})),
+  drivers:saved.drivers&&saved.drivers.length?saved.drivers:DEFAULT_DRIVERS.map(d=>({...d})),
+  light:{}, draft:{}, error:"", adminFilter:"all", detailId:null
+};
+if(!state.orders.length && state.shifts.length){ state.orders = state.shifts.flatMap(s => s.orders||[]); }
+state.orders.forEach(o=>{ if(o.customer==null) o.customer=""; if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER); });
+const $ = id => document.getElementById(id);
+function show(id){
+  document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
+  $(id).classList.add('show');
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen';
+  $('shell').classList.toggle('wide', wide);
+}
+function persist(){ localStorage.setItem(KEY, JSON.stringify({shifts:state.shifts, orders:state.orders, seq:state.seq, vehicles:state.vehicles, drivers:state.drivers})); }
+function upsertShift(){ if(!state.shift) return; state.shift.messages=state.messages.slice(); const i=state.shifts.findIndex(s=>s.id===state.shift.id); if(i>=0) state.shifts[i]=structuredClone(state.shift); else state.shifts.unshift(structuredClone(state.shift)); persist(); }
+function timeNow(){ return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
+function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function add(a,t){ state.messages.push({author:a,text:t}); renderChat(); }
+function plates(){ return state.vehicles.map(v=>v.plate); }
+function vehicle(plate){ return state.vehicles.find(v=>v.plate===plate)||{plate,consumptionPer100Km:20}; }
+function driverPercent(name){ return (state.drivers.find(d=>d.name===name)||{salaryPercent:30}).salaryPercent; }
+function round2(v){ return Math.round(v*100)/100; }
+function fmt(v){ if(v==null||v==='') return '—'; const n=+v; if(Number.isNaN(n)) return String(v); return n===Math.round(n)?String(Math.round(n)):n.toFixed(2); }
+function hasOpenOrder(){ return !!inProgressOrder(); }
+function inProgressOrder(){ return (state.orders||[]).find(o=>!o.closedAt && o.startOdometer!=null) || null; }
+function assignedPending(){ return (state.orders||[]).filter(o=>!o.closedAt && o.startOdometer==null && o.driverName===DRIVER); }
+function upsertOrder(order){
+  const i=state.orders.findIndex(o=>o.id===order.id);
+  if(i>=0) state.orders[i]=order; else state.orders.unshift(order);
+  state.shifts.forEach(s=>{ const j=(s.orders||[]).findIndex(o=>o.id===order.id); if(j>=0) s.orders[j]=order; });
+  persist();
+}
+function openOrder(){ return inProgressOrder(); }
+function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
+function statusText(o){ if(o.closedAt) return 'Закрыт'; if(o.startOdometer!=null) return 'В работе'; return 'Назначен'; }
+function dayTotal(o){ if(o.emptyKmBefore==null && o.loadedKm==null && o.emptyKmAfter==null) return null; return (o.emptyKmBefore||0)+(o.loadedKm||0)+(o.emptyKmAfter||0); }
+function kmParkingToEnd(o){
+  if(o.endOdometer!=null && o.previousOdometer!=null) return Math.max(0, o.endOdometer-o.previousOdometer);
+  if(o.emptyKmBefore!=null || o.loadedKm!=null) return (o.emptyKmBefore||0)+(o.loadedKm||0);
+  return null;
+}
+function selectedRate(o){
+  if(o.paymentForm==='withVat') return o.rateWithVat??null;
+  if(o.paymentForm==='withoutVat') return o.rateWithoutVat??null;
+  if(o.paymentForm==='cash') return o.rateCash??null;
+  return o.freight??null;
+}
+function metrics(o){
+  const cons=vehicle(o.vehiclePlate).consumptionPer100Km;
+  const km=kmParkingToEnd(o);
+  const fuelLitersCalc=km==null?null:round2(km*cons/100);
+  const price=o.fuelPricePerLiter;
+  const fuelCostCalc=(fuelLitersCalc!=null && price!=null)?round2(fuelLitersCalc*price):(o.fuelTotalCost??null);
+  const rate=selectedRate(o);
+  const cushion=rate==null?null:round2(rate*0.1);
+  const bonus=o.salaryBonus||0;
+  const percent=o.driverPercent??driverPercent(o.driverName||DRIVER);
+  const driverPay=rate==null?null:round2(rate*percent/100+bonus);
+  const rent=o.vehicleRent||0;
+  const netProfit=(rate!=null && driverPay!=null && cushion!=null)?round2(rate-driverPay-cushion-(fuelCostCalc||0)-rent):null;
+  const costPerKmNoVat=(o.rateWithoutVat!=null && o.loadedKm>0)?round2(o.rateWithoutVat/o.loadedKm):null;
+  return {km,fuelLitersCalc,fuelCostCalc,rate,cushion,driverPay,costPerKmNoVat,netProfit,cons,percent};
+}
+
+function renderChat(){
+  $('chat').innerHTML=state.messages.map(m=>`<div class="bubble ${m.author}">${esc(m.text)}</div>`).join('');
+  $('chat').scrollTop=$('chat').scrollHeight; renderInput();
+}
+function fluidButtons(){ return FLUIDS.map(l=>`<button class="secondary fluid" data-level="${l}">${l}</button>`).join(''); }
+function lightsUI(){
+  const rows=[["lowBeam","Ближний свет"],["brake","Стоп-сигналы"],["turn","Указатели поворотов"]];
+  return rows.map(([k,t])=>`<div><div class="hint">${t}</div><div class="yesno">
+    <button data-key="${k}" data-val="Да" class="${state.light[k]==='Да'?'primary':''}">Да</button>
+    <button data-key="${k}" data-val="Нет" class="${state.light[k]==='Нет'?'primary':''}">Нет</button></div></div>`).join('')+`<button class="primary" id="lights-ok">Отправить</button>`;
+}
+function renderInput(){
+  const err=state.error?`<div class="error">${esc(state.error)}</div>`:'';
+  let html=err; const os=state.orderStep;
+  if(os==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
+  else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='startAssignedOdometer'||os==='closeShiftParking'){
+    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closeShiftParking'?'Например, 277800':os==='closingOdometer'?'Например, 277720':'Например, 277690';
+    html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
+  } else if(os==='dayNumber') html+=`<div class="hint">Номер заказа за день</div><div class="nums">${[1,2,3,4,5].map(n=>`<button data-day="${n}">${n}</button>`).join('')}</div>`;
+  else if(os==='loading'||os==='unloading') html+=`<div class="row"><textarea id="text" rows="2" placeholder="Город, улица, дом, строение"></textarea><button id="text-ok">OK</button></div>`;
+  else if(os==='askRefuel') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
+  else if(state.step==='idle') html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
+  else if(state.step==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
+  else if(state.step==='odometer'||state.step==='fuel') html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${state.step==='odometer'?'Например, 125430':'Например, 42'}" /><button id="num-ok">OK</button></div>`;
+  else if(state.step==='gur') html+=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons();
+  else if(state.step==='coolant') html+=`<div class="hint">Уровень ОЖ</div>`+fluidButtons();
+  else if(state.step==='lights') html+=lightsUI();
+  else if(state.step==='oil') html+=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons();
+  else if(state.step==='done'){
+    if(hasOpenOrder()) html+=`<button class="primary" id="close-order">Закрыть заказ</button>`;
+    else {
+      assignedPending().forEach(o=>{ html+=`<button class="primary start-assigned" data-id="${o.id}">Начать заказ №${o.sequentialNumber}</button>`; });
+      html+=`<button class="secondary" id="create-order">Создать заказ сам</button>`;
+      html+=`<button class="primary" id="close-shift">Закрыть смену</button>`;
+    }
+    html+=`<button class="secondary" id="new-shift">Новая смена</button>`;
+  }
+  $('input-bar').innerHTML=html; wireInput();
+}
+function wireInput(){
+  $('open-shift')&&($('open-shift').onclick=openShift);
+  document.querySelectorAll('.plate').forEach(b=>b.onclick=()=>selectVehicle(b.dataset.plate));
+  $('num-ok')&&($('num-ok').onclick=submitNumber);
+  document.querySelectorAll('.fluid').forEach(b=>b.onclick=()=>selectFluid(b.dataset.level));
+  document.querySelectorAll('.yesno button[data-key]').forEach(b=>b.onclick=()=>{state.light[b.dataset.key]=b.dataset.val;state.error='';renderInput();});
+  $('lights-ok')&&($('lights-ok').onclick=submitLights);
+  $('create-order')&&($('create-order').onclick=startCreateOrder);
+  $('close-order')&&($('close-order').onclick=startCloseOrder);
+  $('close-shift')&&($('close-shift').onclick=startCloseShift);
+  document.querySelectorAll('.start-assigned').forEach(b=>b.onclick=()=>beginAssigned(b.dataset.id));
+  $('new-shift')&&($('new-shift').onclick=resetChat);
+  document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>selectDayNumber(+b.dataset.day));
+  $('text-ok')&&($('text-ok').onclick=submitText);
+  $('refuel-yes')&&($('refuel-yes').onclick=()=>answerRefuel(true));
+  $('refuel-no')&&($('refuel-no').onclick=()=>answerRefuel(false));
+}
+
+function openShift(){
+  state.shift={id:crypto.randomUUID(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null};
+  add('driver','Открыть смену');
+  add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.`);
+  state.step='chooseVehicle'; state.orderStep='idle'; state.error=''; upsertShift(); renderInput();
+}
+function selectVehicle(plate){
+  if(state.orderStep==='chooseVehicle'){
+    state.draft.plate=plate; add('driver',plate);
+    add('bot',`Вы выбрали автомобиль с гос.номером ${plate}.\nУкажите показания одометра по прибытию на загрузку`);
+    state.orderStep='arrivalOdometer'; state.error=''; upsertShift(); renderInput(); return;
+  }
+  state.shift.vehiclePlate=plate; add('driver',plate);
+  add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nНапишите показания одометра до выезда со стоянки.`);
+  state.step='odometer'; state.error=''; upsertShift(); renderInput();
+}
+function submitNumber(){
+  const raw=($('num')?.value||'').trim().replace(',','.');
+  if(state.orderStep==='arrivalOdometer'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    const value=+digits; const prev=state.shift.lastOdometerPoint??state.shift.odometer;
+    if(prev==null){state.error='Нет одометра смены';renderInput();return;}
+    if(value<prev){state.error=`Одометр не может быть меньше предыдущего (${prev})`;renderInput();return;}
+    state.draft.startOdo=value; state.draft.prevOdo=prev; add('driver',String(value));
+    add('bot','Укажите номер заказа за день.'); state.orderStep='dayNumber'; state.error=''; upsertShift(); renderInput(); return;
+  }
+  if(state.orderStep==='startAssignedOdometer'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    acceptStartAssigned(+digits); return;
+  }
+  if(state.orderStep==='closeShiftParking'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    acceptCloseShiftParking(+digits); return;
+  }
+  if(state.orderStep==='closingOdometer'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    const value=+digits; const order=openOrder();
+    if(!order){state.error='Нет открытого заказа';renderInput();return;}
+    if(value<order.startOdometer){state.error=`Одометр не может быть меньше начала заказа (${order.startOdometer})`;renderInput();return;}
+    state.draft.closeOdo=value; add('driver',String(value)); add('bot','Заправляли машину?');
+    state.orderStep='askRefuel'; state.error=''; upsertShift(); renderInput(); return;
+  }
+  if(state.orderStep==='fuelPrice'){
+    const price=+raw; if(!(price>0)){state.error='Введите стоимость литра, например 56.5';renderInput();return;}
+    state.draft.fuelPrice=price; add('driver',`${price} ₽/л`); add('bot','Укажите количество литров.');
+    state.orderStep='fuelAmount'; state.error=''; upsertShift(); renderInput(); return;
+  }
+  if(state.orderStep==='fuelAmount'){
+    const liters=+raw; if(!(liters>0)){state.error='Введите количество литров, например 40';renderInput();return;}
+    add('driver',`${liters} л`); finalizeClose(true, state.draft.fuelPrice, liters); return;
+  }
+  if(state.step==='odometer'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    const value=+digits; state.shift.odometer=value; state.shift.lastOdometerPoint=value;
+    add('driver',String(value)); add('bot','Введите остаток топлива в литрах.'); state.step='fuel';
+  } else if(state.step==='fuel'){
+    const value=+raw; if(!(value>=0)){state.error='Введите остаток топлива в литрах';renderInput();return;}
+    add('driver',`${value} л`);
+    add('bot','Проверьте и укажите уровень жидкости ГУР:\n• Максимум\n• Середина\n• Минимум'); state.step='gur';
+  }
+  state.error=''; upsertShift(); renderInput();
+}
+function selectFluid(level){
+  if(state.step==='gur'){ add('driver',`ГУР: ${level}`); add('bot','Проверьте и укажите уровень ОЖ:\n• Максимум\n• Середина\n• Минимум'); state.step='coolant'; }
+  else if(state.step==='coolant'){ add('driver',`ОЖ: ${level}`); add('bot','Проверьте осветительные приборы. Отметьте каждый пункт.'); state.light={}; state.step='lights'; }
+  else if(state.step==='oil'){ state.step='done'; state.orderStep='idle'; add('driver',`Масло ДВС: ${level}`); add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Создайте заказ, когда приедете на загрузку.'); }
+  state.error=''; upsertShift(); renderInput();
+}
+function submitLights(){
+  const {lowBeam,brake,turn}=state.light; if(!lowBeam||!brake||!turn){state.error='Отметьте все пункты';renderInput();return;}
+  add('driver',`Ближний свет: ${lowBeam}\nСтоп-сигналы: ${brake}\nУказатели поворотов: ${turn}`);
+  add('bot','Укажите уровень масла в ДВС:\n• Максимум\n• Середина\n• Минимум'); state.step='oil'; state.error=''; upsertShift(); renderInput();
+}
+function beginAssigned(id){
+  if(hasOpenOrder()){ state.error='Сначала закройте текущий заказ'; renderInput(); return; }
+  const order=state.orders.find(o=>o.id===id); if(!order||order.startOdometer!=null){ state.error='Заказ недоступен'; renderInput(); return; }
+  state.draft.assignedId=id; add('driver',`Начать заказ №${order.sequentialNumber}`);
+  add('bot',`Заказ №${order.sequentialNumber} (день ${order.dayNumber})\nАвто: ${order.vehiclePlate}\nМаршрут: ${order.loadingAddress} — ${order.unloadingAddress}\nУкажите показания одометра по прибытию на загрузку.`);
+  state.orderStep='startAssignedOdometer'; state.error=''; upsertShift(); renderInput();
+}
+function acceptStartAssigned(value){
+  const order=state.orders.find(o=>o.id===state.draft.assignedId); if(!order){ state.error='Заказ не найден'; renderInput(); return; }
+  const prev=state.shift.lastOdometerPoint??state.shift.odometer;
+  if(prev==null){ state.error='Нет одометра смены'; renderInput(); return; }
+  if(value<prev){ state.error=`Одометр не может быть меньше предыдущего (${prev})`; renderInput(); return; }
+  order.startOdometer=value; order.previousOdometer=prev; order.emptyKmBefore=value-prev;
+  if(!state.shift.orders) state.shift.orders=[];
+  if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
+  upsertOrder(order); add('driver',String(value));
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · день ${order.dayNumber}\n${order.loadingAddress} — ${order.unloadingAddress}\nОдометр: ${value}`);
+  add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
+  state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
+}
+function startCreateOrder(){
+  if(state.step!=='done'||!state.shift){state.error='Сначала завершите ЕТО';renderInput();return;}
+  if(hasOpenOrder()){state.error='Сначала закройте текущий заказ';renderInput();return;}
+  state.draft={}; state.orderStep='chooseVehicle'; add('driver','Создать заказ'); add('bot','Выберите автомобиль для заказа.'); state.error=''; upsertShift(); renderInput();
+}
+function startCloseOrder(){
+  const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  add('driver','Закрыть заказ');
+  add('bot',`Заказ №${order.sequentialNumber} (за день ${order.dayNumber}).\nУкажите показания одометра по окончании перевозки.`);
+  state.orderStep='closingOdometer'; state.error=''; upsertShift(); renderInput();
+}
+function startCloseShift(){
+  if(state.step!=='done'||!state.shift){state.error='Сначала завершите ЕТО';renderInput();return;}
+  if(hasOpenOrder()){state.error='Сначала закройте текущий заказ';renderInput();return;}
+  add('driver','Закрыть смену');
+  add('bot','Укажите показания одометра по возвращении на стоянку.');
+  state.orderStep='closeShiftParking'; state.error=''; upsertShift(); renderInput();
+}
+function acceptCloseShiftParking(value){
+  const prev=state.shift.lastOdometerPoint??state.shift.odometer;
+  if(prev!=null && value<prev){ state.error=`Одометр не может быть меньше предыдущего (${prev})`; renderInput(); return; }
+  add('driver',String(value));
+  const closed=(state.shift.orders||[]).filter(o=>o.closedAt && o.endOdometer!=null)
+    .sort((a,b)=>new Date(a.closedAt)-new Date(b.closedAt));
+  const last=closed[closed.length-1];
+  if(last){
+    last.emptyKmAfter=Math.max(0, value-last.endOdometer);
+    upsertOrder(last);
+  }
+  state.shift.parkingOdometer=value;
+  state.shift.lastOdometerPoint=value;
+  state.shift.endedAt=new Date().toISOString();
+  add('bot','Смена закрыта. Хорошего отдыха!');
+  upsertShift(); persist();
+  resetChat();
+}
+function answerRefuel(yes){
+  add('driver', yes?'Да':'Нет');
+  if(yes){ add('bot','Укажите стоимость литра.'); state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); }
+  else finalizeClose(false,null,null);
+}
+function finalizeClose(refueled,price,liters){
+  const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  const end=state.draft.closeOdo; const loaded=end-order.startOdometer;
+  order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=new Date().toISOString();
+  if(refueled){ order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters); }
+  if(state.shift) state.shift.lastOdometerPoint=end;
+  upsertOrder(order);
+  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}`);
+  state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
+}
+function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
+function submitText(){
+  const text=($('text')?.value||'').trim(); if(!text){state.error='Введите адрес';renderInput();return;}
+  if(state.orderStep==='loading'){ state.draft.loading=text; add('driver',text); add('bot','Укажите адрес выгрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='unloading'; state.error=''; upsertShift(); renderInput(); return; }
+  if(state.orderStep==='unloading') finishOrder(text);
+}
+function finishOrder(unloading){
+  const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
+  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
+  add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order); upsertOrder(order);
+  const route=`${order.loadingAddress} — ${order.unloadingAddress}`;
+  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа за день - ${order.dayNumber}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}`);
+  add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
+  state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
+}
+function resetChat(){
+  state.step='idle'; state.orderStep='idle'; state.shift=null; state.draft={}; state.error=''; state.light={}; state.messages=[];
+  add('bot','Здравствуйте! Чтобы начать работу, откройте смену. Затем пройдём ежедневный технический осмотр (ЕТО).');
+}
+function showOrders(){
+  $('orders-panel').classList.add('show');
+  const orders=allOrders();
+  $('orders-list').innerHTML = !orders.length ? `<div class="empty">Пока нет заявок</div>` :
+    orders.map(o=>`<div class="card"><h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
+      <p>${esc(dateTime(o.createdAt))}</p><p>${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</p><p>${esc(o.vehiclePlate)}</p></div>`).join('');
+}
+function showShifts(){
+  $('shifts-panel').classList.add('show');
+  $('shifts-list').innerHTML = !state.shifts.length ? `<div class="empty">Пока нет смен</div>` :
+    state.shifts.map(s=>{
+      const st=s.endedAt?'закрыта':(s.completedAt||(s.orders||[]).length?'ЕТО ок':'в процессе');
+      return `<div class="card"><h3>${esc(s.vehiclePlate||'Без номера')}</h3><p>${esc(dateTime(s.startedAt))}</p><p>${st} · заказов: ${(s.orders||[]).length}</p></div>`;
+    }).join('');
+}
+
+const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","№ дня","Нулевой","С грузом","До стоянки","Общий день","₽/л","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
+function filteredOrders(){
+  return allOrders().filter(o=>{
+    if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null;
+    if(state.adminFilter==='progress') return !o.closedAt && o.startOdometer!=null;
+    if(state.adminFilter==='closed') return !!o.closedAt;
+    return true;
+  });
+}
+function renderAdmin(){
+  const orders=filteredOrders();
+  if(!orders.length){ $('admin-list').innerHTML=`<div class="empty">Пока нет заявок. Нажмите + Заказ</div>`; return; }
+  const head=COLS.map(c=>`<th>${c}</th>`).join('');
+  const rows=orders.map(o=>{
+    const m=metrics(o);
+    const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', `${o.loadingAddress} — ${o.unloadingAddress}`, o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
+    return `<tr data-id="${o.id}">${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
+  }).join('');
+  $('admin-list').innerHTML=`<table class="admin"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+  document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
+}
+function fillCreateSelects(){
+  $('create-plate').innerHTML=state.vehicles.map(v=>`<option>${esc(v.plate)}</option>`).join('');
+  $('create-driver').innerHTML=state.drivers.map(d=>`<option>${esc(d.name)}</option>`).join('');
+}
+let createDay=1;
+function bindAdminCreate(){
+  $('admin-new').onclick=()=>{ createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; fillCreateSelects(); show('admin-create'); highlightDay(); };
+  $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
+  $('create-save').onclick=saveDispatcherOrder;
+}
+function highlightDay(){ document.querySelectorAll('[data-cday]').forEach(b=>{ b.style.background = (+b.dataset.cday===createDay)?'var(--accent)':'var(--field)'; }); }
+function saveDispatcherOrder(){
+  const load=($('create-load').value||'').trim(); const unload=($('create-unload').value||'').trim();
+  const plate=$('create-plate').value; const driver=($('create-driver').value||DRIVER).trim();
+  const customer=($('create-customer').value||'').trim();
+  if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
+  state.seq+=1;
+  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,startOdometer:null,driverPercent:driverPercent(driver)};
+  upsertOrder(order); show('admin'); renderAdmin();
+}
+function openDetail(id){
+  state.detailId=id;
+  const o=state.orders.find(x=>x.id===id); if(!o) return;
+  const m=metrics(o);
+  $('detail-form').innerHTML=`
+    <button class="secondary" id="detail-back">Назад к таблице</button>
+    <h2 style="margin:0">Заявка №${o.sequentialNumber}</h2>
+    <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
+    <label>Заказчик</label><input id="d-customer" value="${esc(o.customer||'')}" />
+    <label>Маршрут</label><div class="calc">${esc(o.loadingAddress)} — ${esc(o.unloadingAddress)}</div>
+    <label>Пробег до стоянки, км</label><input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" />
+    <label>Форма оплаты</label>
+    <select id="d-form">
+      <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
+      <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
+      <option value="cash" ${o.paymentForm==='cash'?'selected':''}>Наличные</option>
+    </select>
+    <label>Ставка с НДС</label><input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" />
+    <label>Ставка без НДС</label><input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" />
+    <label>Ставка наличные</label><input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" />
+    <label>Доплата к ЗП</label><input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" />
+    <label>Аренда ТС</label><input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" />
+    <div class="calc">
+      <div><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
+      <div><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
+      <div><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
+      <div><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
+      <div><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
+      <div><span>₽/л (факт)</span><span>${fmt(o.fuelPricePerLiter)}</span></div>
+      <div><span>Стоимость ГСМ</span><span>${fmt(m.fuelCostCalc)} ₽</span></div>
+      <div><span>₽/км без НДС</span><span>${fmt(m.costPerKmNoVat)}</span></div>
+      <div><span>Подушка 10%</span><span>${fmt(m.cushion)} ₽</span></div>
+      <div><span>ЗП водителя</span><span>${fmt(m.driverPay)} ₽</span></div>
+      <div><span>Чистая прибыль</span><span>${fmt(m.netProfit)} ₽</span></div>
+    </div>
+    <div class="ok" id="detail-ok" style="display:none">Сохранено</div>
+    <button class="primary" id="detail-save">Сохранить</button>
+  `;
+  show('admin-detail');
+  $('detail-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  $('detail-save').onclick=()=>{
+    const order=state.orders.find(x=>x.id===id); if(!order) return;
+    const num=id=>{ const v=($(id).value||'').trim().replace(',','.'); return v===''?null:+v; };
+    order.customer=($('d-customer').value||'').trim();
+    order.emptyKmAfter=($('d-empty-after').value||'').replace(/\D/g,'') ? +($('d-empty-after').value||'').replace(/\D/g,'') : null;
+    order.paymentForm=$('d-form').value;
+    order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+    order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
+    order.freight=selectedRate(order);
+    const pay=metrics(order).driverPay; if(pay!=null) order.earnings=pay;
+    upsertOrder(order); $('detail-ok').style.display='block'; openDetail(id);
+  };
+}
+function openCatalogs(){
+  $('catalogs-form').innerHTML=`
+    <button class="secondary" id="cat-back">Назад</button>
+    <h2 style="margin:0">Справочники</h2>
+    <h3 style="margin:8px 0 0">Авто (л/100 км)</h3>
+    ${state.vehicles.map((v,i)=>`<label>${esc(v.plate)}</label><div class="row"><input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" /><button data-save-veh="${i}">OK</button></div>`).join('')}
+    <h3 style="margin:8px 0 0">Водители (% от ставки)</h3>
+    ${state.drivers.map((d,i)=>`<label>${esc(d.name)}</label><div class="row"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><button data-save-drv="${i}">OK</button></div>`).join('')}
+    <div class="ok" id="cat-ok" style="display:none">Сохранено</div>
+  `;
+  show('admin-catalogs-screen');
+  $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveVeh; const v=+(($('veh-'+i).value||'').replace(',','.')); if(!(v>0)) return; state.vehicles[i].consumptionPer100Km=v; persist(); $('cat-ok').style.display='block'; });
+  document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); $('cat-ok').style.display='block'; });
+}
+
+setTimeout(()=>{ show('roles'); }, 1600);
+$('role-driver').onclick=()=>{ show('driver'); resetChat(); };
+$('role-admin').onclick=()=>{ $('pin-input').value=''; $('pin-error').textContent=''; show('admin-pin'); };
+$('pin-back').onclick=()=>show('roles');
+$('pin-ok').onclick=()=>{ if(($('pin-input').value||'').trim()===ADMIN_PIN){ show('admin'); renderAdmin(); } else $('pin-error').textContent='Неверный PIN'; };
+$('admin-exit').onclick=()=>show('roles');
+$('admin-catalogs').onclick=openCatalogs;
+$('driver-exit').onclick=()=>show('roles');
+$('btn-orders').onclick=showOrders;
+$('btn-shifts').onclick=showShifts;
+document.querySelectorAll('.back-driver').forEach(b=>b.onclick=()=>{ $('orders-panel').classList.remove('show'); $('shifts-panel').classList.remove('show'); });
+document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{ state.adminFilter=b.dataset.filter; document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b)); renderAdmin(); });
+bindAdminCreate();
+</script>
+</body>
+</html>

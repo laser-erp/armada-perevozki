@@ -1,0 +1,322 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* DriverReportApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* DriverReportApp.swift */; };
+		A10000000000000000000002 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ChatModels.swift */; };
+		A1000000000000000000000B /* OrderModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* OrderModels.swift */; };
+		A1000000000000000000000D /* CatalogModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000D /* CatalogModels.swift */; };
+		A10000000000000000000003 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* ChatViewModel.swift */; };
+		A10000000000000000000004 /* ShiftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* ShiftStore.swift */; };
+		A10000000000000000000005 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* AppTheme.swift */; };
+		A10000000000000000000006 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* RootView.swift */; };
+		A10000000000000000000007 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* ChatView.swift */; };
+		A10000000000000000000008 /* ShiftsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* ShiftsListView.swift */; };
+		A1000000000000000000000C /* AdminHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000C /* AdminHomeView.swift */; };
+		A10000000000000000000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* DriverReportApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriverReportApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		A2000000000000000000000B /* OrderModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderModels.swift; sourceTree = "<group>"; };
+		A2000000000000000000000D /* CatalogModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogModels.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* ShiftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShiftStore.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* ShiftsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShiftsListView.swift; sourceTree = "<group>"; };
+		A2000000000000000000000C /* AdminHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdminHomeView.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A2000000000000000000000A /* DriverReport.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriverReport.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A40000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A40000000000000000000002 /* DriverReport */,
+				A40000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A40000000000000000000002 /* DriverReport */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* DriverReportApp.swift */,
+				A40000000000000000000004 /* Models */,
+				A40000000000000000000005 /* Views */,
+				A40000000000000000000006 /* Services */,
+				A40000000000000000000007 /* Theme */,
+				A40000000000000000000008 /* Resources */,
+			);
+			path = DriverReport;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A2000000000000000000000A /* DriverReport.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000002 /* ChatModels.swift */,
+				A2000000000000000000000B /* OrderModels.swift */,
+				A2000000000000000000000D /* CatalogModels.swift */,
+				A20000000000000000000003 /* ChatViewModel.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000005 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000006 /* RootView.swift */,
+				A20000000000000000000007 /* ChatView.swift */,
+				A20000000000000000000008 /* ShiftsListView.swift */,
+				A2000000000000000000000C /* AdminHomeView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000006 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000004 /* ShiftStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000007 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000005 /* AppTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000009 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* DriverReport */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A70000000000000000000003 /* Build configuration list for PBXNativeTarget "DriverReport" */;
+			buildPhases = (
+				A50000000000000000000002 /* Sources */,
+				A30000000000000000000001 /* Frameworks */,
+				A50000000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DriverReport;
+			productName = DriverReport;
+			productReference = A2000000000000000000000A /* DriverReport.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A60000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = A70000000000000000000001 /* Build configuration list for PBXProject "DriverReport" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ru;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				ru,
+				Base,
+			);
+			mainGroup = A40000000000000000000001;
+			productRefGroup = A40000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A50000000000000000000001 /* DriverReport */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A50000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000009 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A50000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* DriverReportApp.swift in Sources */,
+				A10000000000000000000002 /* ChatModels.swift in Sources */,
+				A1000000000000000000000B /* OrderModels.swift in Sources */,
+				A1000000000000000000000D /* CatalogModels.swift in Sources */,
+				A10000000000000000000003 /* ChatViewModel.swift in Sources */,
+				A10000000000000000000004 /* ShiftStore.swift in Sources */,
+				A10000000000000000000005 /* AppTheme.swift in Sources */,
+				A10000000000000000000006 /* RootView.swift in Sources */,
+				A10000000000000000000007 /* ChatView.swift in Sources */,
+				A10000000000000000000008 /* ShiftsListView.swift in Sources */,
+				A1000000000000000000000C /* AdminHomeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A80000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A80000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A80000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Водитель ЕТО";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.driverreport.eto;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A80000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Водитель ЕТО";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.driverreport.eto;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A70000000000000000000001 /* Build configuration list for PBXProject "DriverReport" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000001 /* Debug */,
+				A80000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A70000000000000000000003 /* Build configuration list for PBXNativeTarget "DriverReport" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A80000000000000000000003 /* Debug */,
+				A80000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A60000000000000000000001 /* Project object */;
+}
