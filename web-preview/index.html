@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>АРМАДА — учёт перевозок</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
   <style>
     :root {
       --bg0:#000; --bg1:#1e1e1e; --accent:#e61a1f; --bot:#2e2e2e;
@@ -186,8 +188,10 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
+const APP_BUILD="2026-08-02-eto3";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
+console.info("АРМАДА build", APP_BUILD);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
 const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,defaultRatePerHourWork:0,defaultRatePerKmCash:0};
 const state={
@@ -340,37 +344,83 @@ function statusText(o){
   if(o.startOdometer!=null) return 'В работе';
   return 'Назначен';
 }
+function etoThanksInMessages(msgs){
+  return (msgs||[]).some(m=>/Спасибо за прохождение ЕТО|ЕТО пройден/i.test(String(m.text||'')));
+}
+function isEtoDone(shift){
+  if(!shift) return false;
+  if(shift.completedAt) return true;
+  const fields=!!(shift.vehiclePlate && shift.odometer!=null && shift.fuelLiters!=null
+    && (shift.gur||shift.powerSteeringLevel)
+    && (shift.coolant||shift.coolantLevel)
+    && (shift.oil||shift.engineOilLevel));
+  if(fields) return true;
+  if(etoThanksInMessages(shift.messages) || etoThanksInMessages(state.messages)) return true;
+  return false;
+}
+function openShifts(){
+  return (state.shifts||[]).filter(s=>!s.endedAt)
+    .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt));
+}
+function findOpenShift(){
+  const open=openShifts();
+  if(!open.length) return null;
+  // Текущая живая смена важнее «новой пустой»
+  if(state.shift && !state.shift.endedAt && open.some(s=>s.id===state.shift.id)){
+    return open.find(s=>s.id===state.shift.id)||state.shift;
+  }
+  return open.find(s=>isEtoDone(s)) || open[0];
+}
+function healDuplicateOpenShifts(keep){
+  if(!keep) return;
+  (state.shifts||[]).forEach(s=>{
+    if(s.id!==keep.id && !s.endedAt && !isEtoDone(s)){
+      s.endedAt=new Date().toISOString();
+      s.abandoned=true;
+    }
+  });
+}
 function syncOpenShiftRuntime(){
-  const shift=findOpenShift();
+  let shift=findOpenShift();
+  if(!shift && state.shift && !state.shift.endedAt) shift=state.shift;
   if(!shift) return null;
-  // Живой объект смены может быть актуальнее клона в state.shifts
   if(state.shift && state.shift.id===shift.id){
     const live=state.shift;
-    if(live.completedAt && !shift.completedAt) shift.completedAt=live.completedAt;
-    if(live.oil && !shift.oil) shift.oil=live.oil;
-    if(live.engineOilLevel && !shift.engineOilLevel) shift.engineOilLevel=live.engineOilLevel;
-    if(live.gur && !shift.gur) shift.gur=live.gur;
-    if(live.coolant && !shift.coolant) shift.coolant=live.coolant;
-    if(live.vehiclePlate && !shift.vehiclePlate) shift.vehiclePlate=live.vehiclePlate;
+    ['completedAt','oil','engineOilLevel','gur','coolant','vehiclePlate','light','powerSteeringLevel','coolantLevel'].forEach(k=>{
+      if(live[k]!=null && shift[k]==null) shift[k]=live[k];
+    });
     if(live.odometer!=null && shift.odometer==null) shift.odometer=live.odometer;
     if(live.fuelLiters!=null && shift.fuelLiters==null) shift.fuelLiters=live.fuelLiters;
     if(live.lastOdometerPoint!=null) shift.lastOdometerPoint=live.lastOdometerPoint;
-    if(live.light) shift.light=live.light;
+    state.shift=live;
+  } else if(state.shift && !state.shift.endedAt && isEtoDone(state.shift) && !isEtoDone(shift)){
+    // Не затираем живую смену с пройденным ЕТО «пустой» из списка
+    shift=state.shift;
   } else {
     state.shift=shift;
   }
-  if(isEtoDone(state.shift) || isEtoDone(shift)){
+  if(isEtoDone(state.shift) || state.step==='done'){
     state.step='done';
-    if(!state.shift.completedAt) state.shift.completedAt=shift.completedAt||new Date().toISOString();
-    if(!shift.completedAt) shift.completedAt=state.shift.completedAt;
+    if(!state.shift.completedAt) state.shift.completedAt=new Date().toISOString();
   }
+  healDuplicateOpenShifts(state.shift);
   return state.shift;
 }
 function canStartAssignedMessage(){
   const shift=syncOpenShiftRuntime();
+  // step=done уже означает, что ЕТО пройден в этой сессии
+  if(state.step==='done'){
+    if(!shift && !state.shift) return 'Сначала откройте смену';
+    if(state.shift && !state.shift.completedAt) state.shift.completedAt=new Date().toISOString();
+    upsertShift();
+    if(hasOpenOrder()) return 'Сначала закройте текущий заказ';
+    return null;
+  }
   if(!shift) return 'Сначала откройте смену';
-  if(!isEtoDone(shift) && !isEtoDone(state.shift||{})) return 'Сначала завершите ЕТО';
+  if(!isEtoDone(shift) && !isEtoDone(state.shift)) return 'Сначала завершите ЕТО';
   state.step='done';
+  if(state.shift && !state.shift.completedAt) state.shift.completedAt=new Date().toISOString();
+  upsertShift();
   if(hasOpenOrder()) return 'Сначала закройте текущий заказ';
   return null;
 }
@@ -642,11 +692,6 @@ function wireInput(){
   $('refuel-no')&&($('refuel-no').onclick=()=>answerYesNo(false));
 }
 
-function findOpenShift(){ return (state.shifts||[]).slice().sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt)).find(s=>!s.endedAt) || null; }
-function isEtoDone(shift){
-  if(shift.completedAt) return true;
-  return !!(shift.vehiclePlate && shift.odometer!=null && shift.fuelLiters!=null && (shift.gur||shift.powerSteeringLevel) && (shift.coolant||shift.coolantLevel) && (shift.oil||shift.engineOilLevel));
-}
 function resumeOpenShift(shift){
   state.shift=shift;
   state.messages=(shift.messages&&shift.messages.length)?shift.messages.slice():[];
