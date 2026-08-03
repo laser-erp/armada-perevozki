@@ -9,8 +9,16 @@
 6. Админ-таблица и финансы  
 7. Закрытие смены: одометр на стоянке → авто «до стоянки»
 
-## Превью
-`web-preview/index.html`
+## Веб (стабильная ссылка)
+Открыть в браузере с любого компьютера:
+
+**https://laser-erp.github.io/armada-web/**
+
+- PIN администратора: `2580`
+- Данные хранятся в браузере на каждом устройстве (localStorage)
+- Публичный репозиторий сайта: https://github.com/laser-erp/armada-web
+- Исходники веб-версии в этом репо: `web-preview/`
+- После правок в `web-preview/` сайт обновляется workflow’ом (или `scripts/publish-web.sh`)
 
 ## iOS
 `DriverReport.xcodeproj` — нужен Mac/Xcode
