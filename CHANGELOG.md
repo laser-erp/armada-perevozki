@@ -7,6 +7,7 @@
 - Остаток топлива: ЕТО/прошлый заказ − расход по км (+ залито при заправке); без подстановки 80 л
 - Стабильный сайт: https://laser-erp.github.io/armada-web/ (GitHub Pages, репо `armada-web`)
 - Общая база на VPS: http://aptown1.fvds.ru/ + PocketBase (`app_state`); данные не пропадают между устройствами
+- Исправлено открытие смены на http:// (UUID без secure context)
 - Обновлён HANDOFF
 
 ### Ещё не сделано

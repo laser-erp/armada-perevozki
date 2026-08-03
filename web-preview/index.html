@@ -240,9 +240,24 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-03-pb-sync";
+const APP_BUILD="2026-08-03-uuid-http";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
+/** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
+function uuid(){
+  try{
+    const c=globalThis.crypto;
+    if(c&&typeof c.randomUUID==='function'){
+      // На http:// в части браузеров бросает / нет метода — тогда fallback ниже.
+      return c.randomUUID.call(c);
+    }
+  }catch(_){}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0;
+    const v=c==='x'?r:(r&0x3|0x8);
+    return v.toString(16);
+  });
+}
 /** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
 const PB_BASE=(function(){
   const h=location.hostname;
