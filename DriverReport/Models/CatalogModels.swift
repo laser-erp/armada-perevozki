@@ -156,6 +156,9 @@ struct ClientTariffBreakdown: Equatable {
     var emptyKmCash: Double
     var podachaCoveredByHour: Bool
     var loadedKmCash: Double
+    var overnightStorageCash: Double
+    var overnightNights: Int
+    var overnightStorageRateCash: Double
     var totalCash: Double
     var perKm: Double
     var perHour: Double
@@ -176,7 +179,20 @@ struct ClientTariffBreakdown: Equatable {
         if loadedKmCash > 0 {
             parts.append(String(format: "груз %d км = %.0f ₽", loadedKm, loadedKmCash))
         }
-        let mode = isCity ? "город" : "межгород"
+        if overnightStorageCash > 0 {
+            parts.append(String(
+                format: "хранение %d×%.0f = %.0f ₽",
+                overnightNights,
+                overnightStorageRateCash,
+                overnightStorageCash
+            ))
+        }
+        let mode: String
+        if perKm > 0 || perHour > 0 {
+            mode = isCity ? "город" : "межгород"
+        } else {
+            mode = "хранение"
+        }
         return "[\(mode)] " + (parts.isEmpty ? "нет данных для расчёта" : parts.joined(separator: " + "))
     }
 }
@@ -237,14 +253,28 @@ enum OrderFinance {
         return max(0, settings.defaultRatePerHourWork)
     }
 
-    /// Комбинированный тариф: часы (мин. город) + подача + ₽/км по правилу покрытия.
+    /// Ночное хранение: ₽/ночь × число ночей (нал).
+    static func overnightStorageCash(for order: OrderRecord) -> Double {
+        guard let rate = order.overnightStorageRateCash, rate > 0,
+              let nights = order.overnightNights, nights > 0 else { return 0 }
+        return round2(rate * Double(nights))
+    }
+
+    /// База ЗП/подушки: ставка нал минус хранение (ответственность компании).
+    static func payrollRate(for order: OrderRecord) -> Double? {
+        guard let rate = selectedRate(order) else { return nil }
+        return round2(max(0, rate - overnightStorageCash(for: order)))
+    }
+
+    /// Комбинированный тариф: часы (мин. город) + подача + ₽/км + ночное хранение.
     static func calculateClientTariff(
         for order: OrderRecord,
         settings: FinanceSettings
     ) -> ClientTariffBreakdown? {
         let perKm = resolvedPerKm(order: order, settings: settings)
         let perHour = resolvedPerHour(order: order, settings: settings)
-        guard perKm > 0 || perHour > 0 else { return nil }
+        let storageCash = overnightStorageCash(for: order)
+        guard perKm > 0 || perHour > 0 || storageCash > 0 else { return nil }
 
         let hasSegments = order.emptyKmBefore != nil || order.loadedKm != nil || order.emptyKmAfter != nil
         let empty = emptyKm(for: order)
@@ -292,7 +322,7 @@ enum OrderFinance {
             loadedKmCash = 0
         }
 
-        let total = round2(workCash + podachaHourCash + emptyKmCash + loadedKmCash)
+        let total = round2(workCash + podachaHourCash + emptyKmCash + loadedKmCash + storageCash)
         guard total > 0 else { return nil }
 
         return ClientTariffBreakdown(
@@ -306,6 +336,9 @@ enum OrderFinance {
             emptyKmCash: emptyKmCash,
             podachaCoveredByHour: podachaCoveredByHour,
             loadedKmCash: loadedKmCash,
+            overnightStorageCash: storageCash,
+            overnightNights: order.overnightNights ?? 0,
+            overnightStorageRateCash: order.overnightStorageRateCash ?? 0,
             totalCash: total,
             perKm: perKm,
             perHour: perHour

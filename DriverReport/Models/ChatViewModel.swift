@@ -969,7 +969,7 @@ final class ChatViewModel: ObservableObject {
 
         if var open = store.inProgressOrder() {
             // Исключение: машина осталась загружена до завтра.
-            open.staysLoadedOvernight = true
+            open.markStaysLoadedOvernight()
             store.attachOrder(open, to: shift.id)
             if let refreshed = store.allOrders().first(where: { $0.id == open.id }),
                let idx = shift.orders.firstIndex(where: { $0.id == refreshed.id }) {
@@ -977,11 +977,12 @@ final class ChatViewModel: ObservableObject {
             } else if !shift.orders.contains(where: { $0.id == open.id }) {
                 shift.orders.append(open)
             }
+            let nights = open.overnightNights ?? 1
             append(
                 .bot,
                 """
-                Смена закрыта. Заказ №\(open.sequentialNumber) перенесён — машина загружена.
-                Завтра после ЕТО закройте заказ после выгрузки.
+                Смена закрыта. Заказ №\(open.sequentialNumber) перенесён — машина загружена (ночей: \(nights)).
+                Завтра после ЕТО закройте заказ после выгрузки. Админ укажет ставку хранения клиенту.
                 """
             )
         } else {
