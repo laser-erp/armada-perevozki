@@ -234,8 +234,9 @@ final class ShiftStore: ObservableObject {
         OrderFinance.applyClientTariff(to: &o, settings: financeSettings)
         if let rate = OrderFinance.selectedRate(o) {
             let bonus = o.salaryBonus ?? 0
+            let payBase = OrderFinance.payrollRate(for: o) ?? rate
             o.earnings = OrderFinance.round2(
-                OrderFinance.driverPay(rate: rate, percent: o.driverPercent, bonus: bonus)
+                OrderFinance.driverPay(rate: payBase, percent: o.driverPercent, bonus: bonus)
             )
             if o.freight == nil { o.freight = rate }
         }
@@ -252,9 +253,10 @@ final class ShiftStore: ObservableObject {
             ? OrderFinance.round2(calcLiters! * price!)
             : order.fuelTotalCost
         let rate = OrderFinance.selectedRate(order)
-        let cushion = rate.map { OrderFinance.round2(OrderFinance.cushion(rate: $0)) }
+        let payBase = OrderFinance.payrollRate(for: order)
+        let cushion = payBase.map { OrderFinance.round2(OrderFinance.cushion(rate: $0)) }
         let bonus = order.salaryBonus ?? 0
-        let pay = rate.map {
+        let pay = payBase.map {
             OrderFinance.round2(OrderFinance.driverPay(rate: $0, percent: order.driverPercent, bonus: bonus))
         }
         let rent = order.vehicleRent ?? 0
@@ -266,7 +268,7 @@ final class ShiftStore: ObservableObject {
             driverPercent: order.driverPercent,
             markupPercent: financeSettings.markupPercent
         )
-        let totalCost = rate.map {
+        let totalCost = payBase.map {
             OrderFinance.totalCost(
                 rate: $0,
                 fuelCost: fuel,

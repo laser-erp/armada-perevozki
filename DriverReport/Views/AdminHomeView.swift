@@ -276,6 +276,8 @@ struct AdminOrderDetailView: View {
     @State private var ratePerHourWork = ""
     @State private var estimateWorkHours = ""
     @State private var workHours = ""
+    @State private var overnightStorageRateCash = ""
+    @State private var overnightNights = ""
     @State private var rateWithVat = ""
     @State private var rateWithoutVat = ""
     @State private var rateCash = ""
@@ -404,6 +406,20 @@ struct AdminOrderDetailView: View {
                         TextField("Факт часов работы", text: $workHours)
                             .keyboardType(.decimalPad)
                             .onChange(of: workHours) { _, _ in syncFromTariff() }
+                        Text("Ночное хранение груза — ответственность компании. В сумму клиенту входит; в ЗП водителя — нет. При «осталась загружена» число ночей +1.")
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
+                        if order.staysLoadedOvernight == true || (order.overnightNights ?? 0) > 0 {
+                            Text("Ночёвка с грузом\(order.overnightNights.map { ": \($0) ноч." } ?? "")")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(AppTheme.accent)
+                        }
+                        TextField("₽ за ночь хранения (нал)", text: $overnightStorageRateCash)
+                            .keyboardType(.decimalPad)
+                            .onChange(of: overnightStorageRateCash) { _, _ in syncFromTariff() }
+                        TextField("Число ночей", text: $overnightNights)
+                            .keyboardType(.numberPad)
+                            .onChange(of: overnightNights) { _, _ in syncFromTariff() }
                         row("Цепочка км", chainKmLabel(for: order))
                         if !tariffSummary.isEmpty {
                             Text(tariffSummary)
@@ -411,11 +427,15 @@ struct AdminOrderDetailView: View {
                                 .foregroundStyle(AppTheme.accent)
                         }
                         if let preview = tariffPreviewTotals(for: order) {
+                            let storage = OrderFinance.overnightStorageCash(for: draftOrderForTariff(order))
+                            if storage > 0 {
+                                row("Хранение (в сумме)", "\(format(storage)) ₽")
+                            }
                             row("Сумма нал (расчёт)", "\(format(preview.cash)) ₽")
                             row("Сумма без НДС", "\(format(preview.withoutVat)) ₽")
                             row("Сумма с НДС", "\(format(preview.withVat)) ₽")
                         }
-                        Text("ЗП, подушка и прибыль считаются всегда от ставки наличные.")
+                        Text("ЗП и подушка — от ставки наличные без хранения. Прибыль — от полной суммы клиенту.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
                         Picker("Форма для клиента (документы)", selection: $paymentForm) {
@@ -486,6 +506,8 @@ struct AdminOrderDetailView: View {
         ratePerHourWork = order.ratePerHourWork.map(format) ?? ""
         estimateWorkHours = order.estimateWorkHours.map(format) ?? ""
         workHours = order.workHours.map(format) ?? ""
+        overnightStorageRateCash = order.overnightStorageRateCash.map(format) ?? ""
+        overnightNights = order.overnightNights.map(String.init) ?? ""
         rateWithVat = order.rateWithVat.map(format) ?? ""
         rateWithoutVat = order.rateWithoutVat.map(format) ?? ""
         rateCash = order.rateCash.map(format) ?? ""
@@ -507,9 +529,16 @@ struct AdminOrderDetailView: View {
     private func parsedPerHour() -> Double? { parsedDouble(ratePerHourWork) }
     private func parsedEstimateHours() -> Double? { parsedDouble(estimateWorkHours) }
     private func parsedWorkHours() -> Double? { parsedDouble(workHours) }
+    private func parsedOvernightRate() -> Double? { parsedDouble(overnightStorageRateCash) }
 
     private func parsedEstimateKm() -> Int? {
         let digits = estimateKm.filter(\.isNumber)
+        guard let value = Int(digits), value > 0 else { return nil }
+        return value
+    }
+
+    private func parsedOvernightNights() -> Int? {
+        let digits = overnightNights.filter(\.isNumber)
         guard let value = Int(digits), value > 0 else { return nil }
         return value
     }
@@ -522,6 +551,8 @@ struct AdminOrderDetailView: View {
         draft.estimateWorkHours = parsedEstimateHours()
         draft.workHours = parsedWorkHours()
         draft.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber)) ?? order.emptyKmAfter
+        draft.overnightStorageRateCash = parsedOvernightRate()
+        draft.overnightNights = parsedOvernightNights()
         return draft
     }
 
@@ -631,6 +662,8 @@ struct AdminOrderDetailView: View {
         order.estimateWorkHours = parsedEstimateHours()
         order.workHours = parsedWorkHours()
         order.emptyKmAfter = Int(emptyKmAfter.filter(\.isNumber))
+        order.overnightStorageRateCash = parsedOvernightRate()
+        order.overnightNights = parsedOvernightNights()
         order.paymentForm = paymentForm
         OrderFinance.applyClientTariff(to: &order, settings: store.financeSettings)
         if OrderFinance.calculateClientTariff(for: order, settings: store.financeSettings) == nil {
