@@ -95,7 +95,9 @@
 ## Пути
 - iOS / web: `/agent/DriverReport/`
 - Бэкапы: `/agent/backups/DriverReport-backup-latest.zip`
-- Превью: см. `/agent/backups/PREVIEW_URL.txt`
+- **Стабильный сайт (для всех по ссылке):** https://laser-erp.github.io/armada-web/
+- Публикация: репо `laser-erp/armada-web` (GitHub Pages) + sync из `web-preview/`
+- Временные Cloudflare-туннели больше не нужны для работы
 
 ## GitHub
 - Repo: https://github.com/laser-erp/armada-perevozki
