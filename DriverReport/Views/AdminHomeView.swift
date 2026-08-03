@@ -456,6 +456,13 @@ struct AdminOrderDetailView: View {
                     Section("Расчёты") {
                         row("Норма авто", "\(format(m.consumptionPer100)) л/100км")
                         row("ГСМ по заказу", "\(m.fuelLitersCalc.map(format) ?? "—") л")
+                        row(
+                            "Заправка",
+                            order.refueled == true
+                                ? "\(order.fuelLiters.map(format) ?? "—") л"
+                                : (order.refueled == false ? "нет" : "—")
+                        )
+                        row("Остаток топлива", order.fuelRemainingLiters.map { "\(format($0)) л" } ?? "—")
                         row("₽/л (факт)", order.fuelPricePerLiter.map(format) ?? "—")
                         row("Стоимость ГСМ", m.fuelCostCalc.map { "\(format($0)) ₽" } ?? "—")
                         row("₽/км без НДС", m.costPerKmNoVat.map(format) ?? "—")

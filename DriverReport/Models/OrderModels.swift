@@ -64,8 +64,11 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var closedAt: Date?
     var refueled: Bool?
     var fuelPricePerLiter: Double?
+    /// Литры заправки (если refueled == true).
     var fuelLiters: Double?
     var fuelTotalCost: Double?
+    /// Остаток топлива в баке после закрытия заказа (л).
+    var fuelRemainingLiters: Double?
     /// legacy / fallback
     var freight: Double?
     var paymentForm: PaymentForm?
@@ -197,6 +200,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         fuelPricePerLiter: Double? = nil,
         fuelLiters: Double? = nil,
         fuelTotalCost: Double? = nil,
+        fuelRemainingLiters: Double? = nil,
         freight: Double? = nil,
         paymentForm: PaymentForm? = nil,
         rateWithVat: Double? = nil,
@@ -243,6 +247,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.fuelPricePerLiter = fuelPricePerLiter
         self.fuelLiters = fuelLiters
         self.fuelTotalCost = fuelTotalCost
+        self.fuelRemainingLiters = fuelRemainingLiters
         self.freight = freight
         self.paymentForm = paymentForm
         self.rateWithVat = rateWithVat
@@ -266,7 +271,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         case id, sequentialNumber, dayNumber, createdAt, source, vehiclePlate, driverName
         case customer, loadingAddress, unloadingAddress, routePoints, startOdometer, previousOdometer
         case emptyKmBefore, loadedKm, emptyKmAfter, endOdometer, closedAt
-        case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, freight
+        case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, fuelRemainingLiters, freight
         case paymentForm, rateWithVat, rateWithoutVat, rateCash, ratePerKmCash, estimateKm
         case ratePerHourWork, estimateWorkHours, workHours
         case salaryBonus, vehicleRent, driverPercent, earnings, staysLoadedOvernight
@@ -309,6 +314,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         fuelPricePerLiter = try c.decodeIfPresent(Double.self, forKey: .fuelPricePerLiter)
         fuelLiters = try c.decodeIfPresent(Double.self, forKey: .fuelLiters)
         fuelTotalCost = try c.decodeIfPresent(Double.self, forKey: .fuelTotalCost)
+        fuelRemainingLiters = try c.decodeIfPresent(Double.self, forKey: .fuelRemainingLiters)
         freight = try c.decodeIfPresent(Double.self, forKey: .freight)
         paymentForm = try c.decodeIfPresent(PaymentForm.self, forKey: .paymentForm)
         rateWithVat = try c.decodeIfPresent(Double.self, forKey: .rateWithVat)
@@ -352,6 +358,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encodeIfPresent(fuelPricePerLiter, forKey: .fuelPricePerLiter)
         try c.encodeIfPresent(fuelLiters, forKey: .fuelLiters)
         try c.encodeIfPresent(fuelTotalCost, forKey: .fuelTotalCost)
+        try c.encodeIfPresent(fuelRemainingLiters, forKey: .fuelRemainingLiters)
         try c.encodeIfPresent(freight, forKey: .freight)
         try c.encodeIfPresent(paymentForm, forKey: .paymentForm)
         try c.encodeIfPresent(rateWithVat, forKey: .rateWithVat)
