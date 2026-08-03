@@ -54,7 +54,17 @@ final class ChatViewModel: ObservableObject {
         step = .idle
     }
 
+    private func carryOverHint() -> String {
+        guard let open = store.inProgressOrder(), open.isCarryOverLoaded else { return "" }
+        return " Есть перенесённый заказ №\(open.sequentialNumber) (машина загружена) — закроете после выгрузки."
+    }
+
     private func resume(_ shift: ShiftRecord) {
+        var shift = shift
+        let stale = shift.invalidateStaleETOIfNeeded()
+        if stale {
+            store.upsert(shift)
+        }
         activeShift = shift
         messages = shift.messages
         if messages.isEmpty {
@@ -70,12 +80,18 @@ final class ChatViewModel: ObservableObject {
             step = .done
             inputMode = .afterETO
             let noted = messages.contains {
-                $0.text.contains("Смена уже открыта") || $0.text.contains("Продолжаем открытую смену")
+                $0.text.contains("Смена уже открыта")
+                    || $0.text.contains("Продолжаем открытую смену")
+                    || $0.text.contains("ЕТО на сегодня пройден")
             }
             if !noted {
                 append(
                     .bot,
-                    "Смена уже открыта (\(shift.vehiclePlate ?? "авто")). ЕТО пройден — можно работать с заказами или закрыть смену."
+                    """
+                    Смена уже открыта (\(shift.vehiclePlate ?? "авто")). \
+                    ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.\
+                    \(carryOverHint())
+                    """
                 )
                 persistMessages()
             }
@@ -87,15 +103,19 @@ final class ChatViewModel: ObservableObject {
         if shift.vehiclePlate == nil {
             step = .chooseVehicle
             inputMode = .chooseVehicle(FleetCatalog.plates)
-            hint = "Смена открыта, но ЕТО не завершён. Выберите автомобиль."
+            hint = stale
+                ? "Новый день — нужно пройти ЕТО заново (за ночь с машиной могло что-то измениться). Выберите автомобиль.\(carryOverHint())"
+                : "Смена открыта, но ЕТО не завершён. Выберите автомобиль.\(carryOverHint())"
         } else if shift.odometer == nil {
             step = .odometer
             inputMode = .number(placeholder: "Например, 125430")
-            hint = "Продолжим ЕТО. Укажите одометр до выезда со стоянки."
+            hint = stale
+                ? "Новый день — пройдите ЕТО заново. Укажите одометр на стоянке перед выездом.\(carryOverHint())"
+                : "Продолжим ЕТО. Укажите одометр до выезда со стоянки.\(carryOverHint())"
         } else if shift.fuelLiters == nil {
             step = .fuel
             inputMode = .number(placeholder: "Например, 42")
-            hint = "Продолжим ЕТО. Введите остаток топлива в литрах."
+            hint = "Продолжим ЕТО. Введите остаток топлива в литрах.\(carryOverHint())"
         } else if shift.powerSteeringLevel == nil {
             step = .powerSteering
             inputMode = .fluidLevel(title: "Уровень жидкости ГУР")
@@ -132,7 +152,11 @@ final class ChatViewModel: ObservableObject {
         let timeText = Self.timeFormatter.string(from: now)
 
         append(.driver, "Открыть смену")
-        append(.bot, "Смена открыта в \(timeText). Выберите автомобиль, на котором вы сегодня работаете.")
+        let carry = carryOverHint()
+        append(
+            .bot,
+            "Смена открыта в \(timeText). Выберите автомобиль, на котором вы сегодня работаете.\(carry.isEmpty ? "" : "\n\(carry.trimmingCharacters(in: .whitespaces))")"
+        )
 
         shift.messages = messages
         activeShift = shift
@@ -466,10 +490,24 @@ final class ChatViewModel: ObservableObject {
         if activeShift == nil, let open = store.openShift() {
             resume(open)
         }
-        // Если UI уже после ЕТО — не блокируем старт заказа.
+        if var open = activeShift ?? store.openShift() {
+            if open.invalidateStaleETOIfNeeded() {
+                activeShift = open
+                store.upsert(open)
+                step = open.vehiclePlate == nil ? .chooseVehicle : .odometer
+                inputMode = open.vehiclePlate == nil
+                    ? .chooseVehicle(FleetCatalog.plates)
+                    : .number(placeholder: "Например, 125430")
+                return "Сначала завершите ЕТО"
+            }
+        }
+        // Если UI уже после ЕТО сегодня — не блокируем старт заказа.
         if step == .done {
             if var shift = activeShift ?? store.openShift() {
-                if shift.completedAt == nil {
+                guard shift.isETOComplete else {
+                    return "Сначала завершите ЕТО"
+                }
+                if shift.completedAt.map({ Calendar.current.isDateInToday($0) }) != true {
                     shift.completedAt = Date()
                     activeShift = shift
                     store.upsert(shift)
@@ -489,7 +527,7 @@ final class ChatViewModel: ObservableObject {
         guard shift.isETOComplete else {
             return "Сначала завершите ЕТО"
         }
-        if shift.completedAt == nil {
+        if shift.completedAt.map({ Calendar.current.isDateInToday($0) }) != true {
             shift.completedAt = Date()
             activeShift = shift
             store.upsert(shift)

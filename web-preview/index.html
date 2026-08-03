@@ -239,7 +239,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-02-fuel80rub";
+const APP_BUILD="2026-08-03-eto-daily";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 console.info("АРМАДА build", APP_BUILD);
@@ -395,19 +395,40 @@ function statusText(o){
   if(o.startOdometer!=null) return 'В работе';
   return 'Назначен';
 }
-function etoThanksInMessages(msgs){
-  return (msgs||[]).some(m=>/Спасибо за прохождение ЕТО|ЕТО пройден/i.test(String(m.text||'')));
+function isSameLocalDay(iso, now){
+  if(!iso) return false;
+  const d=new Date(iso), n=now||new Date();
+  if(Number.isNaN(d.getTime())) return false;
+  return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
 }
+/** ЕТО засчитывается только в календарный день прохождения */
 function isEtoDone(shift){
   if(!shift) return false;
-  if(shift.completedAt) return true;
-  const fields=!!(shift.vehiclePlate && shift.odometer!=null && shift.fuelLiters!=null
+  if(shift.completedAt) return isSameLocalDay(shift.completedAt);
+  // Незавершённый осмотр только в день открытия смены
+  if(!isSameLocalDay(shift.startedAt)) return false;
+  return !!(shift.vehiclePlate && shift.odometer!=null && shift.fuelLiters!=null
     && (shift.gur||shift.powerSteeringLevel)
     && (shift.coolant||shift.coolantLevel)
     && (shift.oil||shift.engineOilLevel));
-  if(fields) return true;
-  if(etoThanksInMessages(shift.messages) || etoThanksInMessages(state.messages)) return true;
-  return false;
+}
+/** Сбросить вчерашний ЕТО — утром осмотр заново (авто и lastOdometerPoint оставляем) */
+function invalidateStaleEto(shift){
+  if(!shift || shift.endedAt) return false;
+  if(isEtoDone(shift)) return false;
+  const hadOldEto=!!(shift.completedAt || shift.odometer!=null || shift.fuelLiters!=null
+    || shift.oil || shift.engineOilLevel || shift.gur || shift.coolant);
+  if(!hadOldEto) return false;
+  if(shift.completedAt && isSameLocalDay(shift.completedAt)) return false;
+  if(!shift.completedAt && isSameLocalDay(shift.startedAt)) return false; // сегодня ещё идём по ЕТО
+  shift.completedAt=null;
+  shift.odometer=null;
+  shift.fuelLiters=null;
+  shift.gur=null; shift.powerSteeringLevel=null;
+  shift.coolant=null; shift.coolantLevel=null;
+  shift.oil=null; shift.engineOilLevel=null;
+  shift.light={};
+  return true;
 }
 function openShifts(){
   return (state.shifts||[]).filter(s=>!s.endedAt)
@@ -450,27 +471,25 @@ function syncOpenShiftRuntime(){
   } else {
     state.shift=shift;
   }
-  if(isEtoDone(state.shift) || state.step==='done'){
+  invalidateStaleEto(state.shift);
+  if(isEtoDone(state.shift)){
     state.step='done';
     if(!state.shift.completedAt) state.shift.completedAt=new Date().toISOString();
+  } else if(state.step==='done'){
+    state.step=state.shift.vehiclePlate?'odometer':'chooseVehicle';
   }
   healDuplicateOpenShifts(state.shift);
   return state.shift;
 }
 function canStartAssignedMessage(){
   const shift=syncOpenShiftRuntime();
-  // step=done уже означает, что ЕТО пройден в этой сессии
-  if(state.step==='done'){
-    if(!shift && !state.shift) return 'Сначала откройте смену';
-    if(state.shift && !state.shift.completedAt) state.shift.completedAt=new Date().toISOString();
-    upsertShift();
-    if(hasOpenOrder()) return 'Сначала закройте текущий заказ';
-    return null;
+  if(!shift && !state.shift) return 'Сначала откройте смену';
+  if(!isEtoDone(shift) && !isEtoDone(state.shift)){
+    if(state.step==='done') state.step=(state.shift&&state.shift.vehiclePlate)?'odometer':'chooseVehicle';
+    return 'Сначала завершите ЕТО';
   }
-  if(!shift) return 'Сначала откройте смену';
-  if(!isEtoDone(shift) && !isEtoDone(state.shift)) return 'Сначала завершите ЕТО';
   state.step='done';
-  if(state.shift && !state.shift.completedAt) state.shift.completedAt=new Date().toISOString();
+  if(state.shift && !isSameLocalDay(state.shift.completedAt)) state.shift.completedAt=new Date().toISOString();
   upsertShift();
   if(hasOpenOrder()) return 'Сначала закройте текущий заказ';
   return null;
@@ -746,14 +765,20 @@ function wireInput(){
 function resumeOpenShift(shift){
   state.shift=shift;
   state.messages=(shift.messages&&shift.messages.length)?shift.messages.slice():[];
-  state.orderStep='idle'; state.draft={}; state.error=''; state.light=shift.light||{};
+  state.orderStep='idle'; state.draft={}; state.error='';
+  const stale=invalidateStaleEto(shift);
+  state.light=shift.light||{};
   if(isEtoDone(shift)){
     state.step='done';
-    const noted=(state.messages||[]).some(m=>String(m.text||'').includes('Смена уже открыта')||String(m.text||'').includes('Продолжаем открытую смену'));
+    const noted=(state.messages||[]).some(m=>String(m.text||'').includes('Смена уже открыта')||String(m.text||'').includes('Продолжаем открытую смену')||String(m.text||'').includes('ЕТО пройден'));
     if(!state.messages.length){
       state.messages=[{author:'bot',text:`Продолжаем открытую смену от ${dateTime(shift.startedAt)}.`}];
     } else if(!noted){
-      state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО пройден — можно работать с заказами или закрыть смену.`});
+      const carry=inProgressOrder();
+      const carryHint=carry&&carry.staysLoadedOvernight
+        ? `\nЕсть перенесённый заказ №${carry.sequentialNumber} (машина загружена) — после работы закройте его.`
+        : '';
+      state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}`});
     }
     upsertShift(); persist(); renderChat(); return;
   }
@@ -764,8 +789,16 @@ function resumeOpenShift(shift){
   else if(!(shift.coolant||shift.coolantLevel)) state.step='coolant';
   else if(!state.light.lowBeam || !state.light.brake || !state.light.turn) state.step='lights';
   else state.step='oil';
-  if(!state.messages.length){
-    state.messages=[{author:'bot',text:'Смена открыта, но ЕТО не завершён. Продолжим с того места, где остановились.'}];
+  const carry=inProgressOrder();
+  const carryHint=carry&&carry.staysLoadedOvernight
+    ? ` Есть перенесённый заказ №${carry.sequentialNumber} (машина загружена) — закроете после выгрузки.`
+    : '';
+  if(stale){
+    state.messages.push({author:'bot',text:`Новый день — нужно пройти ЕТО заново (за ночь с машиной могло что-то измениться).${carryHint}`});
+  } else if(!state.messages.length){
+    state.messages=[{author:'bot',text:`Смена открыта, но ЕТО не завершён. Продолжим с того места, где остановились.${carryHint}`}];
+  } else if(carryHint && !(state.messages||[]).some(m=>String(m.text||'').includes('перенесённый заказ'))){
+    state.messages.push({author:'bot',text:carryHint.trim()});
   }
   upsertShift(); persist(); renderChat();
 }
@@ -774,7 +807,11 @@ function openShift(){
   if(existing){ resumeOpenShift(existing); return; }
   state.shift={id:crypto.randomUUID(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null,completedAt:null};
   add('driver','Открыть смену');
-  add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.`);
+  const carry=inProgressOrder();
+  const carryHint=carry&&carry.staysLoadedOvernight
+    ? `\nЕсть перенесённый заказ №${carry.sequentialNumber} (машина загружена с прошлого дня) — после ЕТО закройте его по выгрузке.`
+    : '';
+  add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.${carryHint}`);
   state.step='chooseVehicle'; state.orderStep='idle'; state.error=''; upsertShift(); renderInput();
 }
 function selectVehicle(plate){
