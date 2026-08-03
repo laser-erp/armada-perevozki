@@ -97,6 +97,8 @@
 - Бэкапы: `/agent/backups/DriverReport-backup-latest.zip`
 - **Стабильный сайт (для всех по ссылке):** https://laser-erp.github.io/armada-web/
 - Публикация: репо `laser-erp/armada-web` (GitHub Pages) + sync из `web-preview/`
+- **Сайты и пароли (отдельный файл, не в git):** `/agent/backups/ARMADA_SITES_AND_PASSWORDS.txt`
+- VPS / PocketBase: `176.12.67.35` → админка `http://176.12.67.35:8090/_/`
 - Временные Cloudflare-туннели больше не нужны для работы
 
 ## GitHub
