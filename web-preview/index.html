@@ -500,6 +500,47 @@ function kmParkingToEnd(o){
   if(o.emptyKmBefore!=null || o.loadedKm!=null) return (o.emptyKmBefore||0)+(o.loadedKm||0);
   return null;
 }
+/** Км для списания топлива: полная цепочка, иначе стоянка→конец заказа. */
+function tripKmForFuel(o){
+  const total=dayTotal(o);
+  if(total!=null) return total;
+  return kmParkingToEnd(o);
+}
+/** Остаток до заказа: прошлый заказ по авто, иначе ЕТО смены. Не подставляем 80 л. */
+function lastFuelRemainingLiters(plate, exceptId){
+  const scored=allOrders()
+    .filter(o=>o.id!==exceptId && o.fuelRemainingLiters!=null && +o.fuelRemainingLiters>=0 && (!plate||o.vehiclePlate===plate))
+    .map(o=>({o, t:new Date(o.closedAt||o.createdAt).getTime()}))
+    .sort((a,b)=>b.t-a.t);
+  return scored.length?+scored[0].o.fuelRemainingLiters:null;
+}
+function resolveFuelRemainingBefore(plate, exceptId, shiftFuel){
+  const prev=lastFuelRemainingLiters(plate, exceptId);
+  if(prev!=null) return prev;
+  if(shiftFuel!=null && +shiftFuel>=0) return +shiftFuel;
+  return null;
+}
+/** Пересчитать остаток: до − расход [+ залито]. Без исходного остатка — null. */
+function computeFuelRemainingAfter(before, tripKm, consPer100, refillLiters){
+  if(before==null || !(before>=0)) return null;
+  if(tripKm==null || !(consPer100>=0)) return null;
+  const used=round2(tripKm*consPer100/100);
+  const add=(refillLiters!=null && +refillLiters>0)?+refillLiters:0;
+  return round2(Math.max(0, before-used+add));
+}
+function applyFuelRemainingOnClose(order, shift, refillLiters){
+  const before=resolveFuelRemainingBefore(
+    order.vehiclePlate,
+    order.id,
+    shift&&shift.fuelLiters!=null?shift.fuelLiters:null
+  );
+  const km=tripKmForFuel(order);
+  const cons=vehicle(order.vehiclePlate).consumptionPer100Km;
+  const after=computeFuelRemainingAfter(before, km, cons, refillLiters);
+  order.fuelRemainingLiters=(after!=null)?after:null;
+  if(after!=null && shift) shift.fuelLiters=after;
+  return {before, after, km, used:(before!=null && km!=null)?round2(km*cons/100):null};
+}
 /** Ставка для ЗП / подушки / прибыли — всегда наличные */
 function selectedRate(o){
   if(o.rateCash!=null) return o.rateCash;
@@ -1085,11 +1126,17 @@ function finalizeClose(refueled,price,liters){
     order.emptyKmAfter=Math.max(0, park-end);
     if(state.shift) state.shift.lastOdometerPoint=park;
   } else if(state.shift) state.shift.lastOdometerPoint=end;
+  const fuelBal=applyFuelRemainingOnClose(order, state.shift, refueled?liters:null);
   applyClientTariff(order);
   upsertOrder(order);
-  const fuelNote=!refueled && order.fuelPricePerLiter!=null
-    ? `\nТопливо: ${fmt(order.fuelPricePerLiter)} ₽/л (без заправки)`
-    : '';
+  let fuelNote='';
+  if(!refueled && order.fuelPricePerLiter!=null){
+    fuelNote+=`\nТопливо: ${fmt(order.fuelPricePerLiter)} ₽/л (без заправки)`;
+  }
+  if(fuelBal.after!=null){
+    fuelNote+=`\nОстаток топлива: ${fmt(fuelBal.after)} л`;
+    if(fuelBal.used!=null) fuelNote+=` (расход ${fmt(fuelBal.used)} л)`;
+  }
   add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nДо стоянки / след. заказа: ${order.emptyKmAfter??0} км${fuelNote}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
@@ -1489,6 +1536,8 @@ function openDetail(id){
       <div class="calc-row"><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
       <div class="calc-row"><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
       <div class="calc-row"><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
+      <div class="calc-row"><span>Заправка</span><span>${o.refueled?`${fmt(o.fuelLiters)} л`:'нет'}</span></div>
+      <div class="calc-row"><span>Остаток топлива</span><span>${fmt(o.fuelRemainingLiters)} л</span></div>
       <div class="calc-row"><span>руб/л (факт)</span><span>${fmt(o.fuelPricePerLiter)}</span></div>
       <div class="calc-row"><span>Стоимость ГСМ</span><span>${fmt(m.fuelCostCalc)} руб</span></div>
       <div class="calc-row"><span>руб/км без НДС</span><span>${fmt(m.costPerKmNoVat)}</span></div>

@@ -889,12 +889,39 @@ final class ChatViewModel: ObservableObject {
             order.fuelTotalCost = nil
         }
         order.closedAt = Date()
+
+        let beforeFuel = OrderFinance.resolveFuelRemainingBefore(
+            plate: order.vehiclePlate,
+            except: order.id,
+            shiftFuel: shift.fuelLiters,
+            previousOrders: store.allOrders()
+        )
+        let tripKm = OrderFinance.tripKmForFuel(order)
+        let cons = store.vehicle(for: order.vehiclePlate).consumptionPer100Km
+        let afterFuel = OrderFinance.computeFuelRemainingAfter(
+            before: beforeFuel,
+            tripKm: tripKm,
+            consumptionPer100: cons,
+            refillLiters: refueled ? liters : nil
+        )
+        order.fuelRemainingLiters = afterFuel
+        if let afterFuel {
+            shift.fuelLiters = afterFuel
+        }
+
         shift.lastOdometerPoint = parkingOrNextOdometer
         store.attachOrder(order, to: shift.id)
 
         var fuelNote = ""
         if !refueled, let price = order.fuelPricePerLiter {
             fuelNote = "\nТопливо: \(formatDecimal(price)) ₽/л (без заправки)"
+        }
+        if let afterFuel {
+            fuelNote += "\nОстаток топлива: \(formatDecimal(afterFuel)) л"
+            if let tripKm {
+                let used = OrderFinance.round2(OrderFinance.fuelLiters(km: tripKm, consumptionPer100: cons))
+                fuelNote += " (расход \(formatDecimal(used)) л)"
+            }
         }
         append(
             .bot,

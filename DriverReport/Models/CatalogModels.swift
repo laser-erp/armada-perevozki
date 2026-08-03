@@ -433,6 +433,49 @@ enum OrderFinance {
         Double(km) * consumptionPer100 / 100.0
     }
 
+    /// Км для списания топлива: полная цепочка, иначе стоянка→конец заказа.
+    static func tripKmForFuel(_ order: OrderRecord) -> Int? {
+        if let total = order.dayTotalKm { return total }
+        return kmParkingToEnd(order)
+    }
+
+    /// Остаток до заказа: прошлый заказ по авто, иначе ЕТО. Не подставляем 80 л.
+    static func resolveFuelRemainingBefore(
+        plate: String,
+        except orderId: UUID?,
+        shiftFuel: Double?,
+        previousOrders: [OrderRecord]
+    ) -> Double? {
+        let prev = previousOrders
+            .filter { order in
+                if let orderId, order.id == orderId { return false }
+                guard order.vehiclePlate == plate else { return false }
+                guard let rem = order.fuelRemainingLiters, rem >= 0 else { return false }
+                return true
+            }
+            .sorted { a, b in
+                (a.closedAt ?? a.createdAt) > (b.closedAt ?? b.createdAt)
+            }
+            .first?
+            .fuelRemainingLiters
+        if let prev { return prev }
+        if let shiftFuel, shiftFuel >= 0 { return shiftFuel }
+        return nil
+    }
+
+    /// Остаток после: до − расход [+ залито]. Без исходного остатка — nil.
+    static func computeFuelRemainingAfter(
+        before: Double?,
+        tripKm: Int?,
+        consumptionPer100: Double,
+        refillLiters: Double?
+    ) -> Double? {
+        guard let before, before >= 0, let tripKm, consumptionPer100 >= 0 else { return nil }
+        let used = round2(fuelLiters(km: tripKm, consumptionPer100: consumptionPer100))
+        let add = (refillLiters ?? 0) > 0 ? (refillLiters ?? 0) : 0
+        return round2(max(0, before - used + add))
+    }
+
     /// Ставка для ЗП / подушки / прибыли — всегда наличные
     /// (в «с НДС» заложен НДС 22%, в «без НДС» — 8% относительно нал).
     static func selectedRate(_ order: OrderRecord) -> Double? {
