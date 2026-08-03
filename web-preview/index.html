@@ -248,7 +248,6 @@ function uuid(){
   try{
     const c=globalThis.crypto;
     if(c&&typeof c.randomUUID==='function'){
-      // На http:// в части браузеров бросает / нет метода — тогда fallback ниже.
       return c.randomUUID.call(c);
     }
   }catch(_){}
@@ -291,18 +290,18 @@ function kindTitle(kind){ return kind==='unloading'?'Выгрузка':'Загр
 function normalizePoint(p, fallbackKind){
   if(typeof p==='string'){
     const address=String(p||'').trim();
-    return address?{id:crypto.randomUUID(),address,kind:fallbackKind||'loading'}:null;
+    return address?{id:uuid(),address,kind:fallbackKind||'loading'}:null;
   }
   if(!p||typeof p!=='object') return null;
   const address=String(p.address||'').trim();
   if(!address) return null;
   const kind=p.kind==='unloading'?'unloading':'loading';
-  return {id:p.id||crypto.randomUUID(),address,kind};
+  return {id:p.id||uuid(),address,kind};
 }
 function defaultRoutePoints(load, unload){
   return [
-    {id:crypto.randomUUID(),address:String(load||'').trim()||'Адрес загрузки',kind:'loading'},
-    {id:crypto.randomUUID(),address:String(unload||'').trim()||'Адрес выгрузки',kind:'unloading'}
+    {id:uuid(),address:String(load||'').trim()||'Адрес загрузки',kind:'loading'},
+    {id:uuid(),address:String(unload||'').trim()||'Адрес выгрузки',kind:'unloading'}
   ];
 }
 function ensureRoutePoints(o){
@@ -1005,16 +1004,26 @@ function resumeOpenShift(shift){
   upsertShift(); persist(); renderChat();
 }
 function openShift(){
-  const existing=findOpenShift();
-  if(existing){ resumeOpenShift(existing); return; }
-  state.shift={id:crypto.randomUUID(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null,completedAt:null};
-  add('driver','Открыть смену');
-  const carry=inProgressOrder();
-  const carryHint=carry&&carry.staysLoadedOvernight
-    ? `\nЕсть перенесённый заказ №${carry.sequentialNumber} (машина загружена с прошлого дня) — после ЕТО закройте его по выгрузке.`
-    : '';
-  add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.${carryHint}`);
-  state.step='chooseVehicle'; state.orderStep='idle'; state.error=''; upsertShift(); renderInput();
+  try{
+    if(!state.vehicles||!state.vehicles.length){
+      state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
+    }
+    const existing=findOpenShift();
+    if(existing){ resumeOpenShift(existing); return; }
+    state.shift={id:uuid(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null,completedAt:null};
+    add('driver','Открыть смену');
+    const carry=inProgressOrder();
+    const carryHint=carry&&carry.staysLoadedOvernight
+      ? `
+Есть перенесённый заказ №${carry.sequentialNumber} (машина загружена с прошлого дня) — после ЕТО закройте его по выгрузке.`
+      : '';
+    add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.${carryHint}`);
+    state.step='chooseVehicle'; state.orderStep='idle'; state.error=''; upsertShift(); renderInput();
+  }catch(err){
+    console.error('openShift', err);
+    state.error='Не удалось открыть смену. Обновите страницу и попробуйте снова.';
+    renderInput();
+  }
 }
 function selectVehicle(plate){
   if(state.orderStep==='chooseVehicle'){
@@ -1283,7 +1292,7 @@ function submitText(){
 }
 function finishOrder(unloading){
   const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
-  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:defaultRoutePoints(d.loading,unloading),driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
+  const order={id:uuid(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:defaultRoutePoints(d.loading,unloading),driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER)};
   ensureRoutePoints(order);
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order); upsertOrder(order);
   const route=routeText(order);
@@ -1510,7 +1519,7 @@ function saveDispatcherOrder(){
   const customer=($('create-customer').value||'').trim();
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
   state.seq+=1;
-  const order={id:crypto.randomUUID(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,routePoints:defaultRoutePoints(load,unload),startOdometer:null,driverPercent:driverPercent(driver)};
+  const order={id:uuid(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,routePoints:defaultRoutePoints(load,unload),startOdometer:null,driverPercent:driverPercent(driver)};
   ensureRoutePoints(order);
   upsertOrder(order); show('admin'); renderAdmin();
 }
@@ -1528,7 +1537,7 @@ function openDetail(id){
       const kindSel=row.querySelector('[data-route-kind]');
       const kind=(kindSel&&kindSel.value==='unloading')?'unloading':'loading';
       const prev=editPoints[i]||{};
-      return {id:prev.id||crypto.randomUUID(),address,kind};
+      return {id:prev.id||uuid(),address,kind};
     });
   };
   const suggestionsFor=(kind)=>{
@@ -1580,7 +1589,7 @@ function openDetail(id){
     const addKind=kind=>{
       editPoints=readPointsFromDom();
       const insertAt=Math.max(1, editPoints.length-1);
-      editPoints.splice(insertAt, 0, {id:crypto.randomUUID(),address:'',kind});
+      editPoints.splice(insertAt, 0, {id:uuid(),address:'',kind});
       renderRouteEditor();
     };
     $('route-add-load').onclick=()=>addKind('loading');
