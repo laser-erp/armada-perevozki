@@ -106,3 +106,9 @@
 - Repo: https://github.com/laser-erp/armada-perevozki
 - Account: laser-erp
 - Агент: https://cursor.com/agents/bc-019fb4d1-f788-7cd1-a617-8a118a0f4317
+
+## Следующий блок (завтра)
+- Попробовать HTTPS на `aptown1.fvds.ru` после снятия лимита LE (после ~2026-08-03 22:50 UTC / 01:50 МСК 4 авг)
+- Либо подключить свой домен (например `armada.sx` / `app.armada.sx`) → A-запись на `176.12.67.35` → Caddy HTTPS
+- Главный вход: http://aptown1.fvds.ru/
+- Пароли/ссылки: `/agent/backups/ARMADA_SITES_AND_PASSWORDS.txt`
