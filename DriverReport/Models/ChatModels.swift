@@ -118,8 +118,13 @@ struct ShiftRecord: Identifiable, Codable, Equatable {
         self.endedAt = endedAt
     }
 
+    /// ЕТО засчитывается только в календарный день прохождения.
     var isETOComplete: Bool {
-        if completedAt != nil { return true }
+        if let completedAt {
+            return Calendar.current.isDateInToday(completedAt)
+        }
+        // Незавершённый осмотр — только если смена открыта сегодня
+        guard Calendar.current.isDateInToday(startedAt) else { return false }
         return vehiclePlate != nil
             && odometer != nil
             && fuelLiters != nil
@@ -128,6 +133,29 @@ struct ShiftRecord: Identifiable, Codable, Equatable {
             && engineOilLevel != nil
     }
     var isClosed: Bool { endedAt != nil }
+
+    /// Сбросить вчерашний ЕТО для повторного осмотра утром.
+    mutating func invalidateStaleETOIfNeeded() -> Bool {
+        if isETOComplete { return false }
+        let hadInspection = completedAt != nil
+            || odometer != nil
+            || fuelLiters != nil
+            || powerSteeringLevel != nil
+            || coolantLevel != nil
+            || engineOilLevel != nil
+            || lights.isComplete
+        guard hadInspection else { return false }
+        if let completedAt, Calendar.current.isDateInToday(completedAt) { return false }
+        if completedAt == nil, Calendar.current.isDateInToday(startedAt) { return false }
+        completedAt = nil
+        odometer = nil
+        fuelLiters = nil
+        powerSteeringLevel = nil
+        coolantLevel = nil
+        engineOilLevel = nil
+        lights = LightChecklistAnswers()
+        return true
+    }
 }
 
 enum ETOStep: Int, Codable {
