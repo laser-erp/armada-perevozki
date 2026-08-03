@@ -116,6 +116,7 @@
     <img class="logo" src="logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Выберите роль</div>
+    <div class="hint" id="sync-hint" style="margin-bottom:8px">Подключение к общей базе…</div>
     <div class="stack">
       <button class="primary" id="role-driver">Водитель</button>
       <button class="secondary" id="role-admin">Администратор</button>
@@ -239,10 +240,16 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-03-eto-daily";
+const APP_BUILD="2026-08-03-pb-sync";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
-console.info("АРМАДА build", APP_BUILD);
+/** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
+const PB_BASE=(function(){
+  const h=location.hostname;
+  if(h==='aptown1.fvds.ru'||h==='176.12.67.35') return location.origin;
+  return 'http://aptown1.fvds.ru';
+})();
+console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
 const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,defaultRatePerHourWork:0,defaultRatePerKmCash:0};
 const state={
@@ -254,6 +261,9 @@ const state={
   finance:Object.assign({}, DEFAULT_FINANCE, saved.finance||{}),
   light:{}, draft:{}, error:"", adminFilter:"all", detailId:null
 };
+let pbRecordId=null;
+let persistTimer=null;
+let syncStatus='local'; // local | syncing | ok | error
 if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
 if(state.finance.markupPercent>80) state.finance.markupPercent=80;
 if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -309,7 +319,117 @@ function show(id){
   const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen';
   $('shell').classList.toggle('wide', wide);
 }
-function persist(){ localStorage.setItem(KEY, JSON.stringify({shifts:state.shifts, orders:state.orders, seq:state.seq, vehicles:state.vehicles, drivers:state.drivers, customers:state.customers, finance:state.finance})); }
+function snapshot(){
+  return {
+    shifts:state.shifts,
+    orders:state.orders,
+    seq:state.seq,
+    vehicles:state.vehicles,
+    drivers:state.drivers,
+    customers:state.customers,
+    finance:state.finance,
+    savedAt:new Date().toISOString()
+  };
+}
+function scorePayload(p){
+  if(!p||typeof p!=='object') return 0;
+  return (p.orders&&p.orders.length||0)*10 + (p.shifts&&p.shifts.length||0)*3 + (p.customers&&p.customers.length||0) + (p.seq||0);
+}
+function applyPayload(p){
+  if(!p||typeof p!=='object') return;
+  state.shifts=Array.isArray(p.shifts)?p.shifts:[];
+  state.orders=Array.isArray(p.orders)?p.orders:[];
+  state.seq=p.seq||0;
+  state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles:DEFAULT_VEHICLES.map(v=>({...v}));
+  state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
+  state.customers=Array.isArray(p.customers)?p.customers:[];
+  state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
+  if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
+  if(state.finance.markupPercent>80) state.finance.markupPercent=80;
+  if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
+  if(!(state.finance.minWorkHours>=0)) state.finance.minWorkHours=4;
+  if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
+  if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
+  if(!(state.finance.defaultRatePerKmCash>=0)) state.finance.defaultRatePerKmCash=0;
+  if(!state.orders.length && state.shifts.length) state.orders=state.shifts.flatMap(s=>s.orders||[]);
+  state.orders.forEach(o=>{
+    if(o.customer==null) o.customer="";
+    if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
+    ensureRoutePoints(o);
+  });
+}
+async function fetchServerState(){
+  const filter=encodeURIComponent("key='main'");
+  const res=await fetch(`${PB_BASE}/api/collections/app_state/records?filter=${filter}&perPage=1`);
+  if(!res.ok) throw new Error('Не удалось загрузить базу ('+res.status+')');
+  const data=await res.json();
+  return (data.items&&data.items[0])||null;
+}
+async function pushServerState(){
+  const payload=snapshot();
+  localStorage.setItem(KEY, JSON.stringify(payload));
+  const body={key:'main', payload};
+  if(pbRecordId){
+    const res=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    if(!res.ok) throw new Error('Не удалось сохранить ('+res.status+')');
+    return;
+  }
+  const res=await fetch(`${PB_BASE}/api/collections/app_state/records`,{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  if(res.ok){
+    const rec=await res.json();
+    pbRecordId=rec.id;
+    return;
+  }
+  const existing=await fetchServerState();
+  if(!existing) throw new Error('Не удалось создать запись базы');
+  pbRecordId=existing.id;
+  const res2=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
+}
+function persist(){
+  localStorage.setItem(KEY, JSON.stringify(snapshot()));
+  syncStatus='syncing';
+  clearTimeout(persistTimer);
+  persistTimer=setTimeout(()=>{
+    pushServerState()
+      .then(()=>{ syncStatus='ok'; })
+      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); });
+  }, 350);
+}
+async function initCloudSync(){
+  syncStatus='syncing';
+  try{
+    const rec=await fetchServerState();
+    const local=snapshot();
+    if(rec){
+      pbRecordId=rec.id;
+      const remote=rec.payload||{};
+      const rScore=scorePayload(remote);
+      const lScore=scorePayload(local);
+      const remoteNewer=!!(remote.savedAt && (!local.savedAt || remote.savedAt>=local.savedAt));
+      if(rScore>lScore || (rScore>0 && remoteNewer) || (rScore===lScore && remoteNewer && rScore>0)){
+        applyPayload(remote);
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+      } else if(lScore>0){
+        await pushServerState();
+      }
+    } else if(scorePayload(local)>0){
+      await pushServerState();
+    } else {
+      await pushServerState();
+    }
+    syncStatus='ok';
+  }catch(err){
+    syncStatus='error';
+    console.warn('PB init', err);
+  }
+}
 function upsertShift(){ if(!state.shift) return; state.shift.messages=state.messages.slice(); const i=state.shifts.findIndex(s=>s.id===state.shift.id); if(i>=0) state.shifts[i]=structuredClone(state.shift); else state.shifts.unshift(structuredClone(state.shift)); persist(); }
 function uniqAddrs(list){
   const seen=new Set(); const out=[];
@@ -1660,7 +1780,18 @@ function openCatalogs(){
   document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); $('cat-ok').style.display='block'; });
 }
 
-setTimeout(()=>{ show('roles'); }, 1600);
+function updateSyncHint(){
+  const el=$('sync-hint'); if(!el) return;
+  if(syncStatus==='ok') el.textContent='Общая база подключена — данные сохраняются на сервере';
+  else if(syncStatus==='error') el.textContent='Нет связи с сервером — пока только локально в этом браузере';
+  else if(syncStatus==='syncing') el.textContent='Подключение к общей базе…';
+  else el.textContent='Локальный режим';
+}
+(async function boot(){
+  await initCloudSync();
+  updateSyncHint();
+  setTimeout(()=>{ show('roles'); updateSyncHint(); }, 700);
+})();
 $('role-driver').onclick=()=>{ show('driver'); resetChat(); };
 $('role-admin').onclick=()=>{ $('pin-input').value=''; $('pin-error').textContent=''; show('admin-pin'); };
 $('pin-back').onclick=()=>show('roles');

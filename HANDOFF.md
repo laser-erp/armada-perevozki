@@ -95,11 +95,12 @@
 ## Пути
 - iOS / web: `/agent/DriverReport/`
 - Бэкапы: `/agent/backups/DriverReport-backup-latest.zip`
-- **Стабильный сайт (для всех по ссылке):** https://laser-erp.github.io/armada-web/
-- Публикация: репо `laser-erp/armada-web` (GitHub Pages) + sync из `web-preview/`
-- **Сайты и пароли (отдельный файл, не в git):** `/agent/backups/ARMADA_SITES_AND_PASSWORDS.txt`
-- VPS / PocketBase: `176.12.67.35` → админка `http://176.12.67.35:8090/_/`
-- Временные Cloudflare-туннели больше не нужны для работы
+- **Главное приложение (общая база):** http://aptown1.fvds.ru/
+- GitHub Pages редиректит туда: https://laser-erp.github.io/armada-web/
+- Данные: PocketBase на VPS, коллекция `app_state` (key=`main`); веб пишет при каждом `persist()`
+- Веб-файлы на сервере: `/var/www/armada` (Caddy :80 → static + `/api`/`/_` → PocketBase)
+- **Сайты и пароли:** `/agent/backups/ARMADA_SITES_AND_PASSWORDS.txt`
+- HTTPS пока нет (лимит LE на fvds.ru); позже — свой домен
 
 ## GitHub
 - Repo: https://github.com/laser-erp/armada-perevozki
