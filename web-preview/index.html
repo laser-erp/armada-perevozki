@@ -343,7 +343,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-purge-cancelled";
+const APP_BUILD="2026-08-04-sync-guard";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -467,10 +467,27 @@ function show(id){
     touchAdminPresence(id);
   }
 }
+function isCancelledOrder(o){
+  return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));
+}
+function stripCancelledFromOrders(orders){
+  return (orders||[]).filter(o=>!isCancelledOrder(o));
+}
+function bumpDataEpoch(reason){
+  state.dataEpoch=(Number(state.dataEpoch)||0)+1;
+  console.info('dataEpoch →', state.dataEpoch, reason||'');
+}
 function snapshot(){
+  // Отменённые никогда не уезжают на сервер — иначе старая вкладка воскрешает их.
+  const orders=stripCancelledFromOrders(state.orders);
+  const shifts=(state.shifts||[]).map(s=>{
+    const copy={...s};
+    if(Array.isArray(copy.orders)) copy.orders=stripCancelledFromOrders(copy.orders);
+    return copy;
+  });
   return {
-    shifts:state.shifts,
-    orders:state.orders,
+    shifts,
+    orders,
     seq:state.seq,
     vehicles:state.vehicles,
     drivers:state.drivers,
@@ -481,7 +498,8 @@ function snapshot(){
     adminLogins:state.adminLogins,
     adminPresence:state.adminPresence,
     dataEpoch:Number(state.dataEpoch)||0,
-    savedAt:new Date().toISOString()
+    savedAt:new Date().toISOString(),
+    appBuild:APP_BUILD
   };
 }
 function scorePayload(p){
@@ -492,7 +510,8 @@ function scorePayload(p){
 function applyPayload(p){
   if(!p||typeof p!=='object') return;
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
-  state.orders=Array.isArray(p.orders)?p.orders:[];
+  // Явный массив orders с сервера (в т.ч. []) — закон. Не поднимаем заказы из смен.
+  state.orders=Array.isArray(p.orders)?stripCancelledFromOrders(p.orders):[];
   state.seq=p.seq||0;
   state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles:DEFAULT_VEHICLES.map(v=>({...v}));
   state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
@@ -508,9 +527,9 @@ function applyPayload(p){
   if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
   if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
   if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
-  // Старые данные: заказы жили только внутри смен. Не воскрешать, если orders уже явный [] с сервера.
-  if(!Array.isArray(p.orders) && state.shifts.length){
-    state.orders=state.shifts.flatMap(s=>s.orders||[]);
+  // Только если поле orders вообще отсутствовало в старых дампах.
+  if(!('orders' in p) && state.shifts.length && !state.orders.length){
+    state.orders=stripCancelledFromOrders(state.shifts.flatMap(s=>s.orders||[]));
   }
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
@@ -529,6 +548,24 @@ async function fetchServerState(){
   return (data.items&&data.items[0])||null;
 }
 async function pushServerState(){
+  // Перед записью сверяем эпоху: старая вкладка не должна затирать более новую базу.
+  try{
+    const rec=await fetchServerState();
+    if(rec){
+      pbRecordId=rec.id;
+      const remote=rec.payload||{};
+      const remoteEpoch=Number(remote.dataEpoch)||0;
+      const localEpoch=Number(state.dataEpoch)||0;
+      if(remoteEpoch>localEpoch){
+        applyPayload(remote);
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
+        return {aborted:true, reason:'remote_ahead'};
+      }
+    }
+  }catch(err){
+    console.warn('PB preflight', err);
+  }
   const payload=snapshot();
   localStorage.setItem(KEY, JSON.stringify(payload));
   const body={key:'main', payload};
@@ -537,7 +574,7 @@ async function pushServerState(){
       method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
     });
     if(!res.ok) throw new Error('Не удалось сохранить ('+res.status+')');
-    return;
+    return {aborted:false};
   }
   const res=await fetch(`${PB_BASE}/api/collections/app_state/records`,{
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
@@ -545,7 +582,7 @@ async function pushServerState(){
   if(res.ok){
     const rec=await res.json();
     pbRecordId=rec.id;
-    return;
+    return {aborted:false};
   }
   const existing=await fetchServerState();
   if(!existing) throw new Error('Не удалось создать запись базы');
@@ -554,6 +591,7 @@ async function pushServerState(){
     method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
   });
   if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
+  return {aborted:false};
 }
 function persist(){
   localStorage.setItem(KEY, JSON.stringify(snapshot()));
@@ -569,32 +607,20 @@ async function initCloudSync(){
   syncStatus='syncing';
   try{
     const rec=await fetchServerState();
-    const local=snapshot();
     if(rec){
       pbRecordId=rec.id;
       const remote=rec.payload||{};
-      const rScore=scorePayload(remote);
-      const lScore=scorePayload(local);
-      const remoteTs=Date.parse(remote.savedAt||'')||0;
-      const localTs=Date.parse(local.savedAt||'')||0;
       const remoteEpoch=Number(remote.dataEpoch)||0;
-      const localEpoch=Number(local.dataEpoch)||0;
-      const remoteNewer=remoteTs>0 && remoteTs>=localTs;
-      // Эпоха с сервера (очистка админом) важнее локального кэша; иначе — по savedAt.
-      const takeRemote=remoteEpoch>localEpoch
-        || (remoteEpoch===localEpoch && remoteNewer)
-        || (remoteEpoch===localEpoch && !remoteTs && !localTs && rScore>lScore)
-        || (remoteEpoch===localEpoch && !localTs && rScore>0);
-      if(takeRemote){
+      const localEpoch=Number(state.dataEpoch)||0;
+      // Сервер — источник правды при старте, если эпоха не ниже локальной.
+      // Раньше при равной эпохе «более новый» localStorage затирал очистку на сервере.
+      if(remoteEpoch>=localEpoch || !localEpoch){
         applyPayload(remote);
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
-      } else if(lScore>0 || localTs>0){
-        await pushServerState();
       } else {
+        // Локальная эпоха строго выше — осознанная очистка/миграция с этого устройства.
         await pushServerState();
       }
-    } else if(scorePayload(local)>0){
-      await pushServerState();
     } else {
       await pushServerState();
     }
@@ -1304,14 +1330,15 @@ function cancelOrder(id, reason){
   // Полностью убираем из списка — иначе «Отменён» висит в «Все»
   state.orders=(state.orders||[]).filter(x=>x.id!==id);
   state.shifts.forEach(s=>{ if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>x.id!==id); });
+  bumpDataEpoch('cancelOrder');
   persist();
   return true;
 }
 function purgeCancelledOrders(){
   const before=(state.orders||[]).length;
-  state.orders=(state.orders||[]).filter(o=>!o.cancelledAt && !(o.closedAt && o.cancelReason));
+  state.orders=stripCancelledFromOrders(state.orders);
   state.shifts.forEach(s=>{
-    if(Array.isArray(s.orders)) s.orders=s.orders.filter(o=>!o.cancelledAt && !(o.closedAt && o.cancelReason));
+    if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders);
   });
   return before!==(state.orders||[]).length;
 }
@@ -3235,6 +3262,10 @@ function updateSyncHint(){
 }
 (async function boot(){
   await initCloudSync();
+  if(purgeCancelledOrders()){
+    bumpDataEpoch('purge-boot');
+    persist();
+  }
   updateSyncHint();
   setTimeout(()=>{ show('roles'); updateSyncHint(); }, 700);
 })();
