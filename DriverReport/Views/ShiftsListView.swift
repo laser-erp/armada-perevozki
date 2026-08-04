@@ -208,7 +208,11 @@ struct OrdersListView: View {
     private var orders: [OrderRecord] {
         let all = store.allOrders()
         if adminMode { return all }
-        return all.filter { $0.driverName == driverName }
+        return all.filter { $0.driverName == driverName && $0.onExchange != true }
+    }
+
+    private var exchangeOrders: [OrderRecord] {
+        adminMode ? [] : store.exchangeBoard(for: driverName)
     }
 
     var body: some View {
@@ -220,53 +224,33 @@ struct OrdersListView: View {
             )
             .ignoresSafeArea()
 
-            if orders.isEmpty {
+            if orders.isEmpty && exchangeOrders.isEmpty {
                 Text("Пока нет заявок")
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(AppTheme.textMuted)
             } else {
                 List {
-                    ForEach(orders) { order in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("№\(order.sequentialNumber) · за день \(order.dayNumber)")
-                                .font(.system(.headline, design: .rounded))
-                            Text(Self.dateTime.string(from: order.createdAt))
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            Text(order.routeText)
-                                .font(.system(.subheadline, design: .rounded))
-                            Text(order.vehiclePlate)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(AppTheme.accent)
-                            if adminMode {
-                                Text("Нулевой \(order.emptyKmBefore.map(String.init) ?? "—") км · с грузом \(order.loadedKm.map(String.init) ?? "—")")
-                                    .font(.system(.caption2, design: .rounded))
-                                    .foregroundStyle(AppTheme.textMuted)
-                                if let pay = store.metrics(for: order).driverPay {
-                                    Text("ЗП: \(formatMoney(pay)) ₽")
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(AppTheme.accent)
-                                }
-                            } else if let pay = order.earnings ?? store.metrics(for: order).driverPay {
-                                Text("ЗП: \(formatMoney(pay)) ₽")
-                                    .font(.system(.subheadline, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(AppTheme.accent)
-                            } else if order.isClosed {
-                                Text("ЗП: ожидает расчёта")
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(AppTheme.textMuted)
+                    if !exchangeOrders.isEmpty {
+                        Section("Биржа") {
+                            ForEach(exchangeOrders) { order in
+                                orderRow(order, exchange: true)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button("Взять заказ") { takeExchange(order) }
+                                            .tint(AppTheme.accent)
+                                    }
                             }
-                            Text(order.statusText)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(order.isClosed ? .green : (order.isInProgress ? .orange : AppTheme.accent))
                         }
-                        .listRowBackground(AppTheme.botBubble.opacity(0.55))
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if !adminMode, order.isAssignedPending {
-                                Button("Начать заказ") {
-                                    startAssigned(order)
-                                }
-                                .tint(AppTheme.accent)
+                    }
+                    if !orders.isEmpty {
+                        Section(adminMode ? "Все заявки" : "Мои заявки") {
+                            ForEach(orders) { order in
+                                orderRow(order, exchange: false)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        if !adminMode, order.isAssignedPending {
+                                            Button("Начать заказ") { startAssigned(order) }
+                                                .tint(AppTheme.accent)
+                                        }
+                                    }
                             }
                         }
                     }
@@ -283,6 +267,71 @@ struct OrdersListView: View {
             Button("OK", role: .cancel) { startError = nil }
         } message: {
             Text(startError ?? "")
+        }
+    }
+
+    @ViewBuilder
+    private func orderRow(_ order: OrderRecord, exchange: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(exchange
+                 ? "Биржа · №\(order.sequentialNumber) · день \(order.dayNumber)"
+                 : "№\(order.sequentialNumber) · за день \(order.dayNumber)")
+                .font(.system(.headline, design: .rounded))
+            Text(Self.dateTime.string(from: order.createdAt))
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.secondary)
+            Text(order.routeText)
+                .font(.system(.subheadline, design: .rounded))
+            if !exchange {
+                Text(order.vehiclePlate)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(AppTheme.accent)
+            }
+            if !order.contactLine.isEmpty {
+                Text(order.contactLine)
+                    .font(.system(.caption, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.accent)
+            }
+            if let phone = order.contactPhone, !phone.isEmpty,
+               let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
+                Link("Позвонить \(phone)", destination: url)
+                    .font(.system(.caption, design: .rounded))
+            }
+            if adminMode {
+                Text("Нулевой \(order.emptyKmBefore.map(String.init) ?? "—") км · с грузом \(order.loadedKm.map(String.init) ?? "—")")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+                if let pay = store.metrics(for: order).driverPay {
+                    Text("ЗП: \(formatMoney(pay)) ₽")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(AppTheme.accent)
+                }
+            } else if !exchange {
+                if let pay = order.earnings ?? store.metrics(for: order).driverPay {
+                    Text("ЗП: \(formatMoney(pay)) ₽")
+                        .font(.system(.subheadline, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.accent)
+                } else if order.isClosed {
+                    Text("ЗП: ожидает расчёта")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+            }
+            Text(exchange ? "На бирже" : order.statusText)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(order.isClosed ? .green : (order.isInProgress ? .orange : AppTheme.accent))
+        }
+        .listRowBackground(AppTheme.botBubble.opacity(0.55))
+    }
+
+    private func takeExchange(_ order: OrderRecord) {
+        let plate = store.openShift()?.vehiclePlate
+        guard store.takeExchangeOrder(order.id, driverName: driverName, vehiclePlate: plate) != nil else {
+            startError = "Заказ уже недоступен или биржа выключена"
+            return
+        }
+        if let taken = store.orders.first(where: { $0.id == order.id }) {
+            startAssigned(taken)
         }
     }
 

@@ -20,11 +20,109 @@ struct VehicleProfile: Identifiable, Codable, Equatable {
     ]
 }
 
+struct ContactPhone: Identifiable, Codable, Equatable {
+    var id: String
+    var number: String
+    var label: String
+
+    init(id: String = UUID().uuidString, number: String, label: String = "") {
+        self.id = id
+        self.number = number
+        self.label = label
+    }
+}
+
+struct CompanyContact: Identifiable, Codable, Equatable {
+    var id: String
+    var name: String
+    var title: String
+    var phones: [ContactPhone]
+    var isPrimary: Bool
+
+    init(
+        id: String = UUID().uuidString,
+        name: String,
+        title: String = "",
+        phones: [ContactPhone] = [],
+        isPrimary: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.title = title
+        self.phones = phones
+        self.isPrimary = isPrimary
+    }
+
+    var primaryPhone: String { phones.first?.number ?? "" }
+}
+
+struct CarrierVehicle: Identifiable, Codable, Equatable {
+    var id: String
+    var plate: String
+    var makeModel: String
+    var payloadTons: Double?
+    var bodyLengthM: Double?
+    var bodyWidthM: Double?
+    var bodyHeightM: Double?
+
+    init(
+        id: String = UUID().uuidString,
+        plate: String,
+        makeModel: String = "",
+        payloadTons: Double? = nil,
+        bodyLengthM: Double? = nil,
+        bodyWidthM: Double? = nil,
+        bodyHeightM: Double? = nil
+    ) {
+        self.id = id
+        self.plate = plate
+        self.makeModel = makeModel
+        self.payloadTons = payloadTons
+        self.bodyLengthM = bodyLengthM
+        self.bodyWidthM = bodyWidthM
+        self.bodyHeightM = bodyHeightM
+    }
+}
+
+struct CarrierDriver: Identifiable, Codable, Equatable {
+    var id: String
+    var name: String
+    var phone: String
+    var vehicleId: String?
+
+    init(id: String = UUID().uuidString, name: String, phone: String = "", vehicleId: String? = nil) {
+        self.id = id
+        self.name = name
+        self.phone = phone
+        self.vehicleId = vehicleId
+    }
+}
+
 struct DriverProfile: Identifiable, Codable, Equatable {
     var id: String { name }
     var name: String
     /// % от ставки
     var salaryPercent: Double
+    var phone: String
+    /// Биржу включает только администратор
+    var exchangeEnabled: Bool
+
+    init(name: String, salaryPercent: Double, phone: String = "", exchangeEnabled: Bool = false) {
+        self.name = name
+        self.salaryPercent = salaryPercent
+        self.phone = phone
+        self.exchangeEnabled = exchangeEnabled
+    }
+
+    enum CodingKeys: String, CodingKey { case name, salaryPercent, phone, exchangeEnabled }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        salaryPercent = try c.decodeIfPresent(Double.self, forKey: .salaryPercent) ?? 30
+        phone = try c.decodeIfPresent(String.self, forKey: .phone) ?? ""
+        exchangeEnabled = try c.decodeIfPresent(Bool.self, forKey: .exchangeEnabled) ?? false
+    }
 
     static let defaults: [DriverProfile] = [
         DriverProfile(name: "Наволоцкий Е.Н.", salaryPercent: 30)
@@ -32,15 +130,63 @@ struct DriverProfile: Identifiable, Codable, Equatable {
 }
 
 struct CustomerProfile: Identifiable, Codable, Equatable {
-    var id: String { name }
+    var id: String
     var name: String
+    /// customer / carrier (можно обе роли)
+    var roles: [String]
+    var note: String
+    var phones: [ContactPhone]
+    var contacts: [CompanyContact]
     var loadingAddresses: [String]
     var unloadingAddresses: [String]
+    var vehicles: [CarrierVehicle]
+    var drivers: [CarrierDriver]
 
-    init(name: String, loadingAddresses: [String] = [], unloadingAddresses: [String] = []) {
+    var isCustomer: Bool { roles.contains("customer") || roles.isEmpty }
+    var isCarrier: Bool { roles.contains("carrier") }
+
+    init(
+        id: String = UUID().uuidString,
+        name: String,
+        roles: [String] = ["customer"],
+        note: String = "",
+        phones: [ContactPhone] = [],
+        contacts: [CompanyContact] = [],
+        loadingAddresses: [String] = [],
+        unloadingAddresses: [String] = [],
+        vehicles: [CarrierVehicle] = [],
+        drivers: [CarrierDriver] = []
+    ) {
+        self.id = id
         self.name = name
+        self.roles = roles.isEmpty ? ["customer"] : roles
+        self.note = note
+        self.phones = phones
+        self.contacts = contacts
         self.loadingAddresses = Self.uniqueSorted(loadingAddresses)
         self.unloadingAddresses = Self.uniqueSorted(unloadingAddresses)
+        self.vehicles = vehicles
+        self.drivers = drivers
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, roles, note, phones, contacts
+        case loadingAddresses, unloadingAddresses, vehicles, drivers
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        roles = try c.decodeIfPresent([String].self, forKey: .roles) ?? ["customer"]
+        if roles.isEmpty { roles = ["customer"] }
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        phones = try c.decodeIfPresent([ContactPhone].self, forKey: .phones) ?? []
+        contacts = try c.decodeIfPresent([CompanyContact].self, forKey: .contacts) ?? []
+        loadingAddresses = Self.uniqueSorted(try c.decodeIfPresent([String].self, forKey: .loadingAddresses) ?? [])
+        unloadingAddresses = Self.uniqueSorted(try c.decodeIfPresent([String].self, forKey: .unloadingAddresses) ?? [])
+        vehicles = try c.decodeIfPresent([CarrierVehicle].self, forKey: .vehicles) ?? []
+        drivers = try c.decodeIfPresent([CarrierDriver].self, forKey: .drivers) ?? []
     }
 
     mutating func remember(loading: String?, unloading: String?) {
