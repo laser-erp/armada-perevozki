@@ -13,6 +13,10 @@ struct ChatView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                DriverOrderBanner(viewModel: viewModel)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
@@ -41,6 +45,60 @@ struct ChatView: View {
                     .background(AppTheme.canvasTop.opacity(0.95))
             }
         }
+    }
+}
+
+struct DriverOrderBanner: View {
+    @ObservedObject var viewModel: ChatViewModel
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if let enRoute = viewModel.enRouteOrder {
+                bannerCard(
+                    title: "Заказ №\(enRoute.sequentialNumber) — вы в пути",
+                    subtitle: "\(enRoute.routeText)\nНе забудьте отметить прибытие на загрузку (одометр).",
+                    button: "Прибыл на загрузку"
+                ) {
+                    _ = viewModel.beginArriveOrder(enRoute)
+                }
+            }
+            ForEach(viewModel.assignedPending) { order in
+                bannerCard(
+                    title: "Заказ №\(order.sequentialNumber) назначен",
+                    subtitle: "\(order.routeText)\nПеред выездом со стоянки нажмите «Выехал» и введите одометр.",
+                    button: "Выехал"
+                ) {
+                    _ = viewModel.beginDepartOrder(order)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func bannerCard(title: String, subtitle: String, button: String, action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+            Text(subtitle)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
+            PrimaryButton(title: button, action: action)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [AppTheme.accent.opacity(0.28), AppTheme.accent.opacity(0.08)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.accent.opacity(0.55), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -141,8 +199,8 @@ struct InputBar: View {
 
             case .afterETO:
                 VStack(spacing: 8) {
-                    if viewModel.hasOpenOrder {
-                        if let open = viewModel.openOrder, open.isCarryOverLoaded {
+                    if let open = viewModel.openOrder {
+                        if open.isCarryOverLoaded {
                             Text("Заказ №\(open.sequentialNumber) перенесён (машина загружена) — закройте после выгрузки.")
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(AppTheme.textMuted)
@@ -153,10 +211,20 @@ struct InputBar: View {
                         PrimaryButton(title: "Закрыть смену", style: .secondary) {
                             viewModel.startCloseShift()
                         }
+                    } else if let enRoute = viewModel.enRouteOrder {
+                        Text("Заказ №\(enRoute.sequentialNumber) — выехали. Отметьте прибытие на загрузку.")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(AppTheme.accent)
+                        PrimaryButton(title: "Прибыл на загрузку №\(enRoute.sequentialNumber)") {
+                            viewModel.beginArriveOrder(enRoute)
+                        }
+                        PrimaryButton(title: "Закрыть смену", style: .secondary) {
+                            viewModel.startCloseShift()
+                        }
                     } else {
                         ForEach(viewModel.assignedPending) { order in
-                            PrimaryButton(title: "Начать заказ №\(order.sequentialNumber)") {
-                                viewModel.beginAssignedOrder(order)
+                            PrimaryButton(title: "Выехал · заказ №\(order.sequentialNumber)") {
+                                viewModel.beginDepartOrder(order)
                             }
                         }
                         PrimaryButton(title: "Создать заказ сам", style: .secondary) {

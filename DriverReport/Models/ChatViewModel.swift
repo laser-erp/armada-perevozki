@@ -215,13 +215,23 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        if orderStep == .startAssignedOdometer {
+        if orderStep == .departAssignedOdometer {
             let digits = trimmed.filter(\.isNumber)
             guard let value = Int(digits), !digits.isEmpty else {
                 numberError = "Введите целое число километров"
                 return
             }
-            acceptStartAssignedOdometer(value)
+            acceptDepartOdometer(value)
+            return
+        }
+
+        if orderStep == .arriveAssignedOdometer || orderStep == .startAssignedOdometer {
+            let digits = trimmed.filter(\.isNumber)
+            guard let value = Int(digits), !digits.isEmpty else {
+                numberError = "Введите целое число километров"
+                return
+            }
+            acceptArriveOdometer(value)
             return
         }
 
@@ -455,11 +465,15 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Orders (hybrid)
 
     var hasOpenOrder: Bool {
-        store.inProgressOrder() != nil
+        store.inProgressOrder() != nil || store.enRouteOrder() != nil
     }
 
     var openOrder: OrderRecord? {
         store.inProgressOrder()
+    }
+
+    var enRouteOrder: OrderRecord? {
+        store.enRouteOrder()
     }
 
     var assignedPending: [OrderRecord] {
@@ -471,8 +485,12 @@ final class ChatViewModel: ObservableObject {
             numberError = msg
             return
         }
-        guard !hasOpenOrder else {
+        if store.inProgressOrder() != nil {
             numberError = "Сначала закройте текущий заказ"
+            return
+        }
+        if store.enRouteOrder() != nil {
+            numberError = "Сначала отметьте прибытие на загрузку по текущему заказу"
             return
         }
         clearOrderDraft()
@@ -539,35 +557,46 @@ final class ChatViewModel: ObservableObject {
         return nil
     }
 
-    /// Возвращает текст ошибки или nil при успехе.
+    /// Возвращает текст ошибки или nil при успехе. Маршрутизирует на выезд или прибытие.
     @discardableResult
     func beginAssignedOrder(_ order: OrderRecord) -> String? {
+        if order.isEnRoute { return beginArriveOrder(order) }
+        return beginDepartOrder(order)
+    }
+
+    @discardableResult
+    func beginDepartOrder(_ order: OrderRecord) -> String? {
         if let msg = ensureShiftReadyForOrders() {
             numberError = msg
             return msg
         }
-        guard !hasOpenOrder else {
+        if store.inProgressOrder() != nil {
             let msg = "Сначала закройте текущий заказ"
             numberError = msg
             return msg
         }
+        if let en = store.enRouteOrder(), en.id != order.id {
+            let msg = "Сначала отметьте прибытие на загрузку по текущему заказу"
+            numberError = msg
+            return msg
+        }
         guard order.isAssignedPending else {
-            let msg = "Заказ недоступен для старта"
+            let msg = "Заказ недоступен для выезда"
             numberError = msg
             return msg
         }
         draftAssignedOrderId = order.id
-        append(.driver, "Начать заказ №\(order.sequentialNumber)")
+        append(.driver, "Выехал · заказ №\(order.sequentialNumber)")
         append(
             .bot,
             """
             Заказ №\(order.sequentialNumber) (день \(order.dayNumber))
             Авто: \(order.vehiclePlate)
             Маршрут: \(order.routeText)
-            Укажите показания одометра по прибытию на загрузку.
+            Укажите одометр при выезде со стоянки.
             """
         )
-        orderStep = .startAssignedOdometer
+        orderStep = .departAssignedOdometer
         inputMode = .number(placeholder: "Например, 277690")
         draftNumber = ""
         numberError = nil
@@ -575,8 +604,44 @@ final class ChatViewModel: ObservableObject {
         return nil
     }
 
-    private func acceptStartAssignedOdometer(_ value: Int) {
-        guard var shift = activeShift,
+    @discardableResult
+    func beginArriveOrder(_ order: OrderRecord) -> String? {
+        if let msg = ensureShiftReadyForOrders() {
+            numberError = msg
+            return msg
+        }
+        if store.inProgressOrder() != nil {
+            let msg = "Сначала закройте текущий заказ"
+            numberError = msg
+            return msg
+        }
+        guard order.isEnRoute else {
+            let msg = order.departOdometer == nil
+                ? "Сначала отметьте выезд («Выехал»)"
+                : "Заказ недоступен"
+            numberError = msg
+            return msg
+        }
+        draftAssignedOrderId = order.id
+        append(.driver, "Прибыл на загрузку · заказ №\(order.sequentialNumber)")
+        append(
+            .bot,
+            """
+            Заказ №\(order.sequentialNumber)
+            Маршрут: \(order.routeText)
+            Укажите одометр по прибытию на загрузку.
+            """
+        )
+        orderStep = .arriveAssignedOdometer
+        inputMode = .number(placeholder: "Например, 277720")
+        draftNumber = ""
+        numberError = nil
+        persistMessages()
+        return nil
+    }
+
+    private func acceptDepartOdometer(_ value: Int) {
+        guard let shift = activeShift,
               let id = draftAssignedOrderId,
               var order = store.allOrders().first(where: { $0.id == id }),
               order.isAssignedPending
@@ -590,6 +655,47 @@ final class ChatViewModel: ObservableObject {
         }
         guard value >= previous else {
             numberError = "Одометр не может быть меньше предыдущего (\(previous))"
+            return
+        }
+        order.departOdometer = value
+        order.previousOdometer = previous
+        store.attachOrder(order, to: shift.id)
+        append(.driver, "\(value)")
+        append(
+            .bot,
+            """
+            Выезд зафиксирован🔔
+            №\(order.sequentialNumber)
+            Одометр выезда: \(value)
+
+            По прибытии на загрузку нажмите «Прибыл на загрузку».
+            """
+        )
+        draftAssignedOrderId = nil
+        orderStep = .idle
+        inputMode = .afterETO
+        draftNumber = ""
+        numberError = nil
+        persistMessages()
+        objectWillChange.send()
+    }
+
+    private func acceptArriveOdometer(_ value: Int) {
+        guard let shift = activeShift,
+              let id = draftAssignedOrderId,
+              var order = store.allOrders().first(where: { $0.id == id }),
+              order.isEnRoute || order.isAssignedPending
+        else {
+            numberError = "Заказ не найден"
+            return
+        }
+        guard let previous = order.previousOdometer ?? shift.lastOdometerPoint ?? shift.odometer else {
+            numberError = "Нет одометра смены. Пройдите ЕТО заново."
+            return
+        }
+        let minOdo = order.departOdometer ?? previous
+        guard value >= minOdo else {
+            numberError = "Одометр не может быть меньше выезда (\(minOdo))"
             return
         }
 
@@ -944,6 +1050,10 @@ final class ChatViewModel: ObservableObject {
     func startCloseShift() {
         if let msg = ensureShiftReadyForOrders() {
             numberError = msg
+            return
+        }
+        if let enRoute = enRouteOrder {
+            numberError = "Сначала отметьте прибытие на загрузку по заказу №\(enRoute.sequentialNumber)"
             return
         }
         append(.driver, "Закрыть смену")

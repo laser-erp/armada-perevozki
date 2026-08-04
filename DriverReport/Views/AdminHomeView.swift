@@ -17,7 +17,7 @@ struct AdminHomeView: View {
         store.allOrders().filter { order in
             switch filter {
             case .all: return true
-            case .assigned: return order.isAssignedPending
+            case .assigned: return (order.isAssignedPending || order.isEnRoute) && !order.isOnExchange
             case .progress: return order.isInProgress
             case .closed: return order.isClosed
             }

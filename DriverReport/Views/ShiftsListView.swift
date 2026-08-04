@@ -247,7 +247,10 @@ struct OrdersListView: View {
                                 orderRow(order, exchange: false)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                         if !adminMode, order.isAssignedPending {
-                                            Button("Начать заказ") { startAssigned(order) }
+                                            Button("Выехал") { startAssigned(order) }
+                                                .tint(AppTheme.accent)
+                                        } else if !adminMode, order.isEnRoute {
+                                            Button("Прибыл") { startAssigned(order) }
                                                 .tint(AppTheme.accent)
                                         }
                                     }
@@ -317,9 +320,14 @@ struct OrdersListView: View {
                         .foregroundStyle(AppTheme.textMuted)
                 }
             }
+            if order.isEnRoute, let dep = order.departOdometer {
+                Text("Выезд: \(dep) — отметьте прибытие")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(AppTheme.accent)
+            }
             Text(exchange ? "На бирже" : order.statusText)
                 .font(.system(.caption, design: .rounded))
-                .foregroundStyle(order.isClosed ? .green : (order.isInProgress ? .orange : AppTheme.accent))
+                .foregroundStyle(order.isClosed ? .green : (order.isInProgress || order.isEnRoute ? .orange : AppTheme.accent))
         }
         .listRowBackground(AppTheme.botBubble.opacity(0.55))
     }
