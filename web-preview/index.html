@@ -200,10 +200,21 @@
           <select id="create-unload-pick"><option value="">или из сохранённых</option></select>
         </div>
         <div class="field-block">
+          <label>Перевозчик (компания)</label>
+          <select id="create-carrier-company"></select>
+          <div class="hint">Можно указать вместе с заказчиком. Карточка перевозчика — в Справочниках.</div>
+          <div id="create-carrier-people">
+            <label>Водитель перевозчика</label>
+            <select id="create-carrier-driver"></select>
+            <label>ТС перевозчика</label>
+            <select id="create-carrier-vehicle"></select>
+          </div>
+        </div>
+        <div class="field-block">
           <label>Исполнение</label>
           <select id="create-exec-mode">
             <option value="own">Наш водитель</option>
-            <option value="carrier">Перевозчик</option>
+            <option value="carrier">Водитель перевозчика</option>
             <option value="exchange">На биржу</option>
           </select>
           <div id="create-own-box">
@@ -211,15 +222,6 @@
             <select id="create-plate"></select>
             <label>Водитель (наш)</label>
             <select id="create-driver"></select>
-          </div>
-          <div id="create-carrier-box" style="display:none">
-            <label>Компания-перевозчик</label>
-            <select id="create-carrier-company"></select>
-            <label>Водитель перевозчика</label>
-            <select id="create-carrier-driver"></select>
-            <label>ТС перевозчика</label>
-            <select id="create-carrier-vehicle"></select>
-            <div class="hint">Карточку перевозчика (контакты, ТС, водители) — в Справочниках</div>
           </div>
           <div id="create-exchange-hint" class="hint" style="display:none">Заказ появится на бирже у водителей с включённой биржей (включает администратор).</div>
         </div>
@@ -287,7 +289,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-own-companies";
+const APP_BUILD="2026-08-04-customer-carrier";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -860,25 +862,30 @@ function fillAddressPickers(name){
 function fillExecutorUI(){
   const mode=(($('create-exec-mode')||{}).value)||'own';
   const ownBox=$('create-own-box');
-  const carrierBox=$('create-carrier-box');
+  const carrierPeople=$('create-carrier-people');
   const exchangeHint=$('create-exchange-hint');
   if(ownBox) ownBox.style.display=mode==='own'?'block':'none';
-  if(carrierBox) carrierBox.style.display=mode==='carrier'?'block':'none';
+  if(carrierPeople) carrierPeople.style.display=(mode==='carrier' || !!(($('create-carrier-company')||{}).value))?'block':'none';
   if(exchangeHint) exchangeHint.style.display=mode==='exchange'?'block':'none';
   const saveBtn=$('create-save');
   if(saveBtn){
     saveBtn.textContent=mode==='exchange'?'Выставить на биржу':(mode==='carrier'?'Назначить перевозчику':'Назначить водителю');
   }
-  if(mode==='carrier') fillCarrierPickers();
+  fillCarrierPickers();
 }
 function fillCarrierPickers(){
   const carriers=companiesByRole('carrier');
   const companySel=$('create-carrier-company');
   if(!companySel) return;
   const cur=companySel.value;
-  companySel.innerHTML=`<option value="">— перевозчик —</option>`+carriers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  companySel.innerHTML=`<option value="">— без перевозчика —</option>`+carriers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   if(cur && carriers.some(c=>c.id===cur)) companySel.value=cur;
-  companySel.onchange=()=>fillCarrierDriverVehicle();
+  companySel.onchange=()=>{
+    const mode=(($('create-exec-mode')||{}).value)||'own';
+    const people=$('create-carrier-people');
+    if(people) people.style.display=(mode==='carrier' || !!companySel.value)?'block':'none';
+    fillCarrierDriverVehicle();
+  };
   fillCarrierDriverVehicle();
 }
 function fillCarrierDriverVehicle(){
@@ -2131,6 +2138,7 @@ function renderAdmin(){
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
+      <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
       <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
@@ -2209,21 +2217,27 @@ function saveDispatcherOrder(){
   const ownCo=findCompanyById((($('create-own-company')||{}).value)||'');
   if(!ownCo || !companyHasRole(ownCo,'own')){ $('create-error').textContent='Выберите нашу фирму (ООО «Армада» / ИП Нечаев А.С.)'; return; }
   let plate=''; let driver=''; let onExchange=false;
-  let carrierCompanyId=null, carrierDriverId=null, carrierVehicleId=null;
+  let carrierCompanyId=null, carrierDriverId=null, carrierVehicleId=null, carrierCompanyName='';
   let driverPercentVal=0;
+  const carrierCo=findCompanyById((($('create-carrier-company')||{}).value)||'');
+  if(carrierCo && companyHasRole(carrierCo,'carrier')){
+    carrierCompanyId=carrierCo.id;
+    carrierCompanyName=carrierCo.name;
+    const drv=(carrierCo.drivers||[]).find(d=>d.id===(($('create-carrier-driver')||{}).value));
+    const veh=(carrierCo.vehicles||[]).find(v=>v.id===(($('create-carrier-vehicle')||{}).value));
+    if(drv) carrierDriverId=drv.id;
+    if(veh) carrierVehicleId=veh.id;
+  }
   if(mode==='own'){
     plate=$('create-plate').value;
     driver=($('create-driver').value||DRIVER).trim();
     driverPercentVal=driverPercent(driver);
   } else if(mode==='carrier'){
-    const company=findCompanyById(($('create-carrier-company')||{}).value);
-    if(!company){ $('create-error').textContent='Выберите перевозчика'; return; }
-    carrierCompanyId=company.id;
-    const drv=(company.drivers||[]).find(d=>d.id===(($('create-carrier-driver')||{}).value));
-    const veh=(company.vehicles||[]).find(v=>v.id===(($('create-carrier-vehicle')||{}).value));
+    if(!carrierCo){ $('create-error').textContent='Выберите перевозчика'; return; }
+    const drv=(carrierCo.drivers||[]).find(d=>d.id===carrierDriverId);
+    const veh=(carrierCo.vehicles||[]).find(v=>v.id===carrierVehicleId);
     if(!drv){ $('create-error').textContent='Выберите водителя перевозчика'; return; }
     if(!veh){ $('create-error').textContent='Выберите ТС перевозчика'; return; }
-    carrierDriverId=drv.id; carrierVehicleId=veh.id;
     driver=`[Перевозчик] ${drv.name}`;
     plate=veh.plate;
     driverPercentVal=0;
@@ -2248,7 +2262,7 @@ function saveDispatcherOrder(){
     routePoints:defaultRoutePoints(load,unload), startOdometer:null,
     driverPercent:driverPercentVal,
     executorType:mode, onExchange,
-    carrierCompanyId, carrierDriverId, carrierVehicleId
+    carrierCompanyId, carrierDriverId, carrierVehicleId, carrierCompanyName
   };
   ensureRoutePoints(order);
   applyOrderSchedule(order);
