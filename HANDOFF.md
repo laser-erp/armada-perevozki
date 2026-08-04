@@ -6,6 +6,7 @@
 1. **Брать:** `https://github.com/laser-erp/armada-perevozki` (`git clone` / `git pull`)
 2. **Сохранять:** туда же (`git push origin main`) после каждого блока + zip в `/agent/backups/…-latest.zip`
 3. План → «ок» → код. Не восстанавливать проект по чату.
+4. **База знаний пользователя:** `KNOWLEDGE_BASE.md` — обновлять после каждого блока (см. `AGENT_RULES.md`).
 
 ## Роли
 - Splash → Водитель / Администратор
@@ -104,11 +105,13 @@
 - Водитель не видит ставки, подушку, прибыль и т.п.
 
 ## Ещё не сделано
+- Кнопки «+ наш водитель» / «+ наше авто» в справочниках (сейчас только правка существующих)
 - Вход водителя по телефону / водители перевозчика в приложении
 - Экспорт CSV / Google Sheets (на паузе)
 
 ## Пути
 - iOS / web: `/agent/DriverReport/`
+- **База знаний (инструкции):** `KNOWLEDGE_BASE.md`
 - Бэкапы: `/agent/backups/DriverReport-backup-latest.zip`
 - **Главное приложение (общая база):** http://aptown1.fvds.ru/
 - GitHub Pages редиректит туда: https://laser-erp.github.io/armada-web/
