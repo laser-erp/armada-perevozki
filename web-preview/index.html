@@ -336,7 +336,7 @@
         <div class="field-block">
           <label>От нашей фирмы (договор)</label>
           <select id="create-own-company"></select>
-          <div class="hint">ООО «Армада» / ИП Нечаев А.С. — от кого заявка и договор</div>
+          <div class="hint">От этой фирмы — договор, и из её парка выбираются авто и водитель</div>
         </div>
         <div class="field-block">
           <label>Заказчик (компания)</label>
@@ -382,6 +382,7 @@
             <option value="exchange">На биржу</option>
           </select>
           <div id="create-own-box">
+            <div class="hint" id="create-fleet-hint" style="margin:0 0 6px">Авто и водитель — только парк выбранной фирмы</div>
             <label>Автомобиль (наш)</label>
             <select id="create-plate"></select>
             <label>Водитель (наш)</label>
@@ -460,7 +461,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-fleet-per-firm";
+const APP_BUILD="2026-08-04-order-fleet";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1271,11 +1272,20 @@ function matchesOwnerFilter(o){
   if(f==='_none') return !o.spaceId;
   return o.spaceId===f;
 }
+/** Парк конкретной «нашей фирмы» — то, что уходит в заявку. */
+function fleetDriversForCompany(companyId){
+  if(!companyId) return [];
+  return (state.drivers||[]).filter(d=>d.companyId===companyId);
+}
+function fleetVehiclesForCompany(companyId){
+  if(!companyId) return [];
+  return (state.vehicles||[]).filter(v=>v.companyId===companyId);
+}
 function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
   if(!currentAdmin) return [];
   const co=currentOwnCompany();
-  if(co) return (state.drivers||[]).filter(d=>d.companyId===co.id || (!d.companyId && (d.spaceId===currentSpaceId() || d.ownerAdminId===currentAdmin.id)));
+  if(co) return fleetDriversForCompany(co.id);
   const sid=currentSpaceId();
   if(sid) return (state.drivers||[]).filter(d=>d.spaceId===sid || d.ownerAdminId===currentAdmin.id);
   return driversOwnedByAdminId(currentAdmin.id);
@@ -1283,7 +1293,7 @@ function myCatalogDrivers(){
 function myCatalogVehicles(){
   if(isSuperAdmin()) return state.vehicles||[];
   const co=currentOwnCompany();
-  if(co) return (state.vehicles||[]).filter(v=>v.companyId===co.id || (!v.companyId && (!v.spaceId || v.spaceId===currentSpaceId())));
+  if(co) return fleetVehiclesForCompany(co.id);
   const sid=currentSpaceId();
   if(!sid) return state.vehicles||[];
   return (state.vehicles||[]).filter(v=>!v.spaceId || v.spaceId===sid);
@@ -1882,9 +1892,23 @@ function timeNow(){ return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit'
 function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function add(a,t){ state.messages.push({author:a,text:t}); renderChat(); }
-function plates(){ return state.vehicles.map(v=>v.plate); }
-function vehicle(plate){ return state.vehicles.find(v=>v.plate===plate)||{plate,consumptionPer100Km:20}; }
-function driverPercent(name){ return (state.drivers.find(d=>d.name===name)||{salaryPercent:30}).salaryPercent; }
+function plates(){ return (myCatalogVehicles().length?myCatalogVehicles():state.vehicles).map(v=>v.plate); }
+function vehicle(plate, companyId){
+  const list=state.vehicles||[];
+  if(companyId){
+    const hit=list.find(v=>v.plate===plate && v.companyId===companyId);
+    if(hit) return hit;
+  }
+  return list.find(v=>v.plate===plate)||{plate,consumptionPer100Km:20};
+}
+function driverPercent(name, companyId){
+  const list=state.drivers||[];
+  if(companyId){
+    const hit=list.find(d=>samePersonName(d.name,name) && d.companyId===companyId);
+    if(hit) return hit.salaryPercent??30;
+  }
+  return (list.find(d=>samePersonName(d.name,name))||{salaryPercent:30}).salaryPercent;
+}
 function round2(v){ return Math.round(v*100)/100; }
 function fmt(v){ if(v==null||v==='') return '—'; const n=+v; if(Number.isNaN(n)) return String(v); return n===Math.round(n)?String(Math.round(n)):n.toFixed(2); }
 function inProgressOrder(){ return (state.orders||[]).find(o=>!o.closedAt && o.startOdometer!=null) || null; }
@@ -2120,7 +2144,7 @@ function applyFuelRemainingOnClose(order, shift, refillLiters){
     shift&&shift.fuelLiters!=null?shift.fuelLiters:null
   );
   const km=tripKmForFuel(order);
-  const cons=vehicle(order.vehiclePlate).consumptionPer100Km;
+  const cons=vehicle(order.vehiclePlate, order.ownCompanyId).consumptionPer100Km;
   const after=computeFuelRemainingAfter(before, km, cons, refillLiters);
   order.fuelRemainingLiters=(after!=null)?after:null;
   if(after!=null && shift) shift.fuelLiters=after;
@@ -2360,7 +2384,7 @@ function totalCostAtRate(rate, fuelCost, rent, driverPercent, bonus){
   return round2((fuelCost||0)+rent+pay+cush);
 }
 function metrics(o){
-  const cons=vehicle(o.vehiclePlate).consumptionPer100Km;
+  const cons=vehicle(o.vehiclePlate, o.ownCompanyId).consumptionPer100Km;
   const km=kmParkingToEnd(o);
   const fuelLitersCalc=km==null?null:round2(km*cons/100);
   const price=o.fuelPricePerLiter;
@@ -2369,7 +2393,7 @@ function metrics(o){
   const payBase=payrollRate(o);
   const cushion=payBase==null?null:round2(payBase*0.1);
   const bonus=o.salaryBonus||0;
-  const percent=o.driverPercent??driverPercent(o.driverName||DRIVER);
+  const percent=o.driverPercent??driverPercent(o.driverName||DRIVER, o.ownCompanyId);
   const driverPay=payBase==null?null:round2(payBase*percent/100+bonus);
   const rent=o.vehicleRent||0;
   const fuel=fuelCostCalc||0;
@@ -3069,19 +3093,32 @@ function assignExchangeToOwn(id){
   const plate=(($('ex-plate-'+id)||{}).value||'').trim();
   if(!driver){ alert('Выберите водителя'); return; }
   if(!plate){ alert('Выберите авто'); return; }
+  const firmId=o.ownCompanyId || (currentOwnCompany()||{}).id;
+  if(firmId && !fleetDriversForCompany(firmId).some(d=>samePersonName(d.name,driver))){
+    alert('Водитель не из парка фирмы этой заявки'); return;
+  }
+  if(firmId && !fleetVehiclesForCompany(firmId).some(v=>v.plate===plate)){
+    alert('Авто не из парка фирмы этой заявки'); return;
+  }
   o.onExchange=false;
   o.executorType='own';
   o.driverName=driver;
   o.vehiclePlate=plate;
-  o.driverPercent=driverPercent(driver);
+  o.driverPercent=driverPercent(driver, firmId);
+  if(firmId){
+    const co=findCompanyById(firmId);
+    if(co){ o.ownCompanyId=co.id; o.ownCompanyName=co.name; if(co.spaceId) o.spaceId=co.spaceId; }
+  }
   o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
   upsertOrder(o);
   renderAdmin();
 }
 function renderAdminExchangeBoard(orders){
-  const enabled=exchangeEnabledDrivers().filter(d=>isSuperAdmin() || (currentAdmin && d.ownerAdminId===currentAdmin.id));
-  const drvOpts=myCatalogDrivers().map(d=>`<option value="${esc(d.name)}">${esc(d.name)}${d.exchangeEnabled?' · биржа':''} · ${d.salaryPercent}%</option>`).join('');
-  const plateOpts=myCatalogVehicles().map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
+  const enabled=exchangeEnabledDrivers().filter(d=>{
+    if(isSuperAdmin()) return true;
+    const co=currentOwnCompany();
+    return co ? d.companyId===co.id : (currentAdmin && d.ownerAdminId===currentAdmin.id);
+  });
   const driversBlock=enabled.length
     ? `<div class="hint" style="padding:8px 16px 0">Водители с биржей: <strong>${esc(enabled.map(d=>`${d.name} (${d.phone||'без тел.'}, ${d.salaryPercent}%)`).join('; '))}</strong></div>`
     : `<div class="hint" style="padding:8px 16px 0;color:var(--accent)">Ни у кого не включена биржа — включите в Справочниках → Наши водители</div>`;
@@ -3093,8 +3130,13 @@ function renderAdminExchangeBoard(orders){
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
     const sp=findSpaceById(o.spaceId);
+    const firmId=o.ownCompanyId || (currentOwnCompany()||{}).id;
+    const drvList=firmId?fleetDriversForCompany(firmId):myCatalogDrivers();
+    const vehList=firmId?fleetVehiclesForCompany(firmId):myCatalogVehicles();
+    const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}${d.exchangeEnabled?' · биржа':''} · ${d.salaryPercent}%</option>`).join('');
+    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
     const ownerLine=isSuperAdmin()
-      ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>` : '';
+      ? `<p style="color:var(--muted)">Фирма: ${esc(o.ownCompanyName||(sp?sp.name:'—'))}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>` : '';
     return `<div class="card" style="border-color:rgba(232,93,4,.45)">
       <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
@@ -3111,10 +3153,10 @@ function renderAdminExchangeBoard(orders){
       ${hasRate
         ? `<p style="color:var(--accent);font-weight:700">Нал (база ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽ · % водителя после назначения</p>`
         : `<p class="rate-missing">Ставка не заполнена</p>`}
-      <label style="margin-top:8px">Назначить нашего водителя</label>
-      <select id="ex-drv-${o.id}">${drvOpts}</select>
-      <label>Авто</label>
-      <select id="ex-plate-${o.id}">${plateOpts}</select>
+      <label style="margin-top:8px">Назначить водителя парка${o.ownCompanyName?` «${esc(o.ownCompanyName)}»`:''}</label>
+      <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей у фирмы —</option>`}</select>
+      <label>Авто парка</label>
+      <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет авто у фирмы —</option>`}</select>
       <div class="row" style="margin-top:8px">
         <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
         <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
@@ -3199,16 +3241,40 @@ function renderAdmin(){
     if(cancelOrder(b.dataset.id, 'Отменён из списка')) renderAdmin();
   });
 }
+function fillCreateFleetSelects(){
+  const coId=(($('create-own-company')||{}).value)||'';
+  const co=findCompanyById(coId);
+  const firm=co?co.name:'фирмы';
+  const vehList=fleetVehiclesForCompany(coId);
+  const drvList=fleetDriversForCompany(coId);
+  const plateEl=$('create-plate');
+  const drvEl=$('create-driver');
+  if(plateEl){
+    plateEl.innerHTML=vehList.length
+      ? vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('')
+      : `<option value="">— нет авто у «${esc(firm)}» —</option>`;
+  }
+  if(drvEl){
+    drvEl.innerHTML=drvList.length
+      ? drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('')
+      : `<option value="">— нет водителя у «${esc(firm)}» —</option>`;
+  }
+  const hint=$('create-fleet-hint');
+  if(hint){
+    hint.textContent=co
+      ? `Парк «${firm}»: авто ${vehList.length}, водителей ${drvList.length}`
+      : 'Сначала выберите нашу фирму — затем авто и водителя из её парка';
+  }
+}
 function fillCreateSelects(){
-  const vehList=myCatalogVehicles();
-  $('create-plate').innerHTML=vehList.length
-    ? vehList.map(v=>`<option>${esc(v.plate)}</option>`).join('')
-    : `<option value="">— добавьте авто в Справочниках —</option>`;
-  const drvList=myCatalogDrivers();
-  $('create-driver').innerHTML=drvList.length
-    ? drvList.map(d=>`<option>${esc(d.name)}</option>`).join('')
-    : `<option value="">— добавьте своего водителя в Справочниках —</option>`;
-  fillOwnCompanySelect('create-own-company');
+  const preferred=(currentOwnCompany()||{}).id;
+  fillOwnCompanySelect('create-own-company', preferred);
+  const ownEl=$('create-own-company');
+  if(ownEl && !ownEl._fleetBound){
+    ownEl._fleetBound=true;
+    ownEl.onchange=()=>fillCreateFleetSelects();
+  }
+  fillCreateFleetSelects();
 }
 function ownCompanies(){ return companiesByRole('own'); }
 function fillOwnCompanySelect(elId, selectedId){
@@ -3250,7 +3316,11 @@ function saveDispatcherOrder(){
   if(!customer){ $('create-error').textContent='Укажите заказчика'; return; }
   if(!vehicleAt){ $('create-error').textContent='Укажите дату и время подачи ТС'; return; }
   const ownCo=findCompanyById((($('create-own-company')||{}).value)||'');
-  if(!ownCo || !companyHasRole(ownCo,'own')){ $('create-error').textContent='Выберите нашу фирму (ООО «Армада» / ИП Нечаев А.С.)'; return; }
+  if(!ownCo || !companyHasRole(ownCo,'own')){ $('create-error').textContent='Выберите нашу фирму'; return; }
+  if(!isSuperAdmin()){
+    const myCo=currentOwnCompany();
+    if(myCo && ownCo.id!==myCo.id){ $('create-error').textContent='Можно создавать заявку только от своей фирмы'; return; }
+  }
   let plate=''; let driver=''; let onExchange=false;
   let carrierCompanyId=null, carrierDriverId=null, carrierVehicleId=null, carrierCompanyName='';
   let driverPercentVal=0;
@@ -3264,9 +3334,17 @@ function saveDispatcherOrder(){
     if(veh) carrierVehicleId=veh.id;
   }
   if(mode==='own'){
-    plate=$('create-plate').value;
-    driver=($('create-driver').value||DRIVER).trim();
-    driverPercentVal=driverPercent(driver);
+    plate=(($('create-plate')||{}).value||'').trim();
+    driver=(($('create-driver')||{}).value||'').trim();
+    if(!plate){ $('create-error').textContent='Выберите автомобиль из парка фирмы'; return; }
+    if(!driver){ $('create-error').textContent='Выберите водителя из парка фирмы'; return; }
+    if(!fleetVehiclesForCompany(ownCo.id).some(v=>v.plate===plate)){
+      $('create-error').textContent=`Авто ${plate} не относится к «${ownCo.name}»`; return;
+    }
+    if(!fleetDriversForCompany(ownCo.id).some(d=>samePersonName(d.name,driver))){
+      $('create-error').textContent=`Водитель ${driver} не относится к «${ownCo.name}»`; return;
+    }
+    driverPercentVal=driverPercent(driver, ownCo.id);
   } else if(mode==='carrier'){
     if(!carrierCo){ $('create-error').textContent='Выберите перевозчика'; return; }
     const drv=(carrierCo.drivers||[]).find(d=>d.id===carrierDriverId);
@@ -3284,13 +3362,15 @@ function saveDispatcherOrder(){
   }
   state.seq+=1;
   if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
-  const company=upsertCompany({name:customer, roles:['customer'], spaceId:currentAdmin.spaceId||null});
+  const orderSpaceId=ownCo.spaceId || currentAdmin.spaceId || null;
+  const spaceAdm=(state.admins||[]).find(a=>a.spaceId && a.spaceId===orderSpaceId) || currentAdmin;
+  const company=upsertCompany({name:customer, roles:['customer'], spaceId:orderSpaceId});
   const order={
     id:uuid(), sequentialNumber:state.seq, dayNumber:createDay,
     createdAt:new Date().toISOString(), source:'dispatcher',
-    ownerAdminId:currentAdmin.id,
-    ownerAdminName:currentAdmin.name,
-    spaceId:currentAdmin.spaceId||null,
+    ownerAdminId:spaceAdm.id,
+    ownerAdminName:spaceAdm.name,
+    spaceId:orderSpaceId,
     vehiclePlate:plate, driverName:driver, customer,
     customerId:company?company.id:null,
     ownCompanyId:ownCo.id,
@@ -3692,6 +3772,7 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='drivers'?'on':''}" data-cat-panel="drivers">
+      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Водители компании: ${esc(co.name)} — они же в заявке «+ Заказ»`:(isSuperAdmin()?'Водители привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</div>
       <div class="cat-quick drv-add">
         <div class="row">
           <input id="own-drv-name" placeholder="ФИО" style="flex:1.2" />
@@ -3705,14 +3786,13 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
-      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто компании: ${esc(co.name)}`:(isSuperAdmin()?'Авто привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</div>
+      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто компании: ${esc(co.name)} — они же в заявке «+ Заказ»`:(isSuperAdmin()?'Авто привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</div>
       <div class="cat-quick">
         <div class="row">
           <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
           <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 64px;text-align:center" />
-          <button type="button" class="primary icon-btn ok" id="own-veh-add" title="Добавить" style="min-width:40px">+</button>
+          <button type="button" class="icon-btn ok" id="own-veh-add" title="Добавить">+</button>
         </div>
-        ${isSuperAdmin()?`<select id="own-veh-owner" title="В чью фирму добавить">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
       </div>
       <div class="cat-list">${vehicleCards}</div>
     </div>
@@ -3910,13 +3990,7 @@ function openCatalogs(){
     let cons=+((($('own-veh-cons')||{}).value||'').replace(',','.'));
     if(!plate){ alert('Укажите госномер'); return; }
     if(!(cons>0)) cons=20;
-    let owner;
-    if(isSuperAdmin()){
-      const ownerId=(($('own-veh-owner')||{}).value||currentAdmin.id||'').trim();
-      owner=resolveAdminOwner(ownerId);
-    } else {
-      owner=resolveAdminOwner(currentAdmin.id);
-    }
+    const owner=resolveAdminOwner(currentAdmin.id);
     if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
     const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase() && v.companyId===owner.companyId);
     if(exists){ alert('Такой госномер уже есть в этой фирме'); return; }
