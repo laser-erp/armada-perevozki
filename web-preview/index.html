@@ -343,13 +343,13 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-admin-delete-fix";
+const APP_BUILD="2026-08-04-super-navolotsky";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
 ];
 const DEFAULT_ADMINS=[
-  {id:"admin-super", name:"Супер админ", pin:"2580", isSuper:true}
+  {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"2580", isSuper:true}
 ];
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
@@ -752,6 +752,14 @@ function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
   // Сид только если админов ещё нет. Иначе удалённые (напр. «Диспетчер») возвращались снова.
   if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
+  // Переименование старого «Супер админ» → Наволоцкий Е.Н.
+  state.admins.forEach(a=>{
+    if(a.id==='admin-super' || (a.isSuper && (a.name||'').toLowerCase()==='супер админ')){
+      a.name='Наволоцкий Е.Н.';
+      if(a.id==='admin-super' || !a.id) a.id='admin-super';
+      a.isSuper=true;
+    }
+  });
   if(!state.admins.some(a=>a.isSuper)){
     const first=state.admins[0];
     if(first) first.isSuper=true;
