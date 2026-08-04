@@ -51,6 +51,16 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var vehiclePlate: String
     var driverName: String
     var customer: String
+    var customerId: String?
+    var contactName: String?
+    var contactPhone: String?
+    var contactPersonId: String?
+    /// own / carrier / exchange
+    var executorType: String?
+    var onExchange: Bool?
+    var carrierCompanyId: String?
+    var carrierDriverId: String?
+    var carrierVehicleId: String?
     var loadingAddress: String
     var unloadingAddress: String
     /// Маршрут: точки с типом загрузка/выгрузка. Минимум 2.
@@ -152,9 +162,17 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     }
 
     var isClosed: Bool { closedAt != nil }
-    var isAssignedPending: Bool { !isClosed && startOdometer == nil }
+    var isOnExchange: Bool { onExchange == true && !isClosed && startOdometer == nil }
+    var isAssignedPending: Bool { !isClosed && startOdometer == nil && !isOnExchange }
     var isInProgress: Bool { !isClosed && startOdometer != nil }
     var isCarryOverLoaded: Bool { isInProgress && (staysLoadedOvernight == true) }
+
+    var contactLine: String {
+        [customer, contactName ?? "", contactPhone ?? ""]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
 
     /// Пометить ночёвку с грузом и увеличить счётчик ночей.
     mutating func markStaysLoadedOvernight() {
@@ -186,6 +204,15 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         vehiclePlate: String,
         driverName: String = AppDefaults.driverName,
         customer: String = "",
+        customerId: String? = nil,
+        contactName: String? = nil,
+        contactPhone: String? = nil,
+        contactPersonId: String? = nil,
+        executorType: String? = nil,
+        onExchange: Bool? = nil,
+        carrierCompanyId: String? = nil,
+        carrierDriverId: String? = nil,
+        carrierVehicleId: String? = nil,
         loadingAddress: String,
         unloadingAddress: String,
         routePoints: [RoutePoint]? = nil,
@@ -227,6 +254,15 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.vehiclePlate = vehiclePlate
         self.driverName = driverName
         self.customer = customer
+        self.customerId = customerId
+        self.contactName = contactName
+        self.contactPhone = contactPhone
+        self.contactPersonId = contactPersonId
+        self.executorType = executorType
+        self.onExchange = onExchange
+        self.carrierCompanyId = carrierCompanyId
+        self.carrierDriverId = carrierDriverId
+        self.carrierVehicleId = carrierVehicleId
         let points = Self.normalizedRoutePoints(
             routePoints ?? Self.defaultRoutePoints(loading: loadingAddress, unloading: unloadingAddress),
             loading: loadingAddress,
@@ -269,7 +305,9 @@ struct OrderRecord: Identifiable, Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id, sequentialNumber, dayNumber, createdAt, source, vehiclePlate, driverName
-        case customer, loadingAddress, unloadingAddress, routePoints, startOdometer, previousOdometer
+        case customer, customerId, contactName, contactPhone, contactPersonId
+        case executorType, onExchange, carrierCompanyId, carrierDriverId, carrierVehicleId
+        case loadingAddress, unloadingAddress, routePoints, startOdometer, previousOdometer
         case emptyKmBefore, loadedKm, emptyKmAfter, endOdometer, closedAt
         case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, fuelRemainingLiters, freight
         case paymentForm, rateWithVat, rateWithoutVat, rateCash, ratePerKmCash, estimateKm
@@ -288,6 +326,15 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         vehiclePlate = try c.decode(String.self, forKey: .vehiclePlate)
         driverName = try c.decodeIfPresent(String.self, forKey: .driverName) ?? AppDefaults.driverName
         customer = try c.decodeIfPresent(String.self, forKey: .customer) ?? ""
+        customerId = try c.decodeIfPresent(String.self, forKey: .customerId)
+        contactName = try c.decodeIfPresent(String.self, forKey: .contactName)
+        contactPhone = try c.decodeIfPresent(String.self, forKey: .contactPhone)
+        contactPersonId = try c.decodeIfPresent(String.self, forKey: .contactPersonId)
+        executorType = try c.decodeIfPresent(String.self, forKey: .executorType)
+        onExchange = try c.decodeIfPresent(Bool.self, forKey: .onExchange)
+        carrierCompanyId = try c.decodeIfPresent(String.self, forKey: .carrierCompanyId)
+        carrierDriverId = try c.decodeIfPresent(String.self, forKey: .carrierDriverId)
+        carrierVehicleId = try c.decodeIfPresent(String.self, forKey: .carrierVehicleId)
         let loading = try c.decode(String.self, forKey: .loadingAddress)
         let unloading = try c.decode(String.self, forKey: .unloadingAddress)
         let rawPoints: [RoutePoint]
@@ -344,6 +391,15 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encode(vehiclePlate, forKey: .vehiclePlate)
         try c.encode(driverName, forKey: .driverName)
         try c.encode(customer, forKey: .customer)
+        try c.encodeIfPresent(customerId, forKey: .customerId)
+        try c.encodeIfPresent(contactName, forKey: .contactName)
+        try c.encodeIfPresent(contactPhone, forKey: .contactPhone)
+        try c.encodeIfPresent(contactPersonId, forKey: .contactPersonId)
+        try c.encodeIfPresent(executorType, forKey: .executorType)
+        try c.encodeIfPresent(onExchange, forKey: .onExchange)
+        try c.encodeIfPresent(carrierCompanyId, forKey: .carrierCompanyId)
+        try c.encodeIfPresent(carrierDriverId, forKey: .carrierDriverId)
+        try c.encodeIfPresent(carrierVehicleId, forKey: .carrierVehicleId)
         try c.encode(loadingAddress, forKey: .loadingAddress)
         try c.encode(unloadingAddress, forKey: .unloadingAddress)
         try c.encode(routePoints, forKey: .routePoints)

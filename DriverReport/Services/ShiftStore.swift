@@ -81,7 +81,26 @@ final class ShiftStore: ObservableObject {
     }
 
     func assignedPending(for driver: String = AppDefaults.driverName) -> [OrderRecord] {
-        allOrders().filter { $0.isAssignedPending && $0.driverName == driver }
+        allOrders().filter { $0.isAssignedPending && $0.driverName == driver && $0.onExchange != true }
+    }
+
+    func exchangeBoard(for driver: String = AppDefaults.driverName) -> [OrderRecord] {
+        guard driver(for: driver).exchangeEnabled else { return [] }
+        return allOrders().filter(\.isOnExchange)
+    }
+
+    func takeExchangeOrder(_ orderId: UUID, driverName: String = AppDefaults.driverName, vehiclePlate: String?) -> OrderRecord? {
+        guard driver(for: driverName).exchangeEnabled else { return nil }
+        guard var order = orders.first(where: { $0.id == orderId }), order.isOnExchange else { return nil }
+        order.onExchange = false
+        order.executorType = "own"
+        order.driverName = driverName
+        order.driverPercent = driver(for: driverName).salaryPercent
+        if let vehiclePlate, !vehiclePlate.isEmpty {
+            order.vehiclePlate = vehiclePlate
+        }
+        upsertOrder(order)
+        return order
     }
 
     func inProgressOrder(for driver: String = AppDefaults.driverName) -> OrderRecord? {
@@ -168,10 +187,30 @@ final class ShiftStore: ObservableObject {
     func rememberCustomer(from order: OrderRecord) {
         let name = order.customer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        var profile = customer(for: name) ?? CustomerProfile(name: name)
+        var profile = customer(for: name) ?? CustomerProfile(name: name, roles: ["customer"])
         profile.name = name
+        if !profile.roles.contains("customer") { profile.roles.append("customer") }
         profile.remember(routePoints: order.routePoints)
         profile.remember(loading: order.loadingAddress, unloading: order.unloadingAddress)
+        let cName = (order.contactName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let cPhone = (order.contactPhone ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cName.isEmpty || !cPhone.isEmpty {
+            let key = cName.isEmpty ? "Контакт" : cName
+            if let idx = profile.contacts.firstIndex(where: {
+                $0.name.compare(key, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+            }) {
+                if !cPhone.isEmpty,
+                   !profile.contacts[idx].phones.contains(where: { $0.number == cPhone }) {
+                    profile.contacts[idx].phones.append(ContactPhone(number: cPhone))
+                }
+            } else {
+                profile.contacts.append(CompanyContact(
+                    name: key,
+                    phones: cPhone.isEmpty ? [] : [ContactPhone(number: cPhone)],
+                    isPrimary: profile.contacts.isEmpty
+                ))
+            }
+        }
         updateCustomer(profile)
     }
 

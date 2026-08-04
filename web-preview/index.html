@@ -163,16 +163,14 @@
           <div class="nums" id="create-day"><button data-cday="1">1</button><button data-cday="2">2</button><button data-cday="3">3</button><button data-cday="4">4</button><button data-cday="5">5</button></div>
         </div>
         <div class="field-block">
-          <label>Автомобиль</label>
-          <select id="create-plate"></select>
-          <label>Водитель</label>
-          <select id="create-driver"></select>
-        </div>
-        <div class="field-block">
-          <label>Заказчик</label>
-          <input id="create-customer" list="customer-list" placeholder="Имя заказчика" />
+          <label>Заказчик (компания)</label>
+          <input id="create-customer" list="customer-list" placeholder="Название компании" />
           <select id="create-customer-pick"><option value="">или выбрать сохранённого</option></select>
           <datalist id="customer-list"></datalist>
+          <label>Контактное лицо</label>
+          <select id="create-contact-pick"><option value="">— контакт из карточки —</option></select>
+          <input id="create-contact-name" placeholder="ФИО контакта (новое сохранится)" />
+          <input id="create-contact-phone" inputmode="tel" placeholder="Телефон контакта" />
         </div>
         <div class="field-block">
           <label>Адрес загрузки</label>
@@ -183,6 +181,30 @@
           <label>Адрес выгрузки</label>
           <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
           <select id="create-unload-pick"><option value="">или из сохранённых</option></select>
+        </div>
+        <div class="field-block">
+          <label>Исполнение</label>
+          <select id="create-exec-mode">
+            <option value="own">Наш водитель</option>
+            <option value="carrier">Перевозчик</option>
+            <option value="exchange">На биржу</option>
+          </select>
+          <div id="create-own-box">
+            <label>Автомобиль (наш)</label>
+            <select id="create-plate"></select>
+            <label>Водитель (наш)</label>
+            <select id="create-driver"></select>
+          </div>
+          <div id="create-carrier-box" style="display:none">
+            <label>Компания-перевозчик</label>
+            <select id="create-carrier-company"></select>
+            <label>Водитель перевозчика</label>
+            <select id="create-carrier-driver"></select>
+            <label>ТС перевозчика</label>
+            <select id="create-carrier-vehicle"></select>
+            <div class="hint">Карточку перевозчика (контакты, ТС, водители) — в Справочниках</div>
+          </div>
+          <div id="create-exchange-hint" class="hint" style="display:none">Заказ появится на бирже у водителей с включённой биржей (включает администратор).</div>
         </div>
       </div>
       <div class="admin-form-actions">
@@ -236,11 +258,11 @@
 </div>
 <script>
 const DEFAULT_VEHICLES=[{plate:"О 535 МВ 198",consumptionPer100Km:20},{plate:"М 277 НО 198",consumptionPer100Km:20}];
-const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30}];
+const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""}];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-03-uuid-http";
+const APP_BUILD="2026-08-04-companies-exchange";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -272,6 +294,7 @@ const state={
   vehicles:saved.vehicles&&saved.vehicles.length?saved.vehicles:DEFAULT_VEHICLES.map(v=>({...v})),
   drivers:saved.drivers&&saved.drivers.length?saved.drivers:DEFAULT_DRIVERS.map(d=>({...d})),
   customers:Array.isArray(saved.customers)?saved.customers:[],
+  companies:Array.isArray(saved.companies)?saved.companies:[],
   finance:Object.assign({}, DEFAULT_FINANCE, saved.finance||{}),
   light:{}, draft:{}, error:"", adminFilter:"all", detailId:null
 };
@@ -341,13 +364,15 @@ function snapshot(){
     vehicles:state.vehicles,
     drivers:state.drivers,
     customers:state.customers,
+    companies:state.companies,
     finance:state.finance,
     savedAt:new Date().toISOString()
   };
 }
 function scorePayload(p){
   if(!p||typeof p!=='object') return 0;
-  return (p.orders&&p.orders.length||0)*10 + (p.shifts&&p.shifts.length||0)*3 + (p.customers&&p.customers.length||0) + (p.seq||0);
+  return (p.orders&&p.orders.length||0)*10 + (p.shifts&&p.shifts.length||0)*3
+    + (p.companies&&p.companies.length||0) + (p.customers&&p.customers.length||0) + (p.seq||0);
 }
 function applyPayload(p){
   if(!p||typeof p!=='object') return;
@@ -357,6 +382,7 @@ function applyPayload(p){
   state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles:DEFAULT_VEHICLES.map(v=>({...v}));
   state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
   state.customers=Array.isArray(p.customers)?p.customers:[];
+  state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
@@ -371,6 +397,7 @@ function applyPayload(p){
     if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
     ensureRoutePoints(o);
   });
+  migrateCompanies();
 }
 async function fetchServerState(){
   const filter=encodeURIComponent("key='main'");
@@ -450,15 +477,112 @@ function uniqAddrs(list){
   (list||[]).forEach(a=>{ const v=String(a||'').trim(); if(!v) return; const k=v.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push(v); });
   return out;
 }
-function findCustomer(name){
+
+function normalizePhone(p){
+  if(typeof p==='string'){ const n=String(p).trim(); return n?{id:uuid(),number:n,label:''}:null; }
+  if(!p||typeof p!=='object') return null;
+  const number=String(p.number||p.phone||'').trim(); if(!number) return null;
+  return {id:p.id||uuid(), number, label:String(p.label||'').trim()};
+}
+function normalizeContact(c){
+  if(!c||typeof c!=='object') return null;
+  const name=String(c.name||'').trim(); if(!name) return null;
+  const phones=(Array.isArray(c.phones)?c.phones:[]).map(normalizePhone).filter(Boolean);
+  if(c.phone && !phones.length){ const one=normalizePhone(c.phone); if(one) phones.push(one); }
+  return {id:c.id||uuid(), name, title:String(c.title||'').trim(), phones, isPrimary:!!c.isPrimary};
+}
+function normalizeCarrierVehicle(v){
+  if(!v||typeof v!=='object') return null;
+  const plate=String(v.plate||'').trim(); if(!plate) return null;
+  const num=x=>{ const n=+(String(x??'').replace(',','.')); return (n>0)?n:null; };
+  return {
+    id:v.id||uuid(), plate,
+    makeModel:String(v.makeModel||v.model||'').trim(),
+    payloadTons:num(v.payloadTons),
+    bodyLengthM:num(v.bodyLengthM), bodyWidthM:num(v.bodyWidthM), bodyHeightM:num(v.bodyHeightM)
+  };
+}
+function normalizeCarrierDriver(d){
+  if(!d||typeof d!=='object') return null;
+  const name=String(d.name||'').trim(); if(!name) return null;
+  return {id:d.id||uuid(), name, phone:String(d.phone||'').trim(), vehicleId:d.vehicleId||null};
+}
+function normalizeCompany(c){
+  if(!c||typeof c!=='object') return null;
+  const name=String(c.name||'').trim(); if(!name) return null;
+  let roles=Array.isArray(c.roles)?c.roles.slice():[];
+  if(!roles.length){
+    if(c.role==='carrier') roles=['carrier'];
+    else if(c.isCarrier) roles=['carrier'];
+    else roles=['customer'];
+  }
+  roles=roles.filter(r=>r==='customer'||r==='carrier');
+  if(!roles.length) roles=['customer'];
+  const phones=(Array.isArray(c.phones)?c.phones:[]).map(normalizePhone).filter(Boolean);
+  const contacts=(Array.isArray(c.contacts)?c.contacts:[]).map(normalizeContact).filter(Boolean);
+  const vehicles=(Array.isArray(c.vehicles)?c.vehicles:[]).map(normalizeCarrierVehicle).filter(Boolean);
+  const drivers=(Array.isArray(c.drivers)?c.drivers:[]).map(normalizeCarrierDriver).filter(Boolean);
+  return {
+    id:c.id||uuid(), name, roles, note:String(c.note||'').trim(),
+    phones, contacts,
+    loadingAddresses:uniqAddrs(c.loadingAddresses||[]),
+    unloadingAddresses:uniqAddrs(c.unloadingAddresses||[]),
+    vehicles, drivers
+  };
+}
+function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
+function companiesByRole(role){ return (state.companies||[]).filter(c=>companyHasRole(c, role)); }
+function findCompanyById(id){ return (state.companies||[]).find(c=>c.id===id)||null; }
+function findCompanyByName(name){
   const key=String(name||'').trim().toLowerCase(); if(!key) return null;
-  return state.customers.find(c=>String(c.name||'').trim().toLowerCase()===key)||null;
+  return (state.companies||[]).find(c=>String(c.name||'').trim().toLowerCase()===key)||null;
+}
+function findCustomer(name){
+  // совместимость: заказчик = компания с ролью customer (или любая по имени)
+  const c=findCompanyByName(name);
+  if(c) return c;
+  const key=String(name||'').trim().toLowerCase(); if(!key) return null;
+  return state.customers.find(x=>String(x.name||'').trim().toLowerCase()===key)||null;
+}
+function upsertCompany(raw){
+  const c=normalizeCompany(raw); if(!c) return null;
+  const i=(state.companies||[]).findIndex(x=>x.id===c.id || String(x.name).toLowerCase()===c.name.toLowerCase());
+  if(i>=0){
+    // merge addresses/contacts lightly
+    const prev=state.companies[i];
+    c.loadingAddresses=uniqAddrs([...(c.loadingAddresses||[]),...(prev.loadingAddresses||[])]);
+    c.unloadingAddresses=uniqAddrs([...(c.unloadingAddresses||[]),...(prev.unloadingAddresses||[])]);
+    if(!c.contacts.length && prev.contacts) c.contacts=prev.contacts;
+    if(!c.phones.length && prev.phones) c.phones=prev.phones;
+    if(!c.vehicles.length && prev.vehicles) c.vehicles=prev.vehicles;
+    if(!c.drivers.length && prev.drivers) c.drivers=prev.drivers;
+    if(!c.roles.includes('customer') && companyHasRole(prev,'customer')) c.roles.push('customer');
+    if(!c.roles.includes('carrier') && companyHasRole(prev,'carrier')) c.roles.push('carrier');
+    c.id=prev.id;
+    state.companies[i]=c;
+  } else {
+    state.companies.push(c);
+  }
+  state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  syncCustomersFromCompanies();
+  return c;
+}
+function syncCustomersFromCompanies(){
+  // legacy mirror for old UI bits
+  state.customers=companiesByRole('customer').map(c=>({
+    name:c.name,
+    loadingAddresses:c.loadingAddresses||[],
+    unloadingAddresses:c.unloadingAddresses||[]
+  }));
 }
 function rememberCustomer(order){
   const name=String(order.customer||'').trim(); if(!name) return;
-  let c=findCustomer(name);
-  if(!c){ c={name, loadingAddresses:[], unloadingAddresses:[]}; state.customers.push(c); }
-  c.name=name;
+  let c=findCompanyByName(name);
+  if(!c){
+    c=upsertCompany({name, roles:['customer'], loadingAddresses:[], unloadingAddresses:[], contacts:[], phones:[]});
+  } else if(!companyHasRole(c,'customer')){
+    c.roles.push('customer'); upsertCompany(c);
+  }
   ensureRoutePoints(order);
   (order.routePoints||[]).forEach(p=>{
     const addr=String(p.address||'').trim(); if(!addr) return;
@@ -469,25 +593,103 @@ function rememberCustomer(order){
   if(order.unloadingAddress) c.unloadingAddresses.unshift(order.unloadingAddress);
   c.loadingAddresses=uniqAddrs(c.loadingAddresses);
   c.unloadingAddresses=uniqAddrs(c.unloadingAddresses);
-  state.customers.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  // contact from order
+  if(order.contactName || order.contactPhone){
+    const cname=String(order.contactName||'Контакт').trim();
+    let person=(c.contacts||[]).find(x=>x.name.toLowerCase()===cname.toLowerCase());
+    if(!person){
+      person={id:uuid(), name:cname, title:'', phones:[], isPrimary:!(c.contacts||[]).length};
+      c.contacts.push(person);
+    }
+    if(order.contactPhone){
+      const ph=String(order.contactPhone).trim();
+      if(ph && !(person.phones||[]).some(x=>x.number===ph)) person.phones.push({id:uuid(), number:ph, label:''});
+    }
+    order.contactPersonId=person.id;
+    order.customerId=c.id;
+  }
+  upsertCompany(c);
 }
-function migrateCustomers(){
-  if(state.customers.length) return;
-  const before=state.customers.length;
-  state.orders.forEach(rememberCustomer);
-  if(state.customers.length!==before) persist();
+function migrateCompanies(){
+  // customers → companies
+  (state.customers||[]).forEach(c=>{
+    if(!findCompanyByName(c.name)){
+      upsertCompany({
+        name:c.name, roles:['customer'],
+        loadingAddresses:c.loadingAddresses||[], unloadingAddresses:c.unloadingAddresses||[],
+        contacts:c.contacts||[], phones:c.phones||[]
+      });
+    }
+  });
+  state.companies=(state.companies||[]).map(normalizeCompany).filter(Boolean);
+  // drivers exchangeEnabled
+  state.drivers=(state.drivers||[]).map(d=>({
+    name:d.name,
+    salaryPercent:d.salaryPercent??30,
+    exchangeEnabled:!!d.exchangeEnabled,
+    phone:String(d.phone||'').trim()
+  }));
+  if(!state.drivers.length) state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
+  syncCustomersFromCompanies();
+  // if still empty companies, mine from orders
+  if(!state.companies.length){
+    state.orders.forEach(rememberCustomer);
+  }
 }
-function customerNames(){ return state.customers.map(c=>c.name); }
-migrateCustomers();
+function customerNames(){ return companiesByRole('customer').map(c=>c.name); }
+function carrierNames(){ return companiesByRole('carrier').map(c=>c.name); }
+function primaryContact(company){
+  if(!company||!(company.contacts||[]).length) return null;
+  return company.contacts.find(c=>c.isPrimary) || company.contacts[0];
+}
+function contactPhone(contact){
+  if(!contact) return '';
+  const p=(contact.phones||[])[0];
+  return p?p.number:'';
+}
+function driverExchangeEnabled(name){
+  const d=state.drivers.find(x=>x.name===name);
+  return !!(d&&d.exchangeEnabled);
+}
+function exchangeOrders(){
+  return (state.orders||[]).filter(o=>!o.closedAt && o.onExchange && o.startOdometer==null);
+}
+function orderContactLine(o){
+  const parts=[];
+  if(o.customer) parts.push(o.customer);
+  if(o.contactName) parts.push(o.contactName);
+  if(o.contactPhone) parts.push(o.contactPhone);
+  return parts.join(' · ')||'—';
+}
+migrateCompanies();
 function fillCustomerPickers(){
   const list=$('customer-list');
   if(list) list.innerHTML=customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('');
   const pick=$('create-customer-pick');
   if(pick){
     pick.innerHTML=`<option value="">— выбрать сохранённого —</option>`+customerNames().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    pick.onchange=()=>{ if(pick.value){ $('create-customer').value=pick.value; fillAddressPickers(pick.value); } };
+    pick.onchange=()=>{ if(pick.value){ $('create-customer').value=pick.value; fillAddressPickers(pick.value); fillContactPickers(pick.value); } };
   }
-  $('create-customer')&&($('create-customer').oninput=()=>fillAddressPickers(($('create-customer').value||'').trim()));
+  $('create-customer')&&($('create-customer').oninput=()=>{
+    const name=($('create-customer').value||'').trim();
+    fillAddressPickers(name); fillContactPickers(name);
+  });
+}
+function fillContactPickers(name){
+  const c=findCompanyByName(name);
+  const pick=$('create-contact-pick');
+  const phoneEl=$('create-contact-phone');
+  const nameEl=$('create-contact-name');
+  if(!pick) return;
+  const contacts=(c&&c.contacts)||[];
+  pick.innerHTML=`<option value="">— контакт из карточки —</option>`+contacts.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${contactPhone(p)?' · '+esc(contactPhone(p)):''}</option>`).join('');
+  pick.onchange=()=>{
+    const person=(contacts||[]).find(x=>x.id===pick.value);
+    if(person){
+      if(nameEl) nameEl.value=person.name;
+      if(phoneEl) phoneEl.value=contactPhone(person);
+    }
+  };
 }
 function fillAddressPickers(name){
   const c=findCustomer(name)||{loadingAddresses:[],unloadingAddresses:[]};
@@ -502,6 +704,48 @@ function fillAddressPickers(name){
     up.onchange=()=>{ if(up.value) $('create-unload').value=up.value; };
   }
 }
+function fillExecutorUI(){
+  const mode=(($('create-exec-mode')||{}).value)||'own';
+  const ownBox=$('create-own-box');
+  const carrierBox=$('create-carrier-box');
+  const exchangeHint=$('create-exchange-hint');
+  if(ownBox) ownBox.style.display=mode==='own'?'block':'none';
+  if(carrierBox) carrierBox.style.display=mode==='carrier'?'block':'none';
+  if(exchangeHint) exchangeHint.style.display=mode==='exchange'?'block':'none';
+  const saveBtn=$('create-save');
+  if(saveBtn){
+    saveBtn.textContent=mode==='exchange'?'Выставить на биржу':(mode==='carrier'?'Назначить перевозчику':'Назначить водителю');
+  }
+  if(mode==='carrier') fillCarrierPickers();
+}
+function fillCarrierPickers(){
+  const carriers=companiesByRole('carrier');
+  const companySel=$('create-carrier-company');
+  if(!companySel) return;
+  const cur=companySel.value;
+  companySel.innerHTML=`<option value="">— перевозчик —</option>`+carriers.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  if(cur && carriers.some(c=>c.id===cur)) companySel.value=cur;
+  companySel.onchange=()=>fillCarrierDriverVehicle();
+  fillCarrierDriverVehicle();
+}
+function fillCarrierDriverVehicle(){
+  const company=findCompanyById(($('create-carrier-company')||{}).value);
+  const drv=$('create-carrier-driver');
+  const veh=$('create-carrier-vehicle');
+  if(drv){
+    const list=(company&&company.drivers)||[];
+    drv.innerHTML=`<option value="">— водитель перевозчика —</option>`+list.map(d=>`<option value="${esc(d.id)}">${esc(d.name)}${d.phone?' · '+esc(d.phone):''}</option>`).join('');
+  }
+  if(veh){
+    const list=(company&&company.vehicles)||[];
+    veh.innerHTML=`<option value="">— ТС перевозчика —</option>`+list.map(v=>{
+      const dims=[v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0)?` ${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`:'';
+      const pay=v.payloadTons?` · ${v.payloadTons}т`:'';
+      return `<option value="${esc(v.id)}">${esc(v.plate)}${v.makeModel?' · '+esc(v.makeModel):''}${pay}${dims}</option>`;
+    }).join('');
+  }
+}
+
 function timeNow(){ return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
 function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
@@ -513,7 +757,7 @@ function round2(v){ return Math.round(v*100)/100; }
 function fmt(v){ if(v==null||v==='') return '—'; const n=+v; if(Number.isNaN(n)) return String(v); return n===Math.round(n)?String(Math.round(n)):n.toFixed(2); }
 function hasOpenOrder(){ return !!inProgressOrder(); }
 function inProgressOrder(){ return (state.orders||[]).find(o=>!o.closedAt && o.startOdometer!=null) || null; }
-function assignedPending(){ return (state.orders||[]).filter(o=>!o.closedAt && o.startOdometer==null && o.driverName===DRIVER); }
+function assignedPending(){ return (state.orders||[]).filter(o=>!o.closedAt && o.startOdometer==null && !o.onExchange && o.driverName===DRIVER); }
 function upsertOrder(order){
   const i=state.orders.findIndex(o=>o.id===order.id);
   if(i>=0) state.orders[i]=order; else state.orders.unshift(order);
@@ -525,6 +769,7 @@ function openOrder(){ return inProgressOrder(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
 function statusText(o){
   if(o.closedAt) return 'Закрыт';
+  if(o.onExchange && o.startOdometer==null) return 'На бирже';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(o.startOdometer!=null) return 'В работе';
   return 'Назначен';
@@ -1351,29 +1596,72 @@ function hideDriverPanels(){
     const el=$(id); if(el) el.classList.remove('show');
   });
 }
+
 function showOrders(){
   hideDriverPanels();
   $('orders-panel').classList.add('show');
-  const orders=allOrders().filter(o=>o.driverName===DRIVER);
-  if(!orders.length){
+  const mine=allOrders().filter(o=>o.driverName===DRIVER && !o.onExchange);
+  const board=driverExchangeEnabled(DRIVER)?exchangeOrders():[];
+  let html='';
+  if(board.length){
+    html+=`<div class="orders-hint">Биржа — можно взять заказ</div>`;
+    html+=board.map(o=>`<div class="card" style="margin:8px 0">
+      <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
+      <p>${esc(dateTime(o.createdAt))}</p>
+      <p>${esc(routeText(o))}</p>
+      <p style="color:var(--accent);font-weight:700">${esc(orderContactLine(o))}</p>
+      ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent);font-weight:700">Позвонить ${esc(o.contactPhone)}</a></p>`:''}
+      <button type="button" class="primary take-exchange" data-id="${o.id}">Взять заказ</button>
+    </div>`).join('');
+  } else if(driverExchangeEnabled(DRIVER)){
+    html+=`<div class="orders-hint">Биржа пуста</div>`;
+  }
+  if(!mine.length && !board.length){
     $('orders-list').innerHTML=`<div class="empty">Пока нет заявок</div>`;
     return;
   }
-  $('orders-list').innerHTML =
-    `<div class="orders-hint">У назначенных: свайп влево → «Начать заказ»</div><div id="orders-error" class="error"></div>`+
-    orders.map(o=>{
+  if(mine.length){
+    html+=`<div class="orders-hint">Мои заявки: свайп влево → «Начать заказ»</div><div id="orders-error" class="error"></div>`;
+    html+=mine.map(o=>{
       const canStart=!o.closedAt && o.startOdometer==null;
+      const contact=orderContactLine(o);
       return `<div class="swipe-item" data-id="${o.id}" data-can-start="${canStart?1:0}">
         ${canStart?`<div class="swipe-actions"><button type="button" class="swipe-start" data-id="${o.id}">Начать заказ</button></div>`:''}
         <div class="swipe-front">
           <h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
           <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
-          <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(driverPayText(o))}</p>
+          <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(contact)}</p>
+          ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
+          <p style="color:var(--muted);margin-top:4px">${esc(driverPayText(o))}</p>
         </div>
       </div>`;
     }).join('');
+  }
+  $('orders-list').innerHTML=html;
+  document.querySelectorAll('.take-exchange').forEach(b=>b.onclick=()=>takeExchangeOrder(b.dataset.id));
   wireOrdersSwipe();
 }
+function takeExchangeOrder(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !o.onExchange){ showOrdersError('Заказ уже недоступен'); return; }
+  if(!driverExchangeEnabled(DRIVER)){ showOrdersError('Биржа для вас выключена'); return; }
+  const gate=canStartAssignedMessage();
+  // allow take without open order conflict check via ensure — only need shift+ETO
+  const shift=syncOpenShiftRuntime();
+  if(!shift && !state.shift){ showOrdersError('Сначала откройте смену'); return; }
+  if(!isEtoDone(shift) && !isEtoDone(state.shift)){ showOrdersError('Сначала завершите ЕТО'); return; }
+  if(hasOpenOrder()){ showOrdersError('Сначала закройте текущий заказ'); return; }
+  o.onExchange=false;
+  o.executorType='own';
+  o.driverName=DRIVER;
+  o.driverPercent=driverPercent(DRIVER);
+  o.vehiclePlate=state.shift?.vehiclePlate || state.vehicles[0]?.plate || o.vehiclePlate;
+  upsertOrder(o);
+  showOrders();
+  // optionally start immediately
+  beginAssigned(o.id);
+}
+
 function wireOrdersSwipe(){
   const ACTION_W=118;
   document.querySelectorAll('#orders-list .swipe-item').forEach(item=>{
@@ -1472,6 +1760,7 @@ function renderAdmin(){
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
+      <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
       ${hasRate
@@ -1500,7 +1789,7 @@ function fillCreateSelects(){
 }
 let createDay=1;
 function bindAdminCreate(){
-  $('admin-new').onclick=()=>{ createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); show('admin-create'); highlightDay(); };
+  $('admin-new').onclick=()=>{ createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own'; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI; };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
   $('create-save').onclick=saveDispatcherOrder;
@@ -1508,13 +1797,54 @@ function bindAdminCreate(){
 function highlightDay(){ document.querySelectorAll('[data-cday]').forEach(b=>{ b.style.background = (+b.dataset.cday===createDay)?'var(--accent)':'var(--field)'; }); }
 function saveDispatcherOrder(){
   const load=($('create-load').value||'').trim(); const unload=($('create-unload').value||'').trim();
-  const plate=$('create-plate').value; const driver=($('create-driver').value||DRIVER).trim();
   const customer=($('create-customer').value||'').trim();
+  const contactName=($('create-contact-name').value||'').trim();
+  const contactPhone=($('create-contact-phone').value||'').trim();
+  const mode=($('create-exec-mode').value||'own');
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
+  if(!customer){ $('create-error').textContent='Укажите заказчика'; return; }
+  let plate=''; let driver=''; let onExchange=false;
+  let carrierCompanyId=null, carrierDriverId=null, carrierVehicleId=null;
+  let driverPercentVal=0;
+  if(mode==='own'){
+    plate=$('create-plate').value;
+    driver=($('create-driver').value||DRIVER).trim();
+    driverPercentVal=driverPercent(driver);
+  } else if(mode==='carrier'){
+    const company=findCompanyById(($('create-carrier-company')||{}).value);
+    if(!company){ $('create-error').textContent='Выберите перевозчика'; return; }
+    carrierCompanyId=company.id;
+    const drv=(company.drivers||[]).find(d=>d.id===(($('create-carrier-driver')||{}).value));
+    const veh=(company.vehicles||[]).find(v=>v.id===(($('create-carrier-vehicle')||{}).value));
+    if(!drv){ $('create-error').textContent='Выберите водителя перевозчика'; return; }
+    if(!veh){ $('create-error').textContent='Выберите ТС перевозчика'; return; }
+    carrierDriverId=drv.id; carrierVehicleId=veh.id;
+    driver=`[Перевозчик] ${drv.name}`;
+    plate=veh.plate;
+    driverPercentVal=0;
+  } else if(mode==='exchange'){
+    onExchange=true;
+    driver='Биржа';
+    plate='—';
+    driverPercentVal=0;
+  }
   state.seq+=1;
-  const order={id:uuid(),sequentialNumber:state.seq,dayNumber:createDay,createdAt:new Date().toISOString(),source:'dispatcher',vehiclePlate:plate,driverName:driver,customer,loadingAddress:load,unloadingAddress:unload,routePoints:defaultRoutePoints(load,unload),startOdometer:null,driverPercent:driverPercent(driver)};
+  const company=upsertCompany({name:customer, roles:['customer']});
+  const order={
+    id:uuid(), sequentialNumber:state.seq, dayNumber:createDay,
+    createdAt:new Date().toISOString(), source:'dispatcher',
+    vehiclePlate:plate, driverName:driver, customer,
+    customerId:company?company.id:null,
+    contactName, contactPhone, contactPersonId:(($('create-contact-pick')||{}).value)||null,
+    loadingAddress:load, unloadingAddress:unload,
+    routePoints:defaultRoutePoints(load,unload), startOdometer:null,
+    driverPercent:driverPercentVal,
+    executorType:mode, onExchange,
+    carrierCompanyId, carrierDriverId, carrierVehicleId
+  };
   ensureRoutePoints(order);
-  upsertOrder(order); show('admin'); renderAdmin();
+  upsertOrder(order);
+  show('admin'); renderAdmin();
 }
 function openDetail(id){
   state.detailId=id;
@@ -1747,11 +2077,57 @@ function openDetail(id){
     $('detail-ok').style.display='block';
   };
 }
+
 function openCatalogs(){
+  const companyCards=(state.companies||[]).map((c,i)=>{
+    const roles=[companyHasRole(c,'customer')?'Заказчик':'', companyHasRole(c,'carrier')?'Перевозчик':''].filter(Boolean).join(' · ');
+    const contacts=(c.contacts||[]).map(p=>`${p.name}${contactPhone(p)?' '+contactPhone(p):''}`).join('; ')||'—';
+    const vehicles=(c.vehicles||[]).map(v=>{
+      const dim=[v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0)?`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`:'';
+      return `${v.plate}${v.payloadTons?` ${v.payloadTons}т`:''}${dim?' '+dim:''}`;
+    }).join('; ')||'—';
+    return `<div class="card" style="margin:8px 0">
+      <h3 style="margin:0">${esc(c.name)}</h3>
+      <div class="hint">${esc(roles||'—')}</div>
+      <div class="hint">Контакты: ${esc(contacts)}</div>
+      ${companyHasRole(c,'customer')?`<div class="hint">Загрузки: ${esc((c.loadingAddresses||[]).join(' · ')||'—')}</div>
+      <div class="hint">Выгрузки: ${esc((c.unloadingAddresses||[]).join(' · ')||'—')}</div>`:''}
+      ${companyHasRole(c,'carrier')?`<div class="hint">ТС: ${esc(vehicles)}</div>
+      <div class="hint">Водители: ${esc(((c.drivers||[]).map(d=>d.name).join('; '))||'—')}</div>`:''}
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="secondary" data-edit-co="${esc(c.id)}">Карточка</button>
+        <button type="button" class="secondary" data-del-co="${esc(c.id)}">Удалить</button>
+      </div>
+    </div>`;
+  }).join('') || `<div class="hint">Пока пусто — добавьте компанию ниже</div>`;
+
   $('catalogs-form').innerHTML=`
     <button class="secondary" id="cat-back">Назад</button>
     <h2 style="margin:0">Справочники</h2>
-    <h3 style="margin:8px 0 0">Финансы / тариф</h3>
+
+    <h3 style="margin:12px 0 0">Компании (заказчик / перевозчик)</h3>
+    <button class="primary" id="co-new" style="margin:8px 0">+ Компания</button>
+    <div id="co-editor" style="display:none" class="field-block"></div>
+    ${companyCards}
+
+    <h3 style="margin:16px 0 0">Наши водители</h3>
+    <div class="hint">Биржу включает администратор</div>
+    ${state.drivers.map((d,i)=>`
+      <div class="card" style="margin:8px 0">
+        <label>${esc(d.name)} — % от ставки</label>
+        <div class="row"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><button data-save-drv="${i}">OK</button></div>
+        <label>Телефон</label>
+        <input id="drv-phone-${i}" inputmode="tel" value="${esc(d.phone||'')}" placeholder="+7..." />
+        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа включена
+        </label>
+        <button type="button" class="secondary" data-save-drv-meta="${i}" style="margin-top:8px">Сохранить водителя</button>
+      </div>`).join('')}
+
+    <h3 style="margin:16px 0 0">Наши авто (л/100 км)</h3>
+    ${state.vehicles.map((v,i)=>`<label>${esc(v.plate)}</label><div class="row"><input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" /><button data-save-veh="${i}">OK</button></div>`).join('')}
+
+    <h3 style="margin:16px 0 0">Финансы / тариф</h3>
     <label>Наценка к себестоимости, %</label><input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" />
     <label>Порог города, км</label><input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" />
     <label>Мин. часов работы (город)</label><input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" />
@@ -1759,28 +2135,152 @@ function openCatalogs(){
     <label>₽/час работы по умолчанию</label><input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" />
     <label>₽/км нал по умолчанию</label><input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||''}" />
     <button class="primary" id="fin-save">Сохранить тариф</button>
-    <div class="hint">Город ≤ порога: мин. часы + подача. Если нулевой×₽/км > подачи — добавляем ₽/км нулевого.</div>
-    <h3 style="margin:8px 0 0">Заказчики</h3>
-    ${state.customers.length?state.customers.map((c,i)=>`
-      <div class="card" style="margin:8px 0">
-        <h3 style="margin:0">${esc(c.name)}</h3>
-        <div class="hint">Загрузки: ${(c.loadingAddresses||[]).length? (c.loadingAddresses||[]).map(esc).join(' · ') : '—'}</div>
-        <div class="hint">Выгрузки: ${(c.unloadingAddresses||[]).length? (c.unloadingAddresses||[]).map(esc).join(' · ') : '—'}</div>
-        <button type="button" class="secondary" data-del-cust="${i}">Удалить заказчика</button>
-      </div>`).join(''):`<div class="hint">Появятся после сохранения заявок с заказчиком</div>`}
-    <h3 style="margin:8px 0 0">Авто (л/100 км)</h3>
-    ${state.vehicles.map((v,i)=>`<label>${esc(v.plate)}</label><div class="row"><input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" /><button data-save-veh="${i}">OK</button></div>`).join('')}
-    <h3 style="margin:8px 0 0">Водители (% от ставки)</h3>
-    ${state.drivers.map((d,i)=>`<label>${esc(d.name)}</label><div class="row"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><button data-save-drv="${i}">OK</button></div>`).join('')}
     <div class="ok" id="cat-ok" style="display:none">Сохранено</div>
   `;
   show('admin-catalogs-screen');
   $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
-  document.querySelectorAll('[data-del-cust]').forEach(b=>b.onclick=()=>{
-    const i=+b.dataset.delCust;
-    state.customers.splice(i,1);
-    persist();
-    openCatalogs();
+
+  const openEditor=(company)=>{
+    const c=company?normalizeCompany(company):{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[]};
+    const box=$('co-editor');
+    box.style.display='block';
+    const isCust=companyHasRole(c,'customer');
+    const isCarr=companyHasRole(c,'carrier');
+    box.innerHTML=`
+      <h3 style="margin:0 0 8px">${company?'Редактирование':'Новая компания'}</h3>
+      <label>Название</label><input id="co-name" value="${esc(c.name)}" />
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
+      <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
+      <h4>Контактные лица</h4>
+      <div id="co-contacts"></div>
+      <button type="button" class="secondary" id="co-add-contact">+ Контакт</button>
+      <div id="co-customer-fields" style="display:${isCust?'block':'none'}">
+        <h4>Адреса заказчика</h4>
+        <label>Загрузки (каждый с новой строки)</label>
+        <textarea id="co-loads" rows="3">${esc((c.loadingAddresses||[]).join('\n'))}</textarea>
+        <label>Выгрузки</label>
+        <textarea id="co-unloads" rows="3">${esc((c.unloadingAddresses||[]).join('\n'))}</textarea>
+      </div>
+      <div id="co-carrier-fields" style="display:${isCarr?'block':'none'}">
+        <h4>ТС перевозчика</h4>
+        <div id="co-vehicles"></div>
+        <button type="button" class="secondary" id="co-add-veh">+ ТС</button>
+        <h4>Водители перевозчика</h4>
+        <div id="co-drivers"></div>
+        <button type="button" class="secondary" id="co-add-drv">+ Водитель перевозчика</button>
+      </div>
+      <button class="primary" id="co-save" style="margin-top:10px">Сохранить компанию</button>
+      <button class="secondary" id="co-cancel">Отмена</button>
+    `;
+    let contacts=(c.contacts||[]).map(x=>({...x, phones:(x.phones||[]).map(p=>({...p}))}));
+    let vehicles=(c.vehicles||[]).map(x=>({...x}));
+    let drivers=(c.drivers||[]).map(x=>({...x}));
+    const paintContacts=()=>{
+      $('co-contacts').innerHTML=contacts.map((p,i)=>`
+        <div class="card" style="margin:6px 0">
+          <input data-cn="${i}" placeholder="ФИО" value="${esc(p.name)}" />
+          <input data-ct="${i}" placeholder="Должность" value="${esc(p.title||'')}" />
+          <input data-cp="${i}" inputmode="tel" placeholder="Телефон" value="${esc(contactPhone(p))}" />
+          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-cprim="${i}" ${p.isPrimary?'checked':''}/> Основной</label>
+          <button type="button" class="secondary" data-cdel="${i}">Удалить контакт</button>
+        </div>`).join('')||`<div class="hint">Нет контактов</div>`;
+      document.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{ contacts.splice(+b.dataset.cdel,1); paintContacts(); });
+    };
+    const paintVehicles=()=>{
+      $('co-vehicles').innerHTML=vehicles.map((v,i)=>`
+        <div class="card" style="margin:6px 0">
+          <input data-vp="${i}" placeholder="Госномер" value="${esc(v.plate)}" />
+          <input data-vm="${i}" placeholder="Марка/модель" value="${esc(v.makeModel||'')}" />
+          <input data-vpay="${i}" inputmode="decimal" placeholder="Грузоподъёмность, т" value="${v.payloadTons??''}" />
+          <div class="row">
+            <input data-vl="${i}" inputmode="decimal" placeholder="Длина, м" value="${v.bodyLengthM??''}" />
+            <input data-vw="${i}" inputmode="decimal" placeholder="Ширина, м" value="${v.bodyWidthM??''}" />
+            <input data-vh="${i}" inputmode="decimal" placeholder="Высота, м" value="${v.bodyHeightM??''}" />
+          </div>
+          <button type="button" class="secondary" data-vdel="${i}">Удалить ТС</button>
+        </div>`).join('')||`<div class="hint">Нет ТС</div>`;
+      document.querySelectorAll('[data-vdel]').forEach(b=>b.onclick=()=>{ vehicles.splice(+b.dataset.vdel,1); paintVehicles(); });
+    };
+    const paintDrivers=()=>{
+      $('co-drivers').innerHTML=drivers.map((d,i)=>`
+        <div class="card" style="margin:6px 0">
+          <input data-dn="${i}" placeholder="ФИО водителя" value="${esc(d.name)}" />
+          <input data-dp="${i}" inputmode="tel" placeholder="Телефон" value="${esc(d.phone||'')}" />
+          <button type="button" class="secondary" data-ddel="${i}">Удалить</button>
+        </div>`).join('')||`<div class="hint">Нет водителей</div>`;
+      document.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{ drivers.splice(+b.dataset.ddel,1); paintDrivers(); });
+    };
+    paintContacts(); paintVehicles(); paintDrivers();
+    const syncRoleVisibility=()=>{
+      $('co-customer-fields').style.display=$('co-role-c').checked?'block':'none';
+      $('co-carrier-fields').style.display=$('co-role-r').checked?'block':'none';
+    };
+    $('co-role-c').onchange=syncRoleVisibility;
+    $('co-role-r').onchange=syncRoleVisibility;
+    $('co-add-contact').onclick=()=>{ contacts.push({id:uuid(),name:'',title:'',phones:[],isPrimary:!contacts.length}); paintContacts(); };
+    $('co-add-veh').onclick=()=>{ vehicles.push({id:uuid(),plate:'',makeModel:'',payloadTons:null,bodyLengthM:null,bodyWidthM:null,bodyHeightM:null}); paintVehicles(); };
+    $('co-add-drv').onclick=()=>{ drivers.push({id:uuid(),name:'',phone:'',vehicleId:null}); paintDrivers(); };
+    $('co-cancel').onclick=()=>{ box.style.display='none'; box.innerHTML=''; };
+    $('co-save').onclick=()=>{
+      const name=($('co-name').value||'').trim();
+      if(!name){ alert('Укажите название'); return; }
+      const roles=[];
+      if($('co-role-c').checked) roles.push('customer');
+      if($('co-role-r').checked) roles.push('carrier');
+      if(!roles.length){ alert('Выберите роль: заказчик и/или перевозчик'); return; }
+      // read contacts from DOM
+      contacts=contacts.map((p,i)=>{
+        const nameEl=document.querySelector(`[data-cn="${i}"]`);
+        const titleEl=document.querySelector(`[data-ct="${i}"]`);
+        const phoneEl=document.querySelector(`[data-cp="${i}"]`);
+        const primEl=document.querySelector(`[data-cprim="${i}"]`);
+        const nm=(nameEl&&nameEl.value||'').trim();
+        const ph=(phoneEl&&phoneEl.value||'').trim();
+        return {id:p.id||uuid(), name:nm, title:(titleEl&&titleEl.value||'').trim(), phones:ph?[{id:uuid(),number:ph,label:''}]:[], isPrimary:!!(primEl&&primEl.checked)};
+      }).filter(p=>p.name);
+      vehicles=vehicles.map((v,i)=>{
+        const plate=(document.querySelector(`[data-vp="${i}"]`)?.value||'').trim();
+        const makeModel=(document.querySelector(`[data-vm="${i}"]`)?.value||'').trim();
+        const num=id=>{ const raw=document.querySelector(`[data-${id}="${i}"]`)?.value||''; const n=+String(raw).replace(',','.'); return n>0?n:null; };
+        return {id:v.id||uuid(), plate, makeModel, payloadTons:num('vpay'), bodyLengthM:num('vl'), bodyWidthM:num('vw'), bodyHeightM:num('vh')};
+      }).filter(v=>v.plate);
+      drivers=drivers.map((d,i)=>{
+        const name=(document.querySelector(`[data-dn="${i}"]`)?.value||'').trim();
+        const phone=(document.querySelector(`[data-dp="${i}"]`)?.value||'').trim();
+        return {id:d.id||uuid(), name, phone, vehicleId:d.vehicleId||null};
+      }).filter(d=>d.name);
+      const loads=uniqAddrs((($('co-loads')||{}).value||'').split(/\n/));
+      const unloads=uniqAddrs((($('co-unloads')||{}).value||'').split(/\n/));
+      upsertCompany({
+        id:c.id, name, roles, note:($('co-note').value||'').trim(),
+        contacts, vehicles, drivers,
+        loadingAddresses:roles.includes('customer')?loads:[],
+        unloadingAddresses:roles.includes('customer')?unloads:[],
+        phones:c.phones||[]
+      });
+      persist();
+      openCatalogs();
+      $('cat-ok').style.display='block';
+    };
+  };
+
+  $('co-new').onclick=()=>openEditor(null);
+  document.querySelectorAll('[data-edit-co]').forEach(b=>b.onclick=()=>openEditor(findCompanyById(b.dataset.editCo)));
+  document.querySelectorAll('[data-del-co]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.delCo;
+    state.companies=state.companies.filter(c=>c.id!==id);
+    syncCustomersFromCompanies();
+    persist(); openCatalogs();
+  });
+  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveVeh; const v=+(($('veh-'+i).value||'').replace(',','.')); if(!(v>0)) return; state.vehicles[i].consumptionPer100Km=v; persist(); $('cat-ok').style.display='block'; });
+  document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); $('cat-ok').style.display='block'; });
+  document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.saveDrvMeta;
+    state.drivers[i].phone=(($('drv-phone-'+i)||{}).value||'').trim();
+    state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
+    const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
+    persist(); $('cat-ok').style.display='block';
   });
   $('fin-save').onclick=()=>{
     let markup=+(($('fin-markup').value||'').replace(',','.')); if(Number.isNaN(markup)) markup=15;
@@ -1793,8 +2293,6 @@ function openCatalogs(){
     persist();
     $('cat-ok').style.display='block';
   };
-  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveVeh; const v=+(($('veh-'+i).value||'').replace(',','.')); if(!(v>0)) return; state.vehicles[i].consumptionPer100Km=v; persist(); $('cat-ok').style.display='block'; });
-  document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); $('cat-ok').style.display='block'; });
 }
 
 function updateSyncHint(){

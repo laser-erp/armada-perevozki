@@ -729,9 +729,9 @@ struct AdminCatalogView: View {
                 }
                 .listRowBackground(AppTheme.botBubble.opacity(0.7))
             }
-            Section("Заказчики") {
+            Section("Компании (заказчики)") {
                 if store.customers.isEmpty {
-                    Text("Появятся после сохранения заявок с заказчиком")
+                    Text("Появятся после сохранения заявок с заказчиком. Полные карточки (перевозчик / биржа) — в веб-приложении.")
                         .foregroundStyle(AppTheme.textMuted)
                         .listRowBackground(AppTheme.botBubble.opacity(0.7))
                 }
@@ -741,7 +741,7 @@ struct AdminCatalogView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(customer.name)
-                            Text("загрузок: \(customer.loadingAddresses.count) · выгрузок: \(customer.unloadingAddresses.count)")
+                            Text("загрузок: \(customer.loadingAddresses.count) · выгрузок: \(customer.unloadingAddresses.count)\(customer.contacts.isEmpty ? "" : " · контактов: \(customer.contacts.count)")")
                                 .font(.caption)
                                 .foregroundStyle(AppTheme.textMuted)
                         }
@@ -764,7 +764,7 @@ struct AdminCatalogView: View {
                     .listRowBackground(AppTheme.botBubble.opacity(0.7))
                 }
             }
-            Section("Водители (% от ставки)") {
+            Section("Водители (% / биржа)") {
                 ForEach(store.drivers) { driver in
                     NavigationLink {
                         DriverEditView(store: store, name: driver.name)
@@ -772,6 +772,11 @@ struct AdminCatalogView: View {
                         HStack {
                             Text(driver.name)
                             Spacer()
+                            if driver.exchangeEnabled {
+                                Text("биржа")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.accent)
+                            }
                             Text("\(Int(driver.salaryPercent))%")
                                 .foregroundStyle(AppTheme.accent)
                         }
@@ -967,6 +972,8 @@ struct DriverEditView: View {
     @ObservedObject var store: ShiftStore
     let name: String
     @State private var value = ""
+    @State private var phone = ""
+    @State private var exchangeEnabled = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -974,9 +981,20 @@ struct DriverEditView: View {
             Text(name)
             TextField("% от ставки", text: $value)
                 .keyboardType(.decimalPad)
+            TextField("Телефон", text: $phone)
+                .keyboardType(.phonePad)
+            Toggle("Биржа включена", isOn: $exchangeEnabled)
+            Text("Биржу включает только администратор. Водитель с флагом видит свободные заказы на бирже.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.textMuted)
             Button("Сохранить") {
                 let v = Double(value.replacingOccurrences(of: ",", with: ".")) ?? 30
-                store.updateDriver(DriverProfile(name: name, salaryPercent: v))
+                store.updateDriver(DriverProfile(
+                    name: name,
+                    salaryPercent: v,
+                    phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
+                    exchangeEnabled: exchangeEnabled
+                ))
                 dismiss()
             }
             .foregroundStyle(AppTheme.accent)
@@ -985,7 +1003,10 @@ struct DriverEditView: View {
         .background(AppTheme.canvasTop)
         .navigationTitle("Водитель")
         .onAppear {
-            value = String(format: "%g", store.driver(for: name).salaryPercent)
+            let d = store.driver(for: name)
+            value = String(format: "%g", d.salaryPercent)
+            phone = d.phone
+            exchangeEnabled = d.exchangeEnabled
         }
     }
 }
