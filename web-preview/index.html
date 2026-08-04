@@ -2808,6 +2808,17 @@ function openDetail(id){
   const detailScroll=$('detail-form'); if(detailScroll) detailScroll.scrollTop=0;
   const detailActions=$('detail-actions'); if(detailActions) detailActions.style.display='flex';
   const detailOk=$('detail-ok'); if(detailOk) detailOk.style.display='none';
+  const detailCancel=$('detail-cancel-order');
+  if(detailCancel){
+    detailCancel.style.display=(!o.closedAt && !o.cancelledAt)?'':'none';
+    detailCancel.onclick=()=>{
+      if(!confirm('Отменить этот заказ?')) return;
+      if(cancelOrder(id, 'Отменён из карточки')){
+        if(detailActions) detailActions.style.display='none';
+        show('admin'); renderAdmin();
+      }
+    };
+  }
   renderRouteEditor();
   wirePerKmInputs(o);
   wireRateAutoFill(o);
