@@ -269,7 +269,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30,exch
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-depart-arrive";
+const APP_BUILD="2026-08-04-sync-clear";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -297,12 +297,13 @@ const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)|
 const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
 const state={
   step:"idle", orderStep:"idle", messages:[], shift:null,
-  shifts:saved.shifts||[], orders:saved.orders||[], seq:saved.seq||0,
+  shifts:saved.shifts||[], orders:Array.isArray(saved.orders)?saved.orders:[], seq:saved.seq||0,
   vehicles:saved.vehicles&&saved.vehicles.length?saved.vehicles:DEFAULT_VEHICLES.map(v=>({...v})),
   drivers:saved.drivers&&saved.drivers.length?saved.drivers:DEFAULT_DRIVERS.map(d=>({...d})),
   customers:Array.isArray(saved.customers)?saved.customers:[],
   companies:Array.isArray(saved.companies)?saved.companies:[],
   finance:Object.assign({}, DEFAULT_FINANCE, saved.finance||{}),
+  dataEpoch:Number(saved.dataEpoch)||0,
   light:{}, draft:{}, error:"", adminFilter:"all", detailId:null
 };
 let pbRecordId=null;
@@ -315,7 +316,10 @@ if(!(state.finance.minWorkHours>=0)) state.finance.minWorkHours=4;
 if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
 if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
 if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
-if(!state.orders.length && state.shifts.length){ state.orders = state.shifts.flatMap(s => s.orders||[]); }
+// Миграция только если в localStorage вообще не было массива orders
+if(!Array.isArray(saved.orders) && state.shifts.length){
+  state.orders=state.shifts.flatMap(s=>s.orders||[]);
+}
 function kindTitle(kind){ return kind==='unloading'?'Выгрузка':'Загрузка'; }
 function normalizePoint(p, fallbackKind){
   if(typeof p==='string'){
@@ -373,6 +377,7 @@ function snapshot(){
     customers:state.customers,
     companies:state.companies,
     finance:state.finance,
+    dataEpoch:Number(state.dataEpoch)||0,
     savedAt:new Date().toISOString()
   };
 }
@@ -391,6 +396,7 @@ function applyPayload(p){
   state.customers=Array.isArray(p.customers)?p.customers:[];
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
+  state.dataEpoch=Number(p.dataEpoch)||0;
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -398,7 +404,10 @@ function applyPayload(p){
   if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
   if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
   if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
-  if(!state.orders.length && state.shifts.length) state.orders=state.shifts.flatMap(s=>s.orders||[]);
+  // Старые данные: заказы жили только внутри смен. Не воскрешать, если orders уже явный [] с сервера.
+  if(!Array.isArray(p.orders) && state.shifts.length){
+    state.orders=state.shifts.flatMap(s=>s.orders||[]);
+  }
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
     if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
@@ -460,11 +469,22 @@ async function initCloudSync(){
       const remote=rec.payload||{};
       const rScore=scorePayload(remote);
       const lScore=scorePayload(local);
-      const remoteNewer=!!(remote.savedAt && (!local.savedAt || remote.savedAt>=local.savedAt));
-      if(rScore>lScore || (rScore>0 && remoteNewer) || (rScore===lScore && remoteNewer && rScore>0)){
+      const remoteTs=Date.parse(remote.savedAt||'')||0;
+      const localTs=Date.parse(local.savedAt||'')||0;
+      const remoteEpoch=Number(remote.dataEpoch)||0;
+      const localEpoch=Number(local.dataEpoch)||0;
+      const remoteNewer=remoteTs>0 && remoteTs>=localTs;
+      // Эпоха с сервера (очистка админом) важнее локального кэша; иначе — по savedAt.
+      const takeRemote=remoteEpoch>localEpoch
+        || (remoteEpoch===localEpoch && remoteNewer)
+        || (remoteEpoch===localEpoch && !remoteTs && !localTs && rScore>lScore)
+        || (remoteEpoch===localEpoch && !localTs && rScore>0);
+      if(takeRemote){
         applyPayload(remote);
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
-      } else if(lScore>0){
+      } else if(lScore>0 || localTs>0){
+        await pushServerState();
+      } else {
         await pushServerState();
       }
     } else if(scorePayload(local)>0){
