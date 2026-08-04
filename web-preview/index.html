@@ -72,7 +72,12 @@
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
-    #admin-detail,#admin-create,#admin-catalogs-screen,#admin-activity-screen{overflow:hidden;min-height:0}
+    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen{overflow:hidden;min-height:0}
+    .claim-box{padding:10px 12px;border-radius:16px;background:rgba(230,26,31,.08);border:1px solid rgba(230,26,31,.28);margin:8px 0}
+    .claim-box h3{margin:0 0 6px;font-size:.95rem}
+    .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
+    .veh-specs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+    .veh-specs input{width:48px;flex:0 0 48px;padding:4px 2px;min-height:28px;text-align:center;font-size:.72rem;border-radius:var(--pill);border:0;background:var(--field);color:var(--text)}
     .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:640px;margin:0 auto}
     .admin-form-scroll{
       flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -388,12 +393,33 @@
             <label>Водитель (наш)</label>
             <select id="create-driver"></select>
           </div>
-          <div id="create-exchange-hint" class="hint" style="display:none">Заказ появится на бирже у водителей с включённой биржей (включает администратор).</div>
+          <div id="create-exchange-hint" class="hint" style="display:none">Заказ увидят другие фирмы на бирже. Укажите требования к ТС — забрать сможет только подходящий транспорт.</div>
+        </div>
+        <div class="field-block" id="create-req-block">
+          <label>Требования к ТС (для биржи и подбора)</label>
+          <div class="row">
+            <input id="create-req-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" style="flex:0 0 64px;text-align:center" />
+            <input id="create-req-l" inputmode="decimal" placeholder="Д, м" title="Длина кузова, м" style="flex:1;text-align:center" />
+            <input id="create-req-w" inputmode="decimal" placeholder="Ш, м" title="Ширина, м" style="flex:1;text-align:center" />
+            <input id="create-req-h" inputmode="decimal" placeholder="В, м" title="Высота, м" style="flex:1;text-align:center" />
+          </div>
+          <div class="hint">Авто перевозчика должно быть не меньше этих значений</div>
         </div>
       </div>
       <div class="admin-form-actions">
         <div class="error" id="create-error"></div>
         <button class="primary" id="create-save">Назначить водителю</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-claim" class="screen">
+    <div class="admin-form-shell">
+      <div class="admin-form-scroll" id="claim-form"></div>
+      <div class="admin-form-actions">
+        <div class="error" id="claim-error"></div>
+        <button class="primary" id="claim-confirm">Подписать заявку и назначить</button>
+        <button class="secondary" id="claim-cancel">Отмена</button>
       </div>
     </div>
   </div>
@@ -450,9 +476,9 @@
 </div>
 <script>
 const DEFAULT_VEHICLES=[
-  {plate:"О 535 МВ 198",consumptionPer100Km:20},
-  {plate:"М 277 НО 198",consumptionPer100Km:20},
-  {plate:"В 603 СА 47",consumptionPer100Km:20}
+  {plate:"О 535 МВ 198",consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2},
+  {plate:"М 277 НО 198",consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2},
+  {plate:"В 603 СА 47",consumptionPer100Km:20,payloadTons:10,bodyLengthM:8,bodyWidthM:2.45,bodyHeightM:2.5}
 ];
 const DEFAULT_DRIVERS=[
   {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
@@ -461,7 +487,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-order-fleet";
+const APP_BUILD="2026-08-04-firm-claim";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1256,13 +1282,80 @@ function orderBelongsToAdmin(o, adminId){
   if(!nm || nm==='—' || nm==='-' || nm==='Биржа' || nm.startsWith('[Перевозчик]')) return false;
   return driverNamesOwnedByAdminId(adminId).has(nm);
 }
-/** Доступ: супер — любой; обычный — заказы пространства своей фирмы. */
-function canAdminSeeOrder(o){
+function isMyFirmOrder(o){
   if(!o || !currentAdmin) return false;
-  if(isSuperAdmin()) return true;
+  const myCo=currentOwnCompany();
+  if(myCo && o.ownCompanyId && o.ownCompanyId===myCo.id) return true;
   const sid=currentSpaceId();
   if(sid && o.spaceId===sid) return true;
   return orderBelongsToAdmin(o, currentAdmin.id);
+}
+function isPartnerOnOrder(o){
+  if(!o || !currentAdmin) return false;
+  const myCo=currentOwnCompany();
+  const app=o.transportApp;
+  if(app && myCo && (app.carrierCompanyId===myCo.id || app.customerCompanyId===myCo.id)) return true;
+  if(o.partnerSpaceId && o.partnerSpaceId===currentSpaceId()) return true;
+  if(o.executorAdminId && o.executorAdminId===currentAdmin.id) return true;
+  return false;
+}
+/** Доступ: супер — любой; биржа — всем админам; своя фирма / партнёр по заявке. */
+function canAdminSeeOrder(o){
+  if(!o || !currentAdmin) return false;
+  if(isSuperAdmin()) return true;
+  if(o.onExchange && !o.closedAt && o.startOdometer==null) return true;
+  if(isPartnerOnOrder(o)) return true;
+  const sid=currentSpaceId();
+  if(sid && o.spaceId===sid) return true;
+  return orderBelongsToAdmin(o, currentAdmin.id);
+}
+function numOrNull(raw){
+  const n=+String(raw??'').replace(',','.');
+  return (n>0 && !Number.isNaN(n))?n:null;
+}
+function vehicleSpecText(v){
+  if(!v) return '';
+  const bits=[];
+  if(v.payloadTons>0) bits.push(v.payloadTons+'т');
+  if([v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0))
+    bits.push(`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`);
+  return bits.join(' · ');
+}
+function orderReqText(o){
+  if(!o) return '';
+  const bits=[];
+  if(o.reqPayloadTons>0) bits.push('от '+o.reqPayloadTons+'т');
+  if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0))
+    bits.push(`кузов ≥ ${o.reqLengthM}×${o.reqWidthM}×${o.reqHeightM}м`);
+  else {
+    if(o.reqLengthM>0) bits.push('Д≥'+o.reqLengthM+'м');
+    if(o.reqWidthM>0) bits.push('Ш≥'+o.reqWidthM+'м');
+    if(o.reqHeightM>0) bits.push('В≥'+o.reqHeightM+'м');
+  }
+  return bits.join(' · ');
+}
+/** ТС подходит, если каждое указанное требование закрыто его характеристикой. */
+function vehicleFitsOrder(v, o){
+  if(!v || !o) return false;
+  const pairs=[['reqPayloadTons','payloadTons'],['reqLengthM','bodyLengthM'],['reqWidthM','bodyWidthM'],['reqHeightM','bodyHeightM']];
+  let anyReq=false;
+  for(const [req,field] of pairs){
+    const need=+o[req];
+    if(!(need>0)) continue;
+    anyReq=true;
+    const have=+v[field];
+    if(!(have>0) || have+1e-9<need) return false;
+  }
+  if(!anyReq) return true;
+  return true;
+}
+function readOrderRequirementsFromCreate(){
+  return {
+    reqPayloadTons:numOrNull(($('create-req-pay')||{}).value),
+    reqLengthM:numOrNull(($('create-req-l')||{}).value),
+    reqWidthM:numOrNull(($('create-req-w')||{}).value),
+    reqHeightM:numOrNull(($('create-req-h')||{}).value)
+  };
 }
 /** Фильтр супер-админа по пространству фирмы. */
 function matchesOwnerFilter(o){
@@ -1669,6 +1762,11 @@ function migrateCompanies(){
   state.vehicles=(state.vehicles||[]).map(v=>({
     plate:String(v.plate||'').trim(),
     consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
+    makeModel:String(v.makeModel||'').trim(),
+    payloadTons:numOrNull(v.payloadTons),
+    bodyLengthM:numOrNull(v.bodyLengthM),
+    bodyWidthM:numOrNull(v.bodyWidthM),
+    bodyHeightM:numOrNull(v.bodyHeightM),
     spaceId:v.spaceId||null,
     companyId:v.companyId||null,
     companyName:v.companyName||null
@@ -1676,6 +1774,16 @@ function migrateCompanies(){
   if(!state.vehicles.length && !(state.spaces||[]).length){
     state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
   }
+  // подтянуть габариты/тоннаж для известных номеров, если пусто
+  const normPlate=p=>String(p||'').toLowerCase().replace(/\s+/g,'');
+  DEFAULT_VEHICLES.forEach(def=>{
+    const hit=(state.vehicles||[]).find(v=>normPlate(v.plate)===normPlate(def.plate));
+    if(!hit) return;
+    if(!(hit.payloadTons>0) && def.payloadTons) hit.payloadTons=def.payloadTons;
+    if(!(hit.bodyLengthM>0) && def.bodyLengthM) hit.bodyLengthM=def.bodyLengthM;
+    if(!(hit.bodyWidthM>0) && def.bodyWidthM) hit.bodyWidthM=def.bodyWidthM;
+    if(!(hit.bodyHeightM>0) && def.bodyHeightM) hit.bodyHeightM=def.bodyHeightM;
+  });
   // наши фирмы (ООО «Армада», ИП Нечаев А.С.)
   DEFAULT_OWN_COMPANIES.forEach(def=>{
     const existing=findCompanyByName(def.name);
@@ -1941,6 +2049,7 @@ function statusText(o){
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(o.startOdometer!=null) return 'В работе';
   if(o.departOdometer!=null) return 'В пути';
+  if(o.executorType==='partner' && o.transportApp) return 'Партнёр';
   // снят с биржи / без водителя — не считаем «назначен»
   if(!o.onExchange && o.startOdometer==null && o.departOdometer==null &&
      (!o.driverName || o.driverName==='—' || o.driverName==='-' || o.driverName==='Биржа')){
@@ -3081,92 +3190,195 @@ function filteredOrders(){
 function unpublishFromExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || !o.onExchange) return;
-  if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return; }
-  cancelOrder(id, 'Снят с биржи');
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Снять с биржи может только фирма‑заказчик'); return; }
+  if(!confirm('Снять заказ с биржи?')) return;
+  o.onExchange=false;
+  o.executorType='own';
+  o.driverName=o.driverName==='Биржа'?'—':(o.driverName||'—');
+  bumpDataEpoch('unpublish-exchange');
+  upsertOrder(o);
+  renderAdmin();
+}
+function publishToExchange(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || o.closedAt || o.startOdometer!=null){ alert('Нельзя выставить на биржу'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
+  if(!confirm('Выставить заказ на биржу для других фирм?')) return;
+  o.onExchange=true;
+  o.executorType='exchange';
+  o.driverName='Биржа';
+  o.vehiclePlate='—';
+  o.transportApp=null;
+  o.partnerSpaceId=null;
+  o.executorAdminId=null;
+  bumpDataEpoch('publish-exchange');
+  upsertOrder(o);
+  state.adminFilter='exchange';
+  document.querySelectorAll('#admin-filters [data-filter]').forEach(b=>b.classList.toggle('on', b.dataset.filter==='exchange'));
   renderAdmin();
 }
 function assignExchangeToOwn(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
-  if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Свой парк — только для заказов вашей фирмы. Чужой забирайте кнопкой «Забрать»'); return; }
   const driver=(($('ex-drv-'+id)||{}).value||'').trim();
   const plate=(($('ex-plate-'+id)||{}).value||'').trim();
   if(!driver){ alert('Выберите водителя'); return; }
   if(!plate){ alert('Выберите авто'); return; }
   const firmId=o.ownCompanyId || (currentOwnCompany()||{}).id;
+  const veh=fleetVehiclesForCompany(firmId).find(v=>v.plate===plate);
   if(firmId && !fleetDriversForCompany(firmId).some(d=>samePersonName(d.name,driver))){
     alert('Водитель не из парка фирмы этой заявки'); return;
   }
-  if(firmId && !fleetVehiclesForCompany(firmId).some(v=>v.plate===plate)){
-    alert('Авто не из парка фирмы этой заявки'); return;
-  }
+  if(!veh){ alert('Авто не из парка фирмы этой заявки'); return; }
+  if(!vehicleFitsOrder(veh, o)){ alert('Авто не подходит по грузоподъёмности/габаритам'); return; }
   o.onExchange=false;
   o.executorType='own';
   o.driverName=driver;
   o.vehiclePlate=plate;
   o.driverPercent=driverPercent(driver, firmId);
-  if(firmId){
-    const co=findCompanyById(firmId);
-    if(co){ o.ownCompanyId=co.id; o.ownCompanyName=co.name; if(co.spaceId) o.spaceId=co.spaceId; }
-  }
   o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
+  bumpDataEpoch('assign-exchange-own');
   upsertOrder(o);
   renderAdmin();
 }
-function renderAdminExchangeBoard(orders){
-  const enabled=exchangeEnabledDrivers().filter(d=>{
-    if(isSuperAdmin()) return true;
-    const co=currentOwnCompany();
-    return co ? d.companyId===co.id : (currentAdmin && d.ownerAdminId===currentAdmin.id);
-  });
-  const driversBlock=enabled.length
-    ? `<div class="hint" style="padding:8px 16px 0">Водители с биржей: <strong>${esc(enabled.map(d=>`${d.name} (${d.phone||'без тел.'}, ${d.salaryPercent}%)`).join('; '))}</strong></div>`
-    : `<div class="hint" style="padding:8px 16px 0;color:var(--accent)">Ни у кого не включена биржа — включите в Справочниках → Наши водители</div>`;
-  if(!orders.length){
-    return `${driversBlock}<div class="empty">На бирже пока пусто. Создайте заказ с исполнением «На биржу».</div>`;
+let claimOrderId=null;
+function openClaimExchange(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
+  if(isMyFirmOrder(o) && !isSuperAdmin()){ alert('Это заказ вашей фирмы — назначьте своего водителя или снимите с биржи'); return; }
+  const myCo=currentOwnCompany();
+  if(!myCo){ alert('Сначала нужна ваша фирма'); return; }
+  if(o.ownCompanyId && o.ownCompanyId===myCo.id){ alert('Нельзя забрать свой же заказ как перевозчик'); return; }
+  claimOrderId=id;
+  const drvList=fleetDriversForCompany(myCo.id);
+  const vehAll=fleetVehiclesForCompany(myCo.id);
+  const vehOk=vehAll.filter(v=>vehicleFitsOrder(v,o));
+  const req=orderReqText(o)||'не указаны';
+  $('claim-error').textContent='';
+  $('claim-form').innerHTML=`
+    <button type="button" class="secondary" id="claim-back">← Назад</button>
+    <h2>Забрать заказ №${o.sequentialNumber}</h2>
+    <div class="hint">Электронная договор‑заявка на перевозку между фирмами</div>
+    <div class="claim-box">
+      <h3>Договор‑заявка</h3>
+      <p><strong>Заказчик перевозки:</strong> ${esc(o.ownCompanyName||'—')}</p>
+      <p><strong>Перевозчик:</strong> ${esc(myCo.name)}</p>
+      <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
+      <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
+      <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
+      <p class="hint" style="margin-top:6px">После подписи перевозчик назначает водителя и авто из своего парка — они войдут в заявку.</p>
+    </div>
+    <div class="field-block">
+      <label>Водитель (ваш парк)</label>
+      <select id="claim-driver">${drvList.length?drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join(''):`<option value="">— добавьте водителя в Справочниках —</option>`}</select>
+      <label>Авто (подходящее по т / габаритам)</label>
+      <select id="claim-plate">${vehOk.length?vehOk.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join(''):`<option value="">— нет подходящего авто —</option>`}</select>
+      <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}. Неподходящие скрыты.`:'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
+    </div>
+  `;
+  show('admin-claim');
+  $('claim-back').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
+  $('claim-cancel').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
+  $('claim-confirm').onclick=confirmClaimExchange;
+}
+function confirmClaimExchange(){
+  const o=state.orders.find(x=>x.id===claimOrderId);
+  if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); claimOrderId=null; show('admin'); renderAdmin(); return; }
+  const myCo=currentOwnCompany();
+  if(!myCo || !currentAdmin){ $('claim-error').textContent='Нужна ваша фирма'; return; }
+  const driver=(($('claim-driver')||{}).value||'').trim();
+  const plate=(($('claim-plate')||{}).value||'').trim();
+  if(!driver){ $('claim-error').textContent='Выберите водителя'; return; }
+  if(!plate){ $('claim-error').textContent='Выберите подходящее авто'; return; }
+  if(!fleetDriversForCompany(myCo.id).some(d=>samePersonName(d.name,driver))){
+    $('claim-error').textContent='Водитель не из вашего парка'; return;
   }
+  const veh=fleetVehiclesForCompany(myCo.id).find(v=>v.plate===plate);
+  if(!veh){ $('claim-error').textContent='Авто не из вашего парка'; return; }
+  if(!vehicleFitsOrder(veh, o)){ $('claim-error').textContent='Авто не подходит по требованиям заявки'; return; }
+  const customerCo=findCompanyById(o.ownCompanyId);
+  o.transportApp={
+    id:uuid(),
+    signedAt:new Date().toISOString(),
+    customerCompanyId:o.ownCompanyId||null,
+    customerCompanyName:o.ownCompanyName||(customerCo&&customerCo.name)||'',
+    carrierCompanyId:myCo.id,
+    carrierCompanyName:myCo.name,
+    customerAdminId:o.ownerAdminId||null,
+    carrierAdminId:currentAdmin.id,
+    driverName:driver,
+    vehiclePlate:plate,
+    vehiclePayloadTons:veh.payloadTons||null,
+    vehicleBodyLengthM:veh.bodyLengthM||null,
+    vehicleBodyWidthM:veh.bodyWidthM||null,
+    vehicleBodyHeightM:veh.bodyHeightM||null,
+    reqPayloadTons:o.reqPayloadTons||null,
+    reqLengthM:o.reqLengthM||null,
+    reqWidthM:o.reqWidthM||null,
+    reqHeightM:o.reqHeightM||null,
+    route:routeText(o),
+    orderSequentialNumber:o.sequentialNumber
+  };
+  o.onExchange=false;
+  o.executorType='partner';
+  o.carrierCompanyId=myCo.id;
+  o.carrierCompanyName=myCo.name;
+  o.driverName=driver;
+  o.vehiclePlate=plate;
+  o.driverPercent=driverPercent(driver, myCo.id);
+  o.partnerSpaceId=currentAdmin.spaceId||null;
+  o.executorAdminId=currentAdmin.id;
+  bumpDataEpoch('claim-exchange');
+  upsertOrder(o);
+  claimOrderId=null;
+  show('admin');
+  state.adminFilter='assigned';
+  document.querySelectorAll('#admin-filters [data-filter]').forEach(b=>b.classList.toggle('on', b.dataset.filter==='assigned'));
+  renderAdmin();
+  alert('Договор‑заявка подписана. Водитель и авто внесены в заявку.');
+}
+function renderAdminExchangeBoard(orders){
+  const hint=`<div class="hint" style="padding:8px 16px 0">Биржа между фирмами: чужой заказ — <strong>Забрать</strong> (договор‑заявка + ваш парк). Свой — назначить себе или снять.</div>`;
+  if(!orders.length){
+    return `${hint}<div class="empty">На бирже пусто. Выставьте лишний заказ: «+ Заказ» → «На биржу» или кнопка «На биржу» у заявки.</div>`;
+  }
+  const myCo=currentOwnCompany();
   const cards=orders.map(o=>{
-    const m=metrics(o);
-    const hasRate=selectedRate(o)!=null;
-    const pay=m.driverPay;
-    const sp=findSpaceById(o.spaceId);
-    const firmId=o.ownCompanyId || (currentOwnCompany()||{}).id;
-    const drvList=firmId?fleetDriversForCompany(firmId):myCatalogDrivers();
-    const vehList=firmId?fleetVehiclesForCompany(firmId):myCatalogVehicles();
-    const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}${d.exchangeEnabled?' · биржа':''} · ${d.salaryPercent}%</option>`).join('');
-    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
-    const ownerLine=isSuperAdmin()
-      ? `<p style="color:var(--muted)">Фирма: ${esc(o.ownCompanyName||(sp?sp.name:'—'))}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>` : '';
+    const mine=isMyFirmOrder(o);
+    const req=orderReqText(o);
+    const firmId=mine?(o.ownCompanyId||(myCo&&myCo.id)): (myCo&&myCo.id);
+    const drvList=firmId?fleetDriversForCompany(firmId):[];
+    const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
+    const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join('');
     return `<div class="card" style="border-color:rgba(232,93,4,.45)">
       <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
-      ${ownerLine}
-      <p style="font-weight:700;color:var(--accent)">${esc(orderContactLine(o))}</p>
-      ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
+      <p style="color:var(--muted)">Заказчик перевозки: <strong>${esc(o.ownCompanyName||'—')}</strong>${mine?' · ваш заказ':''}</p>
       <p>${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
-      <p>Исполнение: биржа · сейчас: ${esc(o.driverName||'—')} / ${esc(o.vehiclePlate||'—')}</p>
-      <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)} · всего: ${fmt(dayTotal(o))}</p>
-      <p>₽/л: ${fmt(o.fuelPricePerLiter)} · ₽/км: ${fmt(o.ratePerKmCash)} · ₽/час: ${fmt(o.ratePerHourWork)}</p>
-      <p>С НДС: ${fmt(o.rateWithVat)} · без НДС: ${fmt(o.rateWithoutVat)} · нал: ${fmt(o.rateCash)}</p>
-      <p>ГСМ л: ${fmt(m.fuelLitersCalc)} · ГСМ ₽: ${fmt(m.fuelCostCalc)} · подушка: ${fmt(m.cushion)} · прибыль: ${fmt(m.netProfit)}</p>
-      ${hasRate
-        ? `<p style="color:var(--accent);font-weight:700">Нал (база ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽ · % водителя после назначения</p>`
-        : `<p class="rate-missing">Ставка не заполнена</p>`}
-      <label style="margin-top:8px">Назначить водителя парка${o.ownCompanyName?` «${esc(o.ownCompanyName)}»`:''}</label>
-      <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей у фирмы —</option>`}</select>
-      <label>Авто парка</label>
-      <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет авто у фирмы —</option>`}</select>
-      <div class="row" style="margin-top:8px">
-        <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
-        <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
-        <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка / ставки</button>
-      </div>
+      <p><strong>ТС нужно:</strong> ${esc(req||'не указано')}</p>
+      ${mine?`
+        <label style="margin-top:8px">Назначить своего водителя</label>
+        <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
+        <label>Своё авто (под требования)</label>
+        <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
+          <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
+          <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+        </div>
+      `:`
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="primary ex-claim" data-id="${o.id}">Забрать</button>
+          <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+        </div>
+      `}
     </div>`;
   }).join('');
-  return `${driversBlock}
-    <div class="hint" style="padding:8px 16px 0">Админ видит все данные заказа и водителей. Водитель на бирже — только маршрут и контакт.</div>
-    <div class="admin-cards">${cards}</div>`;
+  return `${hint}<div class="admin-cards">${cards}</div>`;
 }
 function renderAdmin(){
   paintAdminOwnerFilters();
@@ -3175,6 +3387,7 @@ function renderAdmin(){
     $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
     document.querySelectorAll('#admin-list .ex-unpub').forEach(b=>b.onclick=()=>unpublishFromExchange(b.dataset.id));
+    document.querySelectorAll('#admin-list .ex-claim').forEach(b=>b.onclick=()=>openClaimExchange(b.dataset.id));
     document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
     return;
   }
@@ -3201,9 +3414,11 @@ function renderAdmin(){
       ${ownerLine}
       ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
       <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
+      ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
       <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
+      ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
       ${orderScheduleLines(o, false)}
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
       ${hasRate
@@ -3212,6 +3427,7 @@ function renderAdmin(){
       <div class="row" style="margin-top:8px">
         <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
         ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
+        ${!onEx && !o.closedAt && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:''}
         ${!o.closedAt&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
       </div>
     </div>`;
@@ -3234,6 +3450,10 @@ function renderAdmin(){
     state.adminFilter='exchange';
     document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x.dataset.filter==='exchange'));
     renderAdmin();
+  });
+  document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    publishToExchange(b.dataset.id);
   });
   document.querySelectorAll('#admin-list .cancel-order').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
@@ -3298,7 +3518,9 @@ let createDay=1;
 function bindAdminCreate(){
   $('admin-new').onclick=()=>{
     if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own'; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own';
+    ['create-req-pay','create-req-l','create-req-w','create-req-h'].forEach(id=>{ if($(id)) $(id).value=''; });
+    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
@@ -3360,6 +3582,16 @@ function saveDispatcherOrder(){
     plate='—';
     driverPercentVal=0;
   }
+  const reqs=readOrderRequirementsFromCreate();
+  if(mode==='exchange' && !(reqs.reqPayloadTons>0)){
+    $('create-error').textContent='Для биржи укажите грузоподъёмность (т) в требованиях к ТС'; return;
+  }
+  if(mode==='own'){
+    const veh=fleetVehiclesForCompany(ownCo.id).find(v=>v.plate===plate);
+    if(veh && !vehicleFitsOrder(veh, reqs)){
+      $('create-error').textContent='Выбранное авто меньше требований к ТС'; return;
+    }
+  }
   state.seq+=1;
   if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
   const orderSpaceId=ownCo.spaceId || currentAdmin.spaceId || null;
@@ -3381,7 +3613,14 @@ function saveDispatcherOrder(){
     routePoints:defaultRoutePoints(load,unload), startOdometer:null,
     driverPercent:driverPercentVal,
     executorType:mode, onExchange,
-    carrierCompanyId, carrierDriverId, carrierVehicleId, carrierCompanyName
+    carrierCompanyId, carrierDriverId, carrierVehicleId, carrierCompanyName,
+    reqPayloadTons:reqs.reqPayloadTons,
+    reqLengthM:reqs.reqLengthM,
+    reqWidthM:reqs.reqWidthM,
+    reqHeightM:reqs.reqHeightM,
+    transportApp:null,
+    partnerSpaceId:null,
+    executorAdminId:null
   };
   ensureRoutePoints(order);
   applyOrderSchedule(order);
@@ -3487,9 +3726,22 @@ function openDetail(id){
     <h2>Заявка №${o.sequentialNumber}</h2>
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
     <div class="hint" style="color:var(--accent)">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС считаются от нал.</div>
+    ${o.transportApp?`<div class="claim-box">
+      <h3>Договор‑заявка подписана</h3>
+      <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
+      <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}</p>
+      <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
+    </div>`:''}
     <div class="field-block">
       <label for="d-own-company">От нашей фирмы</label>
       <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
+      <label>Требования к ТС (т / Д×Ш×В)</label>
+      <div class="row">
+        <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" style="flex:0 0 64px;text-align:center" />
+        <input id="d-req-l" inputmode="decimal" placeholder="Д, м" value="${o.reqLengthM??''}" style="flex:1;text-align:center" />
+        <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
+        <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
+      </div>
       <label for="d-customer">Заказчик</label>
       <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
       <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
@@ -3628,9 +3880,13 @@ function openDetail(id){
     order.customer=($('d-customer').value||'').trim();
     const ownSel=findCompanyById((($('d-own-company')||{}).value)||'');
     if(ownSel){ order.ownCompanyId=ownSel.id; order.ownCompanyName=ownSel.name; }
+    order.reqPayloadTons=numOrNull(($('d-req-pay')||{}).value);
+    order.reqLengthM=numOrNull(($('d-req-l')||{}).value);
+    order.reqWidthM=numOrNull(($('d-req-w')||{}).value);
+    order.reqHeightM=numOrNull(($('d-req-h')||{}).value);
     const carrSel=findCompanyById((($('d-carrier-company')||{}).value)||'');
     if(carrSel){ order.carrierCompanyId=carrSel.id; order.carrierCompanyName=carrSel.name; }
-    else { order.carrierCompanyId=null; order.carrierCompanyName=''; }
+    else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
     order.contactName=(($('d-contact-name')||{}).value||'').trim();
     order.contactPhone=(($('d-contact-phone')||{}).value||'').trim();
     order.vehicleAt=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
@@ -3735,15 +3991,24 @@ function openCatalogs(){
 
   const vehicleCards=vehicles.map(({v,i})=>{
     const coName=v.companyName||(v.companyId&&(findCompanyById(v.companyId)||{}).name)||(isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'');
-    return `<div class="dense-row">
-      <div class="grow">
-        <div class="name">${esc(v.plate)}</div>
-        ${coName?`<div class="meta">${esc(coName)}</div>`:''}
+    const spec=vehicleSpecText(v);
+    return `<div class="item-card">
+      <div class="item-top">
+        <div class="item-name" title="${esc(coName||v.plate)}">${esc(v.plate)}</div>
+        <div class="item-actions" style="flex:0 0 auto;gap:4px">
+          <button type="button" class="icon-btn ok" data-save-veh="${i}" title="Сохранить">✓</button>
+          <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
+        </div>
       </div>
-      <input class="tiny" id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" title="л/100" aria-label="Расход" />
-      <span class="hint" style="margin:0">л</span>
-      <button type="button" class="icon-btn ok" data-save-veh="${i}" title="Сохранить">✓</button>
-      <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
+      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}</div>
+      <div class="veh-specs">
+        <input id="veh-pay-${i}" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" value="${v.payloadTons??''}" />
+        <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
+        <input id="veh-w-${i}" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
+        <input id="veh-h-${i}" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
+        <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km}" />
+        <span class="hint" style="margin:0">л/100</span>
+      </div>
     </div>`;
   }).join('') || `<div class="hint">Нет авто — добавьте ниже</div>`;
 
@@ -3786,12 +4051,18 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
-      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто компании: ${esc(co.name)} — они же в заявке «+ Заказ»`:(isSuperAdmin()?'Авто привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</div>
+      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто «${esc(co.name)}»: тоннаж и габариты нужны для биржи`:(isSuperAdmin()?'Авто привязаны к фирме админа':'Сначала нужна ваша фирма'); })()}</div>
       <div class="cat-quick">
         <div class="row">
           <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
-          <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 64px;text-align:center" />
+          <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 56px;text-align:center" />
           <button type="button" class="icon-btn ok" id="own-veh-add" title="Добавить">+</button>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <input id="own-veh-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность" style="flex:0 0 56px;text-align:center" />
+          <input id="own-veh-l" inputmode="decimal" placeholder="Д, м" style="flex:1;text-align:center" />
+          <input id="own-veh-w" inputmode="decimal" placeholder="Ш, м" style="flex:1;text-align:center" />
+          <input id="own-veh-h" inputmode="decimal" placeholder="В, м" style="flex:1;text-align:center" />
         </div>
       </div>
       <div class="cat-list">${vehicleCards}</div>
@@ -3970,7 +4241,19 @@ function openCatalogs(){
     syncCustomersFromCompanies();
     persist(); openCatalogs();
   });
-  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveVeh; const v=+(($('veh-'+i).value||'').replace(',','.')); if(!(v>0)) return; state.vehicles[i].consumptionPer100Km=v; persist(); $('cat-ok').style.display='block'; });
+  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.saveVeh;
+    const v=state.vehicles[i]; if(!v) return;
+    const cons=+(($('veh-'+i).value||'').replace(',','.'));
+    if(!(cons>0)){ alert('Укажите расход л/100'); return; }
+    v.consumptionPer100Km=cons;
+    v.payloadTons=numOrNull(($('veh-pay-'+i)||{}).value);
+    v.bodyLengthM=numOrNull(($('veh-l-'+i)||{}).value);
+    v.bodyWidthM=numOrNull(($('veh-w-'+i)||{}).value);
+    v.bodyHeightM=numOrNull(($('veh-h-'+i)||{}).value);
+    bumpDataEpoch('save-vehicle');
+    persist(); flashCatOk(); openCatalogs();
+  });
   document.querySelectorAll('[data-del-veh]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.delVeh;
     const v=state.vehicles[i];
@@ -3994,8 +4277,13 @@ function openCatalogs(){
     if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
     const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase() && v.companyId===owner.companyId);
     if(exists){ alert('Такой госномер уже есть в этой фирме'); return; }
+    const payloadTons=numOrNull(($('own-veh-pay')||{}).value);
+    const bodyLengthM=numOrNull(($('own-veh-l')||{}).value);
+    const bodyWidthM=numOrNull(($('own-veh-w')||{}).value);
+    const bodyHeightM=numOrNull(($('own-veh-h')||{}).value);
+    if(!(payloadTons>0)){ alert('Укажите грузоподъёмность (т) — нужна для биржи'); return; }
     state.vehicles.push({
-      plate, consumptionPer100Km:cons,
+      plate, consumptionPer100Km:cons, payloadTons, bodyLengthM, bodyWidthM, bodyHeightM, makeModel:'',
       spaceId:owner.spaceId, companyId:owner.companyId, companyName:owner.companyName
     });
     bumpDataEpoch('add-vehicle');
