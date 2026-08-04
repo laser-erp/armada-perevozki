@@ -141,8 +141,36 @@
       width:100%;padding:7px 12px;min-height:34px;border-radius:var(--pill);border:0;
       background:var(--field);color:var(--text);font-size:16px
     }
-    .check{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;color:var(--muted);white-space:nowrap;margin:0!important;width:auto!important}
-    .check input{width:auto!important;min-height:0!important;flex:0 0 auto;accent-color:var(--accent)}
+    .check{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text);white-space:nowrap;margin:0!important;width:auto!important}
+    .check input{
+      -webkit-appearance:none;appearance:none;width:22px!important;height:22px!important;min-width:22px;min-height:22px!important;
+      margin:0;flex:0 0 auto;border:2px solid rgba(255,255,255,.55);border-radius:7px;background:rgba(0,0,0,.35);
+      accent-color:var(--accent);cursor:pointer;position:relative
+    }
+    .check input:checked{
+      background:var(--accent);border-color:var(--accent);
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.2l2.8 2.8 6.2-6.2'/%3E%3C/svg%3E");
+      background-size:14px 14px;background-position:center;background-repeat:no-repeat
+    }
+    .role-toggles{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+    .role-tog{
+      display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:44px;border-radius:14px;cursor:pointer;
+      background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.22);color:var(--text);margin:0!important;width:100%!important;
+      font-size:.88rem;font-weight:700;user-select:none;transition:background .12s,border-color .12s,box-shadow .12s
+    }
+    .role-tog input{
+      -webkit-appearance:none;appearance:none;width:24px!important;height:24px!important;min-width:24px;min-height:24px!important;
+      margin:0;flex:0 0 auto;border:2.5px solid rgba(255,255,255,.65);border-radius:8px;background:rgba(0,0,0,.4);cursor:pointer
+    }
+    .role-tog input:checked{
+      background:var(--accent);border-color:#fff;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.2l2.8 2.8 6.2-6.2'/%3E%3C/svg%3E");
+      background-size:15px 15px;background-position:center;background-repeat:no-repeat
+    }
+    .role-tog:has(input:checked){
+      background:rgba(230,26,31,.22);border-color:var(--accent);box-shadow:inset 0 0 0 1px rgba(230,26,31,.35)
+    }
+    .role-tog .role-sub{display:block;font-size:.68rem;font-weight:600;color:var(--muted);margin-top:1px}
     .dense-row{
       display:flex;align-items:center;gap:5px;padding:5px 7px;min-height:40px;
       background:rgba(46,46,46,.94);border-radius:18px;border:1px solid rgba(255,255,255,.04);
@@ -407,7 +435,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-round-compact";
+const APP_BUILD="2026-08-04-role-toggles";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3534,9 +3562,12 @@ function openCatalogs(){
         <button type="button" class="icon-btn" id="co-cancel" title="Закрыть">×</button>
       </div>
       <label>Название</label><input id="co-name" value="${esc(c.name)}" />
-      <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/> Наша фирма (договоры / заявки)</label>
-      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
-      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
+      <div class="hint" style="margin:6px 0 0">Роли контрагента — можно несколько</div>
+      <div class="role-toggles">
+        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/><span>Наша фирма<span class="role-sub">договоры и заявки от нас</span></span></label>
+        <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/><span>Заказчик<span class="role-sub">кто заказывает перевозку</span></span></label>
+        <label class="role-tog"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/><span>Перевозчик<span class="role-sub">сторонняя компания с ТС</span></span></label>
+      </div>
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>
       <div id="co-contacts"></div>
@@ -3567,7 +3598,7 @@ function openCatalogs(){
           <input data-cn="${i}" placeholder="ФИО" value="${esc(p.name)}" />
           <input data-ct="${i}" placeholder="Должность" value="${esc(p.title||'')}" />
           <input data-cp="${i}" inputmode="tel" placeholder="Телефон" value="${esc(contactPhone(p))}" />
-          <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-cprim="${i}" ${p.isPrimary?'checked':''}/> Основной</label>
+          <label class="check"><input type="checkbox" data-cprim="${i}" ${p.isPrimary?'checked':''}/> Основной</label>
           <button type="button" class="secondary" data-cdel="${i}">Удалить контакт</button>
         </div>`).join('')||`<div class="hint">Нет контактов</div>`;
       document.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{ contacts.splice(+b.dataset.cdel,1); paintContacts(); });
