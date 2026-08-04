@@ -912,23 +912,12 @@ final class ChatViewModel: ObservableObject {
         shift.lastOdometerPoint = parkingOrNextOdometer
         store.attachOrder(order, to: shift.id)
 
-        var fuelNote = ""
-        if !refueled, let price = order.fuelPricePerLiter {
-            fuelNote = "\nТопливо: \(formatDecimal(price)) ₽/л (без заправки)"
-        }
-        if let afterFuel {
-            fuelNote += "\nОстаток топлива: \(formatDecimal(afterFuel)) л"
-            if let tripKm {
-                let used = OrderFinance.round2(OrderFinance.fuelLiters(km: tripKm, consumptionPer100: cons))
-                fuelNote += " (расход \(formatDecimal(used)) л)"
-            }
-        }
+        // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
         append(
             .bot,
             """
             Заказ №\(order.sequentialNumber) закрыт.
             Одометр окончания: \(endOdo)
-            До стоянки / след. заказа: \(order.emptyKmAfter ?? 0) км\(fuelNote)
             ЗП по заказу появится в «Заявки» после расчёта администратором.
             """
         )
