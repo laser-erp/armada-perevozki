@@ -440,7 +440,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-admin-session";
+const APP_BUILD="2026-08-04-own-company-fleet";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -676,11 +676,53 @@ function normalizeSpace(s){
     director:String(s.director||'').trim(),
     adminId:s.adminId||null,
     adminName:String(s.adminName||'').trim(),
+    ownCompanyId:s.ownCompanyId||null,
     createdAt:s.createdAt||new Date().toISOString()
   };
 }
 function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
 function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
+/** «Наша фирма» пространства — у каждого админа своя. */
+function ensureOwnCompanyForSpace(space){
+  if(!space) return null;
+  if(space.ownCompanyId){
+    const existing=findCompanyById(space.ownCompanyId);
+    if(existing && companyHasRole(existing,'own')){
+      if(!existing.spaceId) existing.spaceId=space.id;
+      return existing;
+    }
+  }
+  let co=(state.companies||[]).find(c=>c.spaceId===space.id && companyHasRole(c,'own'));
+  if(!co){
+    co=(state.companies||[]).find(c=>companyHasRole(c,'own') && (c.name||'').trim().toLowerCase()===(space.name||'').trim().toLowerCase());
+  }
+  if(!co){
+    co=upsertCompany({
+      name:space.name, roles:['own'], note:space.inn?`ИНН ${space.inn}`:'',
+      contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
+      spaceId:space.id, inn:space.inn, ogrn:space.ogrn, kpp:space.kpp, address:space.address
+    });
+  } else {
+    co.spaceId=space.id;
+    if(!companyHasRole(co,'own')) co.roles.push('own');
+    upsertCompany(co);
+  }
+  if(co) space.ownCompanyId=co.id;
+  return co||null;
+}
+function ownCompanyForSpaceId(spaceId){
+  const sp=findSpaceById(spaceId);
+  return sp?ensureOwnCompanyForSpace(sp):null;
+}
+function ownCompanyForAdminId(adminId){
+  const adm=(state.admins||[]).find(a=>a.id===adminId);
+  if(!adm||!adm.spaceId) return null;
+  return ownCompanyForSpaceId(adm.spaceId);
+}
+function currentOwnCompany(){
+  if(!currentAdmin) return null;
+  return ownCompanyForAdminId(currentAdmin.id) || ownCompanyForSpaceId(currentSpaceId());
+}
 function createSpaceForAdmin(admin, firm){
   const space=normalizeSpace({
     id:uuid(),
@@ -696,16 +738,10 @@ function createSpaceForAdmin(admin, firm){
   });
   state.spaces=(state.spaces||[]).concat([space]);
   admin.spaceId=space.id;
-  // наша фирма в справочнике компаний — в этом пространстве
-  const co=upsertCompany({
-    name:space.name, roles:['own'], note:space.inn?`ИНН ${space.inn}`:'',
-    contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
-    spaceId:space.id, inn:space.inn, ogrn:space.ogrn, kpp:space.kpp, address:space.address
-  });
-  if(co) space.ownCompanyId=co.id;
+  ensureOwnCompanyForSpace(space);
   return space;
 }
-/** У каждого админа — пространство фирмы; сущности без spaceId привязываем. */
+/** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
 function migrateSpaces(){
   state.settings=Object.assign({dadataToken:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
@@ -717,29 +753,42 @@ function migrateSpaces(){
     createSpaceForAdmin(a, {name:defaultFirmNameForAdmin(a.name)});
     changed=true;
   });
+  (state.spaces||[]).forEach(sp=>{
+    const before=sp.ownCompanyId;
+    ensureOwnCompanyForSpace(sp);
+    if(sp.ownCompanyId!==before) changed=true;
+  });
   const superAdm=(state.admins||[]).find(a=>a.isSuper);
   const fallbackSpace=superAdm&&superAdm.spaceId;
+  (state.companies||[]).forEach(c=>{
+    if(c.spaceId) return;
+    const nm=(c.name||'').toLowerCase();
+    const hit=(state.spaces||[]).find(s=>(s.name||'').toLowerCase()===nm);
+    if(hit){ c.spaceId=hit.id; changed=true; }
+  });
   (state.drivers||[]).forEach(d=>{
-    if(d.spaceId) return;
-    const adm=(state.admins||[]).find(x=>x.id===d.ownerAdminId);
-    if(adm&&adm.spaceId){ d.spaceId=adm.spaceId; changed=true; }
-    else if(fallbackSpace){ d.spaceId=fallbackSpace; changed=true; }
+    if(!d.spaceId){
+      const adm=(state.admins||[]).find(x=>x.id===d.ownerAdminId);
+      if(adm&&adm.spaceId){ d.spaceId=adm.spaceId; changed=true; }
+      else if(fallbackSpace){ d.spaceId=fallbackSpace; changed=true; }
+    }
+    if(!d.companyId && d.spaceId){
+      const co=ownCompanyForSpaceId(d.spaceId);
+      if(co){ d.companyId=co.id; d.companyName=co.name; changed=true; }
+    }
   });
   (state.vehicles||[]).forEach(v=>{
-    if(v.spaceId) return;
-    if(fallbackSpace){ v.spaceId=fallbackSpace; changed=true; }
+    if(!v.spaceId && fallbackSpace){ v.spaceId=fallbackSpace; changed=true; }
+    if(!v.companyId && v.spaceId){
+      const co=ownCompanyForSpaceId(v.spaceId);
+      if(co){ v.companyId=co.id; v.companyName=co.name; changed=true; }
+    }
   });
   (state.orders||[]).forEach(o=>{
     if(o.spaceId) return;
     const adm=(state.admins||[]).find(x=>x.id===o.ownerAdminId);
     if(adm&&adm.spaceId){ o.spaceId=adm.spaceId; changed=true; }
     else if(fallbackSpace){ o.spaceId=fallbackSpace; changed=true; }
-  });
-  (state.companies||[]).forEach(c=>{
-    if(c.spaceId) return;
-    const nm=(c.name||'').toLowerCase();
-    const hit=(state.spaces||[]).find(s=>(s.name||'').toLowerCase()===nm);
-    if(hit){ c.spaceId=hit.id; changed=true; }
   });
   return changed;
 }
@@ -1133,12 +1182,16 @@ function matchesOwnerFilter(o){
 function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
   if(!currentAdmin) return [];
+  const co=currentOwnCompany();
+  if(co) return (state.drivers||[]).filter(d=>d.companyId===co.id || (!d.companyId && (d.spaceId===currentSpaceId() || d.ownerAdminId===currentAdmin.id)));
   const sid=currentSpaceId();
   if(sid) return (state.drivers||[]).filter(d=>d.spaceId===sid || d.ownerAdminId===currentAdmin.id);
   return driversOwnedByAdminId(currentAdmin.id);
 }
 function myCatalogVehicles(){
   if(isSuperAdmin()) return state.vehicles||[];
+  const co=currentOwnCompany();
+  if(co) return (state.vehicles||[]).filter(v=>v.companyId===co.id || (!v.companyId && (!v.spaceId || v.spaceId===currentSpaceId())));
   const sid=currentSpaceId();
   if(!sid) return state.vehicles||[];
   return (state.vehicles||[]).filter(v=>!v.spaceId || v.spaceId===sid);
@@ -1150,9 +1203,21 @@ function adminOwnerOptionsHtml(selectedId){
 }
 function resolveAdminOwner(adminId){
   const adm=(state.admins||[]).find(a=>a.id===adminId);
-  if(adm) return {ownerAdminId:adm.id, ownerAdminName:adm.name, spaceId:adm.spaceId||null};
-  if(currentAdmin) return {ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name, spaceId:currentAdmin.spaceId||null};
-  return {ownerAdminId:null, ownerAdminName:null, spaceId:null};
+  if(adm){
+    const co=ownCompanyForAdminId(adm.id);
+    return {
+      ownerAdminId:adm.id, ownerAdminName:adm.name, spaceId:adm.spaceId||null,
+      companyId:co?co.id:null, companyName:co?co.name:null
+    };
+  }
+  if(currentAdmin){
+    const co=currentOwnCompany();
+    return {
+      ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name, spaceId:currentAdmin.spaceId||null,
+      companyId:co?co.id:null, companyName:co?co.name:null
+    };
+  }
+  return {ownerAdminId:null, ownerAdminName:null, spaceId:null, companyId:null, companyName:null};
 }
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
@@ -1491,7 +1556,9 @@ function migrateCompanies(){
     phone:String(d.phone||'').trim(),
     ownerAdminId:d.ownerAdminId||null,
     ownerAdminName:d.ownerAdminName||null,
-    spaceId:d.spaceId||null
+    spaceId:d.spaceId||null,
+    companyId:d.companyId||null,
+    companyName:d.companyName||null
   }));
   if(!state.drivers.length) state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
   DEFAULT_DRIVERS.forEach(def=>{
@@ -1501,7 +1568,9 @@ function migrateCompanies(){
   state.vehicles=(state.vehicles||[]).map(v=>({
     plate:String(v.plate||'').trim(),
     consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
-    spaceId:v.spaceId||null
+    spaceId:v.spaceId||null,
+    companyId:v.companyId||null,
+    companyName:v.companyName||null
   })).filter(v=>v.plate);
   if(!state.vehicles.length) state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
   DEFAULT_VEHICLES.forEach(def=>{
@@ -3448,8 +3517,19 @@ function flashCatOk(msg){
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
   const companies=(state.companies||[]).filter(companyInMySpace);
-  const drivers=(state.drivers||[]).map((d,i)=>({d,i})).filter(({d})=>isSuperAdmin() || (currentAdmin && (d.spaceId===currentAdmin.spaceId || d.ownerAdminId===currentAdmin.id)));
-  const vehicles=(state.vehicles||[]).map((v,i)=>({v,i})).filter(({v})=>isSuperAdmin() || !currentAdmin || !v.spaceId || v.spaceId===currentAdmin.spaceId);
+  const myCo=currentOwnCompany();
+  const drivers=(state.drivers||[]).map((d,i)=>({d,i})).filter(({d})=>{
+    if(isSuperAdmin()) return true;
+    if(!currentAdmin) return false;
+    if(myCo && d.companyId===myCo.id) return true;
+    return d.spaceId===currentAdmin.spaceId || d.ownerAdminId===currentAdmin.id;
+  });
+  const vehicles=(state.vehicles||[]).map((v,i)=>({v,i})).filter(({v})=>{
+    if(isSuperAdmin()) return true;
+    if(!currentAdmin) return false;
+    if(myCo && v.companyId===myCo.id) return true;
+    return !v.spaceId || v.spaceId===currentAdmin.spaceId;
+  });
   const companyCards=companies.map(c=>{
     const roles=roleLabels(c);
     const chips=[
@@ -3474,9 +3554,10 @@ function openCatalogs(){
   }).join('') || `<div class="hint">Пока пусто — нажмите «+ Компания»</div>`;
 
   const driverCards=drivers.map(({d,i})=>{
+    const coName=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'';
     return `<div class="drv-card">
       <div class="drv-top">
-        <div class="drv-name">${esc(d.name)}</div>
+        <div class="drv-name">${esc(d.name)}${coName?`<div class="meta" style="font-weight:600">${esc(coName)}</div>`:''}</div>
         <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="Процент" />
         <span class="hint" style="margin:0">%</span>
         <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
@@ -3485,17 +3566,17 @@ function openCatalogs(){
       </div>
       <div class="drv-bot">
         <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
-        ${isSuperAdmin()?`<select class="slim" id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`:''}
+        ${isSuperAdmin()?`<select class="slim" id="drv-owner-${i}" title="Админ / фирма">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`:''}
       </div>
     </div>`;
   }).join('') || `<div class="hint">Нет водителей — добавьте ниже</div>`;
 
   const vehicleCards=vehicles.map(({v,i})=>{
-    const spName=isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'';
+    const coName=v.companyName||(v.companyId&&(findCompanyById(v.companyId)||{}).name)||(isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'');
     return `<div class="dense-row">
       <div class="grow">
         <div class="name">${esc(v.plate)}</div>
-        ${spName?`<div class="meta">${esc(spName)}</div>`:''}
+        ${coName?`<div class="meta">${esc(coName)}</div>`:''}
       </div>
       <input class="tiny" id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" title="л/100" aria-label="Расход" />
       <span class="hint" style="margin:0">л</span>
@@ -3529,6 +3610,7 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='drivers'?'on':''}" data-cat-panel="drivers">
+      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Водители компании: ${esc(co.name)}`:(isSuperAdmin()?'Водители привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</div>
       <div class="cat-quick">
         <div class="row">
           <input id="own-drv-name" placeholder="ФИО водителя" style="flex:1.5" />
@@ -3539,18 +3621,20 @@ function openCatalogs(){
           <label class="check"><input type="checkbox" id="own-drv-ex"/> Биржа</label>
           <button type="button" class="primary icon-btn ok" id="own-drv-add" title="Добавить" style="min-width:40px">+</button>
         </div>
-        ${isSuperAdmin()?`<select id="own-drv-owner">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
+        ${isSuperAdmin()?`<select id="own-drv-owner" title="В чью фирму добавить">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
       </div>
       <div class="cat-list">${driverCards}</div>
     </div>
 
     <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
+      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто компании: ${esc(co.name)}`:(isSuperAdmin()?'Авто привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</div>
       <div class="cat-quick">
         <div class="row">
           <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
           <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 64px;text-align:center" />
           <button type="button" class="primary icon-btn ok" id="own-veh-add" title="Добавить" style="min-width:40px">+</button>
         </div>
+        ${isSuperAdmin()?`<select id="own-veh-owner" title="В чью фирму добавить">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
       </div>
       <div class="cat-list">${vehicleCards}</div>
     </div>
@@ -3738,22 +3822,34 @@ function openCatalogs(){
     persist(); openCatalogs();
   });
   $('own-veh-add')&&($('own-veh-add').onclick=()=>{
+    if(!currentAdmin){ alert('Войдите как администратор'); return; }
     const plate=(($('own-veh-plate')||{}).value||'').trim();
     let cons=+((($('own-veh-cons')||{}).value||'').replace(',','.'));
     if(!plate){ alert('Укажите госномер'); return; }
     if(!(cons>0)) cons=20;
     const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase());
     if(exists){ alert('Такой госномер уже есть'); return; }
-    state.vehicles.push({plate, consumptionPer100Km:cons, spaceId:currentSpaceId()});
+    let owner;
+    if(isSuperAdmin()){
+      const ownerId=(($('own-veh-owner')||{}).value||currentAdmin.id||'').trim();
+      owner=resolveAdminOwner(ownerId);
+    } else {
+      owner=resolveAdminOwner(currentAdmin.id);
+    }
+    if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
+    state.vehicles.push({
+      plate, consumptionPer100Km:cons,
+      spaceId:owner.spaceId, companyId:owner.companyId, companyName:owner.companyName
+    });
     persist(); openCatalogs();
-    $('cat-ok').style.display='block';
+    flashCatOk();
   });
-  document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); $('cat-ok').style.display='block'; });
+  document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); flashCatOk(); });
   document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveDrvMeta;
     const d=state.drivers[i];
     if(!d) return;
-    if(!isSuperAdmin() && (!currentAdmin || d.ownerAdminId!==currentAdmin.id)){ alert('Чужой водитель — нет доступа'); return; }
+    if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     state.drivers[i].phone=(($('drv-phone-'+i)||{}).value||'').trim();
     state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
     const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
@@ -3761,14 +3857,17 @@ function openCatalogs(){
       const ownerId=(($('drv-owner-'+i)||{}).value||'').trim();
       if(!ownerId){ alert('Выберите админа'); return; }
       Object.assign(state.drivers[i], resolveAdminOwner(ownerId));
+    } else if(!state.drivers[i].companyId){
+      const co=currentOwnCompany();
+      if(co){ state.drivers[i].companyId=co.id; state.drivers[i].companyName=co.name; state.drivers[i].spaceId=currentSpaceId(); }
     }
-    persist(); $('cat-ok').style.display='block';
+    persist(); flashCatOk();
   });
   document.querySelectorAll('[data-del-drv]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.delDrv;
     const d=state.drivers[i];
     if(!d) return;
-    if(!isSuperAdmin() && (!currentAdmin || d.ownerAdminId!==currentAdmin.id)){ alert('Чужой водитель — нет доступа'); return; }
+    if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     const name=d.name||'';
     if(!confirm(`Удалить водителя ${name}?`)) return;
     if(state.drivers.length<=1){ alert('Должен остаться хотя бы один водитель'); return; }
@@ -3788,18 +3887,20 @@ function openCatalogs(){
     let owner;
     if(isSuperAdmin()){
       const ownerId=(($('own-drv-owner')||{}).value||'').trim();
-      if(!ownerId){ alert('Выберите админа, которому принадлежит водитель'); return; }
+      if(!ownerId){ alert('Выберите админа / фирму'); return; }
       owner=resolveAdminOwner(ownerId);
     } else {
-      owner={ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name, spaceId:currentAdmin.spaceId||null};
+      owner=resolveAdminOwner(currentAdmin.id);
     }
+    if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
     state.drivers.push({
       name, salaryPercent:pct, phone, exchangeEnabled,
       ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
-      spaceId:owner.spaceId||null
+      spaceId:owner.spaceId||null,
+      companyId:owner.companyId, companyName:owner.companyName
     });
     persist(); openCatalogs();
-    $('cat-ok').style.display='block';
+    flashCatOk();
   });
   $('fin-save').onclick=()=>{
     let markup=+(($('fin-markup').value||'').replace(',','.')); if(Number.isNaN(markup)) markup=15;
@@ -3810,7 +3911,7 @@ function openCatalogs(){
     let ph=+(($('fin-perhour').value||'').replace(',','.')); state.finance.defaultRatePerHourWork=(ph>0)?ph:0;
     let pk=+(($('fin-perkm').value||'').replace(',','.')); state.finance.defaultRatePerKmCash=(pk>0)?pk:80;
     persist();
-    $('cat-ok').style.display='block';
+    flashCatOk();
   };
 }
 
