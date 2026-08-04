@@ -58,6 +58,10 @@
     .filters{display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap}
     .filters button{border:0;border-radius:8px;padding:7px 10px;min-height:36px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.78rem}
     .filters button.on{background:var(--accent);color:#fff}
+    #admin-owner-filters{display:none;border-top:1px solid rgba(255,255,255,.06);padding-top:4px}
+    #admin-owner-filters.show{display:flex}
+    #admin-owner-filters button{font-size:.72rem;padding:6px 9px;min-height:32px;background:rgba(255,255,255,.06)}
+    #admin-owner-filters button.on{background:var(--text);color:#111}
     .table-wrap{flex:1;overflow:auto;padding:0 0 12px;-webkit-overflow-scrolling:touch}
     table.admin{border-collapse:collapse;min-width:1800px;font-size:11px}
     table.admin th,table.admin td{border:1px solid rgba(255,255,255,.08);padding:6px 5px;text-align:left;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
@@ -203,6 +207,7 @@
       <button data-filter="progress">В работе</button>
       <button data-filter="closed">Закрыт</button>
     </div>
+    <div class="filters" id="admin-owner-filters" aria-label="Фильтр по администратору"></div>
     <div class="table-wrap" id="admin-list"></div>
   </div>
 
@@ -343,7 +348,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-sync-guard";
+const APP_BUILD="2026-08-04-admin-own-orders";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -394,7 +399,7 @@ const state={
   adminLogins:Array.isArray(saved.adminLogins)?saved.adminLogins:[],
   adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
   dataEpoch:Number(saved.dataEpoch)||0,
-  light:{}, draft:{}, error:"", adminFilter:"all", detailId:null
+  light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null
 };
 let pbRecordId=null;
 let persistTimer=null;
@@ -836,6 +841,45 @@ function mergeAdminAuthFromRemote(p){
   state.adminPresence=[...byDev.values()];
 }
 function isSuperAdmin(){ return !!(currentAdmin&&currentAdmin.isSuper); }
+/** Доступ: супер — любой заказ; обычный админ — только созданные им. */
+function canAdminSeeOrder(o){
+  if(!o || !currentAdmin) return false;
+  if(isSuperAdmin()) return true;
+  return !!o.ownerAdminId && o.ownerAdminId===currentAdmin.id;
+}
+/** Фильтр списка супер-админа по владельцу (не влияет на права). */
+function matchesOwnerFilter(o){
+  if(!isSuperAdmin()) return true;
+  const f=state.adminOwnerFilter||'all';
+  if(f==='all') return true;
+  if(f==='_none') return !o.ownerAdminId;
+  return o.ownerAdminId===f;
+}
+function paintAdminOwnerFilters(){
+  const box=$('admin-owner-filters');
+  if(!box) return;
+  if(!isSuperAdmin()){
+    box.classList.remove('show');
+    box.innerHTML='';
+    return;
+  }
+  box.classList.add('show');
+  const admins=(state.admins||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const cur=state.adminOwnerFilter||'all';
+  const btns=[
+    `<button type="button" data-owner="all" class="${cur==='all'?'on':''}">Все админы</button>`,
+    ...admins.map(a=>`<button type="button" data-owner="${esc(a.id)}" class="${cur===a.id?'on':''}">${esc(a.name)}</button>`),
+    `<button type="button" data-owner="_none" class="${cur==='_none'?'on':''}">Без владельца</button>`
+  ];
+  box.innerHTML=btns.join('');
+  box.querySelectorAll('button[data-owner]').forEach(b=>{
+    b.onclick=()=>{
+      state.adminOwnerFilter=b.dataset.owner||'all';
+      paintAdminOwnerFilters();
+      renderAdmin();
+    };
+  });
+}
 function fillAdminLoginSelect(){
   migrateAdmins();
   const sel=$('admin-name-select'); if(!sel) return;
@@ -891,6 +935,7 @@ function updateAdminChrome(){
   if(act) act.style.display=isSuperAdmin()?'':'none';
   const title=$('admin-title');
   if(title) title.textContent=currentAdmin?`Заявки · ${currentAdmin.name}`:'Заявки';
+  paintAdminOwnerFilters();
 }
 function loginAdmin(){
   migrateAdmins();
@@ -1323,6 +1368,7 @@ function statusText(o){
 }
 function cancelOrder(id, reason){
   const o=state.orders.find(x=>x.id===id); if(!o) return false;
+  if(currentAdmin && !canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return false; }
   if(o.closedAt && !o.cancelledAt){ alert('Заказ уже закрыт'); return false; }
   if(o.startOdometer!=null && !o.cancelledAt){
     if(!confirm('Заказ уже в работе. Точно отменить?')) return false;
@@ -2440,6 +2486,8 @@ function filteredOrders(){
   return allOrders().filter(o=>{
     // отменённые не показываем нигде
     if(o.cancelledAt || (o.closedAt && o.cancelReason)) return false;
+    // обычный админ — только свои; супер — все, плюс фильтр по админу
+    if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return false;
     if(state.adminFilter==='exchange') return !o.closedAt && !!o.onExchange && o.startOdometer==null;
     if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null && !o.onExchange && o.driverName && o.driverName!=='—' && o.driverName!=='-' && o.driverName!=='Биржа';
     if(state.adminFilter==='progress') return !o.closedAt && o.startOdometer!=null;
@@ -2450,12 +2498,14 @@ function filteredOrders(){
 function unpublishFromExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || !o.onExchange) return;
+  if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return; }
   cancelOrder(id, 'Снят с биржи');
   renderAdmin();
 }
 function assignExchangeToOwn(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
+  if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return; }
   const driver=(($('ex-drv-'+id)||{}).value||'').trim();
   const plate=(($('ex-plate-'+id)||{}).value||'').trim();
   if(!driver){ alert('Выберите водителя'); return; }
@@ -2483,9 +2533,12 @@ function renderAdminExchangeBoard(orders){
     const m=metrics(o);
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
+    const ownerLine=isSuperAdmin()
+      ? `<p style="color:var(--muted)">Админ: ${esc(o.ownerAdminName||'—')}</p>` : '';
     return `<div class="card" style="border-color:rgba(232,93,4,.45)">
       <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
+      ${ownerLine}
       <p style="font-weight:700;color:var(--accent)">${esc(orderContactLine(o))}</p>
       ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
       <p>${esc(routeText(o))}</p>
@@ -2514,6 +2567,7 @@ function renderAdminExchangeBoard(orders){
     <div class="admin-cards">${cards}</div>`;
 }
 function renderAdmin(){
+  paintAdminOwnerFilters();
   const orders=filteredOrders();
   if(state.adminFilter==='exchange'){
     $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
@@ -2522,16 +2576,26 @@ function renderAdmin(){
     document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
     return;
   }
-  if(!orders.length){ $('admin-list').innerHTML=`<div class="empty">Пока нет заявок. Нажмите + Заказ</div>`; return; }
-  const exCount=exchangeOrders().length;
+  if(!orders.length){
+    const emptyHint=isSuperAdmin()
+      ? 'Пока нет заявок. Нажмите + Заказ'
+      : 'У вас пока нет своих заявок. Нажмите + Заказ — чужие заказы других админов здесь не показываются';
+    $('admin-list').innerHTML=`<div class="empty">${emptyHint}</div>`;
+    return;
+  }
+  const exCount=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.closedAt && o.onExchange && o.startOdometer==null).length;
   const cards=orders.map(o=>{
     const m=metrics(o);
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
     const onEx=!!o.onExchange && !o.closedAt && o.startOdometer==null;
+    const ownerLine=isSuperAdmin() && o.ownerAdminName
+      ? `<p style="color:var(--muted)">Админ: ${esc(o.ownerAdminName)}</p>`
+      : (isSuperAdmin() && !o.ownerAdminId ? `<p style="color:var(--muted)">Админ: —</p>` : '');
     return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''}>
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
+      ${ownerLine}
       ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
       <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
@@ -2653,9 +2717,12 @@ function saveDispatcherOrder(){
   }
   state.seq+=1;
   const company=upsertCompany({name:customer, roles:['customer']});
+  if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
   const order={
     id:uuid(), sequentialNumber:state.seq, dayNumber:createDay,
     createdAt:new Date().toISOString(), source:'dispatcher',
+    ownerAdminId:currentAdmin.id,
+    ownerAdminName:currentAdmin.name,
     vehiclePlate:plate, driverName:driver, customer,
     customerId:company?company.id:null,
     ownCompanyId:ownCo.id,
@@ -2676,6 +2743,7 @@ function saveDispatcherOrder(){
 function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
+  if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
   const m=metrics(o);
   let editPoints=ensureRoutePoints(o).map(p=>({...p}));
   const readPointsFromDom=()=>{
