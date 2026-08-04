@@ -348,7 +348,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-admin-driver-scope";
+const APP_BUILD="2026-08-04-super-assign-drivers";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -889,6 +889,17 @@ function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
   if(!currentAdmin) return [];
   return driversOwnedByAdminId(currentAdmin.id);
+}
+function adminOwnerOptionsHtml(selectedId){
+  const list=(state.admins||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const sel=selectedId|| (currentAdmin&&currentAdmin.id) || (list[0]&&list[0].id) || '';
+  return list.map(a=>`<option value="${esc(a.id)}" ${a.id===sel?'selected':''}>${esc(a.name)}</option>`).join('');
+}
+function resolveAdminOwner(adminId){
+  const adm=(state.admins||[]).find(a=>a.id===adminId);
+  if(adm) return {ownerAdminId:adm.id, ownerAdminName:adm.name};
+  if(currentAdmin) return {ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name};
+  return {ownerAdminId:null, ownerAdminName:null};
 }
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
@@ -3097,7 +3108,7 @@ function openCatalogs(){
     <div class="cat-list two-col">${companyCards}</div>
 
     <h3>Наши водители</h3>
-    <div class="hint">${isSuperAdmin()?'Все водители.':'Ваши водители — их заказы видны вам в заявках.'} Галочка «Биржа» — доступ к бирже.</div>
+    <div class="hint">${isSuperAdmin()?'Супер может назначить водителя любому админу.':'Ваши водители — их заказы видны вам в заявках.'} Галочка «Биржа» — доступ к бирже.</div>
     <div class="cat-compact">
       <div class="row">
         <input id="own-drv-name" placeholder="ФИО" style="flex:1.4" />
@@ -3107,20 +3118,23 @@ function openCatalogs(){
         <input id="own-drv-phone" inputmode="tel" placeholder="Телефон" style="flex:1" />
         <label class="check"><input type="checkbox" id="own-drv-ex"/> Биржа</label>
       </div>
+      ${isSuperAdmin()?`<label>Админ (владелец водителя)</label><select id="own-drv-owner">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
       <button type="button" class="primary cat-add-btn" id="own-drv-add">+ водитель</button>
     </div>
     <div class="cat-list two-col">
     ${state.drivers.map((d,i)=>{
       const mine=isSuperAdmin() || (currentAdmin && d.ownerAdminId===currentAdmin.id);
       if(!mine) return '';
-      const ownerHint=isSuperAdmin()&&d.ownerAdminName?`<div class="hint">Админ: ${esc(d.ownerAdminName)}</div>`:'';
+      const ownerSelect=isSuperAdmin()
+        ? `<label>Админ</label><select id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`
+        : '';
       return `
       <div class="item-card">
         <div class="item-top">
           <div class="item-name">${esc(d.name)}</div>
           <div class="pct-wrap"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><span>%</span></div>
         </div>
-        ${ownerHint}
+        ${ownerSelect}
         <div class="item-mid">
           <input id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
           <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
@@ -3336,6 +3350,11 @@ function openCatalogs(){
     state.drivers[i].phone=(($('drv-phone-'+i)||{}).value||'').trim();
     state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
     const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
+    if(isSuperAdmin()){
+      const ownerId=(($('drv-owner-'+i)||{}).value||'').trim();
+      if(!ownerId){ alert('Выберите админа'); return; }
+      Object.assign(state.drivers[i], resolveAdminOwner(ownerId));
+    }
     persist(); $('cat-ok').style.display='block';
   });
   document.querySelectorAll('[data-del-drv]').forEach(b=>b.onclick=()=>{
@@ -3359,9 +3378,17 @@ function openCatalogs(){
     if(Number.isNaN(pct) || pct<0) pct=30;
     const exists=state.drivers.some(d=>(d.name||'').toLowerCase()===name.toLowerCase());
     if(exists){ alert('Такой водитель уже есть'); return; }
+    let owner;
+    if(isSuperAdmin()){
+      const ownerId=(($('own-drv-owner')||{}).value||'').trim();
+      if(!ownerId){ alert('Выберите админа, которому принадлежит водитель'); return; }
+      owner=resolveAdminOwner(ownerId);
+    } else {
+      owner={ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name};
+    }
     state.drivers.push({
       name, salaryPercent:pct, phone, exchangeEnabled,
-      ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name
+      ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName
     });
     persist(); openCatalogs();
     $('cat-ok').style.display='block';
