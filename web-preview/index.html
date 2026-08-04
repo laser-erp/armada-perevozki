@@ -440,7 +440,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-driver-phone";
+const APP_BUILD="2026-08-04-admin-session";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -454,6 +454,7 @@ const RETIRED_ADMIN_NAMES=new Set(["диспетчер"]);
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
+const ADMIN_SESSION_KEY="armada_admin_session_v1";
 const PRESENCE_ONLINE_MS=90*1000;
 const PRESENCE_TICK_MS=25*1000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -1241,6 +1242,33 @@ function updateAdminChrome(){
   }
   paintAdminOwnerFilters();
 }
+function saveAdminSession(){
+  if(!currentAdmin){ try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(_){} return; }
+  try{
+    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({
+      id:currentAdmin.id, name:currentAdmin.name, isSuper:!!currentAdmin.isSuper,
+      spaceId:currentAdmin.spaceId||null, at:new Date().toISOString()
+    }));
+  }catch(_){}
+}
+function clearAdminSession(){
+  try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(_){}
+}
+/** Восстановить вход после обновления страницы (без повторного PIN). */
+function restoreAdminSession(){
+  migrateAdmins();
+  let raw=null;
+  try{ raw=JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY)||'null'); }catch(_){ raw=null; }
+  if(!raw||!raw.id) return false;
+  const adm=state.admins.find(a=>a.id===raw.id);
+  if(!adm){ clearAdminSession(); return false; }
+  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
+  saveAdminSession();
+  touchAdminPresence('admin');
+  startPresenceHeartbeat();
+  updateAdminChrome();
+  return true;
+}
 function loginAdmin(){
   migrateAdmins();
   const id=(($('admin-name-select')||{}).value||'').trim();
@@ -1249,6 +1277,7 @@ function loginAdmin(){
   if(!adm){ $('pin-error').textContent='Выберите администратора'; return; }
   if(pin!==String(adm.pin)){ $('pin-error').textContent='Неверный PIN'; return; }
   currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
+  saveAdminSession();
   pushAdminLogin('login');
   touchAdminPresence('admin');
   startPresenceHeartbeat();
@@ -1265,6 +1294,7 @@ function logoutAdmin(){
   }
   stopPresenceHeartbeat();
   currentAdmin=null;
+  clearAdminSession();
   updateAdminChrome();
   show('roles');
 }
@@ -1423,6 +1453,7 @@ function renderAdminActivity(){
       currentAdmin.isSuper=!!state.admins[i].isSuper;
       currentAdmin.name=state.admins[i].name;
       currentAdmin.spaceId=state.admins[i].spaceId||null;
+      saveAdminSession();
       updateAdminChrome();
     }
     persist(); renderAdminActivity();
@@ -3801,11 +3832,24 @@ function updateSyncHint(){
   }
   if(dirty) persist();
   updateSyncHint();
-  setTimeout(()=>{ show('roles'); updateSyncHint(); }, 700);
+  setTimeout(()=>{
+    updateSyncHint();
+    if(restoreAdminSession()){
+      show('admin');
+      renderAdmin();
+    } else {
+      show('roles');
+    }
+  }, 700);
 })();
 $('role-driver').onclick=()=>{ show('driver'); resetChat(); renderDriverBanner(); };
 $('role-admin').onclick=()=>{
   migrateAdmins();
+  if(restoreAdminSession()){
+    show('admin');
+    renderAdmin();
+    return;
+  }
   fillAdminLoginSelect();
   $('pin-input').value='';
   $('pin-error').textContent='';
