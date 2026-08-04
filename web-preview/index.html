@@ -343,7 +343,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-purge-dispatcher";
+const APP_BUILD="2026-08-04-no-super-label";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -813,7 +813,7 @@ function fillAdminLoginSelect(){
   migrateAdmins();
   const sel=$('admin-name-select'); if(!sel) return;
   const list=state.admins.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
-  sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}${a.isSuper?' · супер':''}</option>`).join('');
+  sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
 }
 function pushAdminLogin(action){
   if(!currentAdmin) return;
@@ -913,7 +913,7 @@ function renderAdminActivity(){
       ${online.length?online.map(p=>`
         <div class="item-card">
           <div class="item-top">
-            <div class="item-name">${esc(p.adminName)}${p.isSuper?' · супер':''}</div>
+            <div class="item-name">${esc(p.adminName)}</div>
             <span class="ok" style="font-size:.75rem">онлайн</span>
           </div>
           <div class="hint">Экран: ${esc(p.screen||'admin')} · ${esc(dateTime(p.lastSeen))}</div>
@@ -926,7 +926,7 @@ function renderAdminActivity(){
       ${log.length?log.map(e=>`
         <div class="item-card">
           <div class="item-top">
-            <div class="item-name">${esc(e.adminName)}${e.isSuper?' · супер':''}</div>
+            <div class="item-name">${esc(e.adminName)}</div>
             <span class="hint">${e.action==='login'?'вход':'выход'}</span>
           </div>
           <div class="hint">${esc(dateTime(e.at))}</div>
@@ -948,7 +948,7 @@ function renderAdminActivity(){
       ${admins.map((a,i)=>`
         <div class="item-card">
           <div class="item-top">
-            <div class="item-name">${esc(a.name)}${a.isSuper?' · супер':''}</div>
+            <div class="item-name">${esc(a.name)}</div>
           </div>
           <div class="item-mid">
             <input id="adm-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(a.pin)}" placeholder="PIN" />
