@@ -197,9 +197,16 @@
     }
     .drv-card .check{font-size:.65rem;gap:3px}
     .drv-card .icon-btn{min-width:28px;min-height:28px;width:28px;font-size:.78rem}
-    .cat-quick.drv-add{padding:5px;gap:4px;border-radius:14px}
-    .cat-quick.drv-add .row{gap:4px}
-    .cat-quick.drv-add input{padding:5px 8px;min-height:30px;font-size:15px}
+    .cat-quick.drv-add{padding:4px;gap:3px;border-radius:14px}
+    .cat-quick.drv-add .row{gap:3px;align-items:center}
+    .cat-quick.drv-add input{padding:5px 6px;min-height:28px;font-size:14px}
+    .cat-quick.drv-add .check{font-size:.6rem;gap:2px;flex:0 0 auto}
+    .cat-quick.drv-add .icon-btn,
+    .cat-quick.drv-add button.primary.icon-btn{
+      width:26px!important;min-width:26px!important;max-width:26px!important;
+      min-height:26px!important;height:26px!important;padding:0!important;
+      font-size:.75rem!important;flex:0 0 26px!important;line-height:1;margin:0!important
+    }
     .icon-btn{
       border:0;border-radius:var(--pill);min-width:32px;min-height:32px;width:32px;padding:0;font-weight:800;cursor:pointer;
       background:var(--field);color:var(--text);font-size:.85rem;flex:0 0 auto;line-height:1
@@ -452,7 +459,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-drivers-slim";
+const APP_BUILD="2026-08-04-drv-add-btn";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3621,7 +3628,7 @@ function openCatalogs(){
           <input class="pct" id="own-drv-pct" inputmode="decimal" value="30" placeholder="%" title="%" />
           <input id="own-drv-phone" inputmode="tel" placeholder="Тел." style="flex:1" />
           <label class="check" title="Биржа"><input type="checkbox" id="own-drv-ex"/> Б</label>
-          <button type="button" class="primary icon-btn ok" id="own-drv-add" title="Добавить">+</button>
+          <button type="button" class="icon-btn ok" id="own-drv-add" title="Добавить">+</button>
         </div>
       </div>
       <div class="cat-list">${driverCards}</div>
