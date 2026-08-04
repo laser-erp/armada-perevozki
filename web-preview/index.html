@@ -207,7 +207,7 @@
       <button data-filter="progress">В работе</button>
       <button data-filter="closed">Закрыт</button>
     </div>
-    <div class="filters" id="admin-owner-filters" aria-label="Фильтр по администратору"></div>
+    <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
     <div class="table-wrap" id="admin-list"></div>
   </div>
 
@@ -348,7 +348,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-super-assign-drivers";
+const APP_BUILD="2026-08-04-firm-spaces";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -398,13 +398,15 @@ const state={
   admins:Array.isArray(saved.admins)?saved.admins:[],
   adminLogins:Array.isArray(saved.adminLogins)?saved.adminLogins:[],
   adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
+  spaces:Array.isArray(saved.spaces)?saved.spaces:[],
+  settings:Object.assign({dadataToken:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null
 };
 let pbRecordId=null;
 let persistTimer=null;
 let syncStatus='local'; // local | syncing | ok | error
-let currentAdmin=null; // {id,name} — только в этой вкладке
+let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
@@ -502,6 +504,8 @@ function snapshot(){
     admins:state.admins,
     adminLogins:state.adminLogins,
     adminPresence:state.adminPresence,
+    spaces:state.spaces,
+    settings:state.settings,
     dataEpoch:Number(state.dataEpoch)||0,
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
@@ -523,6 +527,8 @@ function applyPayload(p){
   state.customers=Array.isArray(p.customers)?p.customers:[];
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
+  state.spaces=Array.isArray(p.spaces)?p.spaces:[];
+  state.settings=Object.assign({dadataToken:''}, state.settings||{}, p.settings||{});
   state.dataEpoch=Number(p.dataEpoch)||0;
   mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
@@ -544,6 +550,7 @@ function applyPayload(p){
   migrateCompanies();
   migrateAdmins();
   migrateDriverOwners();
+  migrateSpaces();
   purgeCancelledOrders();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -555,6 +562,135 @@ function migrateDriverOwners(){
     if(adm){ d.ownerAdminId=adm.id; d.ownerAdminName=adm.name; changed=true; }
   });
   return changed;
+}
+function defaultFirmNameForAdmin(adminName){
+  const n=(adminName||'').trim().toLowerCase();
+  if(n.includes('нечаев')) return 'ИП Нечаев А.С.';
+  if(n.includes('наволоцк')) return 'ООО «Армада»';
+  return adminName||'Фирма';
+}
+function normalizeSpace(s){
+  if(!s||typeof s!=='object') return null;
+  const id=s.id||uuid();
+  const name=String(s.name||'').trim(); if(!name) return null;
+  return {
+    id, name,
+    inn:String(s.inn||'').trim(),
+    ogrn:String(s.ogrn||'').trim(),
+    kpp:String(s.kpp||'').trim(),
+    address:String(s.address||'').trim(),
+    director:String(s.director||'').trim(),
+    adminId:s.adminId||null,
+    adminName:String(s.adminName||'').trim(),
+    createdAt:s.createdAt||new Date().toISOString()
+  };
+}
+function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
+function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
+function createSpaceForAdmin(admin, firm){
+  const space=normalizeSpace({
+    id:uuid(),
+    name:(firm&&firm.name)||defaultFirmNameForAdmin(admin.name),
+    inn:(firm&&firm.inn)||'',
+    ogrn:(firm&&firm.ogrn)||'',
+    kpp:(firm&&firm.kpp)||'',
+    address:(firm&&firm.address)||'',
+    director:(firm&&firm.director)||'',
+    adminId:admin.id,
+    adminName:admin.name,
+    createdAt:new Date().toISOString()
+  });
+  state.spaces=(state.spaces||[]).concat([space]);
+  admin.spaceId=space.id;
+  // наша фирма в справочнике компаний — в этом пространстве
+  const co=upsertCompany({
+    name:space.name, roles:['own'], note:space.inn?`ИНН ${space.inn}`:'',
+    contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
+    spaceId:space.id, inn:space.inn, ogrn:space.ogrn, kpp:space.kpp, address:space.address
+  });
+  if(co) space.ownCompanyId=co.id;
+  return space;
+}
+/** У каждого админа — пространство фирмы; сущности без spaceId привязываем. */
+function migrateSpaces(){
+  state.settings=Object.assign({dadataToken:''}, state.settings||{});
+  state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
+  let changed=false;
+  (state.admins||[]).forEach(a=>{
+    if(a.spaceId && findSpaceById(a.spaceId)) return;
+    const byAdmin=state.spaces.find(s=>s.adminId===a.id);
+    if(byAdmin){ a.spaceId=byAdmin.id; changed=true; return; }
+    createSpaceForAdmin(a, {name:defaultFirmNameForAdmin(a.name)});
+    changed=true;
+  });
+  const superAdm=(state.admins||[]).find(a=>a.isSuper);
+  const fallbackSpace=superAdm&&superAdm.spaceId;
+  (state.drivers||[]).forEach(d=>{
+    if(d.spaceId) return;
+    const adm=(state.admins||[]).find(x=>x.id===d.ownerAdminId);
+    if(adm&&adm.spaceId){ d.spaceId=adm.spaceId; changed=true; }
+    else if(fallbackSpace){ d.spaceId=fallbackSpace; changed=true; }
+  });
+  (state.vehicles||[]).forEach(v=>{
+    if(v.spaceId) return;
+    if(fallbackSpace){ v.spaceId=fallbackSpace; changed=true; }
+  });
+  (state.orders||[]).forEach(o=>{
+    if(o.spaceId) return;
+    const adm=(state.admins||[]).find(x=>x.id===o.ownerAdminId);
+    if(adm&&adm.spaceId){ o.spaceId=adm.spaceId; changed=true; }
+    else if(fallbackSpace){ o.spaceId=fallbackSpace; changed=true; }
+  });
+  (state.companies||[]).forEach(c=>{
+    if(c.spaceId) return;
+    const nm=(c.name||'').toLowerCase();
+    const hit=(state.spaces||[]).find(s=>(s.name||'').toLowerCase()===nm);
+    if(hit){ c.spaceId=hit.id; changed=true; }
+  });
+  return changed;
+}
+function isValidInn(inn){
+  const s=String(inn||'').replace(/\D/g,'');
+  if(s.length===10){
+    const n=s.split('').map(Number);
+    const c=((2*n[0]+4*n[1]+10*n[2]+3*n[3]+5*n[4]+9*n[5]+4*n[6]+6*n[7]+8*n[8])%11)%10;
+    return c===n[9];
+  }
+  if(s.length===12){
+    const n=s.split('').map(Number);
+    const c1=((7*n[0]+2*n[1]+4*n[2]+10*n[3]+3*n[4]+5*n[5]+9*n[6]+4*n[7]+6*n[8]+8*n[9])%11)%10;
+    const c2=((3*n[0]+7*n[1]+2*n[2]+4*n[3]+10*n[4]+3*n[5]+5*n[6]+9*n[7]+4*n[8]+6*n[9]+8*n[10])%11)%10;
+    return c1===n[10] && c2===n[11];
+  }
+  return false;
+}
+async function lookupPartyByInn(inn){
+  const clean=String(inn||'').replace(/\D/g,'');
+  if(!isValidInn(clean)) throw new Error('Некорректный ИНН');
+  const token=String((state.settings&&state.settings.dadataToken)||'').trim();
+  if(!token) throw new Error('Нужен токен DaData: супер → Активность → токен (бесплатно на dadata.ru)');
+  const res=await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Accept':'application/json',
+      'Authorization':'Token '+token
+    },
+    body:JSON.stringify({query:clean})
+  });
+  if(!res.ok) throw new Error('DaData: ошибка '+res.status);
+  const data=await res.json();
+  const s=(data.suggestions&&data.suggestions[0])||null;
+  if(!s||!s.data) throw new Error('По ИНН ничего не найдено');
+  const d=s.data;
+  return {
+    name:s.value||d.name?.short_with_opf||d.name?.full_with_opf||'',
+    inn:d.inn||clean,
+    ogrn:d.ogrn||'',
+    kpp:d.kpp||'',
+    address:(d.address&& (d.address.value||d.address.unrestricted_value))||'',
+    director:(d.management&&d.management.name)|| (d.fio? [d.fio.surname,d.fio.name,d.fio.patronymic].filter(Boolean).join(' '):'')
+  };
 }
 async function fetchServerState(){
   const filter=encodeURIComponent("key='main'");
@@ -702,11 +838,23 @@ function normalizeCompany(c){
     phones, contacts,
     loadingAddresses:uniqAddrs(c.loadingAddresses||[]),
     unloadingAddresses:uniqAddrs(c.unloadingAddresses||[]),
-    vehicles, drivers
+    vehicles, drivers,
+    spaceId:c.spaceId||null,
+    inn:String(c.inn||'').trim(),
+    ogrn:String(c.ogrn||'').trim(),
+    kpp:String(c.kpp||'').trim(),
+    address:String(c.address||'').trim()
   };
 }
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
-function companiesByRole(role){ return (state.companies||[]).filter(c=>companyHasRole(c, role)); }
+function companyInMySpace(c){
+  if(!c) return false;
+  if(isSuperAdmin()) return true;
+  const sid=currentSpaceId();
+  if(!sid) return !c.spaceId;
+  return !c.spaceId || c.spaceId===sid;
+}
+function companiesByRole(role){ return (state.companies||[]).filter(c=>companyHasRole(c, role) && companyInMySpace(c)); }
 function findCompanyById(id){ return (state.companies||[]).find(c=>c.id===id)||null; }
 function findCompanyByName(name){
   const key=String(name||'').trim().toLowerCase(); if(!key) return null;
@@ -735,6 +883,11 @@ function upsertCompany(raw){
     if(!c.roles.includes('carrier') && companyHasRole(prev,'carrier')) c.roles.push('carrier');
     if(!c.roles.includes('own') && companyHasRole(prev,'own')) c.roles.push('own');
     c.id=prev.id;
+    c.spaceId=c.spaceId||prev.spaceId||null;
+    c.inn=c.inn||prev.inn||'';
+    c.ogrn=c.ogrn||prev.ogrn||'';
+    c.kpp=c.kpp||prev.kpp||'';
+    c.address=c.address||prev.address||'';
     state.companies[i]=c;
   } else {
     state.companies.push(c);
@@ -792,7 +945,7 @@ function normalizeAdmin(a){
   if(!a||typeof a!=='object') return null;
   const name=String(a.name||'').trim(); if(!name) return null;
   const pin=String(a.pin||ADMIN_PIN).trim()||ADMIN_PIN;
-  return {id:a.id||uuid(), name, pin, isSuper:!!a.isSuper};
+  return {id:a.id||uuid(), name, pin, isSuper:!!a.isSuper, spaceId:a.spaceId||null};
 }
 function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
@@ -867,28 +1020,34 @@ function orderBelongsToAdmin(o, adminId){
   if(!nm || nm==='—' || nm==='-' || nm==='Биржа' || nm.startsWith('[Перевозчик]')) return false;
   return driverNamesOwnedByAdminId(adminId).has(nm);
 }
-/** Доступ: супер — любой; обычный — свои + заказы водителей, которых добавил. */
+/** Доступ: супер — любой; обычный — заказы пространства своей фирмы. */
 function canAdminSeeOrder(o){
   if(!o || !currentAdmin) return false;
   if(isSuperAdmin()) return true;
+  const sid=currentSpaceId();
+  if(sid && o.spaceId===sid) return true;
   return orderBelongsToAdmin(o, currentAdmin.id);
 }
-/** Фильтр списка супер-админа по владельцу (не влияет на права). */
+/** Фильтр супер-админа по пространству фирмы. */
 function matchesOwnerFilter(o){
   if(!isSuperAdmin()) return true;
   const f=state.adminOwnerFilter||'all';
   if(f==='all') return true;
-  if(f==='_none'){
-    const nm=(o.driverName||'').trim();
-    const drv=(state.drivers||[]).find(d=>(d.name||'')===nm);
-    return !o.ownerAdminId && !(drv&&drv.ownerAdminId);
-  }
-  return orderBelongsToAdmin(o, f);
+  if(f==='_none') return !o.spaceId;
+  return o.spaceId===f;
 }
 function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
   if(!currentAdmin) return [];
+  const sid=currentSpaceId();
+  if(sid) return (state.drivers||[]).filter(d=>d.spaceId===sid || d.ownerAdminId===currentAdmin.id);
   return driversOwnedByAdminId(currentAdmin.id);
+}
+function myCatalogVehicles(){
+  if(isSuperAdmin()) return state.vehicles||[];
+  const sid=currentSpaceId();
+  if(!sid) return state.vehicles||[];
+  return (state.vehicles||[]).filter(v=>!v.spaceId || v.spaceId===sid);
 }
 function adminOwnerOptionsHtml(selectedId){
   const list=(state.admins||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
@@ -897,9 +1056,9 @@ function adminOwnerOptionsHtml(selectedId){
 }
 function resolveAdminOwner(adminId){
   const adm=(state.admins||[]).find(a=>a.id===adminId);
-  if(adm) return {ownerAdminId:adm.id, ownerAdminName:adm.name};
-  if(currentAdmin) return {ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name};
-  return {ownerAdminId:null, ownerAdminName:null};
+  if(adm) return {ownerAdminId:adm.id, ownerAdminName:adm.name, spaceId:adm.spaceId||null};
+  if(currentAdmin) return {ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name, spaceId:currentAdmin.spaceId||null};
+  return {ownerAdminId:null, ownerAdminName:null, spaceId:null};
 }
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
@@ -910,12 +1069,12 @@ function paintAdminOwnerFilters(){
     return;
   }
   box.classList.add('show');
-  const admins=(state.admins||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const spaces=(state.spaces||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
   const cur=state.adminOwnerFilter||'all';
   const btns=[
-    `<button type="button" data-owner="all" class="${cur==='all'?'on':''}">Все админы</button>`,
-    ...admins.map(a=>`<button type="button" data-owner="${esc(a.id)}" class="${cur===a.id?'on':''}">${esc(a.name)}</button>`),
-    `<button type="button" data-owner="_none" class="${cur==='_none'?'on':''}">Без владельца</button>`
+    `<button type="button" data-owner="all" class="${cur==='all'?'on':''}">Все фирмы</button>`,
+    ...spaces.map(s=>`<button type="button" data-owner="${esc(s.id)}" class="${cur===s.id?'on':''}">${esc(s.name)}</button>`),
+    `<button type="button" data-owner="_none" class="${cur==='_none'?'on':''}">Без фирмы</button>`
   ];
   box.innerHTML=btns.join('');
   box.querySelectorAll('button[data-owner]').forEach(b=>{
@@ -980,7 +1139,13 @@ function updateAdminChrome(){
   const act=$('admin-activity');
   if(act) act.style.display=isSuperAdmin()?'':'none';
   const title=$('admin-title');
-  if(title) title.textContent=currentAdmin?`Заявки · ${currentAdmin.name}`:'Заявки';
+  if(title){
+    if(!currentAdmin) title.textContent='Заявки';
+    else {
+      const sp=findSpaceById(currentAdmin.spaceId);
+      title.textContent=sp?`Заявки · ${sp.name}`:`Заявки · ${currentAdmin.name}`;
+    }
+  }
   paintAdminOwnerFilters();
 }
 function loginAdmin(){
@@ -990,7 +1155,7 @@ function loginAdmin(){
   const adm=state.admins.find(a=>a.id===id);
   if(!adm){ $('pin-error').textContent='Выберите администратора'; return; }
   if(pin!==String(adm.pin)){ $('pin-error').textContent='Неверный PIN'; return; }
-  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper};
+  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
   pushAdminLogin('login');
   touchAdminPresence('admin');
   startPresenceHeartbeat();
@@ -1052,22 +1217,44 @@ function renderAdminActivity(){
       :`<div class="hint">Пока пусто</div>`}
     </div>
 
-    <h3>Администраторы</h3>
-    <div class="hint">Супер админ видит активность. Обычный — только заявки и справочники.</div>
+    <h3>Пространства фирм / администраторы</h3>
+    <div class="hint">Каждый админ получает своё пространство фирмы. Название фирмы — вручную; ИНН — опционально, «Загрузить» подтянет реквизиты (DaData).</div>
     <div class="cat-compact">
       <div class="row">
         <input id="new-adm-name" placeholder="Имя администратора" style="flex:1.3" />
         <input id="new-adm-pin" inputmode="numeric" maxlength="8" placeholder="PIN" style="flex:0 0 72px;text-align:center" />
       </div>
+      <label>Название фирмы</label>
+      <input id="new-firm-name" placeholder="ООО «…» / ИП …" />
+      <label>ИНН</label>
+      <div class="row">
+        <input id="new-firm-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" />
+        <button type="button" class="secondary" id="new-firm-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 10px">Загрузить</button>
+      </div>
+      <div class="hint" id="new-firm-inn-status"></div>
+      <input id="new-firm-ogrn" placeholder="ОГРН" />
+      <input id="new-firm-kpp" placeholder="КПП" />
+      <input id="new-firm-address" placeholder="Адрес" />
+      <input id="new-firm-director" placeholder="Руководитель" />
       <label class="check"><input type="checkbox" id="new-adm-super"/> Супер админ</label>
-      <button type="button" class="primary cat-add-btn" id="new-adm-add">+ администратор</button>
+      <button type="button" class="primary cat-add-btn" id="new-adm-add">+ администратор и фирма</button>
+    </div>
+    <h4>Токен DaData (для ИНН)</h4>
+    <div class="hint">Бесплатный ключ: dadata.ru → API. Хранится в общей базе.</div>
+    <div class="row">
+      <input id="dadata-token" type="password" placeholder="Token DaData" value="${esc((state.settings&&state.settings.dadataToken)||'')}" style="flex:1" />
+      <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
     </div>
     <div class="cat-list">
-      ${admins.map((a,i)=>`
+      ${admins.map((a,i)=>{
+        const sp=findSpaceById(a.spaceId);
+        return `
         <div class="item-card">
           <div class="item-top">
             <div class="item-name">${esc(a.name)}</div>
           </div>
+          <div class="hint">Фирма: ${esc(sp?sp.name:'—')}${sp&&sp.inn?` · ИНН ${esc(sp.inn)}`:''}</div>
+          ${sp&&sp.address?`<div class="hint">${esc(sp.address)}</div>`:''}
           <div class="item-mid">
             <input id="adm-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(a.pin)}" placeholder="PIN" />
             <label class="check"><input type="checkbox" id="adm-super-${i}" ${a.isSuper?'checked':''}/> Супер</label>
@@ -1076,19 +1263,57 @@ function renderAdminActivity(){
             <button type="button" class="primary" data-save-adm="${i}">Сохранить</button>
             <button type="button" class="secondary" data-del-adm="${a.id}">Удал.</button>
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>
   `;
   $('act-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  $('dadata-save')&&($('dadata-save').onclick=()=>{
+    state.settings=Object.assign({dadataToken:''}, state.settings||{});
+    state.settings.dadataToken=(($('dadata-token')||{}).value||'').trim();
+    persist();
+    alert(state.settings.dadataToken?'Токен DaData сохранён':'Токен очищен');
+  });
+  $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{
+    const st=$('new-firm-inn-status');
+    const inn=(($('new-firm-inn')||{}).value||'').trim();
+    if(st) st.textContent='Загрузка…';
+    try{
+      const party=await lookupPartyByInn(inn);
+      if($('new-firm-name') && !(($('new-firm-name').value||'').trim())) $('new-firm-name').value=party.name||'';
+      else if($('new-firm-name') && party.name) $('new-firm-name').value=party.name;
+      if($('new-firm-inn')) $('new-firm-inn').value=party.inn||inn;
+      if($('new-firm-ogrn')) $('new-firm-ogrn').value=party.ogrn||'';
+      if($('new-firm-kpp')) $('new-firm-kpp').value=party.kpp||'';
+      if($('new-firm-address')) $('new-firm-address').value=party.address||'';
+      if($('new-firm-director')) $('new-firm-director').value=party.director||'';
+      if(st) st.textContent='Реквизиты загружены';
+    }catch(err){
+      if(st) st.textContent=String(err.message||err);
+    }
+  });
   $('new-adm-add').onclick=()=>{
     if(!isSuperAdmin()) return;
     const name=(($('new-adm-name')||{}).value||'').trim();
     const pin=(($('new-adm-pin')||{}).value||'').trim();
     const isSuper=!!(($('new-adm-super')||{}).checked);
-    if(!name){ alert('Укажите имя'); return; }
+    const firmName=(($('new-firm-name')||{}).value||'').trim();
+    if(!name){ alert('Укажите имя администратора'); return; }
+    if(!firmName){ alert('Укажите название фирмы'); return; }
     if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
     if(state.admins.some(a=>(a.name||'').toLowerCase()===name.toLowerCase())){ alert('Такое имя уже есть'); return; }
-    state.admins.push({id:uuid(), name, pin, isSuper});
+    const inn=(($('new-firm-inn')||{}).value||'').replace(/\D/g,'');
+    if(inn && !isValidInn(inn)){ alert('Некорректный ИНН'); return; }
+    const adm={id:uuid(), name, pin, isSuper, spaceId:null};
+    state.admins.push(adm);
+    createSpaceForAdmin(adm, {
+      name:firmName,
+      inn,
+      ogrn:(($('new-firm-ogrn')||{}).value||'').trim(),
+      kpp:(($('new-firm-kpp')||{}).value||'').trim(),
+      address:(($('new-firm-address')||{}).value||'').trim(),
+      director:(($('new-firm-director')||{}).value||'').trim()
+    });
     persist(); renderAdminActivity();
   };
   document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=()=>{
@@ -1104,6 +1329,7 @@ function renderAdminActivity(){
     if(currentAdmin&&currentAdmin.id===state.admins[i].id){
       currentAdmin.isSuper=!!state.admins[i].isSuper;
       currentAdmin.name=state.admins[i].name;
+      currentAdmin.spaceId=state.admins[i].spaceId||null;
       updateAdminChrome();
     }
     persist(); renderAdminActivity();
@@ -1140,7 +1366,8 @@ function migrateCompanies(){
     exchangeEnabled:!!d.exchangeEnabled,
     phone:String(d.phone||'').trim(),
     ownerAdminId:d.ownerAdminId||null,
-    ownerAdminName:d.ownerAdminName||null
+    ownerAdminName:d.ownerAdminName||null,
+    spaceId:d.spaceId||null
   }));
   if(!state.drivers.length) state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
   DEFAULT_DRIVERS.forEach(def=>{
@@ -1149,7 +1376,8 @@ function migrateCompanies(){
   });
   state.vehicles=(state.vehicles||[]).map(v=>({
     plate:String(v.plate||'').trim(),
-    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20
+    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
+    spaceId:v.spaceId||null
   })).filter(v=>v.plate);
   if(!state.vehicles.length) state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
   DEFAULT_VEHICLES.forEach(def=>{
@@ -2319,7 +2547,7 @@ function submitText(){
 function finishOrder(unloading){
   const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
   const drvProf=(state.drivers||[]).find(x=>(x.name||'')===DRIVER);
-  const order={id:uuid(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:defaultRoutePoints(d.loading,unloading),driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER),ownerAdminId:drvProf?.ownerAdminId||null,ownerAdminName:drvProf?.ownerAdminName||null};
+  const order={id:uuid(),sequentialNumber:state.seq,dayNumber:d.dayNumber,createdAt,source:'driver',vehiclePlate:d.plate,startOdometer:d.startOdo,previousOdometer:d.prevOdo,loadingAddress:d.loading,unloadingAddress:unloading,routePoints:defaultRoutePoints(d.loading,unloading),driverName:DRIVER,customer:'',emptyKmBefore:emptyKm,driverPercent:driverPercent(DRIVER),ownerAdminId:drvProf?.ownerAdminId||null,ownerAdminName:drvProf?.ownerAdminName||null,spaceId:drvProf?.spaceId||null};
   ensureRoutePoints(order);
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order); upsertOrder(order);
   const route=routeText(order);
@@ -2572,7 +2800,7 @@ function assignExchangeToOwn(id){
 function renderAdminExchangeBoard(orders){
   const enabled=exchangeEnabledDrivers().filter(d=>isSuperAdmin() || (currentAdmin && d.ownerAdminId===currentAdmin.id));
   const drvOpts=myCatalogDrivers().map(d=>`<option value="${esc(d.name)}">${esc(d.name)}${d.exchangeEnabled?' · биржа':''} · ${d.salaryPercent}%</option>`).join('');
-  const plateOpts=(state.vehicles||[]).map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
+  const plateOpts=myCatalogVehicles().map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
   const driversBlock=enabled.length
     ? `<div class="hint" style="padding:8px 16px 0">Водители с биржей: <strong>${esc(enabled.map(d=>`${d.name} (${d.phone||'без тел.'}, ${d.salaryPercent}%)`).join('; '))}</strong></div>`
     : `<div class="hint" style="padding:8px 16px 0;color:var(--accent)">Ни у кого не включена биржа — включите в Справочниках → Наши водители</div>`;
@@ -2583,8 +2811,9 @@ function renderAdminExchangeBoard(orders){
     const m=metrics(o);
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
+    const sp=findSpaceById(o.spaceId);
     const ownerLine=isSuperAdmin()
-      ? `<p style="color:var(--muted)">Админ: ${esc(o.ownerAdminName||'—')}</p>` : '';
+      ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>` : '';
     return `<div class="card" style="border-color:rgba(232,93,4,.45)">
       <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
@@ -2639,9 +2868,10 @@ function renderAdmin(){
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
     const onEx=!!o.onExchange && !o.closedAt && o.startOdometer==null;
-    const ownerLine=isSuperAdmin() && o.ownerAdminName
-      ? `<p style="color:var(--muted)">Админ: ${esc(o.ownerAdminName)}</p>`
-      : (isSuperAdmin() && !o.ownerAdminId ? `<p style="color:var(--muted)">Админ: —</p>` : '');
+    const sp=findSpaceById(o.spaceId);
+    const ownerLine=isSuperAdmin()
+      ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
+      : '';
     return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''}>
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
@@ -2689,7 +2919,10 @@ function renderAdmin(){
   });
 }
 function fillCreateSelects(){
-  $('create-plate').innerHTML=state.vehicles.map(v=>`<option>${esc(v.plate)}</option>`).join('');
+  const vehList=myCatalogVehicles();
+  $('create-plate').innerHTML=vehList.length
+    ? vehList.map(v=>`<option>${esc(v.plate)}</option>`).join('')
+    : `<option value="">— добавьте авто в Справочниках —</option>`;
   const drvList=myCatalogDrivers();
   $('create-driver').innerHTML=drvList.length
     ? drvList.map(d=>`<option>${esc(d.name)}</option>`).join('')
@@ -2769,13 +3002,14 @@ function saveDispatcherOrder(){
     driverPercentVal=0;
   }
   state.seq+=1;
-  const company=upsertCompany({name:customer, roles:['customer']});
   if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
+  const company=upsertCompany({name:customer, roles:['customer'], spaceId:currentAdmin.spaceId||null});
   const order={
     id:uuid(), sequentialNumber:state.seq, dayNumber:createDay,
     createdAt:new Date().toISOString(), source:'dispatcher',
     ownerAdminId:currentAdmin.id,
     ownerAdminName:currentAdmin.name,
+    spaceId:currentAdmin.spaceId||null,
     vehiclePlate:plate, driverName:driver, customer,
     customerId:company?company.id:null,
     ownCompanyId:ownCo.id,
@@ -3077,7 +3311,7 @@ function openDetail(id){
 
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-  const companyCards=(state.companies||[]).map((c,i)=>{
+  const companyCards=(state.companies||[]).filter(companyInMySpace).map((c,i)=>{
     const roles=roleLabels(c);
     const contacts=(c.contacts||[]).map(p=>`${p.name}${contactPhone(p)?' '+contactPhone(p):''}`).join('; ')||'—';
     const vehicles=(c.vehicles||[]).map(v=>{
@@ -3123,10 +3357,11 @@ function openCatalogs(){
     </div>
     <div class="cat-list two-col">
     ${state.drivers.map((d,i)=>{
-      const mine=isSuperAdmin() || (currentAdmin && d.ownerAdminId===currentAdmin.id);
+      const mine=isSuperAdmin() || (currentAdmin && (d.spaceId===currentAdmin.spaceId || d.ownerAdminId===currentAdmin.id));
       if(!mine) return '';
+      const sp=findSpaceById(d.spaceId);
       const ownerSelect=isSuperAdmin()
-        ? `<label>Админ</label><select id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`
+        ? `<label>Админ / фирма</label><select id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>${sp?`<div class="hint">${esc(sp.name)}</div>`:''}`
         : '';
       return `
       <div class="item-card">
@@ -3157,16 +3392,20 @@ function openCatalogs(){
       <button type="button" class="primary cat-add-btn" id="own-veh-add">+ авто</button>
     </div>
     <div class="cat-list two-col">
-    ${state.vehicles.map((v,i)=>`
+    ${state.vehicles.map((v,i)=>{
+      if(!isSuperAdmin() && currentAdmin && v.spaceId && v.spaceId!==currentAdmin.spaceId) return '';
+      return `
       <div class="item-card">
         <div class="item-top"><div class="item-name">${esc(v.plate)}</div></div>
+        ${isSuperAdmin()&&v.spaceId?`<div class="hint">${esc((findSpaceById(v.spaceId)||{}).name||'')}</div>`:''}
         <div class="item-mid">
           <input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" placeholder="л/100" />
           <span class="hint" style="white-space:nowrap">л/100</span>
           <button type="button" class="primary" data-save-veh="${i}" style="width:auto;flex:0 0 auto;padding:8px 12px;min-height:40px">OK</button>
           <button type="button" class="secondary" data-del-veh="${i}" style="width:auto;flex:0 0 auto;padding:8px 10px;min-height:40px">×</button>
         </div>
-      </div>`).join('') || `<div class="hint">Пока нет авто</div>`}
+      </div>`;
+    }).join('') || `<div class="hint">Пока нет авто</div>`}
     </div>
 
     <h3>Финансы / тариф</h3>
@@ -3185,8 +3424,8 @@ function openCatalogs(){
   show('admin-catalogs-screen');
   $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
 
-  const openEditor=(company)=>{
-    const c=company?normalizeCompany(company):{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[]};
+    const openEditor=(company)=>{
+    const c=company?normalizeCompany(company):{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId()};
     const box=$('co-editor');
     box.style.display='block';
     const isOwn=companyHasRole(c,'own');
@@ -3305,7 +3544,8 @@ function openCatalogs(){
         contacts, vehicles, drivers,
         loadingAddresses:roles.includes('customer')?loads:[],
         unloadingAddresses:roles.includes('customer')?unloads:[],
-        phones:c.phones||[]
+        phones:c.phones||[],
+        spaceId:c.spaceId||currentSpaceId()
       });
       persist();
       openCatalogs();
@@ -3337,7 +3577,7 @@ function openCatalogs(){
     if(!(cons>0)) cons=20;
     const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase());
     if(exists){ alert('Такой госномер уже есть'); return; }
-    state.vehicles.push({plate, consumptionPer100Km:cons});
+    state.vehicles.push({plate, consumptionPer100Km:cons, spaceId:currentSpaceId()});
     persist(); openCatalogs();
     $('cat-ok').style.display='block';
   });
@@ -3384,11 +3624,12 @@ function openCatalogs(){
       if(!ownerId){ alert('Выберите админа, которому принадлежит водитель'); return; }
       owner=resolveAdminOwner(ownerId);
     } else {
-      owner={ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name};
+      owner={ownerAdminId:currentAdmin.id, ownerAdminName:currentAdmin.name, spaceId:currentAdmin.spaceId||null};
     }
     state.drivers.push({
       name, salaryPercent:pct, phone, exchangeEnabled,
-      ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName
+      ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
+      spaceId:owner.spaceId||null
     });
     persist(); openCatalogs();
     $('cat-ok').style.display='block';
@@ -3417,6 +3658,7 @@ function updateSyncHint(){
   await initCloudSync();
   migrateAdmins();
   let dirty=migrateDriverOwners();
+  if(migrateSpaces()) dirty=true;
   if(purgeCancelledOrders()){
     bumpDataEpoch('purge-boot');
     dirty=true;
