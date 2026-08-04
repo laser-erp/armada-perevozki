@@ -290,15 +290,24 @@ struct OrdersListView: View {
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(AppTheme.accent)
             }
-            if !order.contactLine.isEmpty {
-                Text(order.contactLine)
-                    .font(.system(.caption, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.accent)
-            }
-            if let phone = order.contactPhone, !phone.isEmpty,
-               let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
-                Link("Позвонить \(phone)", destination: url)
+            if !order.scheduleSummary.isEmpty {
+                Text(order.scheduleSummary)
                     .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            if !exchange {
+                let contact = order.driverContactLine(asDriver: driverName)
+                if !contact.isEmpty {
+                    Text(contact)
+                        .font(.system(.caption, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.accent)
+                }
+                if order.driverMaySeeContact(asDriver: driverName),
+                   let phone = order.contactPhone, !phone.isEmpty,
+                   let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
+                    Link("Позвонить \(phone)", destination: url)
+                        .font(.system(.caption, design: .rounded))
+                }
             }
             if adminMode {
                 Text("Нулевой \(order.emptyKmBefore.map(String.init) ?? "—") км · с грузом \(order.loadedKm.map(String.init) ?? "—")")
