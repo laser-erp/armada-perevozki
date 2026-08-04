@@ -343,7 +343,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-cancel-zombie";
+const APP_BUILD="2026-08-04-admin-delete-fix";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -751,11 +751,8 @@ function normalizeAdmin(a){
 }
 function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
+  // Сид только если админов ещё нет. Иначе удалённые (напр. «Диспетчер») возвращались снова.
   if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
-  DEFAULT_ADMINS.forEach(def=>{
-    const exists=state.admins.some(a=>(a.name||'').toLowerCase()===(def.name||'').toLowerCase() || a.id===def.id);
-    if(!exists) state.admins.push({...def});
-  });
   if(!state.admins.some(a=>a.isSuper)){
     const first=state.admins[0];
     if(first) first.isSuper=true;
