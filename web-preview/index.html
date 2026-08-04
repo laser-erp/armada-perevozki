@@ -286,6 +286,7 @@
       <div class="admin-form-actions" id="detail-actions" style="display:none">
         <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
         <button class="primary" id="detail-save">Сохранить</button>
+        <button class="secondary" id="detail-cancel-order" style="display:none">Отменить заказ</button>
       </div>
     </div>
   </div>
@@ -342,7 +343,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-admin-presence";
+const APP_BUILD="2026-08-04-cancel-zombie";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1264,12 +1265,32 @@ function upsertOrder(order){
 function openOrder(){ return inProgressOrder(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
 function statusText(o){
+  if(o.cancelledAt || (o.closedAt && o.cancelReason)) return 'Отменён';
   if(o.closedAt) return 'Закрыт';
   if(o.onExchange && o.startOdometer==null) return 'На бирже';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(o.startOdometer!=null) return 'В работе';
   if(o.departOdometer!=null) return 'В пути';
+  // снят с биржи / без водителя — не считаем «назначен»
+  if(!o.onExchange && o.startOdometer==null && o.departOdometer==null &&
+     (!o.driverName || o.driverName==='—' || o.driverName==='-' || o.driverName==='Биржа')){
+    return 'Черновик';
+  }
   return 'Назначен';
+}
+function cancelOrder(id, reason){
+  const o=state.orders.find(x=>x.id===id); if(!o) return false;
+  if(o.closedAt && !o.cancelledAt){ alert('Заказ уже закрыт'); return false; }
+  if(o.startOdometer!=null && !o.cancelledAt){
+    if(!confirm('Заказ уже в работе. Точно отменить?')) return false;
+  }
+  const now=new Date().toISOString();
+  o.onExchange=false;
+  o.cancelledAt=now;
+  o.closedAt=o.closedAt||now;
+  o.cancelReason=reason||'Отменён администратором';
+  upsertOrder(o);
+  return true;
 }
 function canStartAssignedMessage(){
   const shift=syncOpenShiftRuntime();
@@ -2368,8 +2389,8 @@ const COLS=["Дата","Госномер","Водитель","Заказчик",
 function filteredOrders(){
   return allOrders().filter(o=>{
     if(state.adminFilter==='exchange') return !o.closedAt && !!o.onExchange && o.startOdometer==null;
-    if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null && !o.onExchange;
-    if(state.adminFilter==='progress') return !o.closedAt && o.startOdometer!=null;
+    if(state.adminFilter==='assigned') return !o.closedAt && !o.cancelledAt && o.startOdometer==null && !o.onExchange && o.driverName && o.driverName!=='—' && o.driverName!=='-' && o.driverName!=='Биржа';
+    if(state.adminFilter==='progress') return !o.closedAt && !o.cancelledAt && o.startOdometer!=null;
     if(state.adminFilter==='closed') return !!o.closedAt;
     return true;
   });
@@ -2377,10 +2398,8 @@ function filteredOrders(){
 function unpublishFromExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || !o.onExchange) return;
-  o.onExchange=false;
-  o.executorType=o.executorType||'exchange';
-  if(!o.driverName || o.driverName==='Биржа') o.driverName='—';
-  upsertOrder(o);
+  // Раньше оставался «Назначен» с водителем «—» и висел вечно — теперь отменяем.
+  cancelOrder(id, 'Снят с биржи');
   renderAdmin();
 }
 function assignExchangeToOwn(id){
@@ -2475,6 +2494,7 @@ function renderAdmin(){
       <div class="row" style="margin-top:8px">
         <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
         ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
+        ${!o.closedAt&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2496,6 +2516,11 @@ function renderAdmin(){
     state.adminFilter='exchange';
     document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x.dataset.filter==='exchange'));
     renderAdmin();
+  });
+  document.querySelectorAll('#admin-list .cancel-order').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    if(!confirm('Отменить этот заказ? Он пропадёт из «Назначен» / «В работе».')) return;
+    if(cancelOrder(b.dataset.id, 'Отменён из списка')) renderAdmin();
   });
 }
 function fillCreateSelects(){
