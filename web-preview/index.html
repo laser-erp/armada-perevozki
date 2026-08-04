@@ -68,7 +68,7 @@
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
-    #admin-detail,#admin-create,#admin-catalogs-screen{overflow:hidden;min-height:0}
+    #admin-detail,#admin-create,#admin-catalogs-screen,#admin-activity-screen{overflow:hidden;min-height:0}
     .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:640px;margin:0 auto}
     .admin-form-scroll{
       flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
@@ -175,9 +175,12 @@
   <div id="admin-pin" class="screen"><div class="center">
     <div class="sub" style="align-self:stretch;text-align:left"><button id="pin-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
     <h2 style="margin:0">Вход администратора</h2>
-    <div class="sub">Введите PIN</div>
-    <div class="pin">
-      <input id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" />
+    <div class="sub">Выберите имя и введите PIN</div>
+    <div class="pin" style="max-width:320px;width:100%">
+      <label style="text-align:left;color:var(--muted);font-size:.8rem">Администратор</label>
+      <select id="admin-name-select" style="width:100%;border:0;border-radius:10px;padding:12px;background:var(--field);color:var(--text);font-size:16px;min-height:44px"></select>
+      <label style="text-align:left;color:var(--muted);font-size:.8rem;margin-top:6px">PIN</label>
+      <input id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
       <div class="error" id="pin-error"></div>
       <button class="primary" id="pin-ok">Войти</button>
     </div>
@@ -186,8 +189,9 @@
   <div id="admin" class="screen">
     <header>
       <button id="admin-exit">Выход</button>
-      <h1>Таблица заявок</h1>
+      <h1 id="admin-title">Заявки</h1>
       <div>
+        <button id="admin-activity" style="display:none">Активность</button>
         <button id="admin-catalogs">Справочники</button>
         <button id="admin-new">+ Заказ</button>
       </div>
@@ -292,6 +296,12 @@
     </div>
   </div>
 
+  <div id="admin-activity-screen" class="screen">
+    <div class="admin-form-shell">
+      <div class="admin-form-scroll" id="activity-form"></div>
+    </div>
+  </div>
+
   <div id="driver" class="screen">
     <header>
       <button id="driver-exit">Выход</button>
@@ -331,14 +341,21 @@ const DEFAULT_DRIVERS=[
 ];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
-const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-responsive-compact";
+const ADMIN_PIN="2580"; // запасной PIN первого админа
+const APP_BUILD="2026-08-04-admin-presence";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
 ];
+const DEFAULT_ADMINS=[
+  {id:"admin-super", name:"Супер админ", pin:"2580", isSuper:true},
+  {id:"admin-dispatcher", name:"Диспетчер", pin:"2580", isSuper:false}
+];
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
+const DEVICE_KEY="armada_admin_device";
+const PRESENCE_ONLINE_MS=90*1000;
+const PRESENCE_TICK_MS=25*1000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
 function uuid(){
   try{
@@ -370,12 +387,22 @@ const state={
   customers:Array.isArray(saved.customers)?saved.customers:[],
   companies:Array.isArray(saved.companies)?saved.companies:[],
   finance:Object.assign({}, DEFAULT_FINANCE, saved.finance||{}),
+  admins:Array.isArray(saved.admins)?saved.admins:[],
+  adminLogins:Array.isArray(saved.adminLogins)?saved.adminLogins:[],
+  adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
   dataEpoch:Number(saved.dataEpoch)||0,
   light:{}, draft:{}, error:"", adminFilter:"all", detailId:null
 };
 let pbRecordId=null;
 let persistTimer=null;
 let syncStatus='local'; // local | syncing | ok | error
+let currentAdmin=null; // {id,name} — только в этой вкладке
+let presenceTimer=null;
+function adminDeviceId(){
+  let id=localStorage.getItem(DEVICE_KEY);
+  if(!id){ id=uuid(); localStorage.setItem(DEVICE_KEY, id); }
+  return id;
+}
 if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
 if(state.finance.markupPercent>80) state.finance.markupPercent=80;
 if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -431,8 +458,11 @@ const $ = id => document.getElementById(id);
 function show(id){
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen'||id==='admin-activity-screen';
   $('shell').classList.toggle('wide', wide);
+  if(currentAdmin && (id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen'||id==='admin-activity-screen')){
+    touchAdminPresence(id);
+  }
 }
 function snapshot(){
   return {
@@ -444,6 +474,9 @@ function snapshot(){
     customers:state.customers,
     companies:state.companies,
     finance:state.finance,
+    admins:state.admins,
+    adminLogins:state.adminLogins,
+    adminPresence:state.adminPresence,
     dataEpoch:Number(state.dataEpoch)||0,
     savedAt:new Date().toISOString()
   };
@@ -464,6 +497,7 @@ function applyPayload(p){
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
   state.dataEpoch=Number(p.dataEpoch)||0;
+  mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -481,6 +515,7 @@ function applyPayload(p){
     ensureRoutePoints(o);
   });
   migrateCompanies();
+  migrateAdmins();
 }
 async function fetchServerState(){
   const filter=encodeURIComponent("key='main'");
@@ -705,6 +740,252 @@ function rememberCustomer(order){
   }
   upsertCompany(c);
 }
+
+/** —— Админы: логины, журнал, онлайн (просмотр — только супер админ) —— */
+function normalizeAdmin(a){
+  if(!a||typeof a!=='object') return null;
+  const name=String(a.name||'').trim(); if(!name) return null;
+  const pin=String(a.pin||ADMIN_PIN).trim()||ADMIN_PIN;
+  return {id:a.id||uuid(), name, pin, isSuper:!!a.isSuper};
+}
+function migrateAdmins(){
+  state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
+  if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
+  DEFAULT_ADMINS.forEach(def=>{
+    const exists=state.admins.some(a=>(a.name||'').toLowerCase()===(def.name||'').toLowerCase() || a.id===def.id);
+    if(!exists) state.admins.push({...def});
+  });
+  if(!state.admins.some(a=>a.isSuper)){
+    const first=state.admins[0];
+    if(first) first.isSuper=true;
+    else state.admins.push({...DEFAULT_ADMINS[0]});
+  }
+  state.adminLogins=Array.isArray(state.adminLogins)?state.adminLogins:[];
+  state.adminPresence=Array.isArray(state.adminPresence)?state.adminPresence:[];
+}
+function mergeAdminAuthFromRemote(p){
+  const remoteAdmins=(Array.isArray(p.admins)?p.admins:[]).map(normalizeAdmin).filter(Boolean);
+  if(remoteAdmins.length) state.admins=remoteAdmins;
+  const byId=new Map();
+  (state.adminLogins||[]).forEach(e=>{ if(e&&e.id) byId.set(e.id,e); });
+  (Array.isArray(p.adminLogins)?p.adminLogins:[]).forEach(e=>{
+    if(!e||!e.id) return;
+    const prev=byId.get(e.id);
+    if(!prev || Date.parse(e.at||0)>=Date.parse(prev.at||0)) byId.set(e.id,e);
+  });
+  state.adminLogins=[...byId.values()].sort((a,b)=>Date.parse(b.at||0)-Date.parse(a.at||0)).slice(0,120);
+  const byDev=new Map();
+  (state.adminPresence||[]).forEach(e=>{ if(e&&e.deviceId) byDev.set(e.deviceId,e); });
+  (Array.isArray(p.adminPresence)?p.adminPresence:[]).forEach(e=>{
+    if(!e||!e.deviceId) return;
+    const prev=byDev.get(e.deviceId);
+    if(!prev || Date.parse(e.lastSeen||0)>=Date.parse(prev.lastSeen||0)) byDev.set(e.deviceId,e);
+  });
+  // не затираем своё свежее присутствие
+  const my=byDev.get(adminDeviceId());
+  if(currentAdmin && my && Date.parse(my.lastSeen||0)<Date.now()-5000){
+    byDev.set(adminDeviceId(), {
+      deviceId:adminDeviceId(), adminId:currentAdmin.id, adminName:currentAdmin.name,
+      isSuper:!!currentAdmin.isSuper, lastSeen:new Date().toISOString(), screen:my.screen||'admin'
+    });
+  }
+  state.adminPresence=[...byDev.values()];
+}
+function isSuperAdmin(){ return !!(currentAdmin&&currentAdmin.isSuper); }
+function fillAdminLoginSelect(){
+  migrateAdmins();
+  const sel=$('admin-name-select'); if(!sel) return;
+  const list=state.admins.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}${a.isSuper?' · супер':''}</option>`).join('');
+}
+function pushAdminLogin(action){
+  if(!currentAdmin) return;
+  state.adminLogins.unshift({
+    id:uuid(), at:new Date().toISOString(), action,
+    adminId:currentAdmin.id, adminName:currentAdmin.name, isSuper:!!currentAdmin.isSuper,
+    deviceId:adminDeviceId()
+  });
+  state.adminLogins=state.adminLogins.slice(0,120);
+}
+function touchAdminPresence(screen){
+  if(!currentAdmin) return;
+  const deviceId=adminDeviceId();
+  const row={
+    deviceId, adminId:currentAdmin.id, adminName:currentAdmin.name,
+    isSuper:!!currentAdmin.isSuper, lastSeen:new Date().toISOString(),
+    screen:screen||'admin'
+  };
+  const i=(state.adminPresence||[]).findIndex(p=>p.deviceId===deviceId);
+  if(i>=0) state.adminPresence[i]=row; else state.adminPresence.unshift(row);
+  // чистим совсем старые
+  const cut=Date.now()-24*3600*1000;
+  state.adminPresence=state.adminPresence.filter(p=>Date.parse(p.lastSeen||0)>cut);
+}
+function startPresenceHeartbeat(){
+  stopPresenceHeartbeat();
+  presenceTimer=setInterval(()=>{
+    if(!currentAdmin) return;
+    touchAdminPresence('admin');
+    persist();
+  }, PRESENCE_TICK_MS);
+}
+function stopPresenceHeartbeat(){
+  if(presenceTimer){ clearInterval(presenceTimer); presenceTimer=null; }
+}
+function clearMyPresence(){
+  const deviceId=adminDeviceId();
+  state.adminPresence=(state.adminPresence||[]).filter(p=>p.deviceId!==deviceId);
+}
+function onlineAdmins(){
+  const now=Date.now();
+  return (state.adminPresence||[])
+    .filter(p=>now-Date.parse(p.lastSeen||0)<PRESENCE_ONLINE_MS)
+    .sort((a,b)=>Date.parse(b.lastSeen||0)-Date.parse(a.lastSeen||0));
+}
+function updateAdminChrome(){
+  const act=$('admin-activity');
+  if(act) act.style.display=isSuperAdmin()?'':'none';
+  const title=$('admin-title');
+  if(title) title.textContent=currentAdmin?`Заявки · ${currentAdmin.name}`:'Заявки';
+}
+function loginAdmin(){
+  migrateAdmins();
+  const id=(($('admin-name-select')||{}).value||'').trim();
+  const pin=(($('pin-input')||{}).value||'').trim();
+  const adm=state.admins.find(a=>a.id===id);
+  if(!adm){ $('pin-error').textContent='Выберите администратора'; return; }
+  if(pin!==String(adm.pin)){ $('pin-error').textContent='Неверный PIN'; return; }
+  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper};
+  pushAdminLogin('login');
+  touchAdminPresence('admin');
+  startPresenceHeartbeat();
+  persist();
+  updateAdminChrome();
+  show('admin');
+  renderAdmin();
+}
+function logoutAdmin(){
+  if(currentAdmin){
+    pushAdminLogin('logout');
+    clearMyPresence();
+    persist();
+  }
+  stopPresenceHeartbeat();
+  currentAdmin=null;
+  updateAdminChrome();
+  show('roles');
+}
+function openAdminActivity(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  // подтянуть свежие presence с сервера мягко через persist уже есть; обновим UI
+  renderAdminActivity();
+  show('admin-activity-screen');
+}
+function renderAdminActivity(){
+  migrateAdmins();
+  const online=onlineAdmins();
+  const log=(state.adminLogins||[]).slice(0,40);
+  const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
+  $('activity-form').innerHTML=`
+    <button class="secondary cat-add-btn" id="act-back">← Назад</button>
+    <h2 style="margin:0">Активность</h2>
+    <div class="hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</div>
+
+    <h3>Сейчас в приложении</h3>
+    <div class="cat-list">
+      ${online.length?online.map(p=>`
+        <div class="item-card">
+          <div class="item-top">
+            <div class="item-name">${esc(p.adminName)}${p.isSuper?' · супер':''}</div>
+            <span class="ok" style="font-size:.75rem">онлайн</span>
+          </div>
+          <div class="hint">Экран: ${esc(p.screen||'admin')} · ${esc(dateTime(p.lastSeen))}</div>
+        </div>`).join('')
+      :`<div class="hint">Никого нет онлайн (кроме вас — обновится через несколько секунд)</div>`}
+    </div>
+
+    <h3>Журнал входов</h3>
+    <div class="cat-list">
+      ${log.length?log.map(e=>`
+        <div class="item-card">
+          <div class="item-top">
+            <div class="item-name">${esc(e.adminName)}${e.isSuper?' · супер':''}</div>
+            <span class="hint">${e.action==='login'?'вход':'выход'}</span>
+          </div>
+          <div class="hint">${esc(dateTime(e.at))}</div>
+        </div>`).join('')
+      :`<div class="hint">Пока пусто</div>`}
+    </div>
+
+    <h3>Администраторы</h3>
+    <div class="hint">Супер админ видит активность. Обычный — только заявки и справочники.</div>
+    <div class="cat-compact">
+      <div class="row">
+        <input id="new-adm-name" placeholder="Имя (Диспетчер)" style="flex:1.3" />
+        <input id="new-adm-pin" inputmode="numeric" maxlength="8" placeholder="PIN" style="flex:0 0 72px;text-align:center" />
+      </div>
+      <label class="check"><input type="checkbox" id="new-adm-super"/> Супер админ</label>
+      <button type="button" class="primary cat-add-btn" id="new-adm-add">+ администратор</button>
+    </div>
+    <div class="cat-list">
+      ${admins.map((a,i)=>`
+        <div class="item-card">
+          <div class="item-top">
+            <div class="item-name">${esc(a.name)}${a.isSuper?' · супер':''}</div>
+          </div>
+          <div class="item-mid">
+            <input id="adm-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(a.pin)}" placeholder="PIN" />
+            <label class="check"><input type="checkbox" id="adm-super-${i}" ${a.isSuper?'checked':''}/> Супер</label>
+          </div>
+          <div class="item-actions">
+            <button type="button" class="primary" data-save-adm="${i}">Сохранить</button>
+            <button type="button" class="secondary" data-del-adm="${a.id}">Удал.</button>
+          </div>
+        </div>`).join('')}
+    </div>
+  `;
+  $('act-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  $('new-adm-add').onclick=()=>{
+    if(!isSuperAdmin()) return;
+    const name=(($('new-adm-name')||{}).value||'').trim();
+    const pin=(($('new-adm-pin')||{}).value||'').trim();
+    const isSuper=!!(($('new-adm-super')||{}).checked);
+    if(!name){ alert('Укажите имя'); return; }
+    if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
+    if(state.admins.some(a=>(a.name||'').toLowerCase()===name.toLowerCase())){ alert('Такое имя уже есть'); return; }
+    state.admins.push({id:uuid(), name, pin, isSuper});
+    persist(); renderAdminActivity();
+  };
+  document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=()=>{
+    if(!isSuperAdmin()) return;
+    const i=+b.dataset.saveAdm;
+    const pin=(($('adm-pin-'+i)||{}).value||'').trim();
+    const isSuper=!!(($('adm-super-'+i)||{}).checked);
+    if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
+    state.admins[i].pin=pin;
+    state.admins[i].isSuper=isSuper;
+    if(!state.admins.some(a=>a.isSuper)){ alert('Должен остаться хотя бы один супер админ'); state.admins[i].isSuper=true; }
+    // обновить текущую сессию если это я
+    if(currentAdmin&&currentAdmin.id===state.admins[i].id){
+      currentAdmin.isSuper=!!state.admins[i].isSuper;
+      currentAdmin.name=state.admins[i].name;
+      updateAdminChrome();
+    }
+    persist(); renderAdminActivity();
+  });
+  document.querySelectorAll('[data-del-adm]').forEach(b=>b.onclick=()=>{
+    if(!isSuperAdmin()) return;
+    const id=b.dataset.delAdm;
+    const adm=state.admins.find(a=>a.id===id);
+    if(!adm) return;
+    if(adm.id===currentAdmin?.id){ alert('Нельзя удалить себя, пока вы в системе'); return; }
+    if(adm.isSuper && state.admins.filter(a=>a.isSuper).length<=1){ alert('Нельзя удалить последнего супер админа'); return; }
+    if(!confirm(`Удалить администратора ${adm.name}?`)) return;
+    state.admins=state.admins.filter(a=>a.id!==id);
+    persist(); renderAdminActivity();
+  });
+}
+
 function migrateCompanies(){
   // customers → companies
   (state.customers||[]).forEach(c=>{
@@ -860,6 +1141,7 @@ function updateCreateFreeHint(){
   el.textContent=`Ориентир освобождения: ${formatRuDateTimeAt(free)} (подача + ${minW} ч работы)`;
 }
 migrateCompanies();
+migrateAdmins();
 function fillCustomerPickers(){
   const list=$('customer-list');
   if(list) list.innerHTML=customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('');
@@ -2241,7 +2523,10 @@ function roleLabels(c){
 }
 let createDay=1;
 function bindAdminCreate(){
-  $('admin-new').onclick=()=>{ createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own'; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI; };
+  $('admin-new').onclick=()=>{
+    if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
+    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own'; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+  };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
   $('create-save').onclick=saveDispatcherOrder;
@@ -2583,6 +2868,7 @@ function openDetail(id){
 }
 
 function openCatalogs(){
+  if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
   const companyCards=(state.companies||[]).map((c,i)=>{
     const roles=roleLabels(c);
     const contacts=(c.contacts||[]).map(p=>`${p.name}${contactPhone(p)?' '+contactPhone(p):''}`).join('; ')||'—';
@@ -2893,11 +3179,20 @@ function updateSyncHint(){
   setTimeout(()=>{ show('roles'); updateSyncHint(); }, 700);
 })();
 $('role-driver').onclick=()=>{ show('driver'); resetChat(); renderDriverBanner(); };
-$('role-admin').onclick=()=>{ $('pin-input').value=''; $('pin-error').textContent=''; show('admin-pin'); };
+$('role-admin').onclick=()=>{
+  migrateAdmins();
+  fillAdminLoginSelect();
+  $('pin-input').value='';
+  $('pin-error').textContent='';
+  show('admin-pin');
+};
 $('pin-back').onclick=()=>show('roles');
-$('pin-ok').onclick=()=>{ if(($('pin-input').value||'').trim()===ADMIN_PIN){ show('admin'); renderAdmin(); } else $('pin-error').textContent='Неверный PIN'; };
-$('admin-exit').onclick=()=>show('roles');
-$('admin-catalogs').onclick=openCatalogs;
+$('pin-ok').onclick=loginAdmin;
+$('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin(); });
+$('admin-exit').onclick=logoutAdmin;
+$('admin-catalogs').onclick=()=>{ if(!currentAdmin){ show('admin-pin'); return; } openCatalogs(); };
+$('admin-activity').onclick=()=>{ if(!currentAdmin){ show('admin-pin'); return; } openAdminActivity(); };
+updateAdminChrome();
 $('driver-exit').onclick=()=>show('roles');
 $('btn-cabinet').onclick=showCabinet;
 $('btn-orders').onclick=showOrders;
