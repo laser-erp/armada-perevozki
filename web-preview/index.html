@@ -752,12 +752,15 @@ function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
   // Сид только если админов ещё нет. Иначе удалённые (напр. «Диспетчер») возвращались снова.
   if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
-  // Переименование старого «Супер админ» → Наволоцкий Е.Н.
+  // Переименование старого «Супер админ» → Наволоцкий Е.Н. + актуальный PIN
   state.admins.forEach(a=>{
     if(a.id==='admin-super' || (a.isSuper && (a.name||'').toLowerCase()==='супер админ')){
       a.name='Наволоцкий Е.Н.';
       if(a.id==='admin-super' || !a.id) a.id='admin-super';
       a.isSuper=true;
+    }
+    if(a.id==='admin-super' || ((a.name||'')==='Наволоцкий Е.Н.' && a.isSuper)){
+      if(a.pin==='2580' || !a.pin) a.pin=ADMIN_PIN;
     }
   });
   if(!state.admins.some(a=>a.isSuper)){
