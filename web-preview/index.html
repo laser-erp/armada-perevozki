@@ -271,11 +271,14 @@
 </div>
 <script>
 const DEFAULT_VEHICLES=[{plate:"О 535 МВ 198",consumptionPer100Km:20},{plate:"М 277 НО 198",consumptionPer100Km:20}];
-const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""}];
+const DEFAULT_DRIVERS=[
+  {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
+  {name:"Нечаев А.С.",salaryPercent:30,exchangeEnabled:false,phone:""}
+];
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-own-fleet-add";
+const APP_BUILD="2026-08-04-nechaev-driver";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -655,7 +658,7 @@ function migrateCompanies(){
     }
   });
   state.companies=(state.companies||[]).map(normalizeCompany).filter(Boolean);
-  // drivers exchangeEnabled
+  // drivers exchangeEnabled + seed missing defaults (напр. Нечаев А.С.)
   state.drivers=(state.drivers||[]).map(d=>({
     name:d.name,
     salaryPercent:d.salaryPercent??30,
@@ -663,6 +666,10 @@ function migrateCompanies(){
     phone:String(d.phone||'').trim()
   }));
   if(!state.drivers.length) state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
+  DEFAULT_DRIVERS.forEach(def=>{
+    const exists=state.drivers.some(d=>(d.name||'').toLowerCase()===(def.name||'').toLowerCase());
+    if(!exists) state.drivers.push({...def});
+  });
   syncCustomersFromCompanies();
   // if still empty companies, mine from orders
   if(!state.companies.length){
