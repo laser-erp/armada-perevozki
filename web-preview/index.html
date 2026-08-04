@@ -151,6 +151,7 @@
     </header>
     <div class="filters" id="admin-filters">
       <button data-filter="all" class="on">Все</button>
+      <button data-filter="exchange">Биржа</button>
       <button data-filter="assigned">Назначен</button>
       <button data-filter="progress">В работе</button>
       <button data-filter="closed">Закрыт</button>
@@ -269,7 +270,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30,exch
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-sync-clear";
+const APP_BUILD="2026-08-04-admin-exchange";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -680,6 +681,9 @@ function driverExchangeEnabled(name){
 }
 function exchangeOrders(){
   return (state.orders||[]).filter(o=>!o.closedAt && o.onExchange && o.startOdometer==null);
+}
+function exchangeEnabledDrivers(){
+  return (state.drivers||[]).filter(d=>d.exchangeEnabled);
 }
 function orderContactLine(o){
   const parts=[];
@@ -1909,20 +1913,98 @@ function showShifts(){
 const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","№ дня","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 function filteredOrders(){
   return allOrders().filter(o=>{
-    if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null;
+    if(state.adminFilter==='exchange') return !o.closedAt && !!o.onExchange && o.startOdometer==null;
+    if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null && !o.onExchange;
     if(state.adminFilter==='progress') return !o.closedAt && o.startOdometer!=null;
     if(state.adminFilter==='closed') return !!o.closedAt;
     return true;
   });
 }
-function renderAdmin(){
-  const orders=filteredOrders();
-  if(!orders.length){ $('admin-list').innerHTML=`<div class="empty">Пока нет заявок. Нажмите + Заказ</div>`; return; }
+function unpublishFromExchange(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !o.onExchange) return;
+  o.onExchange=false;
+  o.executorType=o.executorType||'exchange';
+  if(!o.driverName || o.driverName==='Биржа') o.driverName='—';
+  upsertOrder(o);
+  renderAdmin();
+}
+function assignExchangeToOwn(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
+  const driver=(($('ex-drv-'+id)||{}).value||'').trim();
+  const plate=(($('ex-plate-'+id)||{}).value||'').trim();
+  if(!driver){ alert('Выберите водителя'); return; }
+  if(!plate){ alert('Выберите авто'); return; }
+  o.onExchange=false;
+  o.executorType='own';
+  o.driverName=driver;
+  o.vehiclePlate=plate;
+  o.driverPercent=driverPercent(driver);
+  o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
+  upsertOrder(o);
+  renderAdmin();
+}
+function renderAdminExchangeBoard(orders){
+  const enabled=exchangeEnabledDrivers();
+  const drvOpts=(state.drivers||[]).map(d=>`<option value="${esc(d.name)}">${esc(d.name)}${d.exchangeEnabled?' · биржа':''} · ${d.salaryPercent}%</option>`).join('');
+  const plateOpts=(state.vehicles||[]).map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
+  const driversBlock=enabled.length
+    ? `<div class="hint" style="padding:8px 16px 0">Водители с биржей: <strong>${esc(enabled.map(d=>`${d.name} (${d.phone||'без тел.'}, ${d.salaryPercent}%)`).join('; '))}</strong></div>`
+    : `<div class="hint" style="padding:8px 16px 0;color:var(--accent)">Ни у кого не включена биржа — включите в Справочниках → Наши водители</div>`;
+  if(!orders.length){
+    return `${driversBlock}<div class="empty">На бирже пока пусто. Создайте заказ с исполнением «На биржу».</div>`;
+  }
   const cards=orders.map(o=>{
     const m=metrics(o);
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
-    return `<div class="card">
+    return `<div class="card" style="border-color:rgba(232,93,4,.45)">
+      <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
+      <p>${esc(dateTime(o.createdAt))}</p>
+      <p style="font-weight:700;color:var(--accent)">${esc(orderContactLine(o))}</p>
+      ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
+      <p>${esc(routeText(o))}</p>
+      <p>Исполнение: биржа · сейчас: ${esc(o.driverName||'—')} / ${esc(o.vehiclePlate||'—')}</p>
+      <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)} · всего: ${fmt(dayTotal(o))}</p>
+      <p>₽/л: ${fmt(o.fuelPricePerLiter)} · ₽/км: ${fmt(o.ratePerKmCash)} · ₽/час: ${fmt(o.ratePerHourWork)}</p>
+      <p>С НДС: ${fmt(o.rateWithVat)} · без НДС: ${fmt(o.rateWithoutVat)} · нал: ${fmt(o.rateCash)}</p>
+      <p>ГСМ л: ${fmt(m.fuelLitersCalc)} · ГСМ ₽: ${fmt(m.fuelCostCalc)} · подушка: ${fmt(m.cushion)} · прибыль: ${fmt(m.netProfit)}</p>
+      ${hasRate
+        ? `<p style="color:var(--accent);font-weight:700">Нал (база ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽ · % водителя после назначения</p>`
+        : `<p class="rate-missing">Ставка не заполнена</p>`}
+      <label style="margin-top:8px">Назначить нашего водителя</label>
+      <select id="ex-drv-${o.id}">${drvOpts}</select>
+      <label>Авто</label>
+      <select id="ex-plate-${o.id}">${plateOpts}</select>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
+        <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
+        <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка / ставки</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `${driversBlock}
+    <div class="hint" style="padding:8px 16px 0">Админ видит все данные заказа и водителей. Водитель на бирже — только маршрут и контакт.</div>
+    <div class="admin-cards">${cards}</div>`;
+}
+function renderAdmin(){
+  const orders=filteredOrders();
+  if(state.adminFilter==='exchange'){
+    $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
+    document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
+    document.querySelectorAll('#admin-list .ex-unpub').forEach(b=>b.onclick=()=>unpublishFromExchange(b.dataset.id));
+    document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+    return;
+  }
+  if(!orders.length){ $('admin-list').innerHTML=`<div class="empty">Пока нет заявок. Нажмите + Заказ</div>`; return; }
+  const exCount=exchangeOrders().length;
+  const cards=orders.map(o=>{
+    const m=metrics(o);
+    const hasRate=selectedRate(o)!=null;
+    const pay=m.driverPay;
+    const onEx=!!o.onExchange && !o.closedAt && o.startOdometer==null;
+    return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''}>
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
@@ -1932,7 +2014,10 @@ function renderAdmin(){
       ${hasRate
         ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
         : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
-      <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
+        ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
+      </div>
     </div>`;
   }).join('');
   const head=COLS.map(c=>`<th>${c}</th>`).join('');
@@ -1942,12 +2027,18 @@ function renderAdmin(){
     return `<tr data-id="${o.id}"><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
   }).join('');
   $('admin-list').innerHTML=`
-    <div class="hint" style="padding:8px 16px 0">Карточка заявки → поля ставок, доплаты, аренды. После «Сохранить» считается ЗП водителя.</div>
+    <div class="hint" style="padding:8px 16px 0">Карточка заявки → ставки и финансы.${exCount?` На бирже сейчас: <strong>${exCount}</strong> — фильтр «Биржа».`:''}</div>
     <div class="admin-cards">${cards}</div>
     <div class="hint" style="padding:0 16px">Широкая таблица (горизонтальный скролл)</div>
     <div class="table-wrap" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
   document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
+  document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    state.adminFilter='exchange';
+    document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x.dataset.filter==='exchange'));
+    renderAdmin();
+  });
 }
 function fillCreateSelects(){
   $('create-plate').innerHTML=state.vehicles.map(v=>`<option>${esc(v.plate)}</option>`).join('');

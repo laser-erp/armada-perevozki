@@ -7,6 +7,7 @@ struct AdminHomeView: View {
 
     enum StatusFilter: String, CaseIterable, Identifiable {
         case all = "Все"
+        case exchange = "Биржа"
         case assigned = "Назначен"
         case progress = "В работе"
         case closed = "Закрыт"
@@ -17,11 +18,16 @@ struct AdminHomeView: View {
         store.allOrders().filter { order in
             switch filter {
             case .all: return true
+            case .exchange: return order.isOnExchange
             case .assigned: return (order.isAssignedPending || order.isEnRoute) && !order.isOnExchange
             case .progress: return order.isInProgress
             case .closed: return order.isClosed
             }
         }
+    }
+
+    private var exchangeDrivers: [DriverProfile] {
+        store.drivers.filter(\.exchangeEnabled)
     }
 
     var body: some View {
@@ -37,14 +43,34 @@ struct AdminHomeView: View {
                     .pickerStyle(.segmented)
                     .padding(12)
 
-                    Text("Нажмите строку заявки → поля ставок и финансов")
+                    Text(filter == .exchange
+                         ? "Биржа: полные данные заказа. Водители с биржей видны ниже."
+                         : "Нажмите строку заявки → поля ставок и финансов")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(AppTheme.textMuted)
                         .padding(.horizontal, 12)
 
+                    if filter == .exchange {
+                        if exchangeDrivers.isEmpty {
+                            Text("Биржа ни у кого не включена — Справочники → Водители")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 6)
+                        } else {
+                            Text("С биржей: " + exchangeDrivers.map {
+                                "\($0.name) (\($0.phone.isEmpty ? "без тел." : $0.phone), \(Int($0.salaryPercent))%)"
+                            }.joined(separator: "; "))
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, 12)
+                                .padding(.bottom, 6)
+                        }
+                    }
+
                     if filtered.isEmpty {
                         Spacer()
-                        Text("Нет заявок")
+                        Text(filter == .exchange ? "На бирже пусто" : "Нет заявок")
                             .foregroundStyle(AppTheme.textMuted)
                         Spacer()
                     } else {
