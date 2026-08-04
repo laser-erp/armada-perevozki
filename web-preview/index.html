@@ -270,7 +270,11 @@
   </div>
 </div>
 <script>
-const DEFAULT_VEHICLES=[{plate:"О 535 МВ 198",consumptionPer100Km:20},{plate:"М 277 НО 198",consumptionPer100Km:20}];
+const DEFAULT_VEHICLES=[
+  {plate:"О 535 МВ 198",consumptionPer100Km:20},
+  {plate:"М 277 НО 198",consumptionPer100Km:20},
+  {plate:"В 603 СА 47",consumptionPer100Km:20}
+];
 const DEFAULT_DRIVERS=[
   {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
   {name:"Нечаев А.С.",salaryPercent:30,exchangeEnabled:false,phone:""}
@@ -278,7 +282,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-nechaev-driver";
+const APP_BUILD="2026-08-04-vehicle-v603";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -658,7 +662,7 @@ function migrateCompanies(){
     }
   });
   state.companies=(state.companies||[]).map(normalizeCompany).filter(Boolean);
-  // drivers exchangeEnabled + seed missing defaults (напр. Нечаев А.С.)
+  // drivers / vehicles: seed missing defaults (Нечаев А.С., В 603 СА 47, …)
   state.drivers=(state.drivers||[]).map(d=>({
     name:d.name,
     salaryPercent:d.salaryPercent??30,
@@ -669,6 +673,16 @@ function migrateCompanies(){
   DEFAULT_DRIVERS.forEach(def=>{
     const exists=state.drivers.some(d=>(d.name||'').toLowerCase()===(def.name||'').toLowerCase());
     if(!exists) state.drivers.push({...def});
+  });
+  state.vehicles=(state.vehicles||[]).map(v=>({
+    plate:String(v.plate||'').trim(),
+    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20
+  })).filter(v=>v.plate);
+  if(!state.vehicles.length) state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
+  DEFAULT_VEHICLES.forEach(def=>{
+    const norm=p=>String(p||'').toLowerCase().replace(/\s+/g,'');
+    const exists=state.vehicles.some(v=>norm(v.plate)===norm(def.plate));
+    if(!exists) state.vehicles.push({...def});
   });
   syncCustomersFromCompanies();
   // if still empty companies, mine from orders
