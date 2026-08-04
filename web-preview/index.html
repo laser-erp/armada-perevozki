@@ -1273,15 +1273,8 @@ function finalizeClose(refueled,price,liters){
   const fuelBal=applyFuelRemainingOnClose(order, state.shift, refueled?liters:null);
   applyClientTariff(order);
   upsertOrder(order);
-  let fuelNote='';
-  if(!refueled && order.fuelPricePerLiter!=null){
-    fuelNote+=`\nТопливо: ${fmt(order.fuelPricePerLiter)} ₽/л (без заправки)`;
-  }
-  if(fuelBal.after!=null){
-    fuelNote+=`\nОстаток топлива: ${fmt(fuelBal.after)} л`;
-    if(fuelBal.used!=null) fuelNote+=` (расход ${fmt(fuelBal.used)} л)`;
-  }
-  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nДо стоянки / след. заказа: ${order.emptyKmAfter??0} км${fuelNote}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
+  // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
+  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
