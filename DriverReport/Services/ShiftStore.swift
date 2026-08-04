@@ -248,26 +248,30 @@ final class ShiftStore: ObservableObject {
         driverName: String,
         customer: String,
         loadingAddress: String,
-        unloadingAddress: String
+        unloadingAddress: String,
+        vehicleAt: Date? = nil
     ) -> OrderRecord {
         let percent = driver(for: driverName).salaryPercent
-        let order = OrderRecord(
+        var order = OrderRecord(
             sequentialNumber: nextSequentialNumber(),
             dayNumber: dayNumber,
             source: .dispatcher,
             vehiclePlate: vehiclePlate,
             driverName: driverName,
             customer: customer,
+            vehicleAt: vehicleAt,
             loadingAddress: loadingAddress,
             unloadingAddress: unloadingAddress,
             driverPercent: percent
         )
+        order.refreshFreeAt(minWorkHours: financeSettings.minWorkHours)
         upsertOrder(order)
         return order
     }
 
     func recalculated(_ order: OrderRecord) -> OrderRecord {
         var o = order
+        o.refreshFreeAt(minWorkHours: financeSettings.minWorkHours)
         let consumption = vehicle(for: o.vehiclePlate).consumptionPer100Km
         if let km = OrderFinance.kmParkingToEnd(o) {
             let liters = OrderFinance.fuelLiters(km: km, consumptionPer100: consumption)

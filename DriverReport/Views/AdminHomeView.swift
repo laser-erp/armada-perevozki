@@ -211,10 +211,21 @@ struct AdminCreateOrderView: View {
     @State private var customer = ""
     @State private var loading = ""
     @State private var unloading = ""
+    @State private var vehicleAt = Date()
     @State private var error: String?
 
     private var selectedCustomer: CustomerProfile? {
         store.customer(for: customer)
+    }
+
+    private var freeHint: String {
+        let free = OrderRecord.computeFreeAt(
+            vehicleAt: vehicleAt,
+            estimateWorkHours: nil,
+            workHours: nil,
+            minWorkHours: store.financeSettings.minWorkHours
+        )
+        return "Ориентир освобождения: \(OrderRecord.formatRuDateTimeAt(free)) (подача + \(Int(store.financeSettings.minWorkHours)) ч)"
     }
 
     var body: some View {
@@ -237,6 +248,10 @@ struct AdminCreateOrderView: View {
                         }
                     }
                 }
+                DatePicker("Подача ТС", selection: $vehicleAt)
+                Text(freeHint)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textMuted)
             }
             Section("Маршрут") {
                 TextField("Адрес загрузки", text: $loading, axis: .vertical)
@@ -270,7 +285,8 @@ struct AdminCreateOrderView: View {
                     driverName: driver,
                     customer: customer.trimmingCharacters(in: .whitespacesAndNewlines),
                     loadingAddress: load,
-                    unloadingAddress: unload
+                    unloadingAddress: unload,
+                    vehicleAt: vehicleAt
                 )
                 dismiss()
             }

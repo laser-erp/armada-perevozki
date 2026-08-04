@@ -55,6 +55,10 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var contactName: String?
     var contactPhone: String?
     var contactPersonId: String?
+    /// Подача ТС (дата/время).
+    var vehicleAt: Date?
+    /// Ориентир освобождения ТС (подача + часы работы).
+    var freeAt: Date?
     /// own / carrier / exchange
     var executorType: String?
     var onExchange: Bool?
@@ -172,11 +176,71 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var isInProgress: Bool { !isClosed && startOdometer != nil }
     var isCarryOverLoaded: Bool { isInProgress && (staysLoadedOvernight == true) }
 
+    /// Админ: компания + контакт.
     var contactLine: String {
         [customer, contactName ?? "", contactPhone ?? ""]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
+    }
+
+    /// Водителю компанию не показываем; контакт — только после выезда/в работе.
+    func driverMaySeeContact(asDriver driver: String = AppDefaults.driverName) -> Bool {
+        guard onExchange != true, driverName == driver else { return false }
+        return departOdometer != nil || startOdometer != nil || closedAt != nil
+    }
+
+    func driverContactLine(asDriver driver: String = AppDefaults.driverName) -> String {
+        guard driverMaySeeContact(asDriver: driver) else { return "" }
+        return [contactName ?? "", contactPhone ?? ""]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    static func formatRuDateTimeAt(_ date: Date?) -> String {
+        guard let date else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ru_RU")
+        f.dateFormat = "dd.MM.yyyy 'к' HH:mm"
+        return f.string(from: date)
+    }
+
+    /// Освобождение = подача + max(мин. часы, ориентир/факт). Час подачи не входит.
+    static func computeFreeAt(
+        vehicleAt: Date?,
+        estimateWorkHours: Double?,
+        workHours: Double?,
+        minWorkHours: Double
+    ) -> Date? {
+        guard let vehicleAt else { return nil }
+        let minW = max(0, minWorkHours)
+        let entered = workHours ?? estimateWorkHours
+        let hours: Double
+        if let entered, entered > 0 {
+            hours = max(minW, entered)
+        } else {
+            hours = minW
+        }
+        return vehicleAt.addingTimeInterval(hours * 3600)
+    }
+
+    mutating func refreshFreeAt(minWorkHours: Double) {
+        freeAt = Self.computeFreeAt(
+            vehicleAt: vehicleAt,
+            estimateWorkHours: estimateWorkHours,
+            workHours: workHours,
+            minWorkHours: minWorkHours
+        )
+    }
+
+    var scheduleSummary: String {
+        guard let vehicleAt else { return "" }
+        var parts = ["Подача ТС: \(Self.formatRuDateTimeAt(vehicleAt))"]
+        if let freeAt {
+            parts.append("Ориентир освобождения: \(Self.formatRuDateTimeAt(freeAt))")
+        }
+        return parts.joined(separator: "\n")
     }
 
     /// Пометить ночёвку с грузом и увеличить счётчик ночей.
@@ -214,6 +278,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         contactName: String? = nil,
         contactPhone: String? = nil,
         contactPersonId: String? = nil,
+        vehicleAt: Date? = nil,
+        freeAt: Date? = nil,
         executorType: String? = nil,
         onExchange: Bool? = nil,
         carrierCompanyId: String? = nil,
@@ -265,6 +331,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.contactName = contactName
         self.contactPhone = contactPhone
         self.contactPersonId = contactPersonId
+        self.vehicleAt = vehicleAt
+        self.freeAt = freeAt
         self.executorType = executorType
         self.onExchange = onExchange
         self.carrierCompanyId = carrierCompanyId
@@ -314,6 +382,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, sequentialNumber, dayNumber, createdAt, source, vehiclePlate, driverName
         case customer, customerId, contactName, contactPhone, contactPersonId
+        case vehicleAt, freeAt
         case executorType, onExchange, carrierCompanyId, carrierDriverId, carrierVehicleId
         case loadingAddress, unloadingAddress, routePoints, departOdometer, startOdometer, previousOdometer
         case emptyKmBefore, loadedKm, emptyKmAfter, endOdometer, closedAt
@@ -338,6 +407,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         contactName = try c.decodeIfPresent(String.self, forKey: .contactName)
         contactPhone = try c.decodeIfPresent(String.self, forKey: .contactPhone)
         contactPersonId = try c.decodeIfPresent(String.self, forKey: .contactPersonId)
+        vehicleAt = try c.decodeIfPresent(Date.self, forKey: .vehicleAt)
+        freeAt = try c.decodeIfPresent(Date.self, forKey: .freeAt)
         executorType = try c.decodeIfPresent(String.self, forKey: .executorType)
         onExchange = try c.decodeIfPresent(Bool.self, forKey: .onExchange)
         carrierCompanyId = try c.decodeIfPresent(String.self, forKey: .carrierCompanyId)
@@ -404,6 +475,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encodeIfPresent(contactName, forKey: .contactName)
         try c.encodeIfPresent(contactPhone, forKey: .contactPhone)
         try c.encodeIfPresent(contactPersonId, forKey: .contactPersonId)
+        try c.encodeIfPresent(vehicleAt, forKey: .vehicleAt)
+        try c.encodeIfPresent(freeAt, forKey: .freeAt)
         try c.encodeIfPresent(executorType, forKey: .executorType)
         try c.encodeIfPresent(onExchange, forKey: .onExchange)
         try c.encodeIfPresent(carrierCompanyId, forKey: .carrierCompanyId)

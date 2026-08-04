@@ -180,6 +180,11 @@
           <input id="create-contact-phone" inputmode="tel" placeholder="Телефон контакта" />
         </div>
         <div class="field-block">
+          <label>Подача ТС</label>
+          <input id="create-vehicle-at" type="datetime-local" />
+          <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
+        </div>
+        <div class="field-block">
           <label>Адрес загрузки</label>
           <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
           <select id="create-load-pick"><option value="">или из сохранённых</option></select>
@@ -270,7 +275,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30,exch
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-admin-exchange";
+const APP_BUILD="2026-08-04-vehicle-schedule";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -686,11 +691,87 @@ function exchangeEnabledDrivers(){
   return (state.drivers||[]).filter(d=>d.exchangeEnabled);
 }
 function orderContactLine(o){
+  // Админ: компания + контакт
   const parts=[];
   if(o.customer) parts.push(o.customer);
   if(o.contactName) parts.push(o.contactName);
   if(o.contactPhone) parts.push(o.contactPhone);
   return parts.join(' · ')||'—';
+}
+/** Водителю название заказчика не показываем никогда */
+function driverContactLine(o){
+  if(!driverMaySeeContact(o)) return '';
+  const parts=[];
+  if(o.contactName) parts.push(o.contactName);
+  if(o.contactPhone) parts.push(o.contactPhone);
+  return parts.join(' · ');
+}
+/** Контакт — только после выезда/взятия в работу; на бирже и до «Выехал» — скрыт. Компанию не показываем. */
+function driverMaySeeContact(o){
+  if(!o || o.onExchange) return false;
+  if(o.driverName!==DRIVER) return false;
+  return o.departOdometer!=null || o.startOdometer!=null || !!o.closedAt;
+}
+function formatRuDateTimeAt(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yyyy=d.getFullYear();
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mi=String(d.getMinutes()).padStart(2,'0');
+  return `${dd}.${mm}.${yyyy} к ${hh}:${mi}`;
+}
+function toDatetimeLocalValue(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromDatetimeLocalValue(v){
+  const s=String(v||'').trim();
+  if(!s) return null;
+  const d=new Date(s);
+  if(Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+/** Освобождение = подача + max(мин. часы работы, ориентир/факт часов). Час подачи в сумму не входит. */
+function computeFreeAt(vehicleAt, order, fin){
+  if(!vehicleAt) return null;
+  const d=new Date(vehicleAt);
+  if(Number.isNaN(d.getTime())) return null;
+  const s=Object.assign({}, DEFAULT_FINANCE, fin||state.finance||{});
+  const minW=Math.max(0, +(s.minWorkHours||4));
+  const entered=order&&(order.workHours??order.estimateWorkHours);
+  const hours=(entered!=null && +entered>0)?Math.max(minW, +entered):minW;
+  return new Date(d.getTime()+hours*3600*1000).toISOString();
+}
+function applyOrderSchedule(order){
+  if(!order) return order;
+  if(order.vehicleAt){
+    order.freeAt=computeFreeAt(order.vehicleAt, order, state.finance);
+  } else {
+    order.freeAt=null;
+  }
+  return order;
+}
+function orderScheduleLines(o, forDriver){
+  if(!o||!o.vehicleAt) return '';
+  const free=o.freeAt||computeFreeAt(o.vehicleAt, o, state.finance);
+  let html=`<p style="margin-top:6px"><strong>Подача ТС:</strong> ${esc(formatRuDateTimeAt(o.vehicleAt))}</p>`;
+  if(free) html+=`<p><strong>Ориентир освобождения:</strong> ${esc(formatRuDateTimeAt(free))}</p>`;
+  return html;
+}
+function updateCreateFreeHint(){
+  const el=$('create-free-hint'); if(!el) return;
+  const at=fromDatetimeLocalValue(($('create-vehicle-at')||{}).value);
+  if(!at){ el.textContent='Ориентир освобождения: укажите подачу ТС'; return; }
+  const draft={estimateWorkHours:null};
+  const free=computeFreeAt(at, draft, state.finance);
+  const minW=state.finance.minWorkHours??4;
+  el.textContent=`Ориентир освобождения: ${formatRuDateTimeAt(free)} (подача + ${minW} ч работы)`;
 }
 migrateCompanies();
 function fillCustomerPickers(){
@@ -1772,13 +1853,12 @@ function showOrders(){
   const board=driverExchangeEnabled(DRIVER)?exchangeOrders():[];
   let html='';
   if(board.length){
-    html+=`<div class="orders-hint">Биржа — можно взять заказ</div>`;
+    html+=`<div class="orders-hint">Биржа — маршрут и время подачи; заказчик и контакт скрыты до взятия</div>`;
     html+=board.map(o=>`<div class="card" style="margin:8px 0">
       <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p>${esc(routeText(o))}</p>
-      <p style="color:var(--accent);font-weight:700">${esc(orderContactLine(o))}</p>
-      ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent);font-weight:700">Позвонить ${esc(o.contactPhone)}</a></p>`:''}
+      ${orderScheduleLines(o, true)}
       <button type="button" class="primary take-exchange" data-id="${o.id}">Взять заказ</button>
     </div>`).join('');
   } else if(driverExchangeEnabled(DRIVER)){
@@ -1795,14 +1875,15 @@ function showOrders(){
       const canArrive=!o.closedAt && o.departOdometer!=null && o.startOdometer==null;
       const action=canArrive?'arrive':(canDepart?'depart':null);
       const actionLabel=canArrive?'Прибыл':(canDepart?'Выехал':'');
-      const contact=orderContactLine(o);
+      const contact=driverContactLine(o);
       return `<div class="swipe-item" data-id="${o.id}" data-can-start="${action?1:0}" data-action="${action||''}">
         ${action?`<div class="swipe-actions"><button type="button" class="swipe-start" data-id="${o.id}" data-action="${action}">${actionLabel}</button></div>`:''}
         <div class="swipe-front">
           <h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
           <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
-          <p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(contact)}</p>
-          ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
+          ${orderScheduleLines(o, true)}
+          ${contact?`<p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(contact)}</p>`:''}
+          ${driverMaySeeContact(o)&&o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
           ${o.departOdometer!=null&&o.startOdometer==null?`<p style="color:var(--accent);margin-top:4px">Выезд: ${o.departOdometer} — отметьте прибытие</p>`:''}
           <p style="color:var(--muted);margin-top:4px">${esc(driverPayText(o))}</p>
         </div>
@@ -1965,6 +2046,7 @@ function renderAdminExchangeBoard(orders){
       <p style="font-weight:700;color:var(--accent)">${esc(orderContactLine(o))}</p>
       ${o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
       <p>${esc(routeText(o))}</p>
+      ${orderScheduleLines(o, false)}
       <p>Исполнение: биржа · сейчас: ${esc(o.driverName||'—')} / ${esc(o.vehiclePlate||'—')}</p>
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)} · всего: ${fmt(dayTotal(o))}</p>
       <p>₽/л: ${fmt(o.fuelPricePerLiter)} · ₽/км: ${fmt(o.ratePerKmCash)} · ₽/час: ${fmt(o.ratePerHourWork)}</p>
@@ -2010,6 +2092,7 @@ function renderAdmin(){
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
       <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
+      ${orderScheduleLines(o, false)}
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
       ${hasRate
         ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
@@ -2046,7 +2129,7 @@ function fillCreateSelects(){
 }
 let createDay=1;
 function bindAdminCreate(){
-  $('admin-new').onclick=()=>{ createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own'; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI; };
+  $('admin-new').onclick=()=>{ createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own'; fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI; };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
   $('create-save').onclick=saveDispatcherOrder;
@@ -2058,8 +2141,10 @@ function saveDispatcherOrder(){
   const contactName=($('create-contact-name').value||'').trim();
   const contactPhone=($('create-contact-phone').value||'').trim();
   const mode=($('create-exec-mode').value||'own');
+  const vehicleAt=fromDatetimeLocalValue(($('create-vehicle-at')||{}).value);
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
   if(!customer){ $('create-error').textContent='Укажите заказчика'; return; }
+  if(!vehicleAt){ $('create-error').textContent='Укажите дату и время подачи ТС'; return; }
   let plate=''; let driver=''; let onExchange=false;
   let carrierCompanyId=null, carrierDriverId=null, carrierVehicleId=null;
   let driverPercentVal=0;
@@ -2093,6 +2178,7 @@ function saveDispatcherOrder(){
     vehiclePlate:plate, driverName:driver, customer,
     customerId:company?company.id:null,
     contactName, contactPhone, contactPersonId:(($('create-contact-pick')||{}).value)||null,
+    vehicleAt,
     loadingAddress:load, unloadingAddress:unload,
     routePoints:defaultRoutePoints(load,unload), startOdometer:null,
     driverPercent:driverPercentVal,
@@ -2100,6 +2186,7 @@ function saveDispatcherOrder(){
     carrierCompanyId, carrierDriverId, carrierVehicleId
   };
   ensureRoutePoints(order);
+  applyOrderSchedule(order);
   upsertOrder(order);
   show('admin'); renderAdmin();
 }
@@ -2206,6 +2293,12 @@ function openDetail(id){
       <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
       <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
       <select id="d-customer-pick"><option value="">или выбрать сохранённого</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
+      <label for="d-contact-name">Контакт</label>
+      <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
+      <input id="d-contact-phone" inputmode="tel" value="${esc(o.contactPhone||'')}" placeholder="Телефон" />
+      <label for="d-vehicle-at">Подача ТС</label>
+      <input id="d-vehicle-at" type="datetime-local" value="${esc(toDatetimeLocalValue(o.vehicleAt))}" />
+      <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,state.finance)))+' (подача + часы работы)':'укажите подачу ТС'}</div>
     </div>
     <div class="field-block">
       <h3>Маршрут</h3>
@@ -2289,6 +2382,25 @@ function openDetail(id){
     }
   });
   $('d-customer')&&($('d-customer').oninput=()=>renderRouteEditor());
+  const refreshFreeHint=()=>{
+    const hint=$('d-free-hint'); if(!hint) return;
+    const at=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
+    if(!at){ hint.textContent='Ориентир освобождения: укажите подачу ТС'; return; }
+    const draft={
+      estimateWorkHours:numTemp('d-estimate-hours'),
+      workHours:numTemp('d-work-hours')
+    };
+    const free=computeFreeAt(at, draft, state.finance);
+    hint.textContent=`Ориентир освобождения: ${formatRuDateTimeAt(free)} (подача + часы работы)`;
+  };
+  function numTemp(el){
+    const v=($(el)?.value||'').trim().replace(',','.');
+    if(v==='') return null;
+    const n=Number(v); return n>0?n:null;
+  }
+  $('d-vehicle-at')&&($('d-vehicle-at').oninput=refreshFreeHint);
+  $('d-estimate-hours')&&($('d-estimate-hours').oninput=refreshFreeHint);
+  $('d-work-hours')&&($('d-work-hours').oninput=refreshFreeHint);
   $('detail-back').onclick=()=>{ if(detailActions) detailActions.style.display='none'; show('admin'); renderAdmin(); };
   $('detail-save').onclick=()=>{
     const order=state.orders.find(x=>x.id===id); if(!order) return;
@@ -2300,6 +2412,9 @@ function openDetail(id){
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
+    order.contactName=(($('d-contact-name')||{}).value||'').trim();
+    order.contactPhone=(($('d-contact-phone')||{}).value||'').trim();
+    order.vehicleAt=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
     order.routePoints=cleaned;
     ensureRoutePoints(order);
     const after=($('d-empty-after').value||'').replace(/\D/g,'');
@@ -2312,6 +2427,7 @@ function openDetail(id){
     order.estimateKm=estRaw?+estRaw:null;
     const eh=num('d-estimate-hours'); order.estimateWorkHours=(eh!=null&&eh>0)?eh:null;
     const wh=num('d-work-hours'); order.workHours=(wh!=null&&wh>0)?wh:null;
+    applyOrderSchedule(order);
     const stor=num('d-overnight-rate'); order.overnightStorageRateCash=(stor!=null&&stor>0)?stor:null;
     const nightsRaw=(($('d-overnight-nights')||{}).value||'').replace(/\D/g,'');
     order.overnightNights=nightsRaw?+nightsRaw:null;
