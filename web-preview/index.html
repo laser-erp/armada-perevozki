@@ -186,6 +186,7 @@
       border-radius:14px;border:1px solid rgba(255,255,255,.04)
     }
     .drv-card .drv-name{min-width:0;font-weight:700;font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .drv-card .drv-firm{display:block;font-weight:500;font-size:.58rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .drv-card .drv-phone{
       min-width:0;width:100%;padding:5px 8px;min-height:30px;border-radius:var(--pill);
       border:0;background:var(--field);color:var(--text);font-size:15px
@@ -459,7 +460,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-drv-add-btn";
+const APP_BUILD="2026-08-04-fleet-per-firm";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -701,6 +702,9 @@ function normalizeSpace(s){
 }
 function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
 function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
+function samePersonName(a,b){
+  return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+}
 /** «Наша фирма» пространства — у каждого админа своя. */
 function ensureOwnCompanyForSpace(space){
   if(!space) return null;
@@ -708,7 +712,20 @@ function ensureOwnCompanyForSpace(space){
     const existing=findCompanyById(space.ownCompanyId);
     if(existing && companyHasRole(existing,'own')){
       if(!existing.spaceId) existing.spaceId=space.id;
+      if((existing.name||'').trim()!==(space.name||'').trim() && space.name){
+        // id сохранён — название фирмы берём из пространства
+      }
       return existing;
+    }
+    // ownCompanyId есть, а компании нет (удалили/потеряли) — восстанавливаем с тем же id
+    if(!existing){
+      const restored=upsertCompany({
+        id:space.ownCompanyId,
+        name:space.name, roles:['own'], note:space.inn?`ИНН ${space.inn}`:'',
+        contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
+        spaceId:space.id, inn:space.inn, ogrn:space.ogrn, kpp:space.kpp, address:space.address
+      });
+      if(restored) return restored;
     }
   }
   let co=(state.companies||[]).find(c=>c.spaceId===space.id && companyHasRole(c,'own'));
@@ -728,6 +745,55 @@ function ensureOwnCompanyForSpace(space){
   }
   if(co) space.ownCompanyId=co.id;
   return co||null;
+}
+/** Водитель с таким ФИО уже есть именно в этой фирме (в другой фирме — можно). */
+function driverExistsInCompany(name, companyId){
+  if(!companyId) return (state.drivers||[]).some(d=>samePersonName(d.name,name));
+  return (state.drivers||[]).some(d=>samePersonName(d.name,name) && d.companyId===companyId);
+}
+function ensureDriverInCompany(opts){
+  const name=String(opts.name||'').trim();
+  const companyId=opts.companyId;
+  if(!name||!companyId) return false;
+  if(driverExistsInCompany(name, companyId)) return false;
+  state.drivers.push({
+    name,
+    salaryPercent:opts.salaryPercent??30,
+    exchangeEnabled:!!opts.exchangeEnabled,
+    phone:String(opts.phone||'').trim(),
+    ownerAdminId:opts.ownerAdminId||null,
+    ownerAdminName:opts.ownerAdminName||null,
+    spaceId:opts.spaceId||null,
+    companyId,
+    companyName:opts.companyName||null
+  });
+  return true;
+}
+/** Парк (водители/авто) — отдельно на каждую «нашу фирму». */
+function ensureFleetPerSpaces(){
+  let changed=false;
+  (state.spaces||[]).forEach(sp=>{
+    const co=ensureOwnCompanyForSpace(sp);
+    if(!co) return;
+    (state.drivers||[]).forEach(d=>{
+      if(d.spaceId===sp.id && d.companyId!==co.id){
+        d.companyId=co.id; d.companyName=co.name; changed=true;
+      }
+    });
+    (state.vehicles||[]).forEach(v=>{
+      if(v.spaceId!==sp.id) return;
+      if(v.companyId!==co.id || v.companyName!==co.name){
+        v.companyId=co.id; v.companyName=co.name; changed=true;
+      }
+    });
+    const adm=(state.admins||[]).find(a=>a.id===sp.adminId)
+      || (state.admins||[]).find(a=>a.spaceId===sp.id);
+    if(adm && ensureDriverInCompany({
+      name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
+      ownerAdminId:adm.id, ownerAdminName:adm.name
+    })) changed=true;
+  });
+  return changed;
 }
 function ownCompanyForSpaceId(spaceId){
   const sp=findSpaceById(spaceId);
@@ -757,7 +823,13 @@ function createSpaceForAdmin(admin, firm){
   });
   state.spaces=(state.spaces||[]).concat([space]);
   admin.spaceId=space.id;
-  ensureOwnCompanyForSpace(space);
+  const co=ensureOwnCompanyForSpace(space);
+  if(co){
+    ensureDriverInCompany({
+      name:admin.name, companyId:co.id, companyName:co.name, spaceId:space.id,
+      ownerAdminId:admin.id, ownerAdminName:admin.name
+    });
+  }
   return space;
 }
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
@@ -809,6 +881,7 @@ function migrateSpaces(){
     if(adm&&adm.spaceId){ o.spaceId=adm.spaceId; changed=true; }
     else if(fallbackSpace){ o.spaceId=fallbackSpace; changed=true; }
   });
+  if(ensureFleetPerSpaces()) changed=true;
   return changed;
 }
 function isValidInn(inn){
@@ -1579,11 +1652,10 @@ function migrateCompanies(){
     companyId:d.companyId||null,
     companyName:d.companyName||null
   }));
-  if(!state.drivers.length) state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
-  DEFAULT_DRIVERS.forEach(def=>{
-    const exists=state.drivers.some(d=>(d.name||'').toLowerCase()===(def.name||'').toLowerCase());
-    if(!exists) state.drivers.push({...def});
-  });
+  // Глобальный список по ФИО больше не сидим — у каждой фирмы свой парк (ensureFleetPerSpaces).
+  if(!state.drivers.length && !(state.spaces||[]).length){
+    state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
+  }
   state.vehicles=(state.vehicles||[]).map(v=>({
     plate:String(v.plate||'').trim(),
     consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
@@ -1591,12 +1663,9 @@ function migrateCompanies(){
     companyId:v.companyId||null,
     companyName:v.companyName||null
   })).filter(v=>v.plate);
-  if(!state.vehicles.length) state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
-  DEFAULT_VEHICLES.forEach(def=>{
-    const norm=p=>String(p||'').toLowerCase().replace(/\s+/g,'');
-    const exists=state.vehicles.some(v=>norm(v.plate)===norm(def.plate));
-    if(!exists) state.vehicles.push({...def});
-  });
+  if(!state.vehicles.length && !(state.spaces||[]).length){
+    state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
+  }
   // наши фирмы (ООО «Армада», ИП Нечаев А.С.)
   DEFAULT_OWN_COMPANIES.forEach(def=>{
     const existing=findCompanyByName(def.name);
@@ -3573,8 +3642,9 @@ function openCatalogs(){
   }).join('') || `<div class="hint">Пока пусто — нажмите «+ Компания»</div>`;
 
   const driverCards=drivers.map(({d,i})=>{
+    const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||(d.spaceId&&(findSpaceById(d.spaceId)||{}).name)||'';
     return `<div class="drv-card">
-      <div class="drv-name" title="${esc(d.companyName||d.name)}">${esc(d.name)}</div>
+      <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Тел." />
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
@@ -3823,10 +3893,15 @@ function openCatalogs(){
   document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveVeh; const v=+(($('veh-'+i).value||'').replace(',','.')); if(!(v>0)) return; state.vehicles[i].consumptionPer100Km=v; persist(); $('cat-ok').style.display='block'; });
   document.querySelectorAll('[data-del-veh]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.delVeh;
-    const plate=state.vehicles[i]?.plate||'';
-    if(!confirm(`Удалить авто ${plate}?`)) return;
-    if(state.vehicles.length<=1){ alert('Должен остаться хотя бы один автомобиль'); return; }
+    const v=state.vehicles[i];
+    if(!v) return;
+    const plate=v.plate||'';
+    const firm=v.companyName||(findCompanyById(v.companyId)||{}).name||'этой фирмы';
+    if(!confirm(`Удалить авто ${plate} из «${firm}»?`)) return;
+    const sameFirm=(state.vehicles||[]).filter(x=>v.companyId?x.companyId===v.companyId:x.spaceId===v.spaceId);
+    if(sameFirm.length<=1){ alert('В этой фирме должен остаться хотя бы один автомобиль'); return; }
     state.vehicles.splice(i,1);
+    bumpDataEpoch('del-vehicle');
     persist(); openCatalogs();
   });
   $('own-veh-add')&&($('own-veh-add').onclick=()=>{
@@ -3835,8 +3910,6 @@ function openCatalogs(){
     let cons=+((($('own-veh-cons')||{}).value||'').replace(',','.'));
     if(!plate){ alert('Укажите госномер'); return; }
     if(!(cons>0)) cons=20;
-    const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase());
-    if(exists){ alert('Такой госномер уже есть'); return; }
     let owner;
     if(isSuperAdmin()){
       const ownerId=(($('own-veh-owner')||{}).value||currentAdmin.id||'').trim();
@@ -3845,10 +3918,13 @@ function openCatalogs(){
       owner=resolveAdminOwner(currentAdmin.id);
     }
     if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
+    const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase() && v.companyId===owner.companyId);
+    if(exists){ alert('Такой госномер уже есть в этой фирме'); return; }
     state.vehicles.push({
       plate, consumptionPer100Km:cons,
       spaceId:owner.spaceId, companyId:owner.companyId, companyName:owner.companyName
     });
+    bumpDataEpoch('add-vehicle');
     persist(); openCatalogs();
     flashCatOk();
   });
@@ -3873,9 +3949,12 @@ function openCatalogs(){
     if(!d) return;
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     const name=d.name||'';
-    if(!confirm(`Удалить водителя ${name}?`)) return;
-    if(state.drivers.length<=1){ alert('Должен остаться хотя бы один водитель'); return; }
+    const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'этой фирмы';
+    if(!confirm(`Удалить водителя ${name} из «${firm}»?\nВ других фирмах он останется.`)) return;
+    const sameFirm=(state.drivers||[]).filter(x=>d.companyId?x.companyId===d.companyId:(d.spaceId?x.spaceId===d.spaceId:true));
+    if(sameFirm.length<=1){ alert('В этой фирме должен остаться хотя бы один водитель'); return; }
     state.drivers.splice(i,1);
+    bumpDataEpoch('del-driver');
     persist(); openCatalogs();
   });
   $('own-drv-add')&&($('own-drv-add').onclick=()=>{
@@ -3886,16 +3965,16 @@ function openCatalogs(){
     const exchangeEnabled=!!(($('own-drv-ex')||{}).checked);
     if(!name){ alert('Укажите ФИО водителя'); return; }
     if(Number.isNaN(pct) || pct<0) pct=30;
-    const exists=state.drivers.some(d=>(d.name||'').toLowerCase()===name.toLowerCase());
-    if(exists){ alert('Такой водитель уже есть'); return; }
     const owner=resolveAdminOwner(currentAdmin.id);
     if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
+    if(driverExistsInCompany(name, owner.companyId)){ alert('Такой водитель уже есть в вашей фирме'); return; }
     state.drivers.push({
       name, salaryPercent:pct, phone, exchangeEnabled,
       ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
       spaceId:owner.spaceId||null,
       companyId:owner.companyId, companyName:owner.companyName
     });
+    bumpDataEpoch('add-driver');
     persist(); openCatalogs();
     flashCatOk();
   });
@@ -3928,7 +4007,10 @@ function updateSyncHint(){
     bumpDataEpoch('purge-boot');
     dirty=true;
   }
-  if(dirty) persist();
+  if(dirty){
+    bumpDataEpoch('migrate-boot');
+    persist();
+  }
   updateSyncHint();
   setTimeout(()=>{
     updateSyncHint();
