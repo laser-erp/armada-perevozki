@@ -109,13 +109,60 @@
     .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
-    /* Компактные блоки справочников — телефон и ПК */
-    .cat-list{display:flex;flex-direction:column;gap:6px}
-    .cat-compact{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px;padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.06)}
-    .cat-compact .row{gap:6px;align-items:center}
-    .cat-compact input,.cat-compact select{padding:8px 10px;border-radius:10px;font-size:16px;min-height:40px}
-    .check{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);white-space:nowrap;margin:0!important;width:auto!important}
+    /* Справочники — плотная эргономика */
+    .cat-sticky{
+      position:sticky;top:0;z-index:6;margin:0 -12px;padding:8px 12px 6px;
+      background:linear-gradient(180deg,rgba(0,0,0,.96),rgba(0,0,0,.88));
+      border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px)
+    }
+    .cat-sticky .cat-title-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    .cat-sticky h2{margin:0;flex:1;font-size:1rem}
+    .cat-back{width:auto!important;min-width:64px;padding:7px 10px!important;min-height:34px!important;font-size:.8rem!important;margin:0!important}
+    .cat-tabs{display:flex;gap:3px;padding:3px;background:rgba(255,255,255,.06);border-radius:12px}
+    .cat-tabs button{
+      flex:1;border:0;border-radius:9px;padding:8px 4px;min-height:36px;background:transparent;
+      color:var(--muted);font-weight:700;font-size:.7rem;cursor:pointer;line-height:1.15;transition:background .15s,color .15s,transform .12s
+    }
+    .cat-tabs button .n{display:block;font-size:.62rem;font-weight:600;opacity:.8}
+    .cat-tabs button.on{background:var(--accent);color:#fff;transform:translateY(-1px)}
+    .cat-panel{display:none;flex-direction:column;gap:6px;padding-top:8px;animation:catIn .16s ease}
+    .cat-panel.on{display:flex}
+    @keyframes catIn{from{opacity:.35;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .cat-list{display:flex;flex-direction:column;gap:5px}
+    .cat-quick,.cat-compact{
+      display:flex;flex-direction:column;gap:5px;padding:7px;border-radius:12px;
+      background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06)
+    }
+    .cat-quick .row,.cat-compact .row{gap:5px;align-items:center}
+    .cat-quick input,.cat-quick select,.cat-compact input,.cat-compact select{
+      padding:7px 9px;border-radius:9px;font-size:16px;min-height:36px
+    }
+    .cat-search{
+      width:100%;padding:8px 10px;min-height:36px;border-radius:10px;border:0;
+      background:var(--field);color:var(--text);font-size:16px
+    }
+    .check{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;color:var(--muted);white-space:nowrap;margin:0!important;width:auto!important}
     .check input{width:auto!important;min-height:0!important;flex:0 0 auto;accent-color:var(--accent)}
+    .dense-row{
+      display:flex;align-items:center;gap:6px;padding:7px 8px;min-height:44px;
+      background:rgba(46,46,46,.94);border-radius:10px;border:1px solid rgba(255,255,255,.04);
+      transition:border-color .15s,background .15s
+    }
+    .dense-row:active{background:rgba(60,60,60,.96)}
+    .dense-row .grow{flex:1;min-width:0;text-align:left;background:0;border:0;color:inherit;padding:0;cursor:pointer}
+    .dense-row .name{font-weight:700;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .dense-row .meta{font-size:.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+    .dense-row input.tiny{width:50px;padding:6px 4px;min-height:34px;border-radius:8px;text-align:center;font-size:.85rem;flex:0 0 auto}
+    .dense-row input.mid{flex:1;min-width:0;padding:6px 8px;min-height:34px;border-radius:8px;font-size:16px}
+    .dense-row select.slim{flex:0 1 120px;min-width:90px;padding:6px 6px;min-height:34px;border-radius:8px;font-size:.75rem}
+    .icon-btn{
+      border:0;border-radius:8px;min-width:34px;min-height:34px;padding:0 8px;font-weight:800;cursor:pointer;
+      background:var(--field);color:var(--text);font-size:.8rem;flex:0 0 auto
+    }
+    .icon-btn.ok{background:var(--accent);color:#fff}
+    .icon-btn.danger{color:#ffb4b4}
+    .chip{display:inline-block;padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.08);font-size:.62rem;color:var(--muted);margin-right:3px;vertical-align:middle}
+    .chip.hot{background:rgba(230,26,31,.22);color:#ffc9c9}
     .item-card{background:rgba(46,46,46,.9);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
     .item-card .item-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .item-card .item-name{font-weight:700;font-size:.9rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -126,11 +173,20 @@
     .pct-wrap{display:flex;align-items:center;gap:4px;flex:0 0 auto}
     .pct-wrap input{width:54px!important;padding:6px 8px!important;border-radius:8px!important;text-align:center;font-size:.9rem!important;min-height:36px!important}
     .pct-wrap span{font-size:.72rem;color:var(--muted)}
-    .cat-add-btn{padding:10px 12px!important;border-radius:10px!important;font-size:.9rem!important;margin:0!important;min-height:40px}
-    .fin-grid{display:grid;grid-template-columns:1fr;gap:6px}
-    .fin-grid label{margin:0}
-    .co-card .hint{font-size:.72rem;margin-top:2px}
-    .co-card .row button{width:auto;flex:1;padding:8px;font-size:.8rem;min-height:40px}
+    .cat-add-btn{padding:8px 10px!important;border-radius:10px!important;font-size:.85rem!important;margin:0!important;min-height:36px}
+    .fin-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .fin-grid label{margin:0;font-size:.7rem}
+    .fin-grid input{min-height:36px;padding:7px 8px;margin-top:2px}
+    .co-editor-box{
+      padding:8px;border-radius:12px;background:rgba(230,26,31,.08);
+      border:1px solid rgba(230,26,31,.28);display:none;margin-bottom:4px
+    }
+    .co-editor-box.show{display:block;animation:catIn .16s ease}
+    .toast-ok{
+      position:sticky;bottom:0;z-index:4;margin:6px 0 0;padding:8px 10px;border-radius:10px;
+      background:rgba(40,120,70,.92);color:#dfffea;font-weight:700;font-size:.8rem;text-align:center;
+      animation:catIn .16s ease
+    }
 
     /* ПК / планшет: чуть просторнее, формы шире, 2 колонки где уместно */
     @media (min-width:700px){
@@ -142,9 +198,11 @@
       .brand{font-size:1.75rem}
       .admin-form-scroll{padding:14px 18px 20px;gap:10px}
       .admin-cards{padding:12px 16px 24px;gap:10px}
-      .fin-grid{grid-template-columns:1fr 1fr}
+      .fin-grid{grid-template-columns:1fr 1fr 1fr}
       .fin-grid .fin-full{grid-column:1 / -1}
-      .cat-list.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .cat-tabs button{font-size:.78rem;padding:9px 8px}
+      .dense-row .name{font-size:.95rem}
+      .cat-list.two-col{display:grid;grid-template-columns:1fr 1fr;gap:6px}
       header{padding:10px 14px}
       header h1{font-size:1.05rem}
       .filters button{font-size:.85rem;padding:8px 12px}
@@ -348,7 +406,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-firm-spaces";
+const APP_BUILD="2026-08-04-catalogs-ux";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -408,6 +466,7 @@ let persistTimer=null;
 let syncStatus='local'; // local | syncing | ok | error
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
+let catalogTab='companies'; // companies | drivers | vehicles | finance
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
   if(!id){ id=uuid(); localStorage.setItem(DEVICE_KEY, id); }
@@ -3309,130 +3368,170 @@ function openDetail(id){
   };
 }
 
+function showCatalogTab(tab){
+  catalogTab=tab||'companies';
+  document.querySelectorAll('[data-cat-tab]').forEach(b=>b.classList.toggle('on', b.dataset.catTab===catalogTab));
+  document.querySelectorAll('[data-cat-panel]').forEach(p=>p.classList.toggle('on', p.dataset.catPanel===catalogTab));
+}
+function flashCatOk(msg){
+  const el=$('cat-ok'); if(!el) return;
+  el.textContent=msg||'Сохранено';
+  el.style.display='block';
+  clearTimeout(flashCatOk._t);
+  flashCatOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, 1600);
+}
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-  const companyCards=(state.companies||[]).filter(companyInMySpace).map((c,i)=>{
+  const companies=(state.companies||[]).filter(companyInMySpace);
+  const drivers=(state.drivers||[]).map((d,i)=>({d,i})).filter(({d})=>isSuperAdmin() || (currentAdmin && (d.spaceId===currentAdmin.spaceId || d.ownerAdminId===currentAdmin.id)));
+  const vehicles=(state.vehicles||[]).map((v,i)=>({v,i})).filter(({v})=>isSuperAdmin() || !currentAdmin || !v.spaceId || v.spaceId===currentAdmin.spaceId);
+  const companyCards=companies.map(c=>{
     const roles=roleLabels(c);
-    const contacts=(c.contacts||[]).map(p=>`${p.name}${contactPhone(p)?' '+contactPhone(p):''}`).join('; ')||'—';
-    const vehicles=(c.vehicles||[]).map(v=>{
-      const dim=[v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0)?`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`:'';
-      return `${v.plate}${v.payloadTons?` ${v.payloadTons}т`:''}${dim?' '+dim:''}`;
-    }).join('; ')||'—';
-    return `<div class="item-card co-card">
-      <div class="item-top"><div class="item-name">${esc(c.name)}</div></div>
-      <div class="hint">${esc(roles||'—')}</div>
-      <div class="hint">Контакты: ${esc(contacts)}</div>
-      ${companyHasRole(c,'customer')?`<div class="hint">Адреса: ${(c.loadingAddresses||[]).length} загр. / ${(c.unloadingAddresses||[]).length} выгр.</div>`:''}
-      ${companyHasRole(c,'carrier')?`<div class="hint">ТС: ${(c.vehicles||[]).length} · водители: ${(c.drivers||[]).length}</div>`:''}
-      <div class="item-actions">
-        <button type="button" class="secondary" data-edit-co="${esc(c.id)}">Карточка</button>
-        <button type="button" class="secondary" data-del-co="${esc(c.id)}">Удал.</button>
-      </div>
+    const chips=[
+      companyHasRole(c,'own')?'<span class="chip hot">наша</span>':'',
+      companyHasRole(c,'customer')?'<span class="chip">заказчик</span>':'',
+      companyHasRole(c,'carrier')?'<span class="chip">перевозчик</span>':''
+    ].join('');
+    const nContacts=(c.contacts||[]).length;
+    const nAddr=((c.loadingAddresses||[]).length+(c.unloadingAddresses||[]).length);
+    const metaBits=[
+      nContacts?`${nContacts} конт.`:null,
+      companyHasRole(c,'customer')&&nAddr?`${nAddr} адр.`:null,
+      companyHasRole(c,'carrier')?`ТС ${(c.vehicles||[]).length}`:null
+    ].filter(Boolean).join(' · ');
+    return `<div class="dense-row" data-co-row="${esc(c.id)}">
+      <button type="button" class="grow" data-edit-co="${esc(c.id)}">
+        <div class="name">${esc(c.name)}</div>
+        <div class="meta">${chips}${metaBits?` · ${esc(metaBits)}`:''}${!chips&&!metaBits?esc(roles||'—'):''}</div>
+      </button>
+      <button type="button" class="icon-btn danger" data-del-co="${esc(c.id)}" title="Удалить">×</button>
     </div>`;
-  }).join('') || `<div class="hint">Пока пусто — добавьте компанию</div>`;
+  }).join('') || `<div class="hint">Пока пусто — нажмите «+ Компания»</div>`;
 
+  const driverCards=drivers.map(({d,i})=>{
+    return `<div class="dense-row" style="flex-wrap:wrap">
+      <div class="grow" style="flex:1 1 100%">
+        <div class="name">${esc(d.name)}</div>
+      </div>
+      <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="Процент" />
+      <span class="hint" style="margin:0">%</span>
+      <input class="mid" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
+      <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
+      ${isSuperAdmin()?`<select class="slim" id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`:''}
+      <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
+      <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
+    </div>`;
+  }).join('') || `<div class="hint">Нет водителей — добавьте ниже</div>`;
+
+  const vehicleCards=vehicles.map(({v,i})=>{
+    const spName=isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'';
+    return `<div class="dense-row">
+      <div class="grow">
+        <div class="name">${esc(v.plate)}</div>
+        ${spName?`<div class="meta">${esc(spName)}</div>`:''}
+      </div>
+      <input class="tiny" id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" title="л/100" aria-label="Расход" />
+      <span class="hint" style="margin:0">л</span>
+      <button type="button" class="icon-btn ok" data-save-veh="${i}" title="Сохранить">✓</button>
+      <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
+    </div>`;
+  }).join('') || `<div class="hint">Нет авто — добавьте ниже</div>`;
+
+  const tab=catalogTab||'companies';
   $('catalogs-form').innerHTML=`
-    <button class="secondary cat-add-btn" id="cat-back">← Назад</button>
-    <h2 style="margin:0">Справочники</h2>
-
-    <h3>Компании</h3>
-    <div class="hint">Наша фирма / заказчик / перевозчик. ООО «Армада», ИП Нечаев А.С. — наши.</div>
-    <button class="primary cat-add-btn" id="co-new">+ Компания</button>
-    <div id="co-editor" style="display:none" class="field-block"></div>
-    <div class="cat-list two-col">${companyCards}</div>
-
-    <h3>Наши водители</h3>
-    <div class="hint">${isSuperAdmin()?'Супер может назначить водителя любому админу.':'Ваши водители — их заказы видны вам в заявках.'} Галочка «Биржа» — доступ к бирже.</div>
-    <div class="cat-compact">
-      <div class="row">
-        <input id="own-drv-name" placeholder="ФИО" style="flex:1.4" />
-        <input id="own-drv-pct" inputmode="decimal" value="30" placeholder="%" title="% от ставки" style="flex:0 0 56px;text-align:center" />
+    <div class="cat-sticky">
+      <div class="cat-title-row">
+        <button type="button" class="secondary cat-back" id="cat-back">← Назад</button>
+        <h2>Справочники</h2>
       </div>
-      <div class="row">
-        <input id="own-drv-phone" inputmode="tel" placeholder="Телефон" style="flex:1" />
-        <label class="check"><input type="checkbox" id="own-drv-ex"/> Биржа</label>
+      <div class="cat-tabs" role="tablist">
+        <button type="button" data-cat-tab="companies" class="${tab==='companies'?'on':''}">Компании<span class="n">${companies.length}</span></button>
+        <button type="button" data-cat-tab="drivers" class="${tab==='drivers'?'on':''}">Водители<span class="n">${drivers.length}</span></button>
+        <button type="button" data-cat-tab="vehicles" class="${tab==='vehicles'?'on':''}">Авто<span class="n">${vehicles.length}</span></button>
+        <button type="button" data-cat-tab="finance" class="${tab==='finance'?'on':''}">Тариф<span class="n">₽</span></button>
       </div>
-      ${isSuperAdmin()?`<label>Админ (владелец водителя)</label><select id="own-drv-owner">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
-      <button type="button" class="primary cat-add-btn" id="own-drv-add">+ водитель</button>
-    </div>
-    <div class="cat-list two-col">
-    ${state.drivers.map((d,i)=>{
-      const mine=isSuperAdmin() || (currentAdmin && (d.spaceId===currentAdmin.spaceId || d.ownerAdminId===currentAdmin.id));
-      if(!mine) return '';
-      const sp=findSpaceById(d.spaceId);
-      const ownerSelect=isSuperAdmin()
-        ? `<label>Админ / фирма</label><select id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>${sp?`<div class="hint">${esc(sp.name)}</div>`:''}`
-        : '';
-      return `
-      <div class="item-card">
-        <div class="item-top">
-          <div class="item-name">${esc(d.name)}</div>
-          <div class="pct-wrap"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><span>%</span></div>
-        </div>
-        ${ownerSelect}
-        <div class="item-mid">
-          <input id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
-          <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
-        </div>
-        <div class="item-actions">
-          <button type="button" class="primary" data-save-drv-meta="${i}">Сохранить</button>
-          <button type="button" class="secondary" data-del-drv="${i}">Удал.</button>
-        </div>
-      </div>`;
-    }).join('') || `<div class="hint">Пока нет водителей</div>`}
     </div>
 
-    <h3>Наши авто</h3>
-    <div class="hint">Расход л/100 км. Появятся в смене и «+ Заказ».</div>
-    <div class="cat-compact">
-      <div class="row">
-        <input id="own-veh-plate" placeholder="Госномер" style="flex:1.4" />
-        <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 72px;text-align:center" />
+    <div class="cat-panel ${tab==='companies'?'on':''}" data-cat-panel="companies">
+      <div class="row" style="gap:6px">
+        <input class="cat-search" id="co-search" placeholder="Поиск компании…" style="flex:1;margin:0" />
+        <button type="button" class="primary cat-add-btn" id="co-new" style="width:auto;flex:0 0 auto;padding:8px 12px!important">+</button>
       </div>
-      <button type="button" class="primary cat-add-btn" id="own-veh-add">+ авто</button>
-    </div>
-    <div class="cat-list two-col">
-    ${state.vehicles.map((v,i)=>{
-      if(!isSuperAdmin() && currentAdmin && v.spaceId && v.spaceId!==currentAdmin.spaceId) return '';
-      return `
-      <div class="item-card">
-        <div class="item-top"><div class="item-name">${esc(v.plate)}</div></div>
-        ${isSuperAdmin()&&v.spaceId?`<div class="hint">${esc((findSpaceById(v.spaceId)||{}).name||'')}</div>`:''}
-        <div class="item-mid">
-          <input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" placeholder="л/100" />
-          <span class="hint" style="white-space:nowrap">л/100</span>
-          <button type="button" class="primary" data-save-veh="${i}" style="width:auto;flex:0 0 auto;padding:8px 12px;min-height:40px">OK</button>
-          <button type="button" class="secondary" data-del-veh="${i}" style="width:auto;flex:0 0 auto;padding:8px 10px;min-height:40px">×</button>
-        </div>
-      </div>`;
-    }).join('') || `<div class="hint">Пока нет авто</div>`}
+      <div id="co-editor" class="co-editor-box"></div>
+      <div class="cat-list" id="co-list">${companyCards}</div>
     </div>
 
-    <h3>Финансы / тариф</h3>
-    <div class="hint">Пакет: часы работы + подача; км в пакете = груз + после.</div>
-    <div class="fin-grid">
-      <label>Наценка, %<input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" /></label>
-      <label>Км в пакете<input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" /></label>
-      <label>Мин. часов работы<input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" /></label>
-      <label>Часов подачи<input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" /></label>
-      <label>₽/час по умолч.<input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" /></label>
-      <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||80}" /></label>
-      <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф</button>
+    <div class="cat-panel ${tab==='drivers'?'on':''}" data-cat-panel="drivers">
+      <div class="cat-quick">
+        <div class="row">
+          <input id="own-drv-name" placeholder="ФИО водителя" style="flex:1.5" />
+          <input id="own-drv-pct" inputmode="decimal" value="30" placeholder="%" title="% от ставки" style="flex:0 0 52px;text-align:center" />
+        </div>
+        <div class="row">
+          <input id="own-drv-phone" inputmode="tel" placeholder="Телефон" style="flex:1" />
+          <label class="check"><input type="checkbox" id="own-drv-ex"/> Биржа</label>
+          <button type="button" class="primary icon-btn ok" id="own-drv-add" title="Добавить" style="min-width:40px">+</button>
+        </div>
+        ${isSuperAdmin()?`<select id="own-drv-owner">${adminOwnerOptionsHtml(currentAdmin&&currentAdmin.id)}</select>`:''}
+      </div>
+      <div class="cat-list">${driverCards}</div>
     </div>
-    <div class="ok" id="cat-ok" style="display:none">Сохранено</div>
+
+    <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
+      <div class="cat-quick">
+        <div class="row">
+          <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
+          <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 64px;text-align:center" />
+          <button type="button" class="primary icon-btn ok" id="own-veh-add" title="Добавить" style="min-width:40px">+</button>
+        </div>
+      </div>
+      <div class="cat-list">${vehicleCards}</div>
+    </div>
+
+    <div class="cat-panel ${tab==='finance'?'on':''}" data-cat-panel="finance">
+      <div class="hint" style="margin:0">Пакет = часы работы + подача; км в пакете = груз + после.</div>
+      <div class="fin-grid">
+        <label>Наценка, %<input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" /></label>
+        <label>Км в пакете<input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" /></label>
+        <label>Часы работы<input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" /></label>
+        <label>Подача, ч<input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" /></label>
+        <label>₽/час<input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" /></label>
+        <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||80}" /></label>
+        <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф</button>
+      </div>
+    </div>
+
+    <div class="toast-ok" id="cat-ok" style="display:none">Сохранено</div>
   `;
   show('admin-catalogs-screen');
+  showCatalogTab(tab);
+  document.querySelectorAll('[data-cat-tab]').forEach(b=>b.onclick=()=>showCatalogTab(b.dataset.catTab));
+  const search=$('co-search');
+  if(search){
+    search.oninput=()=>{
+      const q=(search.value||'').trim().toLowerCase();
+      document.querySelectorAll('#co-list [data-co-row]').forEach(row=>{
+        const name=(row.querySelector('.name')?.textContent||'').toLowerCase();
+        row.style.display=!q || name.includes(q)?'':'none';
+      });
+    };
+  }
   $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
 
     const openEditor=(company)=>{
+    showCatalogTab('companies');
     const c=company?normalizeCompany(company):{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId()};
     const box=$('co-editor');
-    box.style.display='block';
+    box.classList.add('show');
+    try{ box.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){}
     const isOwn=companyHasRole(c,'own');
     const isCust=companyHasRole(c,'customer');
     const isCarr=companyHasRole(c,'carrier');
     box.innerHTML=`
-      <h3 style="margin:0 0 8px">${company?'Редактирование':'Новая компания'}</h3>
+      <div class="row" style="align-items:center;margin-bottom:4px">
+        <h3 style="margin:0;flex:1;font-size:.95rem">${company?'Карточка':'Новая компания'}</h3>
+        <button type="button" class="icon-btn" id="co-cancel" title="Закрыть">×</button>
+      </div>
       <label>Название</label><input id="co-name" value="${esc(c.name)}" />
       <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/> Наша фирма (договоры / заявки)</label>
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
@@ -3456,8 +3555,7 @@ function openCatalogs(){
         <div id="co-drivers"></div>
         <button type="button" class="secondary" id="co-add-drv">+ Водитель перевозчика</button>
       </div>
-      <button class="primary" id="co-save" style="margin-top:10px">Сохранить компанию</button>
-      <button class="secondary" id="co-cancel">Отмена</button>
+      <button class="primary cat-add-btn" id="co-save" style="margin-top:8px">Сохранить</button>
     `;
     let contacts=(c.contacts||[]).map(x=>({...x, phones:(x.phones||[]).map(p=>({...p}))}));
     let vehicles=(c.vehicles||[]).map(x=>({...x}));
@@ -3507,7 +3605,7 @@ function openCatalogs(){
     $('co-add-contact').onclick=()=>{ contacts.push({id:uuid(),name:'',title:'',phones:[],isPrimary:!contacts.length}); paintContacts(); };
     $('co-add-veh').onclick=()=>{ vehicles.push({id:uuid(),plate:'',makeModel:'',payloadTons:null,bodyLengthM:null,bodyWidthM:null,bodyHeightM:null}); paintVehicles(); };
     $('co-add-drv').onclick=()=>{ drivers.push({id:uuid(),name:'',phone:'',vehicleId:null}); paintDrivers(); };
-    $('co-cancel').onclick=()=>{ box.style.display='none'; box.innerHTML=''; };
+    $('co-cancel').onclick=()=>{ box.classList.remove('show'); box.innerHTML=''; };
     $('co-save').onclick=()=>{
       const name=($('co-name').value||'').trim();
       if(!name){ alert('Укажите название'); return; }
