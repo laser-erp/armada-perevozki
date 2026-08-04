@@ -170,6 +170,11 @@
           <div class="nums" id="create-day"><button data-cday="1">1</button><button data-cday="2">2</button><button data-cday="3">3</button><button data-cday="4">4</button><button data-cday="5">5</button></div>
         </div>
         <div class="field-block">
+          <label>От нашей фирмы (договор)</label>
+          <select id="create-own-company"></select>
+          <div class="hint">ООО «Армада» / ИП Нечаев А.С. — от кого заявка и договор</div>
+        </div>
+        <div class="field-block">
           <label>Заказчик (компания)</label>
           <input id="create-customer" list="customer-list" placeholder="Название компании" />
           <select id="create-customer-pick"><option value="">или выбрать сохранённого</option></select>
@@ -282,7 +287,11 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-vehicle-v603";
+const APP_BUILD="2026-08-04-own-companies";
+const DEFAULT_OWN_COMPANIES=[
+  {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
+  {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
+];
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -556,7 +565,7 @@ function normalizeCompany(c){
     else if(c.isCarrier) roles=['carrier'];
     else roles=['customer'];
   }
-  roles=roles.filter(r=>r==='customer'||r==='carrier');
+  roles=roles.filter(r=>r==='customer'||r==='carrier'||r==='own');
   if(!roles.length) roles=['customer'];
   const phones=(Array.isArray(c.phones)?c.phones:[]).map(normalizePhone).filter(Boolean);
   const contacts=(Array.isArray(c.contacts)?c.contacts:[]).map(normalizeContact).filter(Boolean);
@@ -598,6 +607,7 @@ function upsertCompany(raw){
     if(!c.drivers.length && prev.drivers) c.drivers=prev.drivers;
     if(!c.roles.includes('customer') && companyHasRole(prev,'customer')) c.roles.push('customer');
     if(!c.roles.includes('carrier') && companyHasRole(prev,'carrier')) c.roles.push('carrier');
+    if(!c.roles.includes('own') && companyHasRole(prev,'own')) c.roles.push('own');
     c.id=prev.id;
     state.companies[i]=c;
   } else {
@@ -683,6 +693,16 @@ function migrateCompanies(){
     const norm=p=>String(p||'').toLowerCase().replace(/\s+/g,'');
     const exists=state.vehicles.some(v=>norm(v.plate)===norm(def.plate));
     if(!exists) state.vehicles.push({...def});
+  });
+  // наши фирмы (ООО «Армада», ИП Нечаев А.С.)
+  DEFAULT_OWN_COMPANIES.forEach(def=>{
+    const existing=findCompanyByName(def.name);
+    if(!existing){
+      upsertCompany({...def, contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[]});
+    } else if(!companyHasRole(existing,'own')){
+      existing.roles.push('own');
+      upsertCompany(existing);
+    }
   });
   syncCustomersFromCompanies();
   // if still empty companies, mine from orders
@@ -2110,6 +2130,7 @@ function renderAdmin(){
     return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''}>
       <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
+      ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
       <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
@@ -2147,6 +2168,25 @@ function renderAdmin(){
 function fillCreateSelects(){
   $('create-plate').innerHTML=state.vehicles.map(v=>`<option>${esc(v.plate)}</option>`).join('');
   $('create-driver').innerHTML=state.drivers.map(d=>`<option>${esc(d.name)}</option>`).join('');
+  fillOwnCompanySelect('create-own-company');
+}
+function ownCompanies(){ return companiesByRole('own'); }
+function fillOwnCompanySelect(elId, selectedId){
+  const el=$(elId); if(!el) return;
+  const list=ownCompanies();
+  if(!list.length){
+    el.innerHTML=`<option value="">— добавьте нашу фирму в Справочниках —</option>`;
+    return;
+  }
+  const sel=selectedId||list[0].id;
+  el.innerHTML=list.map(c=>`<option value="${esc(c.id)}" ${c.id===sel?'selected':''}>${esc(c.name)}</option>`).join('');
+}
+function roleLabels(c){
+  return [
+    companyHasRole(c,'own')?'Наша фирма':'',
+    companyHasRole(c,'customer')?'Заказчик':'',
+    companyHasRole(c,'carrier')?'Перевозчик':''
+  ].filter(Boolean).join(' · ');
 }
 let createDay=1;
 function bindAdminCreate(){
@@ -2166,6 +2206,8 @@ function saveDispatcherOrder(){
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
   if(!customer){ $('create-error').textContent='Укажите заказчика'; return; }
   if(!vehicleAt){ $('create-error').textContent='Укажите дату и время подачи ТС'; return; }
+  const ownCo=findCompanyById((($('create-own-company')||{}).value)||'');
+  if(!ownCo || !companyHasRole(ownCo,'own')){ $('create-error').textContent='Выберите нашу фирму (ООО «Армада» / ИП Нечаев А.С.)'; return; }
   let plate=''; let driver=''; let onExchange=false;
   let carrierCompanyId=null, carrierDriverId=null, carrierVehicleId=null;
   let driverPercentVal=0;
@@ -2198,6 +2240,8 @@ function saveDispatcherOrder(){
     createdAt:new Date().toISOString(), source:'dispatcher',
     vehiclePlate:plate, driverName:driver, customer,
     customerId:company?company.id:null,
+    ownCompanyId:ownCo.id,
+    ownCompanyName:ownCo.name,
     contactName, contactPhone, contactPersonId:(($('create-contact-pick')||{}).value)||null,
     vehicleAt,
     loadingAddress:load, unloadingAddress:unload,
@@ -2310,6 +2354,8 @@ function openDetail(id){
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
     <div class="hint" style="color:var(--accent)">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС считаются от нал.</div>
     <div class="field-block">
+      <label for="d-own-company">От нашей фирмы</label>
+      <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
       <label for="d-customer">Заказчик</label>
       <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
       <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
@@ -2433,6 +2479,8 @@ function openDetail(id){
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
+    const ownSel=findCompanyById((($('d-own-company')||{}).value)||'');
+    if(ownSel){ order.ownCompanyId=ownSel.id; order.ownCompanyName=ownSel.name; }
     order.contactName=(($('d-contact-name')||{}).value||'').trim();
     order.contactPhone=(($('d-contact-phone')||{}).value||'').trim();
     order.vehicleAt=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
@@ -2474,7 +2522,7 @@ function openDetail(id){
 
 function openCatalogs(){
   const companyCards=(state.companies||[]).map((c,i)=>{
-    const roles=[companyHasRole(c,'customer')?'Заказчик':'', companyHasRole(c,'carrier')?'Перевозчик':''].filter(Boolean).join(' · ');
+    const roles=roleLabels(c);
     const contacts=(c.contacts||[]).map(p=>`${p.name}${contactPhone(p)?' '+contactPhone(p):''}`).join('; ')||'—';
     const vehicles=(c.vehicles||[]).map(v=>{
       const dim=[v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0)?`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`:'';
@@ -2499,7 +2547,8 @@ function openCatalogs(){
     <button class="secondary" id="cat-back">Назад</button>
     <h2 style="margin:0">Справочники</h2>
 
-    <h3 style="margin:12px 0 0">Компании (заказчик / перевозчик)</h3>
+    <h3 style="margin:12px 0 0">Компании (наша фирма / заказчик / перевозчик)</h3>
+    <div class="hint">Роль «Наша фирма» — от кого заключаем договор и заявку (ООО «Армада», ИП Нечаев А.С.).</div>
     <button class="primary" id="co-new" style="margin:8px 0">+ Компания</button>
     <div id="co-editor" style="display:none" class="field-block"></div>
     ${companyCards}
@@ -2570,12 +2619,14 @@ function openCatalogs(){
     const c=company?normalizeCompany(company):{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[]};
     const box=$('co-editor');
     box.style.display='block';
+    const isOwn=companyHasRole(c,'own');
     const isCust=companyHasRole(c,'customer');
     const isCarr=companyHasRole(c,'carrier');
     box.innerHTML=`
       <h3 style="margin:0 0 8px">${company?'Редактирование':'Новая компания'}</h3>
       <label>Название</label><input id="co-name" value="${esc(c.name)}" />
-      <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/> Наша фирма (договоры / заявки)</label>
+      <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
       <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>
@@ -2652,9 +2703,10 @@ function openCatalogs(){
       const name=($('co-name').value||'').trim();
       if(!name){ alert('Укажите название'); return; }
       const roles=[];
+      if($('co-role-o')&&$('co-role-o').checked) roles.push('own');
       if($('co-role-c').checked) roles.push('customer');
       if($('co-role-r').checked) roles.push('carrier');
-      if(!roles.length){ alert('Выберите роль: заказчик и/или перевозчик'); return; }
+      if(!roles.length){ alert('Выберите роль: наша фирма / заказчик / перевозчик'); return; }
       // read contacts from DOM
       contacts=contacts.map((p,i)=>{
         const nameEl=document.querySelector(`[data-cn="${i}"]`);
