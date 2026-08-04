@@ -229,7 +229,7 @@ final class ShiftStore: ObservableObject {
         if s.minWorkHours < 0 { s.minWorkHours = 0 }
         if s.podachaHours < 0 { s.podachaHours = 0 }
         if s.defaultRatePerHourWork < 0 { s.defaultRatePerHourWork = 0 }
-        if s.defaultRatePerKmCash < 0 { s.defaultRatePerKmCash = 0 }
+        if s.defaultRatePerKmCash <= 0 { s.defaultRatePerKmCash = 80 }
         financeSettings = s
         persist()
     }
@@ -406,6 +406,9 @@ final class ShiftStore: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: financeKey),
            let decoded = try? decoder.decode(FinanceSettings.self, from: data) {
             financeSettings = decoded
+            if financeSettings.defaultRatePerKmCash <= 0 {
+                financeSettings.defaultRatePerKmCash = 80
+            }
         } else {
             financeSettings = .default
         }

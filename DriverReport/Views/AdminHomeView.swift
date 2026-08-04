@@ -388,16 +388,16 @@ struct AdminOrderDetailView: View {
                         row("Общий за день (по полям)", "\(order.dayTotalKm.map(String.init) ?? "—") км")
                     }
                     Section("Тариф клиенту") {
-                        Text("Комбо: часы + ₽/км. Город ≤\(store.financeSettings.cityKmThreshold) км: мин. \(format(store.financeSettings.minWorkHours)) ч работы + \(format(store.financeSettings.podachaHours)) ч подачи. Если нулевой × ₽/км > подачи — ₽/км нулевого добавляется.")
+                        Text("Пакет: мин. \(format(store.financeSettings.minWorkHours)) ч + \(format(store.financeSettings.podachaHours)) ч подачи, в т.ч. \(store.financeSettings.cityKmThreshold) км (груз + нулевой после). Нулевой до — подача 1 ч или 2 ч. Сверх км — ₽/км.")
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
-                        TextField("₽/км наличные", text: $ratePerKmCash)
+                        TextField("₽/км сверх пакета", text: $ratePerKmCash)
                             .keyboardType(.decimalPad)
                             .onChange(of: ratePerKmCash) { _, _ in syncFromTariff() }
                         TextField("₽/час работы", text: $ratePerHourWork)
                             .keyboardType(.decimalPad)
                             .onChange(of: ratePerHourWork) { _, _ in syncFromTariff() }
-                        TextField("Ориентир км (цепочка)", text: $estimateKm)
+                        TextField("Ориентир км (груз + после)", text: $estimateKm)
                             .keyboardType(.numberPad)
                             .onChange(of: estimateKm) { _, _ in syncFromTariff() }
                         TextField("Ориентир часов работы", text: $estimateWorkHours)
@@ -719,10 +719,10 @@ struct AdminCatalogView: View {
                         HStack {
                             Text("Тариф по умолчанию")
                             Spacer()
-                            Text("город ≤\(store.financeSettings.cityKmThreshold) км")
+                            Text("пакет ≤\(store.financeSettings.cityKmThreshold) км")
                                 .foregroundStyle(AppTheme.accent)
                         }
-                        Text("мин \(formatHours(store.financeSettings.minWorkHours)) ч + подача \(formatHours(store.financeSettings.podachaHours)) ч · наценка \(Int(store.financeSettings.markupPercent.rounded()))%")
+                        Text("мин \(formatHours(store.financeSettings.minWorkHours)) ч + подача \(formatHours(store.financeSettings.podachaHours))/×2 ч · \(Int(store.financeSettings.defaultRatePerKmCash.rounded())) ₽/км сверх · наценка \(Int(store.financeSettings.markupPercent.rounded()))%")
                             .font(.caption)
                             .foregroundStyle(AppTheme.textMuted)
                     }
@@ -807,22 +807,22 @@ struct FinanceSettingsEditView: View {
 
     var body: some View {
         Form {
-            Text("Город ≤ N км: минимум часов работы + час(ы) подачи. Если нулевой × ₽/км больше подачи — к сумме добавляется ₽/км нулевого.")
+            Text("Пакет: мин. часы работы + база подачи. Км в пакете = груз + нулевой после. Нулевой до: 1 ч подачи или 2 ч. Сверх км — ₽/км.")
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(AppTheme.textMuted)
             TextField("Наценка к себестоимости, %", text: $markup).keyboardType(.decimalPad)
-            TextField("Порог города, км", text: $cityKm).keyboardType(.numberPad)
-            TextField("Мин. часов работы (город)", text: $minWork).keyboardType(.decimalPad)
-            TextField("Часов подачи", text: $podacha).keyboardType(.decimalPad)
+            TextField("Км в пакете (груз + после)", text: $cityKm).keyboardType(.numberPad)
+            TextField("Мин. часов работы", text: $minWork).keyboardType(.decimalPad)
+            TextField("Часов подачи (база; иначе ×2)", text: $podacha).keyboardType(.decimalPad)
             TextField("₽/час работы по умолчанию", text: $perHour).keyboardType(.decimalPad)
-            TextField("₽/км нал по умолчанию", text: $perKm).keyboardType(.decimalPad)
+            TextField("₽/км сверх пакета по умолчанию", text: $perKm).keyboardType(.decimalPad)
             Button("Сохранить") {
                 let m = Double(markup.replacingOccurrences(of: ",", with: ".")) ?? 15
                 let threshold = Int(cityKm.filter(\.isNumber)) ?? 100
                 let minH = Double(minWork.replacingOccurrences(of: ",", with: ".")) ?? 4
                 let pod = Double(podacha.replacingOccurrences(of: ",", with: ".")) ?? 1
                 let hour = Double(perHour.replacingOccurrences(of: ",", with: ".")) ?? 0
-                let km = Double(perKm.replacingOccurrences(of: ",", with: ".")) ?? 0
+                let km = Double(perKm.replacingOccurrences(of: ",", with: ".")) ?? 80
                 store.updateFinanceSettings(
                     FinanceSettings(
                         markupPercent: min(80, max(0, m)),
@@ -830,7 +830,7 @@ struct FinanceSettingsEditView: View {
                         minWorkHours: max(0, minH),
                         podachaHours: max(0, pod),
                         defaultRatePerHourWork: max(0, hour),
-                        defaultRatePerKmCash: max(0, km)
+                        defaultRatePerKmCash: km > 0 ? km : 80
                     )
                 )
                 dismiss()

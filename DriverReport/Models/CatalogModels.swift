@@ -239,15 +239,15 @@ struct CustomerProfile: Identifiable, Codable, Equatable {
 struct FinanceSettings: Codable, Equatable {
     /// Целевая чистая маржа от ставки, %
     var markupPercent: Double
-    /// Порог «город», км на заказ (нулевой + груз + до стоянки)
+    /// Км в пакете (груз + нулевой после стоянки)
     var cityKmThreshold: Int
-    /// Мин. часов работы в городе
+    /// Мин. часов работы в пакете
     var minWorkHours: Double
-    /// Часов подачи (нулевой / возврат)
+    /// Базовые часы подачи (если нулевой до не покрыт — ×2)
     var podachaHours: Double
     /// ₽/час работы по умолчанию
     var defaultRatePerHourWork: Double
-    /// ₽/км нал по умолчанию
+    /// ₽/км сверх пакета по умолчанию
     var defaultRatePerKmCash: Double
 
     static let `default` = FinanceSettings(
@@ -256,7 +256,7 @@ struct FinanceSettings: Codable, Equatable {
         minWorkHours: 4,
         podachaHours: 1,
         defaultRatePerHourWork: 0,
-        defaultRatePerKmCash: 0
+        defaultRatePerKmCash: 80
     )
 
     enum CodingKeys: String, CodingKey {
@@ -287,21 +287,23 @@ struct FinanceSettings: Codable, Equatable {
         minWorkHours = try c.decodeIfPresent(Double.self, forKey: .minWorkHours) ?? 4
         podachaHours = try c.decodeIfPresent(Double.self, forKey: .podachaHours) ?? 1
         defaultRatePerHourWork = try c.decodeIfPresent(Double.self, forKey: .defaultRatePerHourWork) ?? 0
-        defaultRatePerKmCash = try c.decodeIfPresent(Double.self, forKey: .defaultRatePerKmCash) ?? 0
+        let km = try c.decodeIfPresent(Double.self, forKey: .defaultRatePerKmCash) ?? 80
+        defaultRatePerKmCash = km > 0 ? km : 80
     }
 }
 
 struct ClientTariffBreakdown: Equatable {
     var totalKm: Int
-    var emptyKm: Int
-    var loadedKm: Int
-    var isCity: Bool
+    var emptyKmBefore: Int
+    var packageKm: Int
+    var excessKm: Int
+    var isWithinPackage: Bool
     var workHoursCharged: Double
     var workCash: Double
+    var podachaHoursCharged: Double
     var podachaHourCash: Double
-    var emptyKmCash: Double
     var podachaCoveredByHour: Bool
-    var loadedKmCash: Double
+    var excessKmCash: Double
     var overnightStorageCash: Double
     var overnightNights: Int
     var overnightStorageRateCash: Double
@@ -309,21 +311,37 @@ struct ClientTariffBreakdown: Equatable {
     var perKm: Double
     var perHour: Double
 
+    /// Совместимость со старым UI (город ≈ в пакете).
+    var isCity: Bool { isWithinPackage }
+    var emptyKm: Int { emptyKmBefore }
+    var loadedKm: Int { packageKm }
+    var emptyKmCash: Double { 0 }
+    var loadedKmCash: Double { excessKmCash }
+
     var summaryText: String {
         var parts: [String] = []
         if workCash > 0 {
             parts.append(String(format: "работа %.1f ч = %.0f ₽", workHoursCharged, workCash))
         }
         if podachaHourCash > 0 {
-            parts.append(String(format: "подача = %.0f ₽", podachaHourCash))
+            parts.append(String(format: "подача %.1f ч = %.0f ₽", podachaHoursCharged, podachaHourCash))
+            if emptyKmBefore > 0 {
+                if podachaCoveredByHour {
+                    parts.append(String(format: "нулевой до %d км покрыт подачей", emptyKmBefore))
+                } else {
+                    parts.append(String(format: "нулевой до %d км → 2 ч подачи", emptyKmBefore))
+                }
+            }
         }
-        if emptyKmCash > 0 {
-            parts.append(String(format: "нулевой %d км = %.0f ₽", emptyKm, emptyKmCash))
-        } else if emptyKm > 0 && podachaCoveredByHour {
-            parts.append("нулевой покрыт подачей")
-        }
-        if loadedKmCash > 0 {
-            parts.append(String(format: "груз %d км = %.0f ₽", loadedKm, loadedKmCash))
+        if packageKm > 0 {
+            if excessKmCash > 0 {
+                parts.append(String(
+                    format: "сверх: %d км × %.0f = %.0f ₽ (груз+после %d км)",
+                    excessKm, perKm, excessKmCash, packageKm
+                ))
+            } else {
+                parts.append(String(format: "км в пакете: %d", packageKm))
+            }
         }
         if overnightStorageCash > 0 {
             parts.append(String(
@@ -333,12 +351,7 @@ struct ClientTariffBreakdown: Equatable {
                 overnightStorageCash
             ))
         }
-        let mode: String
-        if perKm > 0 || perHour > 0 {
-            mode = isCity ? "город" : "межгород"
-        } else {
-            mode = "хранение"
-        }
+        let mode = (perKm > 0 || perHour > 0) ? "пакет" : "хранение"
         return "[\(mode)] " + (parts.isEmpty ? "нет данных для расчёта" : parts.joined(separator: " + "))
     }
 }
@@ -391,12 +404,22 @@ enum OrderFinance {
 
     static func resolvedPerKm(order: OrderRecord, settings: FinanceSettings) -> Double {
         if let v = order.ratePerKmCash, v > 0 { return v }
-        return max(0, settings.defaultRatePerKmCash)
+        let def = settings.defaultRatePerKmCash
+        return def > 0 ? def : 80
     }
 
     static func resolvedPerHour(order: OrderRecord, settings: FinanceSettings) -> Double {
         if let v = order.ratePerHourWork, v > 0 { return v }
         return max(0, settings.defaultRatePerHourWork)
+    }
+
+    /// Км в пакете: груз + нулевой после. Нулевой до заказа — через подачу.
+    static func packageKm(for order: OrderRecord) -> Int {
+        if order.loadedKm != nil || order.emptyKmAfter != nil {
+            return (order.loadedKm ?? 0) + (order.emptyKmAfter ?? 0)
+        }
+        if let estimate = order.estimateKm, estimate > 0 { return estimate }
+        return 0
     }
 
     /// Ночное хранение: ₽/ночь × число ночей (нал).
@@ -412,7 +435,7 @@ enum OrderFinance {
         return round2(max(0, rate - overnightStorageCash(for: order)))
     }
 
-    /// Комбинированный тариф: часы (мин. город) + подача + ₽/км + ночное хранение.
+    /// Пакетный тариф: мин. часы + подача (1/2 ч) + сверхкм + хранение.
     static func calculateClientTariff(
         for order: OrderRecord,
         settings: FinanceSettings
@@ -422,66 +445,48 @@ enum OrderFinance {
         let storageCash = overnightStorageCash(for: order)
         guard perKm > 0 || perHour > 0 || storageCash > 0 else { return nil }
 
-        let hasSegments = order.emptyKmBefore != nil || order.loadedKm != nil || order.emptyKmAfter != nil
-        let empty = emptyKm(for: order)
-        let loaded = order.loadedKm ?? 0
+        let emptyBefore = order.emptyKmBefore ?? 0
+        let package = packageKm(for: order)
         let totalKm = totalOrderKm(for: order) ?? 0
         let threshold = max(1, settings.cityKmThreshold)
-        let isCity = totalKm > 0 && totalKm <= threshold
+        let minWork = max(0, settings.minWorkHours)
+        let basePodacha = max(0, settings.podachaHours)
 
         let workEntered = order.workHours ?? order.estimateWorkHours ?? 0
-        let minWork = isCity ? max(0, settings.minWorkHours) : 0
-        let workHoursCharged = max(workEntered, minWork)
+        let workHoursCharged = perHour > 0 ? max(workEntered, minWork) : 0
         let workCash = round2(workHoursCharged * perHour)
 
-        let podachaHours = max(0, settings.podachaHours)
-        let applyPodacha = perHour > 0 && podachaHours > 0 && (isCity || empty > 0 || hasSegments)
-        let podachaBase = applyPodacha ? round2(podachaHours * perHour) : 0
-        let emptyCost = round2(Double(empty) * perKm)
-        // Если подача не покрывает нулевой — добавляем ₽/км нулевого к часу подачи.
-        let podachaCoveredByHour: Bool
-        let emptyKmCash: Double
-        if empty > 0 && perKm > 0 {
-            if podachaBase > 0 && emptyCost <= podachaBase {
-                podachaCoveredByHour = true
-                emptyKmCash = 0
-            } else if podachaBase > 0 {
+        var podachaHoursCharged: Double = 0
+        var podachaCoveredByHour = true
+        if perHour > 0 && basePodacha > 0 {
+            let oneHourCash = round2(basePodacha * perHour)
+            let emptyBeforeCost = round2(Double(emptyBefore) * perKm)
+            if emptyBefore > 0 && emptyBeforeCost > oneHourCash {
+                podachaHoursCharged = basePodacha * 2
                 podachaCoveredByHour = false
-                emptyKmCash = emptyCost
             } else {
-                podachaCoveredByHour = false
-                emptyKmCash = emptyCost
+                podachaHoursCharged = basePodacha
+                podachaCoveredByHour = true
             }
-        } else {
-            podachaCoveredByHour = applyPodacha
-            emptyKmCash = 0
         }
-        let podachaHourCash = podachaBase
-
-        // В городе работа покрывается часами; межгород — гружёный (или ориентир) × ₽/км.
-        let loadedKmCash: Double
-        if hasSegments {
-            loadedKmCash = isCity ? 0 : round2(Double(loaded) * perKm)
-        } else if let estimate = order.estimateKm, estimate > 0, !isCity {
-            loadedKmCash = round2(Double(estimate) * perKm)
-        } else {
-            loadedKmCash = 0
-        }
-
-        let total = round2(workCash + podachaHourCash + emptyKmCash + loadedKmCash + storageCash)
+        let podachaHourCash = round2(podachaHoursCharged * perHour)
+        let excessKm = package > threshold ? package - threshold : 0
+        let excessKmCash = round2(Double(excessKm) * perKm)
+        let total = round2(workCash + podachaHourCash + excessKmCash + storageCash)
         guard total > 0 else { return nil }
 
         return ClientTariffBreakdown(
             totalKm: totalKm,
-            emptyKm: empty,
-            loadedKm: hasSegments ? loaded : (isCity ? 0 : (order.estimateKm ?? 0)),
-            isCity: isCity,
+            emptyKmBefore: emptyBefore,
+            packageKm: package,
+            excessKm: excessKm,
+            isWithinPackage: package > 0 && package <= threshold,
             workHoursCharged: workHoursCharged,
             workCash: workCash,
+            podachaHoursCharged: podachaHoursCharged,
             podachaHourCash: podachaHourCash,
-            emptyKmCash: emptyKmCash,
             podachaCoveredByHour: podachaCoveredByHour,
-            loadedKmCash: loadedKmCash,
+            excessKmCash: excessKmCash,
             overnightStorageCash: storageCash,
             overnightNights: order.overnightNights ?? 0,
             overnightStorageRateCash: order.overnightStorageRateCash ?? 0,
