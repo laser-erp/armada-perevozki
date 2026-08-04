@@ -275,7 +275,7 @@ const DEFAULT_DRIVERS=[{name:"Наволоцкий Е.Н.",salaryPercent:30,exch
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-vehicle-schedule";
+const APP_BUILD="2026-08-04-own-fleet-add";
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
@@ -2484,7 +2484,19 @@ function openCatalogs(){
     ${companyCards}
 
     <h3 style="margin:16px 0 0">Наши водители</h3>
-    <div class="hint">Биржу включает администратор</div>
+    <div class="hint">Биржу включает администратор. Новые водители появятся в «+ Заказ».</div>
+    <div class="field-block" style="margin:8px 0">
+      <label>ФИО нового водителя</label>
+      <input id="own-drv-name" placeholder="Иванов И.И." />
+      <label>% от ставки</label>
+      <input id="own-drv-pct" inputmode="decimal" value="30" />
+      <label>Телефон</label>
+      <input id="own-drv-phone" inputmode="tel" placeholder="+7..." />
+      <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <input type="checkbox" id="own-drv-ex"/> Биржа включена
+      </label>
+      <button type="button" class="primary" id="own-drv-add" style="margin-top:8px">+ наш водитель</button>
+    </div>
     ${state.drivers.map((d,i)=>`
       <div class="card" style="margin:8px 0">
         <label>${esc(d.name)} — % от ставки</label>
@@ -2494,11 +2506,30 @@ function openCatalogs(){
         <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
           <input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа включена
         </label>
-        <button type="button" class="secondary" data-save-drv-meta="${i}" style="margin-top:8px">Сохранить водителя</button>
-      </div>`).join('')}
+        <div class="row" style="margin-top:8px">
+          <button type="button" class="secondary" data-save-drv-meta="${i}">Сохранить водителя</button>
+          <button type="button" class="secondary" data-del-drv="${i}">Удалить</button>
+        </div>
+      </div>`).join('') || `<div class="hint">Пока нет водителей — добавьте выше</div>`}
 
     <h3 style="margin:16px 0 0">Наши авто (л/100 км)</h3>
-    ${state.vehicles.map((v,i)=>`<label>${esc(v.plate)}</label><div class="row"><input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" /><button data-save-veh="${i}">OK</button></div>`).join('')}
+    <div class="hint">Новые авто появятся при открытии смены и в «+ Заказ».</div>
+    <div class="field-block" style="margin:8px 0">
+      <label>Госномер</label>
+      <input id="own-veh-plate" placeholder="А 123 БВ 198" />
+      <label>Расход, л/100 км</label>
+      <input id="own-veh-cons" inputmode="decimal" value="20" />
+      <button type="button" class="primary" id="own-veh-add" style="margin-top:8px">+ наше авто</button>
+    </div>
+    ${state.vehicles.map((v,i)=>`
+      <div class="card" style="margin:8px 0">
+        <label>${esc(v.plate)} — л/100 км</label>
+        <div class="row">
+          <input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" />
+          <button data-save-veh="${i}">OK</button>
+          <button type="button" class="secondary" data-del-veh="${i}">Удалить</button>
+        </div>
+      </div>`).join('') || `<div class="hint">Пока нет авто — добавьте выше</div>`}
 
     <h3 style="margin:16px 0 0">Финансы / тариф</h3>
     <div class="hint">Пакет: мин. часы работы + часы подачи. Км в пакете = груз + нулевой после. Нулевой до — подача 1 ч или 2 ч.</div>
@@ -2648,6 +2679,25 @@ function openCatalogs(){
     persist(); openCatalogs();
   });
   document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveVeh; const v=+(($('veh-'+i).value||'').replace(',','.')); if(!(v>0)) return; state.vehicles[i].consumptionPer100Km=v; persist(); $('cat-ok').style.display='block'; });
+  document.querySelectorAll('[data-del-veh]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.delVeh;
+    const plate=state.vehicles[i]?.plate||'';
+    if(!confirm(`Удалить авто ${plate}?`)) return;
+    if(state.vehicles.length<=1){ alert('Должен остаться хотя бы один автомобиль'); return; }
+    state.vehicles.splice(i,1);
+    persist(); openCatalogs();
+  });
+  $('own-veh-add')&&($('own-veh-add').onclick=()=>{
+    const plate=(($('own-veh-plate')||{}).value||'').trim();
+    let cons=+((($('own-veh-cons')||{}).value||'').replace(',','.'));
+    if(!plate){ alert('Укажите госномер'); return; }
+    if(!(cons>0)) cons=20;
+    const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase());
+    if(exists){ alert('Такой госномер уже есть'); return; }
+    state.vehicles.push({plate, consumptionPer100Km:cons});
+    persist(); openCatalogs();
+    $('cat-ok').style.display='block';
+  });
   document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); $('cat-ok').style.display='block'; });
   document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveDrvMeta;
@@ -2655,6 +2705,27 @@ function openCatalogs(){
     state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
     const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
     persist(); $('cat-ok').style.display='block';
+  });
+  document.querySelectorAll('[data-del-drv]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.delDrv;
+    const name=state.drivers[i]?.name||'';
+    if(!confirm(`Удалить водителя ${name}?`)) return;
+    if(state.drivers.length<=1){ alert('Должен остаться хотя бы один водитель'); return; }
+    state.drivers.splice(i,1);
+    persist(); openCatalogs();
+  });
+  $('own-drv-add')&&($('own-drv-add').onclick=()=>{
+    const name=(($('own-drv-name')||{}).value||'').trim();
+    let pct=+((($('own-drv-pct')||{}).value||'').replace(',','.'));
+    const phone=(($('own-drv-phone')||{}).value||'').trim();
+    const exchangeEnabled=!!(($('own-drv-ex')||{}).checked);
+    if(!name){ alert('Укажите ФИО водителя'); return; }
+    if(Number.isNaN(pct) || pct<0) pct=30;
+    const exists=state.drivers.some(d=>(d.name||'').toLowerCase()===name.toLowerCase());
+    if(exists){ alert('Такой водитель уже есть'); return; }
+    state.drivers.push({name, salaryPercent:pct, phone, exchangeEnabled});
+    persist(); openCatalogs();
+    $('cat-ok').style.display='block';
   });
   $('fin-save').onclick=()=>{
     let markup=+(($('fin-markup').value||'').replace(',','.')); if(Number.isNaN(markup)) markup=15;
