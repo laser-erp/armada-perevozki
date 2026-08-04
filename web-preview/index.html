@@ -343,7 +343,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-pin-45680";
+const APP_BUILD="2026-08-04-purge-dispatcher";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -351,6 +351,9 @@ const DEFAULT_OWN_COMPANIES=[
 const DEFAULT_ADMINS=[
   {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"45680", isSuper:true}
 ];
+/** Старые тестовые учётки — вычищаем при каждой миграции, даже если старый браузер вернул их с кэша */
+const RETIRED_ADMIN_IDS=new Set(["admin-dispatcher"]);
+const RETIRED_ADMIN_NAMES=new Set(["диспетчер"]);
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
@@ -750,7 +753,12 @@ function normalizeAdmin(a){
 }
 function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
-  // Сид только если админов ещё нет. Иначе удалённые (напр. «Диспетчер») возвращались снова.
+  // Вычистить удалённые тестовые учётки (Диспетчер и т.п.)
+  state.admins=state.admins.filter(a=>{
+    const nm=(a.name||'').trim().toLowerCase();
+    return !RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has(nm);
+  });
+  // Сид только если админов ещё нет.
   if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
   // Переименование старого «Супер админ» → Наволоцкий Е.Н. + актуальный PIN
   state.admins.forEach(a=>{
@@ -772,7 +780,8 @@ function migrateAdmins(){
   state.adminPresence=Array.isArray(state.adminPresence)?state.adminPresence:[];
 }
 function mergeAdminAuthFromRemote(p){
-  const remoteAdmins=(Array.isArray(p.admins)?p.admins:[]).map(normalizeAdmin).filter(Boolean);
+  const remoteAdmins=(Array.isArray(p.admins)?p.admins:[]).map(normalizeAdmin).filter(Boolean)
+    .filter(a=>!RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has((a.name||'').trim().toLowerCase()));
   if(remoteAdmins.length) state.admins=remoteAdmins;
   const byId=new Map();
   (state.adminLogins||[]).forEach(e=>{ if(e&&e.id) byId.set(e.id,e); });
@@ -929,7 +938,7 @@ function renderAdminActivity(){
     <div class="hint">Супер админ видит активность. Обычный — только заявки и справочники.</div>
     <div class="cat-compact">
       <div class="row">
-        <input id="new-adm-name" placeholder="Имя (Диспетчер)" style="flex:1.3" />
+        <input id="new-adm-name" placeholder="Имя администратора" style="flex:1.3" />
         <input id="new-adm-pin" inputmode="numeric" maxlength="8" placeholder="PIN" style="flex:0 0 72px;text-align:center" />
       </div>
       <label class="check"><input type="checkbox" id="new-adm-super"/> Супер админ</label>
