@@ -10,104 +10,147 @@
     :root {
       --bg0:#000; --bg1:#1e1e1e; --accent:#e61a1f; --bot:#2e2e2e;
       --text:#f5f5f5; --muted:rgba(245,245,245,.72); --field:rgba(255,255,255,.1); --ink:#111;
+      --pad:10px; --gap:8px; --radius:12px; --fs:15px; --fs-sm:12px; --ctrl-pad:10px 12px;
+      --touch:44px;
     }
-    *{box-sizing:border-box} html,body{margin:0;height:100%;font-family:"Segoe UI","Trebuchet MS",sans-serif;background:#000;color:var(--text)}
-    .phone{max-width:430px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1));position:relative}
-    .phone.wide{max-width:100%}
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;font-family:"Segoe UI","Trebuchet MS",sans-serif;background:#000;color:var(--text);font-size:var(--fs);-webkit-text-size-adjust:100%}
+    .phone{max-width:480px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1));position:relative}
+    .phone.wide{max-width:min(960px,100%)}
     .screen{position:absolute;inset:0;display:none;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1))}
     .screen.show{display:flex}
-    /* Полноэкранные панели внутри водителя — поверх чата */
     .driver-panel{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;background:linear-gradient(160deg,var(--bg0),var(--bg1))}
     .driver-panel.show{display:flex}
     .driver-panel header{background:rgba(0,0,0,.92);position:sticky;top:0;z-index:2}
     .driver-panel .panel-body{background:transparent;flex:1;min-height:0}
-    .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center}
-    .logo{width:120px;height:auto}
-    .brand{font-size:2rem;font-weight:800;letter-spacing:.25em}
-    .sub{color:var(--muted)}
-    button.primary,button.secondary{width:100%;border:0;border-radius:16px;padding:14px 12px;font-size:1rem;font-weight:700;cursor:pointer}
+    .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px 16px;text-align:center}
+    .logo{width:88px;height:auto}
+    .brand{font-size:1.55rem;font-weight:800;letter-spacing:.2em}
+    .sub{color:var(--muted);font-size:.9rem}
+    button.primary,button.secondary{width:100%;border:0;border-radius:var(--radius);padding:12px 10px;min-height:var(--touch);font-size:.95rem;font-weight:700;cursor:pointer}
     button.primary{background:var(--accent);color:#fff}
     button.secondary{background:var(--field);color:var(--text)}
-    .stack{width:100%;max-width:320px;display:flex;flex-direction:column;gap:10px}
-    header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);gap:8px;flex-wrap:wrap}
-    header h1{margin:0;font-size:1.05rem}
-    header button{background:0;border:0;color:var(--accent);font-weight:700;cursor:pointer;white-space:nowrap}
-    #chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
-    .bubble{max-width:86%;padding:10px 14px;border-radius:18px;white-space:pre-wrap;line-height:1.35}
+    .stack{width:100%;max-width:320px;display:flex;flex-direction:column;gap:8px}
+    header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.1);gap:6px;flex-wrap:wrap}
+    header h1{margin:0;font-size:.95rem}
+    header button{background:0;border:0;color:var(--accent);font-weight:700;cursor:pointer;white-space:nowrap;font-size:.85rem;padding:6px 4px;min-height:36px}
+    #chat{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+    .bubble{max-width:88%;padding:8px 12px;border-radius:14px;white-space:pre-wrap;line-height:1.3;font-size:.92rem}
     .bot{align-self:flex-start;background:var(--bot)}
     .driver{align-self:flex-end;background:var(--accent);color:#fff;font-weight:600}
-    #input-bar{padding:10px 12px 16px;border-top:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.9)}
-    .error{color:#ff8d8d;font-size:.82rem}.hint{color:var(--muted);font-size:.8rem}
-    .row{display:flex;gap:8px}
+    #input-bar{padding:8px 10px calc(10px + env(safe-area-inset-bottom,0));border-top:1px solid rgba(255,255,255,.12);display:flex;flex-direction:column;gap:6px;background:rgba(0,0,0,.9)}
+    .error{color:#ff8d8d;font-size:var(--fs-sm)}.hint{color:var(--muted);font-size:var(--fs-sm);line-height:1.3}
+    .row{display:flex;gap:6px;align-items:stretch}
     .row input,.row textarea,.row select,.pin input,
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{
-      border:0;border-radius:14px;padding:12px;background:var(--field);color:var(--text);font-size:1rem;outline:0;font-family:inherit
+      border:0;border-radius:10px;padding:var(--ctrl-pad);background:var(--field);color:var(--text);font-size:16px;outline:0;font-family:inherit;min-height:var(--touch)
     }
     .row input,.row textarea,.row select{flex:1;min-width:0}
-    .row button{border:0;border-radius:14px;padding:0 16px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
-    .nums,.yesno{display:flex;gap:8px}
-    .nums button,.yesno button{flex:1;border:0;border-radius:12px;padding:12px 0;background:var(--field);color:var(--text);font-weight:700;cursor:pointer}
-    .panel-body{flex:1;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
-    .card{background:rgba(46,46,46,.9);border-radius:14px;padding:12px 14px}
-    .card h3{margin:0 0 4px;font-size:1rem}.card p{margin:0;color:var(--muted);font-size:.85rem}
-    .empty{color:var(--muted);text-align:center;margin-top:40px}
-    .pin{width:100%;max-width:280px;display:flex;flex-direction:column;gap:10px}
-    .filters{display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap}
-    .filters button{border:0;border-radius:10px;padding:8px 12px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.85rem}
+    .row button{border:0;border-radius:10px;padding:0 12px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;min-height:var(--touch)}
+    .nums,.yesno{display:flex;gap:6px}
+    .nums button,.yesno button{flex:1;border:0;border-radius:10px;padding:10px 0;min-height:var(--touch);background:var(--field);color:var(--text);font-weight:700;cursor:pointer}
+    .panel-body{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+    .card{background:rgba(46,46,46,.9);border-radius:var(--radius);padding:10px 12px}
+    .card h3{margin:0 0 2px;font-size:.95rem}.card p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.3}
+    .empty{color:var(--muted);text-align:center;margin-top:28px;font-size:.9rem}
+    .pin{width:100%;max-width:280px;display:flex;flex-direction:column;gap:8px}
+    .filters{display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap}
+    .filters button{border:0;border-radius:8px;padding:7px 10px;min-height:36px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.78rem}
     .filters button.on{background:var(--accent);color:#fff}
-    .table-wrap{flex:1;overflow:auto;padding:0 0 16px}
-    table.admin{border-collapse:collapse;min-width:1800px;font-size:12px}
-    table.admin th,table.admin td{border:1px solid rgba(255,255,255,.08);padding:8px 6px;text-align:left;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+    .table-wrap{flex:1;overflow:auto;padding:0 0 12px;-webkit-overflow-scrolling:touch}
+    table.admin{border-collapse:collapse;min-width:1800px;font-size:11px}
+    table.admin th,table.admin td{border:1px solid rgba(255,255,255,.08);padding:6px 5px;text-align:left;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
     table.admin th{position:sticky;top:0;background:#1a1a1a;color:var(--accent);z-index:1}
     table.admin tr{cursor:pointer}
     table.admin tr:hover td{background:rgba(230,26,31,.12)}
-    .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%;max-width:520px;margin:0 auto;padding:16px 16px 40px;text-align:left;direction:ltr}
-    .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.8rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
+    .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:640px;margin:0 auto;padding:12px 12px 28px;text-align:left;direction:ltr}
+    .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
-    /* Админ-формы: экран не сжимает контент — скролл внутри body */
-    #admin-detail,#admin-create,#admin-catalogs-screen{
-      overflow:hidden; min-height:0;
-    }
-    .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:520px;margin:0 auto}
+    #admin-detail,#admin-create,#admin-catalogs-screen{overflow:hidden;min-height:0}
+    .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:640px;margin:0 auto}
     .admin-form-scroll{
       flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
-      padding:16px 18px 24px;display:flex;flex-direction:column;align-items:stretch;gap:10px;
+      padding:10px 12px 16px;display:flex;flex-direction:column;align-items:stretch;gap:8px;
       text-align:left;direction:ltr;width:100%;max-width:100%;margin:0;box-sizing:border-box
     }
     .admin-form-scroll > *{max-width:100%}
-    .admin-form-scroll label{
-      display:block;width:100%;margin:0;padding:0;
-      font-size:.85rem;line-height:1.3;color:var(--muted);
-      text-align:left;unicode-bidi:isolate
-    }
-    .admin-form-actions{flex-shrink:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0));border-top:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.92);display:flex;flex-direction:column;gap:8px}
-    .admin-form-scroll h2,.admin-form-scroll h3{margin:0 0 4px;font-size:1.15rem;text-align:left;width:100%}
-    .field-block{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06);width:100%}
+    .admin-form-scroll label{display:block;width:100%;margin:0;padding:0;font-size:.75rem;line-height:1.25;color:var(--muted);text-align:left;unicode-bidi:isolate}
+    .admin-form-actions{flex-shrink:0;padding:8px 12px calc(10px + env(safe-area-inset-bottom,0));border-top:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.92);display:flex;flex-direction:column;gap:6px}
+    .admin-form-scroll h2{margin:0;font-size:1.05rem;text-align:left;width:100%}
+    .admin-form-scroll h3{margin:4px 0 0;font-size:.95rem;text-align:left;width:100%}
+    .admin-form-scroll h4{margin:6px 0 0;font-size:.85rem}
+    .field-block{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);width:100%}
     .field-block:last-child{border-bottom:0}
-    .calc{background:rgba(46,46,46,.9);border-radius:12px;padding:10px 12px;font-size:.9rem;width:100%;text-align:left;direction:ltr}
-    .calc .calc-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:3px 0;width:100%}
+    .calc{background:rgba(46,46,46,.9);border-radius:10px;padding:8px 10px;font-size:.85rem;width:100%;text-align:left;direction:ltr}
+    .calc .calc-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:2px 0;width:100%}
     .calc .calc-row span:first-child{flex:1;min-width:0;text-align:left}
     .calc .calc-row span:last-child{flex:0 1 auto;text-align:right;white-space:nowrap}
     .calc .hint{display:block;width:100%;text-align:left;white-space:normal}
-    .ok{color:#7dffa0;font-size:.85rem}
-    .admin-cards{display:flex;flex-direction:column;gap:10px;padding:12px 16px 24px}
-    .admin-cards .card button{margin-top:10px}
-    .rate-missing{color:#ffb4b4;font-size:.82rem;font-weight:700}
-    .swipe-item{position:relative;overflow:hidden;border-radius:14px;touch-action:pan-y}
+    .ok{color:#7dffa0;font-size:var(--fs-sm)}
+    .admin-cards{display:flex;flex-direction:column;gap:8px;padding:8px 10px 20px}
+    .admin-cards .card button{margin-top:8px}
+    .rate-missing{color:#ffb4b4;font-size:var(--fs-sm);font-weight:700}
+    .swipe-item{position:relative;overflow:hidden;border-radius:var(--radius);touch-action:pan-y}
     .swipe-actions{position:absolute;inset:0 0 0 auto;display:flex;z-index:0}
-    .swipe-actions button{border:0;background:var(--accent);color:#fff;font-weight:700;padding:0 16px;min-width:118px;cursor:pointer}
-    .swipe-front{position:relative;z-index:1;background:rgba(46,46,46,.96);border-radius:14px;padding:12px 14px;transition:transform .18s ease;will-change:transform}
-    .swipe-front h3{margin:0 0 4px;font-size:1rem}
-    .swipe-front p{margin:0;color:var(--muted);font-size:.85rem}
-    .orders-hint{color:var(--muted);font-size:.8rem;padding:0 2px 4px}
-    .driver-banner{margin:8px 12px 0;padding:12px 14px;border-radius:14px;background:linear-gradient(145deg,rgba(232,93,4,.28),rgba(232,93,4,.08));border:1px solid rgba(232,93,4,.55);display:none}
+    .swipe-actions button{border:0;background:var(--accent);color:#fff;font-weight:700;padding:0 14px;min-width:100px;cursor:pointer}
+    .swipe-front{position:relative;z-index:1;background:rgba(46,46,46,.96);border-radius:var(--radius);padding:10px 12px;transition:transform .18s ease;will-change:transform}
+    .swipe-front h3{margin:0 0 2px;font-size:.92rem}
+    .swipe-front p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
+    .orders-hint{color:var(--muted);font-size:var(--fs-sm);padding:0 2px 2px}
+    .driver-banner{margin:6px 10px 0;padding:10px 12px;border-radius:var(--radius);background:linear-gradient(145deg,rgba(232,93,4,.28),rgba(232,93,4,.08));border:1px solid rgba(232,93,4,.55);display:none}
     .driver-banner.show{display:block}
-    .driver-banner strong{display:block;font-size:1rem;margin:0 0 4px}
-    .driver-banner p{margin:0;color:var(--muted);font-size:.85rem;line-height:1.35}
-    .driver-banner .banner-actions{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+    .driver-banner strong{display:block;font-size:.92rem;margin:0 0 2px}
+    .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
+    .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
+    /* Компактные блоки справочников — телефон и ПК */
+    .cat-list{display:flex;flex-direction:column;gap:6px}
+    .cat-compact{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px;padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .cat-compact .row{gap:6px;align-items:center}
+    .cat-compact input,.cat-compact select{padding:8px 10px;border-radius:10px;font-size:16px;min-height:40px}
+    .check{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);white-space:nowrap;margin:0!important;width:auto!important}
+    .check input{width:auto!important;min-height:0!important;flex:0 0 auto;accent-color:var(--accent)}
+    .item-card{background:rgba(46,46,46,.9);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+    .item-card .item-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .item-card .item-name{font-weight:700;font-size:.9rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .item-card .item-mid{display:flex;gap:6px;align-items:center}
+    .item-card .item-mid input{flex:1;min-width:0;padding:8px 10px;border-radius:8px;font-size:16px;min-height:40px}
+    .item-card .item-actions{display:flex;gap:6px}
+    .item-card .item-actions button{flex:1;padding:8px 6px;border-radius:10px;font-size:.8rem;min-height:40px;width:auto}
+    .pct-wrap{display:flex;align-items:center;gap:4px;flex:0 0 auto}
+    .pct-wrap input{width:54px!important;padding:6px 8px!important;border-radius:8px!important;text-align:center;font-size:.9rem!important;min-height:36px!important}
+    .pct-wrap span{font-size:.72rem;color:var(--muted)}
+    .cat-add-btn{padding:10px 12px!important;border-radius:10px!important;font-size:.9rem!important;margin:0!important;min-height:40px}
+    .fin-grid{display:grid;grid-template-columns:1fr;gap:6px}
+    .fin-grid label{margin:0}
+    .co-card .hint{font-size:.72rem;margin-top:2px}
+    .co-card .row button{width:auto;flex:1;padding:8px;font-size:.8rem;min-height:40px}
+
+    /* ПК / планшет: чуть просторнее, формы шире, 2 колонки где уместно */
+    @media (min-width:700px){
+      :root{ --pad:14px; --gap:10px; --fs:15px; --ctrl-pad:10px 12px; --touch:42px; }
+      .phone{max-width:520px}
+      .phone.wide{max-width:min(1100px,100%)}
+      .admin-form-shell{max-width:720px}
+      .logo{width:100px}
+      .brand{font-size:1.75rem}
+      .admin-form-scroll{padding:14px 18px 20px;gap:10px}
+      .admin-cards{padding:12px 16px 24px;gap:10px}
+      .fin-grid{grid-template-columns:1fr 1fr}
+      .fin-grid .fin-full{grid-column:1 / -1}
+      .cat-list.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      header{padding:10px 14px}
+      header h1{font-size:1.05rem}
+      .filters button{font-size:.85rem;padding:8px 12px}
+      .card h3,.swipe-front h3{font-size:1rem}
+      .card p,.swipe-front p{font-size:.85rem}
+    }
+    @media (min-width:1000px){
+      .phone.wide{max-width:1200px}
+      .admin-form-shell{max-width:800px}
+    }
   </style>
 </head>
 <body>
@@ -289,7 +332,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="2580";
-const APP_BUILD="2026-08-04-customer-carrier";
+const APP_BUILD="2026-08-04-responsive-compact";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2547,88 +2590,93 @@ function openCatalogs(){
       const dim=[v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0)?`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`:'';
       return `${v.plate}${v.payloadTons?` ${v.payloadTons}т`:''}${dim?' '+dim:''}`;
     }).join('; ')||'—';
-    return `<div class="card" style="margin:8px 0">
-      <h3 style="margin:0">${esc(c.name)}</h3>
+    return `<div class="item-card co-card">
+      <div class="item-top"><div class="item-name">${esc(c.name)}</div></div>
       <div class="hint">${esc(roles||'—')}</div>
       <div class="hint">Контакты: ${esc(contacts)}</div>
-      ${companyHasRole(c,'customer')?`<div class="hint">Загрузки: ${esc((c.loadingAddresses||[]).join(' · ')||'—')}</div>
-      <div class="hint">Выгрузки: ${esc((c.unloadingAddresses||[]).join(' · ')||'—')}</div>`:''}
-      ${companyHasRole(c,'carrier')?`<div class="hint">ТС: ${esc(vehicles)}</div>
-      <div class="hint">Водители: ${esc(((c.drivers||[]).map(d=>d.name).join('; '))||'—')}</div>`:''}
-      <div class="row" style="margin-top:8px">
+      ${companyHasRole(c,'customer')?`<div class="hint">Адреса: ${(c.loadingAddresses||[]).length} загр. / ${(c.unloadingAddresses||[]).length} выгр.</div>`:''}
+      ${companyHasRole(c,'carrier')?`<div class="hint">ТС: ${(c.vehicles||[]).length} · водители: ${(c.drivers||[]).length}</div>`:''}
+      <div class="item-actions">
         <button type="button" class="secondary" data-edit-co="${esc(c.id)}">Карточка</button>
-        <button type="button" class="secondary" data-del-co="${esc(c.id)}">Удалить</button>
+        <button type="button" class="secondary" data-del-co="${esc(c.id)}">Удал.</button>
       </div>
     </div>`;
-  }).join('') || `<div class="hint">Пока пусто — добавьте компанию ниже</div>`;
+  }).join('') || `<div class="hint">Пока пусто — добавьте компанию</div>`;
 
   $('catalogs-form').innerHTML=`
-    <button class="secondary" id="cat-back">Назад</button>
+    <button class="secondary cat-add-btn" id="cat-back">← Назад</button>
     <h2 style="margin:0">Справочники</h2>
 
-    <h3 style="margin:12px 0 0">Компании (наша фирма / заказчик / перевозчик)</h3>
-    <div class="hint">Роль «Наша фирма» — от кого заключаем договор и заявку (ООО «Армада», ИП Нечаев А.С.).</div>
-    <button class="primary" id="co-new" style="margin:8px 0">+ Компания</button>
+    <h3>Компании</h3>
+    <div class="hint">Наша фирма / заказчик / перевозчик. ООО «Армада», ИП Нечаев А.С. — наши.</div>
+    <button class="primary cat-add-btn" id="co-new">+ Компания</button>
     <div id="co-editor" style="display:none" class="field-block"></div>
-    ${companyCards}
+    <div class="cat-list two-col">${companyCards}</div>
 
-    <h3 style="margin:16px 0 0">Наши водители</h3>
-    <div class="hint">Биржу включает администратор. Новые водители появятся в «+ Заказ».</div>
-    <div class="field-block" style="margin:8px 0">
-      <label>ФИО нового водителя</label>
-      <input id="own-drv-name" placeholder="Иванов И.И." />
-      <label>% от ставки</label>
-      <input id="own-drv-pct" inputmode="decimal" value="30" />
-      <label>Телефон</label>
-      <input id="own-drv-phone" inputmode="tel" placeholder="+7..." />
-      <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
-        <input type="checkbox" id="own-drv-ex"/> Биржа включена
-      </label>
-      <button type="button" class="primary" id="own-drv-add" style="margin-top:8px">+ наш водитель</button>
+    <h3>Наши водители</h3>
+    <div class="hint">Галочка «Биржа» — доступ к бирже. Появятся в «+ Заказ».</div>
+    <div class="cat-compact">
+      <div class="row">
+        <input id="own-drv-name" placeholder="ФИО" style="flex:1.4" />
+        <input id="own-drv-pct" inputmode="decimal" value="30" placeholder="%" title="% от ставки" style="flex:0 0 56px;text-align:center" />
+      </div>
+      <div class="row">
+        <input id="own-drv-phone" inputmode="tel" placeholder="Телефон" style="flex:1" />
+        <label class="check"><input type="checkbox" id="own-drv-ex"/> Биржа</label>
+      </div>
+      <button type="button" class="primary cat-add-btn" id="own-drv-add">+ водитель</button>
     </div>
+    <div class="cat-list two-col">
     ${state.drivers.map((d,i)=>`
-      <div class="card" style="margin:8px 0">
-        <label>${esc(d.name)} — % от ставки</label>
-        <div class="row"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><button data-save-drv="${i}">OK</button></div>
-        <label>Телефон</label>
-        <input id="drv-phone-${i}" inputmode="tel" value="${esc(d.phone||'')}" placeholder="+7..." />
-        <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
-          <input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа включена
-        </label>
-        <div class="row" style="margin-top:8px">
-          <button type="button" class="secondary" data-save-drv-meta="${i}">Сохранить водителя</button>
-          <button type="button" class="secondary" data-del-drv="${i}">Удалить</button>
+      <div class="item-card">
+        <div class="item-top">
+          <div class="item-name">${esc(d.name)}</div>
+          <div class="pct-wrap"><input id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" /><span>%</span></div>
         </div>
-      </div>`).join('') || `<div class="hint">Пока нет водителей — добавьте выше</div>`}
-
-    <h3 style="margin:16px 0 0">Наши авто (л/100 км)</h3>
-    <div class="hint">Новые авто появятся при открытии смены и в «+ Заказ».</div>
-    <div class="field-block" style="margin:8px 0">
-      <label>Госномер</label>
-      <input id="own-veh-plate" placeholder="А 123 БВ 198" />
-      <label>Расход, л/100 км</label>
-      <input id="own-veh-cons" inputmode="decimal" value="20" />
-      <button type="button" class="primary" id="own-veh-add" style="margin-top:8px">+ наше авто</button>
+        <div class="item-mid">
+          <input id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
+          <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
+        </div>
+        <div class="item-actions">
+          <button type="button" class="primary" data-save-drv-meta="${i}">Сохранить</button>
+          <button type="button" class="secondary" data-del-drv="${i}">Удал.</button>
+        </div>
+      </div>`).join('') || `<div class="hint">Пока нет водителей</div>`}
     </div>
-    ${state.vehicles.map((v,i)=>`
-      <div class="card" style="margin:8px 0">
-        <label>${esc(v.plate)} — л/100 км</label>
-        <div class="row">
-          <input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" />
-          <button data-save-veh="${i}">OK</button>
-          <button type="button" class="secondary" data-del-veh="${i}">Удалить</button>
-        </div>
-      </div>`).join('') || `<div class="hint">Пока нет авто — добавьте выше</div>`}
 
-    <h3 style="margin:16px 0 0">Финансы / тариф</h3>
-    <div class="hint">Пакет: мин. часы работы + часы подачи. Км в пакете = груз + нулевой после. Нулевой до — подача 1 ч или 2 ч.</div>
-    <label>Наценка к себестоимости, %</label><input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" />
-    <label>Км в пакете (груз + после)</label><input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" />
-    <label>Мин. часов работы</label><input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" />
-    <label>Часов подачи (база; иначе ×2)</label><input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" />
-    <label>₽/час работы по умолчанию</label><input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" />
-    <label>₽/км сверх пакета по умолчанию</label><input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||80}" />
-    <button class="primary" id="fin-save">Сохранить тариф</button>
+    <h3>Наши авто</h3>
+    <div class="hint">Расход л/100 км. Появятся в смене и «+ Заказ».</div>
+    <div class="cat-compact">
+      <div class="row">
+        <input id="own-veh-plate" placeholder="Госномер" style="flex:1.4" />
+        <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 72px;text-align:center" />
+      </div>
+      <button type="button" class="primary cat-add-btn" id="own-veh-add">+ авто</button>
+    </div>
+    <div class="cat-list two-col">
+    ${state.vehicles.map((v,i)=>`
+      <div class="item-card">
+        <div class="item-top"><div class="item-name">${esc(v.plate)}</div></div>
+        <div class="item-mid">
+          <input id="veh-${i}" inputmode="decimal" value="${v.consumptionPer100Km}" placeholder="л/100" />
+          <span class="hint" style="white-space:nowrap">л/100</span>
+          <button type="button" class="primary" data-save-veh="${i}" style="width:auto;flex:0 0 auto;padding:8px 12px;min-height:40px">OK</button>
+          <button type="button" class="secondary" data-del-veh="${i}" style="width:auto;flex:0 0 auto;padding:8px 10px;min-height:40px">×</button>
+        </div>
+      </div>`).join('') || `<div class="hint">Пока нет авто</div>`}
+    </div>
+
+    <h3>Финансы / тариф</h3>
+    <div class="hint">Пакет: часы работы + подача; км в пакете = груз + после.</div>
+    <div class="fin-grid">
+      <label>Наценка, %<input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" /></label>
+      <label>Км в пакете<input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" /></label>
+      <label>Мин. часов работы<input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" /></label>
+      <label>Часов подачи<input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" /></label>
+      <label>₽/час по умолч.<input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" /></label>
+      <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||80}" /></label>
+      <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф</button>
+    </div>
     <div class="ok" id="cat-ok" style="display:none">Сохранено</div>
   `;
   show('admin-catalogs-screen');
