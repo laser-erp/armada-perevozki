@@ -84,6 +84,14 @@ final class ShiftStore: ObservableObject {
         allOrders().filter { $0.isAssignedPending && $0.driverName == driver && $0.onExchange != true }
     }
 
+    func enRouteOrder(for driver: String = AppDefaults.driverName) -> OrderRecord? {
+        allOrders().first { $0.isEnRoute && $0.driverName == driver }
+    }
+
+    func awaitingArrive(for driver: String = AppDefaults.driverName) -> [OrderRecord] {
+        allOrders().filter { $0.isEnRoute && $0.driverName == driver }
+    }
+
     func exchangeBoard(for driver: String = AppDefaults.driverName) -> [OrderRecord] {
         guard driver(for: driver).exchangeEnabled else { return [] }
         return allOrders().filter(\.isOnExchange)

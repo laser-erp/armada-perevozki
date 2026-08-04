@@ -65,6 +65,8 @@ struct OrderRecord: Identifiable, Codable, Equatable {
     var unloadingAddress: String
     /// Маршрут: точки с типом загрузка/выгрузка. Минимум 2.
     var routePoints: [RoutePoint]
+    /// Одометр при выезде со стоянки (шаг 1 назначенного заказа).
+    var departOdometer: Int?
     var startOdometer: Int?
     var previousOdometer: Int?
     var emptyKmBefore: Int?
@@ -163,7 +165,10 @@ struct OrderRecord: Identifiable, Codable, Equatable {
 
     var isClosed: Bool { closedAt != nil }
     var isOnExchange: Bool { onExchange == true && !isClosed && startOdometer == nil }
-    var isAssignedPending: Bool { !isClosed && startOdometer == nil && !isOnExchange }
+    /// Назначен, ещё не выехал.
+    var isAssignedPending: Bool { !isClosed && startOdometer == nil && departOdometer == nil && !isOnExchange }
+    /// Выехал, ждёт отметки прибытия на загрузку.
+    var isEnRoute: Bool { !isClosed && departOdometer != nil && startOdometer == nil && !isOnExchange }
     var isInProgress: Bool { !isClosed && startOdometer != nil }
     var isCarryOverLoaded: Bool { isInProgress && (staysLoadedOvernight == true) }
 
@@ -184,6 +189,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         if isClosed { return "Закрыт" }
         if isCarryOverLoaded { return "В работе · до выгрузки" }
         if isInProgress { return "В работе" }
+        if isEnRoute { return "В пути" }
         return "Назначен"
     }
 
@@ -216,6 +222,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         loadingAddress: String,
         unloadingAddress: String,
         routePoints: [RoutePoint]? = nil,
+        departOdometer: Int? = nil,
         startOdometer: Int? = nil,
         previousOdometer: Int? = nil,
         emptyKmBefore: Int? = nil,
@@ -272,6 +279,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         self.loadingAddress = points.first(where: { $0.kind == .loading })?.address ?? points[0].address
         self.unloadingAddress = points.last(where: { $0.kind == .unloading })?.address
             ?? points[points.count - 1].address
+        self.departOdometer = departOdometer
         self.startOdometer = startOdometer
         self.previousOdometer = previousOdometer
         self.emptyKmBefore = emptyKmBefore
@@ -307,7 +315,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         case id, sequentialNumber, dayNumber, createdAt, source, vehiclePlate, driverName
         case customer, customerId, contactName, contactPhone, contactPersonId
         case executorType, onExchange, carrierCompanyId, carrierDriverId, carrierVehicleId
-        case loadingAddress, unloadingAddress, routePoints, startOdometer, previousOdometer
+        case loadingAddress, unloadingAddress, routePoints, departOdometer, startOdometer, previousOdometer
         case emptyKmBefore, loadedKm, emptyKmAfter, endOdometer, closedAt
         case refueled, fuelPricePerLiter, fuelLiters, fuelTotalCost, fuelRemainingLiters, freight
         case paymentForm, rateWithVat, rateWithoutVat, rateCash, ratePerKmCash, estimateKm
@@ -350,6 +358,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         loadingAddress = points.first(where: { $0.kind == .loading })?.address ?? points[0].address
         unloadingAddress = points.last(where: { $0.kind == .unloading })?.address
             ?? points[points.count - 1].address
+        departOdometer = try c.decodeIfPresent(Int.self, forKey: .departOdometer)
         startOdometer = try c.decodeIfPresent(Int.self, forKey: .startOdometer)
         previousOdometer = try c.decodeIfPresent(Int.self, forKey: .previousOdometer)
         emptyKmBefore = try c.decodeIfPresent(Int.self, forKey: .emptyKmBefore)
@@ -403,6 +412,7 @@ struct OrderRecord: Identifiable, Codable, Equatable {
         try c.encode(loadingAddress, forKey: .loadingAddress)
         try c.encode(unloadingAddress, forKey: .unloadingAddress)
         try c.encode(routePoints, forKey: .routePoints)
+        try c.encodeIfPresent(departOdometer, forKey: .departOdometer)
         try c.encodeIfPresent(startOdometer, forKey: .startOdometer)
         try c.encodeIfPresent(previousOdometer, forKey: .previousOdometer)
         try c.encodeIfPresent(emptyKmBefore, forKey: .emptyKmBefore)
@@ -454,7 +464,9 @@ enum OrderFlowStep: String, Codable {
     case fuelPrice
     case fuelAmount
     case closingEmptyAfter
-    case startAssignedOdometer
+    case departAssignedOdometer
+    case arriveAssignedOdometer
+    case startAssignedOdometer // legacy alias → arrive
     case closeShiftParking
     case closeShiftStaysLoaded
 }
