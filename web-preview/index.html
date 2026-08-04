@@ -180,6 +180,14 @@
     .dense-row input.tiny{width:46px;padding:5px 4px;min-height:30px;border-radius:var(--pill);text-align:center;font-size:.8rem;flex:0 0 auto}
     .dense-row input.mid{flex:1;min-width:0;padding:5px 10px;min-height:30px;border-radius:var(--pill);font-size:16px}
     .dense-row select.slim{flex:0 1 110px;min-width:84px;padding:5px 8px;min-height:30px;border-radius:var(--pill);font-size:.72rem}
+    .drv-card{display:flex;flex-direction:column;gap:5px;padding:7px 8px;background:rgba(46,46,46,.94);border-radius:16px;border:1px solid rgba(255,255,255,.04)}
+    .drv-card .drv-top,.drv-card .drv-bot{display:flex;align-items:center;gap:5px;width:100%}
+    .drv-card .drv-name{flex:1;min-width:0;font-weight:700;font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .drv-card .drv-phone{
+      flex:1;min-width:0;width:100%;padding:7px 12px;min-height:34px;border-radius:var(--pill);
+      border:0;background:var(--field);color:var(--text);font-size:16px
+    }
+    .drv-card select.slim{flex:0 1 130px;min-width:100px;padding:5px 8px;min-height:30px;border-radius:var(--pill);font-size:.72rem;border:0;background:var(--field);color:var(--text)}
     .icon-btn{
       border:0;border-radius:var(--pill);min-width:32px;min-height:32px;width:32px;padding:0;font-weight:800;cursor:pointer;
       background:var(--field);color:var(--text);font-size:.85rem;flex:0 0 auto;line-height:1
@@ -432,7 +440,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-role-compact";
+const APP_BUILD="2026-08-04-driver-phone";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3435,17 +3443,19 @@ function openCatalogs(){
   }).join('') || `<div class="hint">Пока пусто — нажмите «+ Компания»</div>`;
 
   const driverCards=drivers.map(({d,i})=>{
-    return `<div class="dense-row" style="flex-wrap:wrap">
-      <div class="grow" style="flex:1 1 100%">
-        <div class="name">${esc(d.name)}</div>
+    return `<div class="drv-card">
+      <div class="drv-top">
+        <div class="drv-name">${esc(d.name)}</div>
+        <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="Процент" />
+        <span class="hint" style="margin:0">%</span>
+        <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
+        <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
+        <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
       </div>
-      <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="Процент" />
-      <span class="hint" style="margin:0">%</span>
-      <input class="mid" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
-      <label class="check"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
-      ${isSuperAdmin()?`<select class="slim" id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`:''}
-      <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
-      <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
+      <div class="drv-bot">
+        <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Телефон" />
+        ${isSuperAdmin()?`<select class="slim" id="drv-owner-${i}">${adminOwnerOptionsHtml(d.ownerAdminId)}</select>`:''}
+      </div>
     </div>`;
   }).join('') || `<div class="hint">Нет водителей — добавьте ниже</div>`;
 
