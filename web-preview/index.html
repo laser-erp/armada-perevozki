@@ -2374,6 +2374,8 @@ function openDetail(id){
       <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
       <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
       <select id="d-customer-pick"><option value="">или выбрать сохранённого</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
+      <label for="d-carrier-company">Перевозчик</label>
+      <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
       <label for="d-contact-name">Контакт</label>
       <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
       <input id="d-contact-phone" inputmode="tel" value="${esc(o.contactPhone||'')}" placeholder="Телефон" />
@@ -2495,6 +2497,9 @@ function openDetail(id){
     order.customer=($('d-customer').value||'').trim();
     const ownSel=findCompanyById((($('d-own-company')||{}).value)||'');
     if(ownSel){ order.ownCompanyId=ownSel.id; order.ownCompanyName=ownSel.name; }
+    const carrSel=findCompanyById((($('d-carrier-company')||{}).value)||'');
+    if(carrSel){ order.carrierCompanyId=carrSel.id; order.carrierCompanyName=carrSel.name; }
+    else { order.carrierCompanyId=null; order.carrierCompanyName=''; }
     order.contactName=(($('d-contact-name')||{}).value||'').trim();
     order.contactPhone=(($('d-contact-phone')||{}).value||'').trim();
     order.vehicleAt=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
