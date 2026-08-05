@@ -115,6 +115,11 @@
     .svc-check label input{margin-top:2px;flex:0 0 auto;width:16px;height:16px;accent-color:var(--accent)}
     .svc-check label.done{color:var(--text);text-decoration:line-through;opacity:.75}
     .svc-check-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+    .svc-lube{width:100%;border-collapse:collapse;font-size:.72rem;margin-top:6px}
+    .svc-lube th,.svc-lube td{border-bottom:1px solid rgba(255,255,255,.08);padding:5px 6px;text-align:left;vertical-align:top;line-height:1.3}
+    .svc-lube th{color:var(--muted);font-weight:700;font-size:.68rem}
+    .svc-lube td:nth-child(2),.svc-lube th:nth-child(2){white-space:nowrap;color:var(--muted)}
+    .svc-lube td:nth-child(3){color:var(--accent);font-weight:600}
     .claim-box{padding:10px 12px;border-radius:16px;background:rgba(230,26,31,.08);border:1px solid rgba(230,26,31,.28);margin:8px 0}
     .claim-box h3{margin:0 0 6px;font-size:.95rem}
     .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
@@ -550,6 +555,22 @@ const DEFAULT_VEHICLES=[
   {plate:"В 603 СА 47",consumptionPer100Km:20,payloadTons:10,bodyLengthM:8,bodyWidthM:2.45,bodyHeightM:2.5,makeModel:"ГАЗ 33104 Валдай"}
 ];
 /** Регламент по руководству ГАЗ-33104 «Валдай» (ММЗ): ТО-1 10 тыс. км, ТО-2 20 тыс. км, СО раз в год. */
+/** Табл. 2.4 — карта смазки (основные узлы ТО; без замков/петель кабины). */
+const GAZ_33104_LUBE_TABLE=[
+  {point:"Картер КПП", places:"1", amount:"по уровню", grease:"«Супер Т-3»; дубль: «Девон Супер Т», Лукойл ТМ-5 85W-90 (−25…+40 °C); зимой −40…+20 °C — Лукойл ТМ-5 75W-90"},
+  {point:"Подшипники карданных шарниров", places:"3", amount:"~4 г", grease:"«Супер Т-3»; дубль: «Девон Супер Т», Лукойл ТМ-5 85W-90"},
+  {point:"Шлицы карданного вала", places:"1", amount:"200 г", grease:"«Супер Т-3»; дубль: «Девон Супер Т», Лукойл ТМ-5 85W-90"},
+  {point:"Подшипник промежуточной опоры кардана", places:"1", amount:"50 г", grease:"Литол-24; дубль: ЛИТА"},
+  {point:"Подшипники шкворней", places:"4", amount:"30 г", grease:"Солидол Ж или солидол С"},
+  {point:"Картер заднего моста (+ ступицы задних)", places:"1", amount:"8 л", grease:"«Супер Т-3» / Лукойл ТМ-5 85W-90 (−25…+40 °C); зимой −40…+20 °C — Лукойл ТМ-5 75W-90"},
+  {point:"Подшипники ступиц передних колёс", places:"4", amount:"400±30 г", grease:"Литол-24; дубль: ЛИТА"},
+  {point:"Манжеты ступиц задних колёс", places:"2", amount:"40 г", grease:"Литол-24"},
+  {point:"Амортизаторы", places:"4", amount:"550±5 см³", grease:"АЖ-12Т; дубль: веретенное масло АУ"},
+  {point:"Система ГУР", places:"1", amount:"1,5 л", grease:"Гидромасло Р; ниже −35 °C — ВМГЗ"},
+  {point:"Уплотнитель рулевого вала", places:"1", amount:"5 г", grease:"Литол-24; дубль: ЛИТА"},
+  {point:"Карданные шарниры рулевого привода", places:"3", amount:"6 г", grease:"Литол-24; дубль: солидол С / Ж"},
+  {point:"Гидропривод сцепления", places:"1", amount:"0,2 л", grease:"Тормозная жидкость «РОСДОТ»; дубль: «Томь» III-А"}
+];
 const GAZ_33104_TO1_WORKS=[
   "Двигатель: проверить герметичность систем охлаждения, питания и смазки",
   "Проверить состояние шлангов топливопроводов",
@@ -560,7 +581,8 @@ const GAZ_33104_TO1_WORKS=[
   "Ходовая: проверить крепление колёс и стремянок рессор",
   "Тормоза: проверить герметичность и работу рабочей тормозной системы",
   "Тормоза: проверить состояние привода и работу стояночной тормозной системы",
-  "Трансмиссия: смазать шлицы карданных валов и подшипник промежуточной опоры (по таблице смазки)"
+  "Трансмиссия: смазать шлицы карданного вала («Супер Т-3» / Лукойл ТМ-5 85W-90, ~200 г)",
+  "Трансмиссия: смазать подшипник промежуточной опоры кардана (Литол-24, ~50 г)"
 ];
 const GAZ_33104_TO2_WORKS=[
   "Все работы ТО-1",
@@ -576,13 +598,13 @@ const GAZ_33104_TO2_WORKS=[
   "Очистить корпус фильтра тонкой очистки топлива и заменить элемент",
   "Трансмиссия: проверить люфт карданной передачи; крепления КПП, фланцев, заднего моста",
   "Очистить сапуны КПП и заднего моста",
-  "Заменить масло в коробке передач и заднем мосту",
-  "Смазать подшипники карданных шарниров и шлицы карданной передачи",
+  "Заменить масло в КПП и заднем мосту («Супер Т-3» / Лукойл ТМ-5 85W-90; зимой 75W-90)",
+  "Смазать подшипники карданных шарниров («Супер Т-3» / Лукойл ТМ-5) и шлицы (~200 г); опору — Литол-24 (~50 г)",
   "Ходовая: проверить амортизаторы, полуоси, буксирное устройство",
   "Проверить/отрегулировать схождение передних колёс; состояние шин и дисков",
-  "Обслуживание ступиц колёс (очистка, подшипники, смазка, регулировка)",
+  "Обслуживание ступиц колёс: очистка, подшипники, Литол-24, регулировка",
   "При необходимости отбалансировать и переставить колёса",
-  "Рулевое: герметичность ГУР, люфты, крепления механизма и колонки",
+  "Рулевое: герметичность ГУР (гидромасло Р), люфты, крепления механизма и колонки",
   "Тормоза: крепление крана, трубопроводов, баллонов; колодки и диски",
   "Проверить/отрегулировать регулятор давления воздуха; при конденсате — картридж осушителя",
   "Электрооборудование: фары, АКБ (очистка, крепление, уровень электролита), генератор и стартер",
@@ -594,13 +616,36 @@ const GAZ_33104_SO_WORKS=[
   "Очистить/промыть фильтр грубой очистки топлива (осенью)",
   "Слить отстой из топливного бака и фильтров (осенью)",
   "Проверить плотность электролита АКБ (осенью)",
-  "Смазать карданные шарниры рулевого управления и уплотнитель рулевого вала"
+  "Смазать карданные шарниры рулевого управления и уплотнитель рулевого вала (Литол-24)"
 ];
 const GAZ_33104_SERVICE_INTERVALS=[
   {name:"ТО-1 (ГАЗ 33104)", everyKm:10000, everyMonths:12, note:"По руководству ГАЗ-33104: каждые 10 000 км или раз в год.", works:GAZ_33104_TO1_WORKS},
   {name:"ТО-2 (ГАЗ 33104)", everyKm:20000, everyMonths:12, note:"По руководству ГАЗ-33104: каждые 20 000 км (включает ТО-1 + расширенный объём).", works:GAZ_33104_TO2_WORKS},
   {name:"СО — сезонное ТО", everyKm:null, everyMonths:12, note:"Сезонное обслуживание раз в год, совместно с ТО-1 или ТО-2.", works:GAZ_33104_SO_WORKS}
 ];
+function isGaz33104Valdai(v){
+  if(!v) return false;
+  return normPlateKey(v.plate)===normPlateKey('В 603 СА 47')
+    || /33104|валдай/i.test(v.makeModel||'');
+}
+function gaz33104LubeTableHtml(){
+  return `<details style="margin-top:10px" open>
+    <summary style="cursor:pointer;color:var(--accent);font-weight:700;font-size:.82rem">Таблица смазки ГАЗ-33104 (табл. 2.4)</summary>
+    <div style="overflow-x:auto">
+      <table class="svc-lube">
+        <thead><tr><th>Узел</th><th>Точ. / объём</th><th>Чем смазывать</th></tr></thead>
+        <tbody>
+          ${GAZ_33104_LUBE_TABLE.map(r=>`<tr>
+            <td>${esc(r.point)}</td>
+            <td>${esc(r.places)} · ${esc(r.amount)}</td>
+            <td>${esc(r.grease)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="meta" style="margin-top:4px">Через пресс-маслёнки — до появления свежей смазки. Источник: руководство ГАЗ-33104.</div>
+  </details>`;
+}
 const DEFAULT_DRIVERS=[
   {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
   {name:"Нечаев А.С.",salaryPercent:30,exchangeEnabled:false,phone:""}
@@ -611,7 +656,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-to-checklist";
+const APP_BUILD="2026-08-05-lube-table";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3028,9 +3073,7 @@ function ensureManufacturerServiceIntervals(){
   let changed=false;
   (state.vehicles||[]).forEach(v=>{
     if(!v||!v.plate) return;
-    const isValdai=normPlateKey(v.plate)===normPlateKey('В 603 СА 47')
-      || /33104|валдай/i.test(v.makeModel||'');
-    if(!isValdai) return;
+    if(!isGaz33104Valdai(v)) return;
     if(!v.makeModel){ v.makeModel='ГАЗ 33104 Валдай'; changed=true; }
     v.serviceIntervals=v.serviceIntervals||[];
     const byName=new Map(v.serviceIntervals.map(x=>[(x.name||'').toLowerCase(), x]));
@@ -3042,20 +3085,24 @@ function ensureManufacturerServiceIntervals(){
         if(iv){ v.serviceIntervals.push(iv); changed=true; }
         return;
       }
-      // дописать перечень работ / примечание, если пусто или устарело
-      if(!(existing.works&&existing.works.length) && def.works&&def.works.length){
-        existing.works=def.works.slice();
-        changed=true;
-      }
       if(def.note && existing.note!==def.note && !(existing.works&&existing.works.length>3 && existing.note && existing.note.includes('руководству'))){
         if(!existing.note || /ГАЗ 33104|руководству/.test(existing.note||'')){
           existing.note=def.note;
           changed=true;
         }
       }
-      if(def.works && def.works.length && (!existing.works || existing.works.length<def.works.length)){
-        existing.works=def.works.slice();
-        changed=true;
+      // обновить перечень работ регламента (в т.ч. когда убрали «по таблице смазки»)
+      if(def.works && def.works.length){
+        const cur=existing.works||[];
+        const same=cur.length===def.works.length && cur.every((w,i)=>w===def.works[i]);
+        const manufacturerList=!cur.length
+          || cur.some(w=>/по таблице смазки/i.test(w))
+          || /ГАЗ 33104|руководству/.test(existing.note||'')
+          || /ГАЗ 33104/.test(existing.name||'');
+        if(!same && manufacturerList){
+          existing.works=def.works.slice();
+          changed=true;
+        }
       }
     });
   });
@@ -3197,6 +3244,7 @@ function openVehicleCard(vehicleId){
       <label>Одометр сейчас<input id="vc-odo" inputmode="numeric" value="${v.currentOdometer??''}" placeholder="км" /></label>
       <button type="button" class="primary cat-add-btn fin-full" id="vc-save-head">Сохранить</button>
     </div>
+    ${isGaz33104Valdai(v)?gaz33104LubeTableHtml():''}
     <h3 style="margin:14px 0 6px;font-size:.95rem">Сервисные интервалы</h3>
     <div class="card" style="padding:8px 12px">${ivHtml}</div>
     <div class="fin-grid" style="margin-top:8px">
