@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-label-za-den";
+const APP_BUILD="2026-08-05-close-status-always";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2709,12 +2709,18 @@ function upsertOrder(order){
   persist();
 }
 function orderById(id){ return id?(state.orders||[]).find(o=>o.id===id)||null:null; }
-/** Текущий заказ на закрытии (не путать с «зомби» незакрытым №1). */
-function openOrder(){
+/** Заказ, который сейчас закрываем (по id из draft, иначе открытый в работе). */
+function orderBeingClosed(){
   const pinned=orderById(state.draft&&state.draft.closingOrderId);
   if(pinned && !pinned.cancelledAt && pinned.startOdometer!=null && !looksClosedOrder(pinned)) return pinned;
-  return inProgressOrder();
+  // fallback: самый «свежий» открытый у водителя
+  const open=(state.orders||[])
+    .filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && orderBelongsToDriver(o))
+    .sort((a,b)=>new Date(b.arrivedAt||b.createdAt||0)-new Date(a.arrivedAt||a.createdAt||0));
+  return open[0]||null;
 }
+/** Текущий заказ на закрытии (не путать с «зомби» незакрытым №1). */
+function openOrder(){ return orderBeingClosed(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
 function statusText(o){
   if(o.cancelledAt || (o.closedAt && o.cancelReason)) return 'Отменён';
@@ -3395,9 +3401,62 @@ function hydrateOrdersFromMessages(){
   }
   return changed;
 }
+/** Дожать зависшее закрытие: есть closeOdo в draft смены, заказ ещё «в работе». */
+function healStuckClosing(){
+  let changed=false;
+  (state.shifts||[]).forEach(s=>{
+    if(!s||s.endedAt) return;
+    const d=s.draft||{};
+    const step=s.orderStep||'';
+    // Только зависший шаг «после заправки / до стоянки» — не трогаем активный ввод одометра/заправки
+    if(step!=='closingEmptyAfter') return;
+    if(d.closeOdo==null) return;
+    const id=d.closingOrderId;
+    let o=id?(state.orders||[]).find(x=>x.id===id):null;
+    if(!o){
+      o=(state.orders||[])
+        .filter(x=>!looksClosedOrder(x) && !x.cancelledAt && x.startOdometer!=null && samePersonName(x.driverName||'', s.driverName||''))
+        .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))[0];
+    }
+    if(!o || looksClosedOrder(o)){
+      if(step==='closingEmptyAfter'||step==='askRefuel'){
+        s.orderStep='idle'; s.draft={}; changed=true;
+      }
+      return;
+    }
+    const end=+d.closeOdo;
+    if(!(end>=o.startOdometer)) return;
+    const now=d.endAt||d.parkingAt||new Date().toISOString();
+    o.endOdometer=end;
+    o.loadedKm=end-o.startOdometer;
+    o.closedAt=now;
+    o.endAt=d.endAt||now;
+    o.parkingAt=d.parkingAt||now;
+    o.emptyKmAfter=(d.parkingAfterOdo!=null && d.parkingAfterOdo>=end)?Math.max(0,d.parkingAfterOdo-end):0;
+    o.refueled=!!d.closeRefueled;
+    if(!o.refueled){
+      o.fuelLiters=null;
+      o.fuelPricePerLiter=(d.fuelPrice!=null && d.fuelPrice>0)?d.fuelPrice:resolveFuelPriceWithoutRefuel(o.vehiclePlate, o.id);
+    }
+    ensureOrderTimeStamps(o);
+    applyClientTariff(o);
+    s.orderStep='idle';
+    s.draft={};
+    s.lastOdometerPoint=end;
+    changed=true;
+  });
+  if(changed){
+    const byId=new Map((state.orders||[]).map(o=>[o.id,o]));
+    (state.shifts||[]).forEach(s=>{
+      (s.orders||[]).forEach((o,idx)=>{ const live=byId.get(o.id); if(live) s.orders[idx]=live; });
+    });
+  }
+  return changed;
+}
 function healAllOrders(){
   let changed=false;
   if(purgeDeadOrdersEverywhere()) changed=true;
+  if(healStuckClosing()) changed=true;
   if(hydrateOrdersFromMessages()) changed=true;
   (state.orders||[]).forEach(o=>{ if(healOrderCloseState(o)) changed=true; ensureOrderTimeStamps(o); });
   (state.shifts||[]).forEach(s=>{
@@ -3730,9 +3789,12 @@ function renderInput(){
   const err=state.error?`<div class="error">${esc(state.error)}</div>`:'';
   let html=err; const os=state.orderStep;
   if(os==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
-  else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='departAssignedOdometer'||os==='arriveAssignedOdometer'||os==='startAssignedOdometer'||os==='closeShiftParking'||os==='closingEmptyAfter'){
-    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closeShiftParking'||os==='closingEmptyAfter'?'Например, 277800':os==='closingOdometer'?'Например, 277720':'Например, 277690';
+  else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='departAssignedOdometer'||os==='arriveAssignedOdometer'||os==='startAssignedOdometer'||os==='closeShiftParking'||os==='postCloseEmptyAfter'){
+    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closeShiftParking'||os==='postCloseEmptyAfter'?'Например, 277800':os==='closingOdometer'?'Например, 277720':'Например, 277690';
     html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
+    if(os==='postCloseEmptyAfter'){
+      html+=`<button class="secondary" id="skip-empty-after">Пропустить — без доп. пробега</button>`;
+    }
   } else if(os==='dayNumber') html+=`<div class="hint">Номер заказа за день</div><div class="nums">${[1,2,3,4,5].map(n=>`<button data-day="${n}">${n}</button>`).join('')}</div>`;
   else if(os==='loading'||os==='unloading') html+=`<div class="row"><textarea id="text" rows="2" placeholder="Город, улица, дом, строение"></textarea><button id="text-ok">OK</button></div>`;
   else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
@@ -3782,6 +3844,10 @@ function wireInput(){
   $('text-ok')&&($('text-ok').onclick=submitText);
   $('refuel-yes')&&($('refuel-yes').onclick=()=>answerYesNo(true));
   $('refuel-no')&&($('refuel-no').onclick=()=>answerYesNo(false));
+  $('skip-empty-after')&&($('skip-empty-after').onclick=()=>{
+    state.orderStep='idle'; state.draft={}; state.error='';
+    upsertShift(); persist(); renderInput();
+  });
 }
 
 /** Сбросить незавершённый ЕТО в текущей смене и пройти заново. */
@@ -3822,6 +3888,16 @@ function restoreOrderWorkflow(shift){
   }
   const saved=shift.orderStep && shift.orderStep!=='idle' ? shift.orderStep : '';
   if(saved){
+    // Старый шаг closingEmptyAfter: заказ уже должен быть закрыт сразу после заправки
+    if(saved==='closingEmptyAfter' && shift.draft && shift.draft.closeOdo!=null){
+      state.draft=shift.draft?structuredClone(shift.draft):{};
+      if(!state.draft.closingOrderId){
+        const open=inProgressOrder();
+        if(open) state.draft.closingOrderId=open.id;
+      }
+      state.orderStep='closingEmptyAfter'; // обработаем в resume → auto finalize
+      return true;
+    }
     state.orderStep=saved;
     state.draft=shift.draft?structuredClone(shift.draft):{};
     if(!state.draft.plate && shift.vehiclePlate) state.draft.plate=shift.vehiclePlate;
@@ -3873,9 +3949,26 @@ function resumeOpenShift(shift){
         state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}`});
       }
     } else {
-      // Не дублируем «ЕТО пройден», если уже оформляем заказ
+      const os=state.orderStep||'';
+      // Зависшее закрытие: сразу дожимаем статус «Закрыт»
+      if(os==='closingEmptyAfter' && state.draft && state.draft.closeOdo!=null){
+        const o=orderBeingClosed();
+        if(o && !looksClosedOrder(o)){
+          state.draft.parkingAfterOdo=state.draft.closeOdo;
+          state.draft.parkingAt=state.draft.endAt||new Date().toISOString();
+          finalizeClose(!!state.draft.closeRefueled, state.draft.fuelPrice||null, state.draft.closeLiters||null);
+          return;
+        }
+        state.orderStep='idle'; state.draft={};
+      }
       const last=state.messages[state.messages.length-1];
-      if(!last || !/прибытию на загрузку|номер заказа за день|адрес загрузки|адрес выгрузки|автомобиль для заказа/i.test(String(last.text||''))){
+      const closeStep=/^closing|^askRefuel|^postClose/.test(os);
+      if(closeStep){
+        if(!last || !/закрыт|одометр на стоянке|Продолжаем закрытие/i.test(String(last.text||''))){
+          const n=(orderBeingClosed()||inProgressOrder()||{}).sequentialNumber;
+          state.messages.push({author:'bot',text:n?`Продолжаем закрытие заказа №${n}.`:`Продолжаем закрытие заказа.`});
+        }
+      } else if(!last || !/прибытию на загрузку|номер заказа за день|адрес загрузки|адрес выгрузки|автомобиль для заказа/i.test(String(last.text||''))){
         state.messages.push({author:'bot',text:`Продолжаем оформление заказа (${shift.vehiclePlate||'авто'}).`});
       }
     }
@@ -4002,12 +4095,39 @@ function submitNumber(){
     const liters=+raw; if(!(liters>0)){state.error='Введите количество литров, например 40';renderInput();return;}
     add('driver',`${liters} л`); askClosingEmptyAfter(true, state.draft.fuelPrice, liters); return;
   }
+  if(state.orderStep==='postCloseEmptyAfter'){
+    const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
+    const value=+digits;
+    const order=orderById(state.draft&&state.draft.postCloseOrderId) || orderBeingClosed();
+    if(!order || order.endOdometer==null){
+      state.orderStep='idle'; state.draft={}; state.error='Заказ уже закрыт'; renderInput(); return;
+    }
+    if(value<order.endOdometer){state.error=`Одометр не может быть меньше окончания (${order.endOdometer})`;renderInput();return;}
+    order.emptyKmAfter=Math.max(0, value-order.endOdometer);
+    order.parkingAt=new Date().toISOString();
+    if(state.shift) state.shift.lastOdometerPoint=value;
+    recomputeOrderTimes(order);
+    applyClientTariff(order);
+    bumpDataEpoch('post-close-empty');
+    upsertOrder(order);
+    add('driver',String(value));
+    add('bot',`Пробег до стоянки/следующего: ${order.emptyKmAfter} км. Заказ №${order.sequentialNumber} обновлён.`);
+    state.orderStep='idle'; state.draft={}; state.error='';
+    upsertShift(); persist();
+    clearTimeout(persistTimer);
+    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-close push', err); });
+    renderInput(); return;
+  }
+  // Совместимость: старый шаг closingEmptyAfter → сразу закрыть
   if(state.orderStep==='closingEmptyAfter'){
     const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
     const value=+digits; const end=state.draft.closeOdo;
     if(end!=null && value<end){state.error=`Одометр не может быть меньше окончания заказа (${end})`;renderInput();return;}
     state.draft.parkingAfterOdo=value;
     state.draft.parkingAt=new Date().toISOString();
+    if(!state.draft.closingOrderId){
+      const o=orderBeingClosed(); if(o) state.draft.closingOrderId=o.id;
+    }
     add('driver',String(value));
     finalizeClose(!!state.draft.closeRefueled, state.draft.fuelPrice||null, state.draft.closeLiters||null); return;
   }
@@ -4174,14 +4294,15 @@ function startCreateOrder(){
 }
 function startCloseOrder(){
   syncOpenShiftRuntime();
-  const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  const order=orderBeingClosed(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
   if(!findOpenShift() || (!isEtoDone(state.shift||{}) && state.step!=='done')){
     state.error='Сначала завершите ЕТО'; renderInput(); return;
   }
-  state.draft=Object.assign({}, state.draft||{}, {closingOrderId:order.id});
+  // Чистый draft закрытия — без хвостов создания заказа
+  state.draft={closingOrderId:order.id, plate:order.vehiclePlate||(state.shift&&state.shift.vehiclePlate)||''};
   add('driver','Закрыть заказ');
   add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)}).\nУкажите показания одометра по окончании перевозки.`);
-  state.orderStep='closingOdometer'; state.error=''; upsertShift(); renderInput();
+  state.orderStep='closingOdometer'; state.error=''; upsertShift(); persist(); renderInput();
 }
 function startCloseShift(){
   const shift=syncOpenShiftRuntime();
@@ -4274,14 +4395,20 @@ function answerRefuel(yes){
   askClosingEmptyAfter(false, price, null);
 }
 function askClosingEmptyAfter(refueled, price, liters){
+  // Статус «Закрыт» сразу после заправки — не ждём одометр стоянки (из‑за него зависали).
+  const order=orderBeingClosed();
+  if(order && !state.draft.closingOrderId) state.draft.closingOrderId=order.id;
   state.draft.closeRefueled=refueled; state.draft.fuelPrice=price; state.draft.closeLiters=liters;
-  add('bot','Укажите одометр на стоянке или у следующего заказа (пробег после выгрузки).');
-  state.orderStep='closingEmptyAfter'; state.error=''; upsertShift(); renderInput();
+  const end=state.draft.closeOdo;
+  state.draft.parkingAfterOdo=(end!=null)?end:state.draft.parkingAfterOdo;
+  state.draft.parkingAt=state.draft.endAt||new Date().toISOString();
+  finalizeClose(refueled, price, liters);
 }
 function finalizeClose(refueled,price,liters){
-  const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  const order=orderBeingClosed(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
   const end=state.draft.closeOdo;
   if(end==null || order.startOdometer==null){state.error='Нет одометра окончания';renderInput();return;}
+  if(end<order.startOdometer){state.error=`Одометр окончания меньше начала (${order.startOdometer})`;renderInput();return;}
   const loaded=end-order.startOdometer;
   const now=new Date().toISOString();
   const parkAt=state.draft.parkingAt||now;
@@ -4301,7 +4428,11 @@ function finalizeClose(refueled,price,liters){
     order.emptyKmAfter=Math.max(0, park-end);
     order.parkingAt=parkAt;
     if(state.shift) state.shift.lastOdometerPoint=park;
-  } else if(state.shift) state.shift.lastOdometerPoint=end;
+  } else {
+    order.emptyKmAfter=order.emptyKmAfter!=null?order.emptyKmAfter:0;
+    order.parkingAt=order.parkingAt||parkAt;
+    if(state.shift) state.shift.lastOdometerPoint=end;
+  }
   recomputeOrderTimes(order);
   // Факт часов с грузом — подсказка для тарифа, если админ ещё не ввёл
   if(order.timeLoadedHours!=null && !(order.workHours>0)){
@@ -4314,7 +4445,14 @@ function finalizeClose(refueled,price,liters){
   // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
   const times=orderTimesText(order);
   add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}${times?'\n'+times:''}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
-  state.orderStep='idle'; state.draft={}; state.error=''; upsertShift();
+  // Опционально добить нулевой после — статус уже «Закрыт»
+  const closedId=order.id;
+  const closedEnd=end;
+  state.draft={postCloseOrderId:closedId, closeOdo:closedEnd};
+  state.orderStep='postCloseEmptyAfter';
+  state.error='';
+  add('bot','Если уже на стоянке или у следующего заказа — введите одометр (пробег после выгрузки). Иначе нажмите «Пропустить».');
+  upsertShift();
   persist();
   clearTimeout(persistTimer);
   pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
