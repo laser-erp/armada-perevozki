@@ -5106,9 +5106,12 @@ try{
   }
   setTimeout(updateSyncHint, 700);
 })();
-$('role-driver').onclick=()=>openDriverPick();
-$('driver-pick-back')&&($('driver-pick-back').onclick=()=>show('roles'));
-$('driver-exit').onclick=()=>{ clearDriverSession(); show('roles'); };
+$('role-driver').onclick=()=>openDriverPick(false);
+$('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
+  if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
+  openDriverPick(true);
+});
+$('driver-exit').onclick=()=>leaveDriverMode();
 $('role-admin').onclick=()=>{
   migrateAdmins();
   if(restoreAdminSession()){
