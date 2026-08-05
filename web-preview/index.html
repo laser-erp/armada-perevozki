@@ -487,7 +487,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-session-fleet";
+const APP_BUILD="2026-08-05-driver-phone";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -843,6 +843,31 @@ function ensureFleetPerSpaces(){
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
     })) changed=true;
+  });
+  // Телефоны: из контактов «нашей фирмы» / других копий того же ФИО
+  (state.drivers||[]).forEach(d=>{
+    if((d.phone||'').trim()) return;
+    let ph='';
+    const co=findCompanyById(d.companyId);
+    if(co){
+      for(const p of (co.contacts||[])){
+        if(samePersonName(p.name, d.name)){ ph=contactPhone(p); if(ph) break; }
+      }
+    }
+    if(!ph){
+      const twin=(state.drivers||[]).find(x=>samePersonName(x.name,d.name) && (x.phone||'').trim());
+      if(twin) ph=String(twin.phone).trim();
+    }
+    if(!ph){
+      for(const c of (state.companies||[])){
+        if(!companyHasRole(c,'own')) continue;
+        for(const p of (c.contacts||[])){
+          if(samePersonName(p.name, d.name)){ ph=contactPhone(p); if(ph) break; }
+        }
+        if(ph) break;
+      }
+    }
+    if(ph){ d.phone=ph; changed=true; }
   });
   return changed;
 }
@@ -2042,6 +2067,43 @@ function driverPercent(name, companyId){
     if(hit) return hit.salaryPercent??30;
   }
   return (list.find(d=>samePersonName(d.name,name))||{salaryPercent:30}).salaryPercent;
+}
+function findDriverRecord(name, companyId){
+  const list=state.drivers||[];
+  const nm=(name||'').trim();
+  if(!nm || nm==='Биржа' || nm==='—' || nm.startsWith('[Перевозчик]')) return null;
+  if(companyId){
+    const hit=list.find(d=>samePersonName(d.name,nm) && d.companyId===companyId);
+    if(hit) return hit;
+  }
+  return list.find(d=>samePersonName(d.name,nm))||null;
+}
+function driverPhone(name, companyId){
+  const d=findDriverRecord(name, companyId);
+  if(d && d.phone) return String(d.phone).trim();
+  // запасной: телефон из контакта «нашей фирмы» с тем же ФИО
+  const cos=(state.companies||[]).filter(c=>companyHasRole(c,'own'));
+  for(const c of cos){
+    if(companyId && c.id!==companyId) continue;
+    for(const p of (c.contacts||[])){
+      if(samePersonName(p.name, name)){
+        const ph=contactPhone(p);
+        if(ph) return ph;
+      }
+    }
+  }
+  return '';
+}
+function orderDriverPhone(o){
+  if(!o) return '';
+  if(o.driverPhone) return String(o.driverPhone).trim();
+  const firmId=o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o.ownCompanyId;
+  return driverPhone(o.driverName, firmId);
+}
+function stampOrderDriverPhone(o){
+  if(!o) return;
+  const ph=orderDriverPhone(o);
+  if(ph) o.driverPhone=ph;
 }
 function round2(v){ return Math.round(v*100)/100; }
 function fmt(v){ if(v==null||v==='') return '—'; const n=+v; if(Number.isNaN(n)) return String(v); return n===Math.round(n)?String(Math.round(n)):n.toFixed(2); }
@@ -3264,7 +3326,9 @@ function assignExchangeToOwn(id){
   o.driverName=driver;
   o.vehiclePlate=plate;
   o.driverPercent=driverPercent(driver, firmId);
+  o.driverPhone=driverPhone(driver, firmId);
   o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
+  stampOrderDriverPhone(o);
   bumpDataEpoch('assign-exchange-own');
   upsertOrder(o);
   renderAdmin();
@@ -3354,8 +3418,11 @@ function confirmClaimExchange(){
   o.driverName=driver;
   o.vehiclePlate=plate;
   o.driverPercent=driverPercent(driver, myCo.id);
+  o.driverPhone=driverPhone(driver, myCo.id);
   o.partnerSpaceId=currentAdmin.spaceId||null;
   o.executorAdminId=currentAdmin.id;
+  if(o.transportApp) o.transportApp.driverPhone=o.driverPhone||'';
+  stampOrderDriverPhone(o);
   bumpDataEpoch('claim-exchange');
   upsertOrder(o);
   claimOrderId=null;
@@ -3441,7 +3508,7 @@ function renderAdmin(){
       ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
       <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
       ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
-      <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}</p>
+      <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })()}</p>
       <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
       ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
@@ -3502,7 +3569,7 @@ function fillCreateFleetSelects(){
   }
   if(drvEl){
     drvEl.innerHTML=drvList.length
-      ? drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('')
+      ? drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}${d.phone?' · '+esc(d.phone):''}</option>`).join('')
       : `<option value="">— нет водителя у «${esc(firm)}» —</option>`;
   }
   const hint=$('create-fleet-hint');
@@ -3581,6 +3648,7 @@ function saveDispatcherOrder(){
     if(drv) carrierDriverId=drv.id;
     if(veh) carrierVehicleId=veh.id;
   }
+  let driverPhoneVal='';
   if(mode==='own'){
     plate=(($('create-plate')||{}).value||'').trim();
     driver=(($('create-driver')||{}).value||'').trim();
@@ -3593,6 +3661,7 @@ function saveDispatcherOrder(){
       $('create-error').textContent=`Водитель ${driver} не относится к «${ownCo.name}»`; return;
     }
     driverPercentVal=driverPercent(driver, ownCo.id);
+    driverPhoneVal=driverPhone(driver, ownCo.id);
   } else if(mode==='carrier'){
     if(!carrierCo){ $('create-error').textContent='Выберите перевозчика'; return; }
     const drv=(carrierCo.drivers||[]).find(d=>d.id===carrierDriverId);
@@ -3602,6 +3671,7 @@ function saveDispatcherOrder(){
     driver=`[Перевозчик] ${drv.name}`;
     plate=veh.plate;
     driverPercentVal=0;
+    driverPhoneVal=(drv.phone||'').trim();
   } else if(mode==='exchange'){
     onExchange=true;
     driver='Биржа';
@@ -3629,7 +3699,8 @@ function saveDispatcherOrder(){
     ownerAdminId:spaceAdm.id,
     ownerAdminName:spaceAdm.name,
     spaceId:orderSpaceId,
-    vehiclePlate:plate, driverName:driver, customer,
+    vehiclePlate:plate, driverName:driver, driverPhone:driverPhoneVal||'',
+    customer,
     customerId:company?company.id:null,
     ownCompanyId:ownCo.id,
     ownCompanyName:ownCo.name,
@@ -3648,6 +3719,7 @@ function saveDispatcherOrder(){
     partnerSpaceId:null,
     executorAdminId:null
   };
+  stampOrderDriverPhone(order);
   ensureRoutePoints(order);
   applyOrderSchedule(order);
   upsertOrder(order);
@@ -3750,15 +3822,21 @@ function openDetail(id){
   $('detail-form').innerHTML=`
     <button class="secondary" id="detail-back">← Назад</button>
     <h2>Заявка №${o.sequentialNumber}</h2>
-    <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)</div>
+    <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</div>
     <div class="hint" style="color:var(--accent)">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС считаются от нал.</div>
     ${o.transportApp?`<div class="claim-box">
       <h3>Договор‑заявка подписана</h3>
       <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
-      <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}</p>
+      <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</p>
       <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
     </div>`:''}
     <div class="field-block">
+      <label>Водитель / телефон</label>
+      <div class="row">
+        <input id="d-driver-name" value="${esc(o.driverName||'')}" placeholder="ФИО водителя" style="flex:1.2" />
+        <input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="Тел. водителя" style="flex:1" />
+      </div>
+      ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
       <label for="d-own-company">От нашей фирмы</label>
       <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
       <label>Требования к ТС (т / Д×Ш×В)</label>
@@ -3904,6 +3982,14 @@ function openDetail(id){
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
+    const drvName=(($('d-driver-name')||{}).value||'').trim();
+    if(drvName) order.driverName=drvName;
+    order.driverPhone=(($('d-driver-phone')||{}).value||'').trim();
+    if(order.driverPhone && order.driverName){
+      const firmId=order.executorType==='partner'?(order.carrierCompanyId||order.ownCompanyId):order.ownCompanyId;
+      const rec=findDriverRecord(order.driverName, firmId);
+      if(rec) rec.phone=order.driverPhone;
+    }
     const ownSel=findCompanyById((($('d-own-company')||{}).value)||'');
     if(ownSel){ order.ownCompanyId=ownSel.id; order.ownCompanyName=ownSel.name; }
     order.reqPayloadTons=numOrNull(($('d-req-pay')||{}).value);
