@@ -74,6 +74,14 @@
     table.admin th{position:sticky;top:0;background:#1a1a1a;color:var(--accent);z-index:1}
     table.admin tr{cursor:pointer}
     table.admin tr:hover td{background:rgba(230,26,31,.12)}
+    table.admin tr.group-total td{background:rgba(230,26,31,.16);font-weight:700;color:var(--text)}
+    table.admin tr.group-total:hover td{background:rgba(230,26,31,.24)}
+    table.admin tr.group-detail td{background:rgba(255,255,255,.03);font-weight:400}
+    table.admin tr.group-total .tog{display:inline-block;min-width:1.2em;color:var(--accent)}
+    .day-total-card{border:1px solid rgba(230,26,31,.35)}
+    .day-total-card .tot-row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:6px;font-size:.82rem}
+    .day-total-card .tot-row b{color:var(--accent)}
+    .day-total-details{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
     .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:640px;margin:0 auto;padding:12px 12px 28px;text-align:left;direction:ltr}
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
@@ -517,7 +525,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-auto-sync-session";
+const APP_BUILD="2026-08-05-shift-day-totals";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -576,7 +584,8 @@ const state={
   settings:Object.assign({dadataToken:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
-  light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null
+  light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
+  adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{}
 };
 let pbRecordId=null;
 let persistTimer=null;
@@ -4816,6 +4825,91 @@ function showShifts(){
 }
 
 const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
+/** Ключ календарного дня (локально). */
+function dayKeyFromIso(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function canAdminSeeShift(s){
+  if(!s) return false;
+  if(isSuperAdmin()){
+    if(state.adminOwnerFilter==='all') return true;
+    return s.ownerAdminId===state.adminOwnerFilter || samePersonName(s.ownerAdminName||'', ((state.admins||[]).find(a=>a.id===state.adminOwnerFilter)||{}).name||'');
+  }
+  const my=currentOwnCompany();
+  if(my && s.ownCompanyId && s.ownCompanyId===my.id) return true;
+  if(currentAdmin && s.ownerAdminId && s.ownerAdminId===currentAdmin.id) return true;
+  // смена водителя своей фирмы
+  if(my && (state.drivers||[]).some(d=>samePersonName(d.name, s.driverName||'') && d.companyId===my.id)) return true;
+  return false;
+}
+/** Суммы по списку заказов: выручка, расходы, прибыль. */
+function sumOrderMoney(list){
+  let revenue=0, expenses=0, profit=0, pay=0, fuel=0, rent=0, cushion=0, km=0, n=0;
+  let hasMoney=false;
+  (list||[]).forEach(o=>{
+    n++;
+    const m=metrics(o);
+    const rate=m.rate;
+    if(rate!=null){ revenue+=rate; hasMoney=true; }
+    const exp=(m.driverPay||0)+(m.fuelCostCalc||0)+(o.vehicleRent||0)+(m.cushion||0);
+    expenses+=exp;
+    pay+=(m.driverPay||0);
+    fuel+=(m.fuelCostCalc||0);
+    rent+=(o.vehicleRent||0);
+    cushion+=(m.cushion||0);
+    if(m.netProfit!=null){ profit+=m.netProfit; hasMoney=true; }
+    const t=dayTotal(o); if(t!=null) km+=t;
+  });
+  return {
+    count:n, km:round2(km),
+    revenue:hasMoney?round2(revenue):null,
+    expenses:hasMoney?round2(expenses):null,
+    profit:hasMoney?round2(profit):null,
+    pay:round2(pay), fuel:round2(fuel), rent:round2(rent), cushion:round2(cushion)
+  };
+}
+/**
+ * Группы «итог смены» после закрытия смены: день + водитель.
+ * Заказы без закрытой смены остаются отдельными строками.
+ */
+function buildAdminShiftDayGroups(orders){
+  const byId=new Map((orders||[]).map(o=>[o.id,o]));
+  const used=new Set();
+  const groups=[];
+  const shifts=(state.shifts||[])
+    .filter(s=>s && s.endedAt && canAdminSeeShift(s))
+    .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
+  shifts.forEach(s=>{
+    const dayKey=dayKeyFromIso(s.endedAt||s.startedAt);
+    if(!dayKey) return;
+    const fromShift=(s.orders||[]).map(o=>byId.get(o.id)||o).filter(o=>o && byId.has(o.id));
+    let list=fromShift;
+    if(!list.length){
+      list=(orders||[]).filter(o=>{
+        if(used.has(o.id)) return false;
+        if(!samePersonName(o.driverName||'', s.driverName||'')) return false;
+        const od=dayKeyFromIso(o.closedAt||o.createdAt);
+        return od===dayKey;
+      });
+    }
+    list=list.filter(o=>!used.has(o.id));
+    if(!list.length) return;
+    list.forEach(o=>used.add(o.id));
+    list.sort((a,b)=>(a.sequentialNumber||0)-(b.sequentialNumber||0));
+    const id=`${s.id||(dayKey+'|'+(s.driverName||''))}`;
+    groups.push({
+      id, shift:s, dayKey, dayLabel:dayOnly(s.endedAt||s.startedAt),
+      driverName:s.driverName||list[0].driverName||'—',
+      vehiclePlate:s.vehiclePlate||list[0].vehiclePlate||'—',
+      orders:list, totals:sumOrderMoney(list)
+    });
+  });
+  const ungrouped=(orders||[]).filter(o=>!used.has(o.id));
+  return {groups, ungrouped};
+}
 function filteredOrders(){
   if(state.adminFilter==='eto') return [];
   return allOrders().filter(o=>{
@@ -5122,18 +5216,70 @@ function renderAdmin(){
       </div>
     </div>`;
   }).join('');
-  const head=COLS.map(c=>`<th>${c}</th>`).join('');
-  const rows=orders.map(o=>{
+  if(!state.adminExpandedGroups || typeof state.adminExpandedGroups!=='object') state.adminExpandedGroups={};
+  const {groups, ungrouped}=buildAdminShiftDayGroups(orders);
+  const orderRowHtml=o=>{
     const m=metrics(o);
     const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', routeText(o), o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.ratePerKmCash), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
-    return `<tr data-id="${o.id}"><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
+    return `<tr class="group-detail" data-id="${o.id}"><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
+  };
+  const head=COLS.map(c=>`<th>${c}</th>`).join('');
+  let tableRows='';
+  groups.forEach(g=>{
+    const open=!!state.adminExpandedGroups[g.id];
+    const t=g.totals;
+    const sumCells=[
+      g.dayLabel, g.vehiclePlate, g.driverName, '—', `Итог смены · ${t.count} заказ.`, '—',
+      '—','—','—', fmt(t.km), '—','—','—','—',
+      fmt(t.revenue), fmt(t.pay), '—','—', fmt(t.fuel), fmt(t.rent), fmt(t.cushion), fmt(t.profit), '—'
+    ];
+    tableRows+=`<tr class="group-total" data-group="${esc(g.id)}" title="Нажмите, чтобы ${open?'свернуть':'развернуть'} заказы">
+      <td><span class="tog">${open?'▼':'▶'}</span> Итог</td>
+      ${sumCells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}
+    </tr>`;
+    if(open) tableRows+=g.orders.map(orderRowHtml).join('');
+  });
+  tableRows+=ungrouped.map(orderRowHtml).join('');
+  const totalCards=groups.map(g=>{
+    const open=!!state.adminExpandedGroups[g.id];
+    const t=g.totals;
+    return `<div class="card day-total-card" data-group-card="${esc(g.id)}">
+      <h3><span class="tog">${open?'▼':'▶'}</span> Итог смены · ${esc(g.dayLabel)} · ${esc(g.driverName)}</h3>
+      <p>${esc(g.vehiclePlate)} · заказов: ${t.count} · смена закрыта ${esc(dateTime(g.shift.endedAt))}</p>
+      <div class="tot-row">
+        <span>Выручка (нал): <b>${esc(fmt(t.revenue))} ₽</b></span>
+        <span>Расходы: <b>${esc(fmt(t.expenses))} ₽</b></span>
+        <span>ЗП: <b>${esc(fmt(t.pay))} ₽</b></span>
+        <span>ГСМ: <b>${esc(fmt(t.fuel))} ₽</b></span>
+        <span>Прибыль: <b>${esc(fmt(t.profit))} ₽</b></span>
+        <span>Км: <b>${esc(fmt(t.km))}</b></span>
+      </div>
+      ${open?`<div class="day-total-details">${g.orders.map(o=>{
+        const m=metrics(o);
+        return `<p style="margin:4px 0">№${o.sequentialNumber} · ${esc(routeText(o))} · нал ${esc(fmt(m.rate))} · ЗП ${esc(fmt(m.driverPay))} · прибыль ${esc(fmt(m.netProfit))}</p>`;
+      }).join('')}<button type="button" class="secondary open-first" data-id="${g.orders[0].id}" style="margin-top:6px">Открыть первый заказ</button></div>`:''}
+    </div>`;
   }).join('');
   $('admin-list').innerHTML=`
-    <div class="hint" style="padding:8px 16px 0">Карточка заявки → ставки и финансы.${exCount?` На бирже сейчас: <strong>${exCount}</strong> — фильтр «Биржа».`:''}</div>
+    <div class="hint" style="padding:8px 16px 0">После закрытия смены — итоговая строка по водителю за день (нажмите ▶ чтобы раскрыть заказы).${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</div>
+    ${totalCards?`<div class="admin-cards">${totalCards}</div>`:''}
     <div class="admin-cards">${cards}</div>
-    <div class="hint" style="padding:0 16px">Широкая таблица (горизонтальный скролл)</div>
-    <div class="table-wrap" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
-  document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+    <div class="hint" style="padding:0 16px">Таблица: итог смены сверху группы, затем детали. Без закрытой смены — обычные строки.</div>
+    <div class="table-wrap" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`;
+  const toggleGroup=id=>{
+    state.adminExpandedGroups[id]=!state.adminExpandedGroups[id];
+    renderAdmin();
+  };
+  document.querySelectorAll('#admin-list tr.group-total[data-group]').forEach(tr=>{
+    tr.onclick=e=>{ e.stopPropagation(); toggleGroup(tr.dataset.group); };
+  });
+  document.querySelectorAll('#admin-list [data-group-card]').forEach(card=>{
+    card.onclick=e=>{
+      if(e.target.closest('button')) return;
+      toggleGroup(card.dataset.groupCard);
+    };
+  });
+  document.querySelectorAll('#admin-list .open-rates, #admin-list .open-first').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
   document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
