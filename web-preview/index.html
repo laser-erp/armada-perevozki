@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-eto-enroute-lock";
+const APP_BUILD="2026-08-05-arrive-gate-fix";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2550,19 +2550,27 @@ function stampOrderDriverPhone(o){
 }
 function round2(v){ return Math.round(v*100)/100; }
 function fmt(v){ if(v==null||v==='') return '—'; const n=+v; if(Number.isNaN(n)) return String(v); return n===Math.round(n)?String(Math.round(n)):n.toFixed(2); }
-function inProgressOrder(){ return (state.orders||[]).find(o=>!o.closedAt && o.startOdometer!=null) || null; }
+function orderBelongsToDriver(o, name){
+  const who=name||DRIVER;
+  if(!o || !who) return false;
+  return samePersonName(o.driverName||'', who);
+}
+/** Заказ текущего водителя уже на загрузке / в работе (не чужие!). */
+function inProgressOrder(){
+  return (state.orders||[]).find(o=>!o.closedAt && !o.cancelledAt && o.startOdometer!=null && orderBelongsToDriver(o)) || null;
+}
 /** Выехал, но ещё не отметил прибытие на загрузку */
 function enRouteOrder(){
-  return (state.orders||[]).find(o=>!o.closedAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && o.driverName===DRIVER) || null;
+  return (state.orders||[]).find(o=>!o.closedAt && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && orderBelongsToDriver(o)) || null;
 }
 /** Есть заказ, который блокирует новый старт (в пути или в работе) */
 function hasOpenOrder(){ return !!(inProgressOrder()||enRouteOrder()); }
 /** Назначен, ещё не выехал */
 function assignedPending(){
-  return (state.orders||[]).filter(o=>!o.closedAt && o.startOdometer==null && o.departOdometer==null && !o.onExchange && o.driverName===DRIVER);
+  return (state.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt && o.startOdometer==null && o.departOdometer==null && !o.onExchange && orderBelongsToDriver(o));
 }
 function awaitingArrive(){
-  return (state.orders||[]).filter(o=>!o.closedAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && o.driverName===DRIVER);
+  return (state.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && orderBelongsToDriver(o));
 }
 function upsertOrder(order){
   const i=state.orders.findIndex(o=>o.id===order.id);
@@ -2618,7 +2626,9 @@ function canStartAssignedMessage(){
     return 'Сначала завершите ЕТО';
   }
   state.step='done';
-  if(state.shift && !isSameLocalDay(state.shift.completedAt)) state.shift.completedAt=new Date().toISOString();
+  if(state.shift && state.shift.completedAt && !isSameLocalDay(state.shift.completedAt) && !state.shift.lockEto){
+    state.shift.completedAt=new Date().toISOString();
+  }
   upsertShift();
   if(inProgressOrder()) return 'Сначала закройте текущий заказ';
   return null;
@@ -2630,9 +2640,22 @@ function canDepartMessage(){
   if(enRouteOrder()) return 'Сначала отметьте прибытие на загрузку по текущему заказу';
   return null;
 }
-/** Для прибытия: смена+ЕТО, без другого заказа в работе */
-function canArriveMessage(){
-  return canStartAssignedMessage();
+/** Для прибытия: смена+ЕТО; чужие «в работе» не блокируют. */
+function canArriveMessage(orderId){
+  const shift=syncOpenShiftRuntime();
+  if(!shift && !state.shift) return 'Сначала откройте смену';
+  if(!isEtoDone(shift) && !isEtoDone(state.shift)){
+    return 'Сначала завершите ЕТО';
+  }
+  state.step='done';
+  const target=orderId?(state.orders||[]).find(o=>o.id===orderId):null;
+  // Свой заказ «в пути» — как раз то, на что жмём «Прибыл»
+  if(target && orderBelongsToDriver(target) && target.departOdometer!=null && target.startOdometer==null && !target.closedAt){
+    return null;
+  }
+  const mineBusy=inProgressOrder();
+  if(mineBusy && (!target || mineBusy.id!==target.id)) return 'Сначала закройте текущий заказ';
+  return null;
 }
 function renderDriverBanner(){
   const box=$('driver-banner'); if(!box) return;
@@ -3700,7 +3723,7 @@ function beginDepart(id, fromOrders){
 }
 /** Шаг 2: прибытие на загрузку */
 function beginArrive(id, fromOrders){
-  const gate=canArriveMessage();
+  const gate=canArriveMessage(id);
   if(gate){
     if(fromOrders){ showOrdersError(gate); return false; }
     state.error=gate; renderInput(); return false;
@@ -3711,13 +3734,22 @@ function beginArrive(id, fromOrders){
     if(fromOrders){ showOrdersError(msg); return false; }
     state.error=msg; renderInput(); return false;
   }
+  if(!orderBelongsToDriver(order)){
+    const msg='Это заказ другого водителя';
+    if(fromOrders){ showOrdersError(msg); return false; }
+    state.error=msg; renderInput(); return false;
+  }
   syncOpenShiftRuntime();
   hideDriverPanels();
   state.draft.assignedId=id;
-  add('driver',`Прибыл на загрузку · заказ №${order.sequentialNumber}`);
-  add('bot',`Заказ №${order.sequentialNumber}\nМаршрут: ${routeText(order)}\nУкажите одометр по прибытию на загрузку.`);
+  // Не дублируем чат, если уже ждём одометр прибытия по этому заказу
+  const already=state.orderStep==='arriveAssignedOdometer' && state.draft && state.draft.assignedId===id;
+  if(!already){
+    add('driver',`Прибыл на загрузку · заказ №${order.sequentialNumber}`);
+    add('bot',`Заказ №${order.sequentialNumber}\nМаршрут: ${routeText(order)}\nУкажите одометр по прибытию на загрузку.`);
+  }
   state.orderStep='arriveAssignedOdometer'; state.error=''; state.step='done';
-  upsertShift(); renderChat(); renderDriverBanner();
+  upsertShift(); renderChat(); renderDriverBanner(); renderInput();
   return true;
 }
 function beginAssigned(id, fromOrders){
