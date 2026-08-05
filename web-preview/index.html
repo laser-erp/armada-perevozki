@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-order-times-visible";
+const APP_BUILD="2026-08-05-renumber-after-dup";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -716,7 +716,10 @@ function applyPayload(p, opts){
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
   // Явный массив orders с сервера (в т.ч. []) — закон. Не поднимаем заказы из смен.
   state.orders=Array.isArray(p.orders)?stripCancelledFromOrders(p.orders):[];
-  state.seq=Math.max(Number(p.seq)||0, Number(state.seq)||0);
+  // remoteSeq: сервер задаёт счётчик № базы целиком (после удаления дубля можно сжать нумерацию).
+  // Иначе Math.max не даёт seq уменьшиться со старой вкладки.
+  if(opts&&opts.remoteSeq) state.seq=Number(p.seq)||0;
+  else state.seq=Math.max(Number(p.seq)||0, Number(state.seq)||0);
   state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles:DEFAULT_VEHICLES.map(v=>({...v}));
   state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
   state.customers=Array.isArray(p.customers)?p.customers:[];
@@ -1158,7 +1161,7 @@ async function pushServerState(){
         const localOrders=(state.orders||[]).map(o=>structuredClone(o));
         const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
         // Сначала сервер, потом аккуратно вернём локальный прогресс ЕТО/заказов
-        applyPayload(remote);
+        applyPayload(remote, {remoteSeq:true});
         let merged=false;
         if(mergeLocalShifts(localShifts)) merged=true;
         if(liveShift && mergeLocalShifts([liveShift])) merged=true;
@@ -1238,7 +1241,7 @@ async function initCloudSync(){
       if(remoteEpoch>=localEpoch || !localEpoch){
         const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
         const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders});
+        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true});
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
       } else {
@@ -2034,7 +2037,7 @@ async function enterAsDriver(rec){
     const recState=await fetchServerState();
     if(recState){
       pbRecordId=recState.id;
-      applyPayload(recState.payload||{}, {keepOrders:localOrders});
+      applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
       migrateEtoFromMessages();
       // Подтянуть только локальные заказы «в пути/в работе», смены — строго с сервера
       localStorage.setItem(KEY, JSON.stringify(snapshot()));
