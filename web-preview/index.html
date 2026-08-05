@@ -314,7 +314,7 @@
     <img class="logo" src="logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Выберите роль</div>
-    <div class="hint" id="sync-hint" style="margin-bottom:8px">Подключение к общей базе…</div>
+    <div class="hint" id="sync-hint" style="display:none;margin-bottom:8px"></div>
     <div class="stack">
       <button class="primary" id="role-driver">Водитель</button>
       <button class="secondary" id="role-admin">Администратор</button>
@@ -535,7 +535,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-mobile-pwa";
+const APP_BUILD="2026-08-05-hide-sync-hint";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -6403,10 +6403,14 @@ function openCatalogs(){
 
 function updateSyncHint(){
   const el=$('sync-hint'); if(!el) return;
-  if(syncStatus==='ok') el.textContent='Общая база подключена — автообновление каждые 8 с, без повторного PIN';
-  else if(syncStatus==='error') el.textContent='Нет связи с сервером — пока только локально в этом браузере';
-  else if(syncStatus==='syncing') el.textContent='Подключение к общей базе…';
-  else el.textContent='Локальный режим';
+  // На экране входа не шумим: текст только если реально нет связи
+  if(syncStatus==='error'){
+    el.textContent='Нет связи с сервером';
+    el.style.display='';
+  } else {
+    el.textContent='';
+    el.style.display='none';
+  }
 }
 // Сразу после загрузки localStorage — без PIN, если сессия была
 try{
