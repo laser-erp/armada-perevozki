@@ -4535,10 +4535,10 @@ function filteredOrders(){
     if(o.cancelledAt || (o.closedAt && o.cancelReason)) return false;
     // обычный админ — только свои; супер — все, плюс фильтр по админу
     if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return false;
-    if(state.adminFilter==='exchange') return !o.closedAt && !!o.onExchange && o.startOdometer==null;
-    if(state.adminFilter==='assigned') return !o.closedAt && o.startOdometer==null && !o.onExchange && o.driverName && o.driverName!=='—' && o.driverName!=='-' && o.driverName!=='Биржа';
-    if(state.adminFilter==='progress') return !o.closedAt && o.startOdometer!=null;
-    if(state.adminFilter==='closed') return !!o.closedAt;
+    if(state.adminFilter==='exchange') return !looksClosedOrder(o) && !!o.onExchange && o.startOdometer==null;
+    if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && o.driverName && o.driverName!=='—' && o.driverName!=='-' && o.driverName!=='Биржа';
+    if(state.adminFilter==='progress') return !looksClosedOrder(o) && o.startOdometer!=null;
+    if(state.adminFilter==='closed') return looksClosedOrder(o);
     return true;
   });
 }
@@ -4804,7 +4804,7 @@ function renderAdmin(){
     const m=metrics(o);
     const hasRate=selectedRate(o)!=null;
     const pay=m.driverPay;
-    const onEx=!!o.onExchange && !o.closedAt && o.startOdometer==null;
+    const onEx=!!o.onExchange && !looksClosedOrder(o) && o.startOdometer==null;
     const sp=findSpaceById(o.spaceId);
     const ownerLine=isSuperAdmin()
       ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
@@ -4829,8 +4829,8 @@ function renderAdmin(){
       <div class="row" style="margin-top:8px">
         <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
         ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
-        ${!onEx && !o.closedAt && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:''}
-        ${!o.closedAt&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
+        ${!onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:''}
+        ${!looksClosedOrder(o)&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
       </div>
     </div>`;
   }).join('');
