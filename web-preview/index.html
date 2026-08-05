@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-driver-phone-pin";
+const APP_BUILD="2026-08-05-create-order-skip-veh";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3480,7 +3480,24 @@ function acceptArrive(value){
 function startCreateOrder(){
   const gate=canDepartMessage();
   if(gate){state.error=gate;renderInput();return;}
-  state.draft={}; state.orderStep='chooseVehicle'; add('driver','Создать заказ'); add('bot','Выберите автомобиль для заказа.'); state.error=''; upsertShift(); renderInput();
+  syncOpenShiftRuntime();
+  const shift=state.shift||findOpenShift();
+  if(!shift || !isEtoDone(shift)){
+    state.error='Сначала завершите ЕТО'; renderInput(); return;
+  }
+  const plate=shift.vehiclePlate||'';
+  state.draft={};
+  add('driver','Создать заказ');
+  // Авто уже выбрано при открытии смены / ЕТО — не спрашиваем снова
+  if(plate){
+    state.draft.plate=plate;
+    add('bot',`Заказ на авто ${plate} (из текущей смены).\nУкажите показания одометра по прибытию на загрузку.`);
+    state.orderStep='arrivalOdometer';
+  } else {
+    add('bot','Выберите автомобиль для заказа.');
+    state.orderStep='chooseVehicle';
+  }
+  state.error=''; upsertShift(); renderInput();
 }
 function startCloseOrder(){
   syncOpenShiftRuntime();
