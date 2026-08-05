@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-tombstone-orders";
+const APP_BUILD="2026-08-05-drop-navolotsky-dup";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -528,6 +528,8 @@ const DEFAULT_ADMINS=[
 /** Старые тестовые учётки — вычищаем при каждой миграции, даже если старый браузер вернул их с кэша */
 const RETIRED_ADMIN_IDS=new Set(["admin-dispatcher"]);
 const RETIRED_ADMIN_NAMES=new Set(["диспетчер"]);
+/** Дубликат заказа Наволоцкого на ИП Нечаев — не воскрешать из кэша вкладок */
+const RETIRED_ORDER_IDS=new Set(["2b08ea51-8d08-4377-8f0d-80aa3b417dda"]);
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
@@ -650,12 +652,20 @@ function isCancelledOrder(o){
   return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));
 }
 function deletedOrderIdSet(){
-  return new Set(state.deletedOrderIds||[]);
+  const s=new Set(state.deletedOrderIds||[]);
+  RETIRED_ORDER_IDS.forEach(id=>s.add(id));
+  return s;
 }
 function rememberDeletedOrderId(id){
   if(!id) return;
   const list=state.deletedOrderIds||(state.deletedOrderIds=[]);
   if(!list.includes(id)) list.push(id);
+}
+function unionDeletedOrderIds(extra){
+  const list=state.deletedOrderIds||(state.deletedOrderIds=[]);
+  RETIRED_ORDER_IDS.forEach(id=>{ if(!list.includes(id)) list.push(id); });
+  (extra||[]).forEach(id=>{ if(id && !list.includes(id)) list.push(id); });
+  return list;
 }
 function stripCancelledFromOrders(orders){
   const dead=deletedOrderIdSet();
@@ -687,7 +697,7 @@ function snapshot(){
     adminPresence:state.adminPresence,
     spaces:state.spaces,
     settings:state.settings,
-    deletedOrderIds:Array.from(new Set(state.deletedOrderIds||[])),
+    deletedOrderIds:Array.from(deletedOrderIdSet()),
     dataEpoch:Number(state.dataEpoch)||0,
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
@@ -714,7 +724,7 @@ function applyPayload(p, opts){
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   state.settings=Object.assign({dadataToken:''}, state.settings||{}, p.settings||{});
   state.dataEpoch=Number(p.dataEpoch)||0;
-  state.deletedOrderIds=Array.from(new Set([...(state.deletedOrderIds||[]), ...((p.deletedOrderIds)||[])]));
+  unionDeletedOrderIds(p.deletedOrderIds||[]);
   mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
@@ -1124,6 +1134,10 @@ async function pushServerState(){
     if(rec){
       pbRecordId=rec.id;
       const remote=rec.payload||{};
+      // tombstone только расширяем — старая вкладка не должна очищать удалённые id
+      unionDeletedOrderIds(remote.deletedOrderIds||[]);
+      state.orders=stripCancelledFromOrders(state.orders);
+      (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
       const remoteEpoch=Number(remote.dataEpoch)||0;
       const localEpoch=Number(state.dataEpoch)||0;
       if(remoteEpoch>localEpoch){
