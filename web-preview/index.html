@@ -554,7 +554,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-vehicle-card-visible";
+const APP_BUILD="2026-08-05-company-finance";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -598,6 +598,18 @@ const PB_BASE=(function(){
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
 const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
+function normalizeFinance(f){
+  const s=Object.assign({}, DEFAULT_FINANCE, f||{});
+  let markup=+s.markupPercent; if(Number.isNaN(markup)) markup=15;
+  s.markupPercent=Math.min(80, Math.max(0, markup));
+  s.cityKmThreshold=(+s.cityKmThreshold>0)?+s.cityKmThreshold:100;
+  s.minWorkHours=(+s.minWorkHours>=0)?+s.minWorkHours:4;
+  s.podachaHours=(+s.podachaHours>=0)?+s.podachaHours:1;
+  s.podachaEmptyKmLimit=(+s.podachaEmptyKmLimit>0)?+s.podachaEmptyKmLimit:20;
+  s.defaultRatePerHourWork=(+s.defaultRatePerHourWork>0)?+s.defaultRatePerHourWork:0;
+  s.defaultRatePerKmCash=(+s.defaultRatePerKmCash>0)?+s.defaultRatePerKmCash:80;
+  return s;
+}
 const state={
   step:"idle", orderStep:"idle", messages:[], shift:null,
   shifts:saved.shifts||[], orders:Array.isArray(saved.orders)?saved.orders:[], seq:saved.seq||0,
@@ -624,6 +636,7 @@ let syncStatus='local'; // local | syncing | ok | error
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
 let catalogTab='companies'; // companies | drivers | vehicles | finance
+let catalogFinanceCompanyId=null; // какая «наша фирма» правится во вкладке Тариф
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
   if(!id){ id=uuid(); localStorage.setItem(DEVICE_KEY, id); }
@@ -850,6 +863,7 @@ function applyPayload(p, opts){
   migrateDriverOrderOwners();
   migrateShiftOwners();
   migrateDriverPins();
+  migrateCompanyFinance();
   migrateEtoFromMessages();
   // Заказы только в смене (потерялись из state.orders) — поднять в общий список
   (state.shifts||[]).forEach(s=>{
@@ -1111,6 +1125,43 @@ function ownCompanyForAdminId(adminId){
 function currentOwnCompany(){
   if(!currentAdmin) return null;
   return ownCompanyForAdminId(currentAdmin.id) || ownCompanyForSpaceId(currentSpaceId());
+}
+function ownCompaniesList(){
+  return (state.companies||[]).filter(c=>companyHasRole(c,'own'));
+}
+/** Тариф фирмы. Заказы и расчёты берут настройки «нашей фирмы» заказа. */
+function financeForCompanyId(companyId){
+  const co=companyId?findCompanyById(companyId):null;
+  if(co && co.finance) return normalizeFinance(co.finance);
+  return normalizeFinance(state.finance);
+}
+function financeForOrder(o){
+  const id=o&&(o.ownCompanyId||null);
+  if(id) return financeForCompanyId(id);
+  const my=currentOwnCompany();
+  if(my) return financeForCompanyId(my.id);
+  return normalizeFinance(state.finance);
+}
+function catalogFinanceCompany(){
+  if(!isSuperAdmin()) return currentOwnCompany();
+  if(catalogFinanceCompanyId){
+    const hit=findCompanyById(catalogFinanceCompanyId);
+    if(hit && companyHasRole(hit,'own')) return hit;
+  }
+  const my=currentOwnCompany();
+  if(my) return my;
+  return ownCompaniesList()[0]||null;
+}
+/** Раздать общий тариф по «нашим фирмам», если у фирмы ещё нет своего. */
+function migrateCompanyFinance(){
+  let changed=false;
+  const seed=normalizeFinance(state.finance);
+  (state.companies||[]).forEach(c=>{
+    if(!companyHasRole(c,'own')) return;
+    if(!c.finance){ c.finance=Object.assign({}, seed); changed=true; }
+    else c.finance=normalizeFinance(c.finance);
+  });
+  return changed;
 }
 function createSpaceForAdmin(admin, firm){
   const space=normalizeSpace({
@@ -1546,7 +1597,7 @@ function normalizeCompany(c){
   const contacts=(Array.isArray(c.contacts)?c.contacts:[]).map(normalizeContact).filter(Boolean);
   const vehicles=(Array.isArray(c.vehicles)?c.vehicles:[]).map(normalizeCarrierVehicle).filter(Boolean);
   const drivers=(Array.isArray(c.drivers)?c.drivers:[]).map(normalizeCarrierDriver).filter(Boolean);
-  return {
+  const out={
     id:c.id||uuid(), name, roles, note:String(c.note||'').trim(),
     phones, contacts,
     loadingAddresses:uniqAddrs(c.loadingAddresses||[]),
@@ -1558,6 +1609,8 @@ function normalizeCompany(c){
     kpp:String(c.kpp||'').trim(),
     address:String(c.address||'').trim()
   };
+  if(c.finance) out.finance=normalizeFinance(c.finance);
+  return out;
 }
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
 function companyInMySpace(c){
@@ -1601,8 +1654,10 @@ function upsertCompany(raw){
     c.ogrn=c.ogrn||prev.ogrn||'';
     c.kpp=c.kpp||prev.kpp||'';
     c.address=c.address||prev.address||'';
+    if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
     state.companies[i]=c;
   } else {
+    if(companyHasRole(c,'own') && !c.finance) c.finance=normalizeFinance(state.finance);
     state.companies.push(c);
   }
   state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
@@ -2603,7 +2658,7 @@ function computeFreeAt(vehicleAt, order, fin){
 function applyOrderSchedule(order){
   if(!order) return order;
   if(order.vehicleAt){
-    order.freeAt=computeFreeAt(order.vehicleAt, order, state.finance);
+    order.freeAt=computeFreeAt(order.vehicleAt, order, financeForOrder(order));
   } else {
     order.freeAt=null;
   }
@@ -2611,7 +2666,7 @@ function applyOrderSchedule(order){
 }
 function orderScheduleLines(o, forDriver){
   if(!o||!o.vehicleAt) return '';
-  const free=o.freeAt||computeFreeAt(o.vehicleAt, o, state.finance);
+  const free=o.freeAt||computeFreeAt(o.vehicleAt, o, financeForOrder(o));
   let html=`<p style="margin-top:6px"><strong>Подача ТС:</strong> ${esc(formatRuDateTimeAt(o.vehicleAt))}</p>`;
   if(free) html+=`<p><strong>Ориентир освобождения:</strong> ${esc(formatRuDateTimeAt(free))}</p>`;
   return html;
@@ -2620,9 +2675,11 @@ function updateCreateFreeHint(){
   const el=$('create-free-hint'); if(!el) return;
   const at=fromDatetimeLocalValue(($('create-vehicle-at')||{}).value);
   if(!at){ el.textContent='Ориентир освобождения: укажите подачу ТС'; return; }
-  const draft={estimateWorkHours:null};
-  const free=computeFreeAt(at, draft, state.finance);
-  const minW=state.finance.minWorkHours??4;
+  const ownId=(($('create-own-company')||{}).value)|| (currentOwnCompany()||{}).id;
+  const fin=financeForCompanyId(ownId);
+  const draft={estimateWorkHours:null, ownCompanyId:ownId||null};
+  const free=computeFreeAt(at, draft, fin);
+  const minW=fin.minWorkHours??4;
   el.textContent=`Ориентир освобождения: ${formatRuDateTimeAt(free)} (подача + ${minW} ч работы)`;
 }
 migrateCompanies();
@@ -4039,7 +4096,7 @@ function calculateClientTariff(o, fin){
   };
 }
 function applyClientTariff(o){
-  const b=calculateClientTariff(o, state.finance);
+  const b=calculateClientTariff(o, financeForOrder(o));
   if(!b) return applyPerKmCash(o);
   const t=fillRatesFrom('cash', b.totalCash);
   o.rateCash=t.cash; o.rateWithoutVat=t.withoutVat; o.rateWithVat=t.withVat;
@@ -4058,17 +4115,17 @@ function applyPerKmCash(o){
   return true;
 }
 /**
- * После смены тарифа в справочнике — пересчитать цены всех заказов,
- * включая уже закрытые (подбор оптимальной цены на этапе настройки).
- * Ставки ₽/ч и ₽/км берутся из справочника; отменённые/retired не трогаем.
+ * После смены тарифа фирмы — пересчитать цены заказов этой фирмы,
+ * включая закрытые. Ставки ₽/ч и ₽/км — из тарифа фирмы.
  */
-function recalculateAllOrderTariffs(){
-  const fin=Object.assign({}, DEFAULT_FINANCE, state.finance||{});
+function recalculateOrderTariffsForCompany(companyId){
+  if(!companyId) return 0;
+  const fin=financeForCompanyId(companyId);
   const dead=deletedOrderIdSet();
   let updated=0;
   (state.orders||[]).forEach(o=>{
     if(!o || !o.id || o.cancelledAt || dead.has(o.id)) return;
-    // Новые дефолты справочника — иначе у закрытых остаются «залипшие» старые ₽/ч·₽/км
+    if(o.ownCompanyId!==companyId) return;
     if(fin.defaultRatePerHourWork>0) o.ratePerHourWork=+fin.defaultRatePerHourWork;
     if(fin.defaultRatePerKmCash>0) o.ratePerKmCash=+fin.defaultRatePerKmCash;
     try{ recomputeOrderTimes(ensureOrderTimeStamps(o)); }catch(_){}
@@ -4089,6 +4146,10 @@ function recalculateAllOrderTariffs(){
     (s.orders||[]).forEach((o,idx)=>{ const live=byId.get(o.id); if(live) s.orders[idx]=live; });
   });
   return updated;
+}
+function recalculateAllOrderTariffs(){
+  // совместимость: пересчёт по всем нашим фирмам
+  return ownCompaniesList().reduce((n,co)=>n+recalculateOrderTariffsForCompany(co.id), 0);
 }
 function wireRateAutoFill(order){
   const map={ 'd-vat':'withVat', 'd-novat':'withoutVat', 'd-cash':'cash' };
@@ -4128,7 +4189,7 @@ function draftTariffFromDom(order){
 function updatePerKmPreview(order){
   const box=$('perkm-preview'); if(!box) return;
   const d=draftTariffFromDom(order||{});
-  const b=calculateClientTariff(d, state.finance);
+  const b=calculateClientTariff(d, financeForOrder(d));
   const total=totalOrderKm(d);
   const pkg=packageKmOf(d);
   const storage=overnightStorageCash(d);
@@ -4148,7 +4209,7 @@ function updatePerKmPreview(order){
 function wirePerKmInputs(order){
   const apply=()=>{
     const d=draftTariffFromDom(order||{});
-    const b=calculateClientTariff(d, state.finance);
+    const b=calculateClientTariff(d, financeForOrder(d));
     updatePerKmPreview(order);
     if(!b) return;
     const t=fillRatesFrom('cash', b.totalCash);
@@ -4194,7 +4255,7 @@ function metrics(o){
   const rent=o.vehicleRent||0;
   const fuel=fuelCostCalc||0;
   const fixed=round2(fixedCosts(fuel, rent, bonus));
-  const markup=state.finance.markupPercent??15;
+  const markup=financeForOrder(o).markupPercent??15;
   const be=breakEvenRate(fixed, percent);
   const rec=recommendedRate(fixed, percent, markup);
   const totalCost=payBase==null?null:totalCostAtRate(payBase, fuel, rent, percent, bonus);
@@ -5987,7 +6048,7 @@ function openDetail(id){
       <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
       <label for="d-vehicle-at">Подача ТС</label>
       <input id="d-vehicle-at" type="datetime-local" value="${esc(toDatetimeLocalValue(o.vehicleAt))}" />
-      <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,state.finance)))+' (подача + часы работы)':'укажите подачу ТС'}</div>
+      <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
     </div>
     <div class="field-block">
       <h3>Маршрут</h3>
@@ -5997,7 +6058,7 @@ function openDetail(id){
     </div>
     <div class="field-block">
       <h3>Тариф клиенту</h3>
-      <div class="hint">Пакет: мин ${state.finance.minWorkHours} ч работы + ${state.finance.podachaHours} ч подачи. В пакет входит ${state.finance.cityKmThreshold} км (груз + нулевой после). Нулевой до ≤${state.finance.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — покрыт 1 ч; иначе 2 ч подачи. Сверх ${state.finance.cityKmThreshold} км — по ₽/км.</div>
+      <div class="hint">${(()=>{ const f=financeForOrder(o); return `Пакет фирмы: мин ${f.minWorkHours} ч работы + ${f.podachaHours} ч подачи. В пакет входит ${f.cityKmThreshold} км (груз + нулевой после). Нулевой до ≤${f.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — покрыт 1 ч; иначе 2 ч подачи. Сверх ${f.cityKmThreshold} км — по ₽/км.`; })()}</div>
       <label for="d-perkm">руб/км сверх пакета (нал)</label>
       <input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 80" />
       <label for="d-perhour">руб/час работы</label>
@@ -6095,7 +6156,7 @@ function openDetail(id){
       estimateWorkHours:numTemp('d-estimate-hours'),
       workHours:numTemp('d-work-hours')
     };
-    const free=computeFreeAt(at, draft, state.finance);
+    const free=computeFreeAt(at, Object.assign({ownCompanyId:o.ownCompanyId}, draft), financeForOrder(o));
     hint.textContent=`Ориентир освобождения: ${formatRuDateTimeAt(free)} (подача + часы работы)`;
   };
   function numTemp(el){
@@ -6336,17 +6397,27 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='finance'?'on':''}" data-cat-panel="finance">
-      <div class="hint" style="margin:0">Пакет = часы работы + подача; км в пакете = груз + после. Второй час подачи: нулевой до &gt; лимита км или дороже 1 ч.</div>
-      <div class="fin-grid">
-        <label>Наценка, %<input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" /></label>
-        <label>Км в пакете<input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" /></label>
-        <label>Часы работы<input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" /></label>
-        <label>Подача, ч<input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" /></label>
-        <label>Нулевой до, км<input id="fin-podacha-km" inputmode="numeric" value="${state.finance.podachaEmptyKmLimit??20}" title="Свыше — +1 ч подачи" /></label>
-        <label>₽/час<input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" /></label>
-        <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||80}" /></label>
-        <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф</button>
-      </div>
+      ${(()=>{
+        const finCo=catalogFinanceCompany();
+        const fin=finCo?financeForCompanyId(finCo.id):normalizeFinance(state.finance);
+        const owns=ownCompaniesList();
+        const firmPick=isSuperAdmin() && owns.length
+          ? `<label class="svc-full">Фирма<select id="fin-company">${owns.map(c=>`<option value="${esc(c.id)}" ${finCo&&c.id===finCo.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
+          : `<div class="hint" style="margin:0 0 6px">Тариф фирмы: <b>${esc((finCo&&finCo.name)||'—')}</b></div>`;
+        return `
+      <div class="hint" style="margin:0">Свои настройки у каждой «нашей фирмы». Пакет = часы работы + подача; км в пакете = груз + после.</div>
+      <div class="fin-grid" style="margin-top:8px">
+        ${firmPick}
+        <label>Наценка, %<input id="fin-markup" inputmode="decimal" value="${fin.markupPercent??15}" /></label>
+        <label>Км в пакете<input id="fin-city" inputmode="numeric" value="${fin.cityKmThreshold??100}" /></label>
+        <label>Часы работы<input id="fin-minwork" inputmode="decimal" value="${fin.minWorkHours??4}" /></label>
+        <label>Подача, ч<input id="fin-podacha" inputmode="decimal" value="${fin.podachaHours??1}" /></label>
+        <label>Нулевой до, км<input id="fin-podacha-km" inputmode="numeric" value="${fin.podachaEmptyKmLimit??20}" title="Свыше — +1 ч подачи" /></label>
+        <label>₽/час<input id="fin-perhour" inputmode="decimal" value="${fin.defaultRatePerHourWork||''}" /></label>
+        <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${fin.defaultRatePerKmCash||80}" /></label>
+        <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф фирмы</button>
+      </div>`;
+      })()}
     </div>
 
     <div class="toast-ok" id="cat-ok" style="display:none">Сохранено</div>
@@ -6683,27 +6754,44 @@ function openCatalogs(){
     persist(); openCatalogs();
     flashCatOk();
   });
-  $('fin-save').onclick=()=>{
-    let markup=+(($('fin-markup').value||'').replace(',','.')); if(Number.isNaN(markup)) markup=15;
-    state.finance.markupPercent=Math.min(80, Math.max(0, markup));
-    const city=+(($('fin-city').value||'').replace(/\D/g,'')); state.finance.cityKmThreshold=city>0?city:100;
-    let minW=+(($('fin-minwork').value||'').replace(',','.')); if(!(minW>=0)) minW=4; state.finance.minWorkHours=minW;
-    let pod=+(($('fin-podacha').value||'').replace(',','.')); if(!(pod>=0)) pod=1; state.finance.podachaHours=pod;
-    const podKm=+(($('fin-podacha-km').value||'').replace(/\D/g,'')); state.finance.podachaEmptyKmLimit=podKm>0?podKm:20;
-    let ph=+(($('fin-perhour').value||'').replace(',','.')); state.finance.defaultRatePerHourWork=(ph>0)?ph:0;
-    let pk=+(($('fin-perkm').value||'').replace(',','.')); state.finance.defaultRatePerKmCash=(pk>0)?pk:80;
-    recalculateAllOrderTariffs();
+  const finCoSel=$('fin-company');
+  if(finCoSel){
+    finCoSel.onchange=()=>{
+      catalogFinanceCompanyId=finCoSel.value||null;
+      catalogTab='finance';
+      openCatalogs();
+    };
+  }
+  $('fin-save')&&($('fin-save').onclick=()=>{
+    const co=catalogFinanceCompany();
+    if(!co){ alert('Нет «нашей фирмы» для тарифа'); return; }
+    const next=normalizeFinance({
+      markupPercent:+(($('fin-markup').value||'').replace(',','.')),
+      cityKmThreshold:+(($('fin-city').value||'').replace(/\D/g,'')),
+      minWorkHours:+(($('fin-minwork').value||'').replace(',','.')),
+      podachaHours:+(($('fin-podacha').value||'').replace(',','.')),
+      podachaEmptyKmLimit:+(($('fin-podacha-km').value||'').replace(/\D/g,'')),
+      defaultRatePerHourWork:+(($('fin-perhour').value||'').replace(',','.')),
+      defaultRatePerKmCash:+(($('fin-perkm').value||'').replace(',','.'))
+    });
+    co.finance=next;
+    // глобальный state.finance — запасной для старых заказов без ownCompanyId
+    const my=currentOwnCompany();
+    if(my && my.id===co.id) state.finance=Object.assign({}, next);
+    catalogFinanceCompanyId=co.id;
+    recalculateOrderTariffsForCompany(co.id);
     bumpDataEpoch('tariff-recalc');
     persist();
     try{
       if(state.detailId && typeof openDetail==='function' && (state.orders||[]).some(o=>o.id===state.detailId)){
         openDetail(state.detailId);
-      } else if(typeof renderAdmin==='function'){
-        renderAdmin();
+      } else {
+        catalogTab='finance';
+        openCatalogs();
       }
     }catch(_){}
     flashCatOk();
-  };
+  });
 }
 
 function updateSyncHint(){
@@ -6732,6 +6820,7 @@ try{
   if(migrateDriverOrderOwners()) dirty=true;
   if(migrateShiftOwners()) dirty=true;
   if(migrateDriverPins()) dirty=true;
+  if(migrateCompanyFinance()) dirty=true;
   if(purgeCancelledOrders()){
     bumpDataEpoch('purge-boot');
     dirty=true;
