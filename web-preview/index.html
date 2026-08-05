@@ -554,7 +554,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-vehicle-service";
+const APP_BUILD="2026-08-05-vehicle-card-visible";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -814,7 +814,7 @@ function applyPayload(p, opts){
   // Иначе Math.max не даёт seq уменьшиться со старой вкладки.
   if(opts&&opts.remoteSeq) state.seq=Number(p.seq)||0;
   else state.seq=Math.max(Number(p.seq)||0, Number(state.seq)||0);
-  state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles:DEFAULT_VEHICLES.map(v=>({...v}));
+  state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles.map(normalizeFleetVehicle).filter(Boolean):DEFAULT_VEHICLES.map(v=>normalizeFleetVehicle(v)).filter(Boolean);
   state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
   state.customers=Array.isArray(p.customers)?p.customers:[];
   state.companies=Array.isArray(p.companies)?p.companies:[];
@@ -6256,11 +6256,11 @@ function openCatalogs(){
       :(soons?`<span class="svc-badge svc-soon">скоро ${soons}</span>`
       :(ivs.length?`<span class="svc-badge svc-ok">ТО ок</span>`:''));
     const logsN=(v.maintenanceLogs||[]).length;
+    const vid=v.id||('idx-'+i);
     return `<div class="item-card">
       <div class="item-top">
         <div class="item-name" title="${esc(coName||v.plate)}">${esc(v.plate)}</div>
         <div class="item-actions" style="flex:0 0 auto;gap:4px">
-          <button type="button" class="veh-card-btn" data-open-veh="${esc(v.id||i)}" title="Карточка">Карточка</button>
           <button type="button" class="icon-btn ok" data-save-veh="${i}" title="Сохранить">✓</button>
           <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
         </div>
@@ -6274,6 +6274,7 @@ function openCatalogs(){
         <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km}" />
         <span class="hint" style="margin:0">л/100</span>
       </div>
+      <button type="button" class="primary cat-add-btn" data-open-veh="${esc(vid)}" style="margin-top:2px">Ремонт и ТО</button>
     </div>`;
   }).join('') || `<div class="hint">Нет авто — добавьте ниже</div>`;
 
@@ -6317,7 +6318,7 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
-      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто «${esc(co.name)}»: тоннаж и габариты нужны для биржи`:(isSuperAdmin()?'Авто привязаны к фирме админа':'Сначала нужна ваша фирма'); })()}</div>
+      <div class="hint" style="margin:0">${(()=>{ const co=currentOwnCompany(); return co?`Авто «${esc(co.name)}»: тоннаж и габариты для биржи. Кнопка «Ремонт и ТО» — журнал и интервалы`:(isSuperAdmin()?'Авто привязаны к фирме админа. «Ремонт и ТО» — карточка обслуживания':'Сначала нужна ваша фирма'); })()}</div>
       <div class="cat-quick">
         <div class="row">
           <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
@@ -6567,14 +6568,12 @@ function openCatalogs(){
   });
   document.querySelectorAll('[data-open-veh]').forEach(b=>b.onclick=()=>{
     const key=b.dataset.openVeh;
-    const byId=fleetVehicleById(key);
-    if(byId){ openVehicleCard(byId.id); return; }
-    const i=+key;
-    const v=state.vehicles[i];
-    if(v){
-      if(!v.id) v.id=uuid();
-      openVehicleCard(v.id);
-    }
+    let v=fleetVehicleById(key);
+    if(!v && String(key).startsWith('idx-')) v=state.vehicles[+String(key).slice(4)];
+    if(!v && /^\d+$/.test(String(key))) v=state.vehicles[+key];
+    if(!v){ alert('Авто не найдено'); return; }
+    if(!v.id) v.id=uuid();
+    openVehicleCard(v.id);
   });
   document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveVeh;
