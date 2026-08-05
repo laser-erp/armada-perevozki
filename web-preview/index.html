@@ -58,6 +58,12 @@
     .filters{display:flex;gap:4px;padding:5px 8px;flex-wrap:wrap}
     .filters button{border:0;border-radius:var(--pill);padding:6px 12px;min-height:32px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.74rem}
     .filters button.on{background:var(--accent);color:#fff}
+    .eto-ok{color:#7dffa0;font-weight:700}
+    .eto-wait{color:#ffcc66;font-weight:700}
+    .eto-bad{color:#ff8d8d;font-weight:700}
+    .eto-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;font-size:.78rem}
+    .eto-grid span{color:var(--muted)}
+    .eto-grid b{font-weight:700;color:var(--text)}
     #admin-owner-filters{display:none;border-top:1px solid rgba(255,255,255,.06);padding-top:4px}
     #admin-owner-filters.show{display:flex}
     #admin-owner-filters button{font-size:.68rem;padding:5px 10px;min-height:28px;background:rgba(255,255,255,.06)}
@@ -319,6 +325,7 @@
     </header>
     <div class="filters" id="admin-filters">
       <button data-filter="all" class="on">Все</button>
+      <button data-filter="eto">ЕТО</button>
       <button data-filter="exchange">Биржа</button>
       <button data-filter="assigned">Назначен</button>
       <button data-filter="progress">В работе</button>
@@ -487,7 +494,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-drv-owner";
+const APP_BUILD="2026-08-05-admin-eto";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -693,6 +700,7 @@ function applyPayload(p){
   migrateDriverOwners();
   migrateSpaces();
   migrateDriverOrderOwners();
+  migrateShiftOwners();
   purgeCancelledOrders();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -1096,7 +1104,15 @@ async function initCloudSync(){
     console.warn('PB init', err);
   }
 }
-function upsertShift(){ if(!state.shift) return; state.shift.messages=state.messages.slice(); const i=state.shifts.findIndex(s=>s.id===state.shift.id); if(i>=0) state.shifts[i]=structuredClone(state.shift); else state.shifts.unshift(structuredClone(state.shift)); persist(); }
+function upsertShift(){
+  if(!state.shift) return;
+  stampShiftOwner(state.shift, state.shift.driverName||DRIVER, state.shift.vehiclePlate);
+  state.shift.messages=state.messages.slice();
+  const i=state.shifts.findIndex(s=>s.id===state.shift.id);
+  if(i>=0) state.shifts[i]=structuredClone(state.shift);
+  else state.shifts.unshift(structuredClone(state.shift));
+  persist();
+}
 function uniqAddrs(list){
   const seen=new Set(); const out=[];
   (list||[]).forEach(a=>{ const v=String(a||'').trim(); if(!v) return; const k=v.toLowerCase(); if(seen.has(k)) return; seen.add(k); out.push(v); });
@@ -2393,6 +2409,73 @@ function invalidateStaleEto(shift){
   shift.light={};
   return true;
 }
+/** Привязать смену к водителю и фирме (как заказ с source=driver). */
+function stampShiftOwner(shift, driverName, vehiclePlate){
+  if(!shift) return shift;
+  const name=String(driverName||shift.driverName||DRIVER).trim()||DRIVER;
+  const plate=String(vehiclePlate||shift.vehiclePlate||'').trim();
+  const bind=resolveDriverOrderBinding(name, plate);
+  shift.driverName=name;
+  if(bind.ownerAdminId){ shift.ownerAdminId=bind.ownerAdminId; shift.ownerAdminName=bind.ownerAdminName; }
+  if(bind.spaceId) shift.spaceId=bind.spaceId;
+  if(bind.ownCompanyId){ shift.ownCompanyId=bind.ownCompanyId; shift.ownCompanyName=bind.ownCompanyName; }
+  return shift;
+}
+function migrateShiftOwners(){
+  let changed=false;
+  (state.shifts||[]).forEach(s=>{
+    if(!s) return;
+    const before=JSON.stringify({d:s.driverName,o:s.ownerAdminId,sp:s.spaceId,c:s.ownCompanyId});
+    stampShiftOwner(s, s.driverName||DRIVER, s.vehiclePlate);
+    const after=JSON.stringify({d:s.driverName,o:s.ownerAdminId,sp:s.spaceId,c:s.ownCompanyId});
+    if(before!==after) changed=true;
+  });
+  return changed;
+}
+function canAdminSeeShift(s){
+  if(!s || !currentAdmin) return false;
+  if(isSuperAdmin()) return true;
+  const myCo=currentOwnCompany();
+  if(myCo && s.ownCompanyId && s.ownCompanyId===myCo.id) return true;
+  const sid=currentSpaceId();
+  if(sid && s.spaceId===sid) return true;
+  if(s.ownerAdminId===currentAdmin.id) return true;
+  if(myCo && s.vehiclePlate){
+    if(fleetVehiclesForCompany(myCo.id).some(v=>v.plate===s.vehiclePlate)) return true;
+  }
+  if(myCo && s.driverName){
+    if(fleetDriversForCompany(myCo.id).some(d=>samePersonName(d.name, s.driverName))) return true;
+  }
+  return false;
+}
+function matchesShiftOwnerFilter(s){
+  if(!isSuperAdmin()) return true;
+  const f=state.adminOwnerFilter||'all';
+  if(f==='all') return true;
+  if(f==='_none') return !s.spaceId;
+  return s.spaceId===f;
+}
+/** Открытые смены водителей фирмы админа (для вкладки ЕТО). */
+function adminOpenShifts(){
+  return (state.shifts||[])
+    .filter(s=>s && !s.endedAt && !s.abandoned && canAdminSeeShift(s) && matchesShiftOwnerFilter(s))
+    .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt));
+}
+function etoStepLabel(shift){
+  if(!shift) return '—';
+  if(shift.endedAt) return 'Смена закрыта';
+  if(isEtoDone(shift)) return 'ЕТО пройден';
+  if(!shift.vehiclePlate) return 'Выбор авто';
+  if(shift.odometer==null) return 'Одометр';
+  if(shift.fuelLiters==null) return 'Топливо';
+  if(!(shift.gur||shift.powerSteeringLevel)) return 'Уровень ГУР';
+  if(!(shift.coolant||shift.coolantLevel)) return 'Уровень ОЖ';
+  const L=shift.light||{};
+  if(!L.lowBeam || !L.brake || !L.turn) return 'Освещение';
+  if(!(shift.oil||shift.engineOilLevel)) return 'Масло ДВС';
+  return 'ЕТО не завершён';
+}
+function etoMark(ok){ return ok?'<b class="eto-ok">✓</b>':'<b class="eto-wait">…</b>'; }
 function openShifts(){
   return (state.shifts||[]).filter(s=>!s.endedAt)
     .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt));
@@ -2863,7 +2946,8 @@ function openShift(){
     }
     const existing=findOpenShift();
     if(existing){ resumeOpenShift(existing); return; }
-    state.shift={id:uuid(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null,completedAt:null};
+    state.shift={id:uuid(),startedAt:new Date().toISOString(),vehiclePlate:null,odometer:null,lastOdometerPoint:null,orders:[],messages:[],endedAt:null,parkingOdometer:null,completedAt:null,driverName:DRIVER};
+    stampShiftOwner(state.shift, DRIVER, null);
     add('driver','Открыть смену');
     const carry=inProgressOrder();
     const carryHint=carry&&carry.staysLoadedOvernight
@@ -2884,7 +2968,9 @@ function selectVehicle(plate){
     add('bot',`Вы выбрали автомобиль с гос.номером ${plate}.\nУкажите показания одометра по прибытию на загрузку`);
     state.orderStep='arrivalOdometer'; state.error=''; upsertShift(); renderInput(); return;
   }
-  state.shift.vehiclePlate=plate; add('driver',plate);
+  state.shift.vehiclePlate=plate;
+  stampShiftOwner(state.shift, DRIVER, plate);
+  add('driver',plate);
   add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nНапишите показания одометра до выезда со стоянки.`);
   state.step='odometer'; state.error=''; upsertShift(); renderInput();
 }
@@ -3421,6 +3507,7 @@ function showShifts(){
 
 const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","№ дня","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 function filteredOrders(){
+  if(state.adminFilter==='eto') return [];
   return allOrders().filter(o=>{
     // отменённые не показываем нигде
     if(o.cancelledAt || (o.closedAt && o.cancelReason)) return false;
@@ -3432,6 +3519,43 @@ function filteredOrders(){
     if(state.adminFilter==='closed') return !!o.closedAt;
     return true;
   });
+}
+function renderAdminEtoBoard(){
+  const shifts=adminOpenShifts();
+  const pending=shifts.filter(s=>!isEtoDone(s)).length;
+  const done=shifts.filter(s=>isEtoDone(s)).length;
+  const hint=`<div class="hint" style="padding:8px 16px 0">Открытые смены водителей вашей фирмы. ЕТО пройден: <strong>${done}</strong> · в процессе: <strong>${pending}</strong></div>`;
+  if(!shifts.length){
+    return `${hint}<div class="empty">Нет открытых смен у водителей вашей фирмы</div>`;
+  }
+  const cards=shifts.map(s=>{
+    const ok=isEtoDone(s);
+    const step=etoStepLabel(s);
+    const L=s.light||{};
+    const ph=formatPhone((()=>{ const d=findDriverRecord(s.driverName, s.ownCompanyId); return d&&d.phone?d.phone:''; })());
+    const firm=s.ownCompanyName||(findSpaceById(s.spaceId)||{}).name||'—';
+    const statusCls=ok?'eto-ok':'eto-wait';
+    const openOrders=(s.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt).length
+      || (state.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt && o.driverName===s.driverName && o.vehiclePlate===s.vehiclePlate).length;
+    return `<div class="card" style="${ok?'':'border:1px solid rgba(255,204,102,.35)'}">
+      <h3>${esc(s.driverName||'Водитель')} · ${esc(s.vehiclePlate||'без авто')}</h3>
+      <p>Смена с ${esc(dateTime(s.startedAt))}${s.ownerAdminName && isSuperAdmin()?` · ${esc(s.ownerAdminName)}`:''}</p>
+      <p>Фирма: ${esc(firm)}${ph?` · <a href="tel:${esc(ph)}" style="color:var(--accent)">☎ ${esc(ph)}</a>`:''}</p>
+      <p class="${statusCls}" style="margin-top:6px">${ok?'✓ ЕТО пройден':'⏳ '+esc(step)}</p>
+      <div class="eto-grid">
+        <span>Авто ${etoMark(!!s.vehiclePlate)}</span>
+        <span>Одометр ${etoMark(s.odometer!=null)} ${s.odometer!=null?`<b>${esc(s.odometer)}</b>`:''}</span>
+        <span>Топливо ${etoMark(s.fuelLiters!=null)} ${s.fuelLiters!=null?`<b>${esc(s.fuelLiters)} л</b>`:''}</span>
+        <span>ГУР ${etoMark(!!(s.gur||s.powerSteeringLevel))} ${s.gur||s.powerSteeringLevel?`<b>${esc(s.gur||s.powerSteeringLevel)}</b>`:''}</span>
+        <span>ОЖ ${etoMark(!!(s.coolant||s.coolantLevel))} ${s.coolant||s.coolantLevel?`<b>${esc(s.coolant||s.coolantLevel)}</b>`:''}</span>
+        <span>Свет ${etoMark(!!(L.lowBeam&&L.brake&&L.turn))}</span>
+        <span>Масло ${etoMark(!!(s.oil||s.engineOilLevel))} ${s.oil||s.engineOilLevel?`<b>${esc(s.oil||s.engineOilLevel)}</b>`:''}</span>
+        <span>Заказов в смене <b>${(s.orders||[]).length}</b>${openOrders?` · открытых: <b>${openOrders}</b>`:''}</span>
+      </div>
+      ${ok && s.completedAt?`<p style="margin-top:6px">ЕТО завершён: ${esc(dateTime(s.completedAt))}</p>`:''}
+    </div>`;
+  }).join('');
+  return `${hint}<div class="admin-cards" style="padding:8px 12px 24px">${cards}</div>`;
 }
 function unpublishFromExchange(id){
   const o=state.orders.find(x=>x.id===id);
@@ -3633,6 +3757,10 @@ function renderAdminExchangeBoard(orders){
 }
 function renderAdmin(){
   paintAdminOwnerFilters();
+  if(state.adminFilter==='eto'){
+    $('admin-list').innerHTML=renderAdminEtoBoard();
+    return;
+  }
   const orders=filteredOrders();
   if(state.adminFilter==='exchange'){
     $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
@@ -4705,6 +4833,7 @@ try{
   let dirty=migrateDriverOwners();
   if(migrateSpaces()) dirty=true;
   if(migrateDriverOrderOwners()) dirty=true;
+  if(migrateShiftOwners()) dirty=true;
   if(purgeCancelledOrders()){
     bumpDataEpoch('purge-boot');
     dirty=true;
