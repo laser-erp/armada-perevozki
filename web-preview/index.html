@@ -525,7 +525,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-tariff-recalc-on-save";
+const APP_BUILD="2026-08-05-tariff-recalc-closed";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3761,12 +3761,23 @@ function applyPerKmCash(o){
   o.freight=selectedRate(o);
   return true;
 }
-/** После смены тарифа в справочнике — пересчитать цены заказов (нал / без НДС / с НДС). */
+/**
+ * После смены тарифа в справочнике — пересчитать цены всех заказов,
+ * включая уже закрытые (подбор оптимальной цены на этапе настройки).
+ * Ставки ₽/ч и ₽/км берутся из справочника; отменённые/retired не трогаем.
+ */
 function recalculateAllOrderTariffs(){
-  let updated=0;
+  const fin=Object.assign({}, DEFAULT_FINANCE, state.finance||{});
   const dead=deletedOrderIdSet();
+  let updated=0;
   (state.orders||[]).forEach(o=>{
     if(!o || !o.id || o.cancelledAt || dead.has(o.id)) return;
+    // Новые дефолты справочника — иначе у закрытых остаются «залипшие» старые ₽/ч·₽/км
+    if(fin.defaultRatePerHourWork>0) o.ratePerHourWork=+fin.defaultRatePerHourWork;
+    if(fin.defaultRatePerKmCash>0) o.ratePerKmCash=+fin.defaultRatePerKmCash;
+    try{ recomputeOrderTimes(ensureOrderTimeStamps(o)); }catch(_){}
+    if(!(o.workHours>0) && o.timeLoadedHours>0) o.workHours=+o.timeLoadedHours;
+    else if(!(o.workHours>0) && o.estimateWorkHours>0) o.workHours=+o.estimateWorkHours;
     const before={
       cash:o.rateCash, noVat:o.rateWithoutVat, vat:o.rateWithVat, freight:o.freight
     };
