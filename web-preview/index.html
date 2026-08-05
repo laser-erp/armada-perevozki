@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-arrive-gate-fix";
+const APP_BUILD="2026-08-05-tombstone-orders";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -571,6 +571,7 @@ const state={
   spaces:Array.isArray(saved.spaces)?saved.spaces:[],
   settings:Object.assign({dadataToken:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
+  deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null
 };
 let pbRecordId=null;
@@ -648,8 +649,17 @@ function show(id){
 function isCancelledOrder(o){
   return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));
 }
+function deletedOrderIdSet(){
+  return new Set(state.deletedOrderIds||[]);
+}
+function rememberDeletedOrderId(id){
+  if(!id) return;
+  const list=state.deletedOrderIds||(state.deletedOrderIds=[]);
+  if(!list.includes(id)) list.push(id);
+}
 function stripCancelledFromOrders(orders){
-  return (orders||[]).filter(o=>!isCancelledOrder(o));
+  const dead=deletedOrderIdSet();
+  return (orders||[]).filter(o=>o && !isCancelledOrder(o) && !dead.has(o.id));
 }
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
@@ -677,6 +687,7 @@ function snapshot(){
     adminPresence:state.adminPresence,
     spaces:state.spaces,
     settings:state.settings,
+    deletedOrderIds:Array.from(new Set(state.deletedOrderIds||[])),
     dataEpoch:Number(state.dataEpoch)||0,
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
@@ -703,6 +714,7 @@ function applyPayload(p, opts){
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   state.settings=Object.assign({dadataToken:''}, state.settings||{}, p.settings||{});
   state.dataEpoch=Number(p.dataEpoch)||0;
+  state.deletedOrderIds=Array.from(new Set([...(state.deletedOrderIds||[]), ...((p.deletedOrderIds)||[])]));
   mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
@@ -717,6 +729,7 @@ function applyPayload(p, opts){
   }
   if(keepShifts) mergeLocalShifts(keepShifts);
   if(keepOrders) mergeLocalOrders(keepOrders);
+  state.orders=stripCancelledFromOrders(state.orders);
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
     if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
@@ -2604,6 +2617,7 @@ function cancelOrder(id, reason){
     if(!confirm('Заказ уже в работе. Точно отменить?')) return false;
   }
   // Полностью убираем из списка — иначе «Отменён» висит в «Все»
+  rememberDeletedOrderId(id);
   state.orders=(state.orders||[]).filter(x=>x.id!==id);
   state.shifts.forEach(s=>{ if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>x.id!==id); });
   bumpDataEpoch('cancelOrder');
@@ -2927,8 +2941,10 @@ function mergeLocalOrders(localOrders){
     if(!o.closedAt && !o.cancelledAt) n+=4;
     return n;
   };
+  const dead=deletedOrderIdSet();
   localOrders.forEach(lo=>{
     if(!lo||!lo.id||lo.cancelledAt) return;
+    if(dead.has(lo.id)) return; // удалённый заказ не воскрешаем из localStorage
     const cur=byId.get(lo.id);
     if(!cur){
       // Подтягиваем только живые/недавно закрытые локальные заказы
