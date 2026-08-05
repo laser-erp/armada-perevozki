@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-heal-order-times";
+const APP_BUILD="2026-08-05-eto-fuel-morning";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2810,6 +2810,7 @@ function invalidateStaleEto(shift){
   shift.completedAt=null;
   shift.odometer=null;
   shift.fuelLiters=null;
+  shift.fuelRemainingLiters=null;
   shift.gur=null; shift.powerSteeringLevel=null;
   shift.coolant=null; shift.coolantLevel=null;
   shift.oil=null; shift.engineOilLevel=null;
@@ -3130,7 +3131,11 @@ function hydrateEtoFromMessages(shift){
       shift.odometer=+t; shift.lastOdometerPoint=+t; changed=true; expect='fuel';
     } else if(expect==='fuel'){
       const fl=t.match(/^(\d+(?:[.,]\d+)?)\s*л?$/i);
-      if(fl && shift.fuelLiters==null){ shift.fuelLiters=+String(fl[1]).replace(',','.'); changed=true; expect='gur'; }
+      if(fl && shift.fuelLiters==null){
+        shift.fuelLiters=+String(fl[1]).replace(',','.');
+        if(shift.fuelRemainingLiters==null) shift.fuelRemainingLiters=shift.fuelLiters;
+        changed=true; expect='gur';
+      }
     } else if(expect==='vehicle' && !shift.vehiclePlate && /[A-ZА-ЯЁ]\s*\d{3}\s*[A-ZА-ЯЁ]{2}\s*\d{2,3}/i.test(t)){
       setIf('vehiclePlate', t.replace(/\s+/g,' ').trim());
     }
@@ -3382,16 +3387,15 @@ function computeFuelRemainingAfter(before, tripKm, consPer100, refillLiters){
   return round2(Math.max(0, before-used+add));
 }
 function applyFuelRemainingOnClose(order, shift, refillLiters){
-  const before=resolveFuelRemainingBefore(
-    order.vehiclePlate,
-    order.id,
-    shift&&shift.fuelLiters!=null?shift.fuelLiters:null
-  );
+  // ЕТО fuelLiters — утренний остаток, не затираем. Текущий остаток — fuelRemainingLiters.
+  const etoFuel=shift&&shift.fuelLiters!=null?shift.fuelLiters:null;
+  const running=shift&&shift.fuelRemainingLiters!=null?shift.fuelRemainingLiters:etoFuel;
+  const before=resolveFuelRemainingBefore(order.vehiclePlate, order.id, running);
   const km=tripKmForFuel(order);
   const cons=vehicle(order.vehiclePlate, order.ownCompanyId).consumptionPer100Km;
   const after=computeFuelRemainingAfter(before, km, cons, refillLiters);
   order.fuelRemainingLiters=(after!=null)?after:null;
-  if(after!=null && shift) shift.fuelLiters=after;
+  if(after!=null && shift) shift.fuelRemainingLiters=after;
   return {before, after, km, used:(before!=null && km!=null)?round2(km*cons/100):null};
 }
 /** Ставка для ЗП / подушки / прибыли — всегда наличные */
@@ -3737,6 +3741,7 @@ function restartEtoInspection(){
   shift.completedAt=null;
   shift.odometer=null;
   shift.fuelLiters=null;
+  shift.fuelRemainingLiters=null;
   shift.gur=null; shift.powerSteeringLevel=null;
   shift.coolant=null; shift.coolantLevel=null;
   shift.oil=null; shift.engineOilLevel=null;
@@ -3960,6 +3965,7 @@ function submitNumber(){
   } else if(state.step==='fuel'){
     const value=+raw; if(!(value>=0)){state.error='Введите остаток топлива в литрах';renderInput();return;}
     state.shift.fuelLiters=value;
+    state.shift.fuelRemainingLiters=value; // стартовый остаток = ЕТО; дальше только fuelRemainingLiters
     add('driver',`${value} л`);
     add('bot','Проверьте и укажите уровень жидкости ГУР:\n• Максимум\n• Середина\n• Минимум'); state.step='gur';
   }
@@ -4567,7 +4573,7 @@ function renderAdminEtoBoard(){
       <div class="eto-grid">
         <span>Авто ${etoMark(!!s.vehiclePlate)}</span>
         <span>Одометр ${etoMark(s.odometer!=null)} ${s.odometer!=null?`<b>${esc(s.odometer)}</b>`:''}</span>
-        <span>Топливо ${etoMark(s.fuelLiters!=null)} ${s.fuelLiters!=null?`<b>${esc(s.fuelLiters)} л</b>`:''}</span>
+        <span>Топливо ${etoMark(s.fuelLiters!=null)} ${s.fuelLiters!=null?`<b>${esc(s.fuelLiters)} л</b>`:''}${s.fuelRemainingLiters!=null && s.fuelRemainingLiters!==s.fuelLiters?` · сейчас <b>${esc(s.fuelRemainingLiters)} л</b>`:''}</span>
         <span>ГУР ${etoMark(!!(s.gur||s.powerSteeringLevel))} ${s.gur||s.powerSteeringLevel?`<b>${esc(s.gur||s.powerSteeringLevel)}</b>`:''}</span>
         <span>ОЖ ${etoMark(!!(s.coolant||s.coolantLevel))} ${s.coolant||s.coolantLevel?`<b>${esc(s.coolant||s.coolantLevel)}</b>`:''}</span>
         <span>Свет ${etoMark(!!(L.lowBeam&&L.brake&&L.turn))}</span>
