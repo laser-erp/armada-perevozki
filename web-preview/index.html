@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-nechaev-order2-sync";
+const APP_BUILD="2026-08-05-podacha-20km";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -558,7 +558,7 @@ const PB_BASE=(function(){
 })();
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
-const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
+const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
 const state={
   step:"idle", orderStep:"idle", messages:[], shift:null,
   shifts:saved.shifts||[], orders:Array.isArray(saved.orders)?saved.orders:[], seq:saved.seq||0,
@@ -592,6 +592,7 @@ if(state.finance.markupPercent>80) state.finance.markupPercent=80;
 if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
 if(!(state.finance.minWorkHours>=0)) state.finance.minWorkHours=4;
 if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
+if(!(state.finance.podachaEmptyKmLimit>0)) state.finance.podachaEmptyKmLimit=20;
 if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
 if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
 // Миграция только если в localStorage вообще не было массива orders
@@ -731,6 +732,7 @@ function applyPayload(p, opts){
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
   if(!(state.finance.minWorkHours>=0)) state.finance.minWorkHours=4;
   if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
+  if(!(state.finance.podachaEmptyKmLimit>0)) state.finance.podachaEmptyKmLimit=20;
   if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
   if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
   // Только если поле orders вообще отсутствовало в старых дампах.
@@ -3244,8 +3246,8 @@ function markStaysLoadedOvernight(o){
 }
 /**
  * Тариф клиенту:
- * — мин. N ч работы + 1 ч подачи (пакет);
- * — нулевой до заказа покрыт 1 ч подачи, иначе 2 ч подачи;
+ * — мин. N ч работы + 1 ч подачи (пакет = обычно 5 ч);
+ * — нулевой до заказа: если > лимита км (20) ИЛИ его ₽ > стоимости 1 ч подачи → +ещё 1 ч подачи;
  * — в пакет входит M км (груз + нулевой после); свыше — ₽/км;
  * — часы/км сверх пакета плюсуем по факту; ночное хранение сверху.
  */
@@ -3260,17 +3262,24 @@ function calculateClientTariff(o, fin){
   const threshold=Math.max(1, s.cityKmThreshold||100);
   const minWork=Math.max(0, s.minWorkHours||0);
   const basePodacha=Math.max(0, s.podachaHours||1);
+  const emptyKmLimit=Math.max(0, s.podachaEmptyKmLimit||20);
   const workEntered=o.workHours??o.estimateWorkHours??0;
   const workHoursCharged=perHour>0?Math.max(+workEntered||0, minWork):0;
   const workCash=round2(workHoursCharged*perHour);
   let podachaHoursCharged=0;
   let podachaCoveredByHour=true;
+  let podachaExtraReason='';
   if(perHour>0 && basePodacha>0){
     const oneHourCash=round2(basePodacha*perHour);
     const emptyBeforeCost=round2(emptyBefore*perKm);
-    if(emptyBefore>0 && emptyBeforeCost>oneHourCash){
+    const overKm=emptyBefore>emptyKmLimit;
+    const overSum=emptyBefore>0 && emptyBeforeCost>oneHourCash;
+    if(overKm || overSum){
       podachaHoursCharged=basePodacha*2;
       podachaCoveredByHour=false;
+      if(overKm && overSum) podachaExtraReason=`нулевой до ${emptyBefore} км (>${emptyKmLimit} км и >1 ч подачи) → 2 ч`;
+      else if(overKm) podachaExtraReason=`нулевой до ${emptyBefore} км > ${emptyKmLimit} км → 2 ч подачи`;
+      else podachaExtraReason=`нулевой до ${emptyBefore} км (${fmt(emptyBeforeCost)} ₽) > 1 ч подачи → 2 ч`;
     } else {
       podachaHoursCharged=basePodacha;
       podachaCoveredByHour=true;
@@ -3287,8 +3296,8 @@ function calculateClientTariff(o, fin){
     parts.push(`подача ${podachaHoursCharged} ч = ${fmt(podachaHourCash)} ₽`);
     if(emptyBefore>0){
       parts.push(podachaCoveredByHour
-        ? `нулевой до ${emptyBefore} км покрыт подачей`
-        : `нулевой до ${emptyBefore} км → 2 ч подачи`);
+        ? `нулевой до ${emptyBefore} км покрыт подачей (≤${emptyKmLimit} км)`
+        : podachaExtraReason);
     }
   }
   if(packageKm>0){
@@ -4922,7 +4931,7 @@ function openDetail(id){
     </div>
     <div class="field-block">
       <h3>Тариф клиенту</h3>
-      <div class="hint">Пакет: мин ${state.finance.minWorkHours} ч работы + ${state.finance.podachaHours} ч подачи. В пакет входит ${state.finance.cityKmThreshold} км (груз + нулевой после). Нулевой до заказа покрыт подачей; если нулевой×₽/км &gt; 1 ч — 2 ч подачи. Сверх ${state.finance.cityKmThreshold} км — по ₽/км.</div>
+      <div class="hint">Пакет: мин ${state.finance.minWorkHours} ч работы + ${state.finance.podachaHours} ч подачи. В пакет входит ${state.finance.cityKmThreshold} км (груз + нулевой после). Нулевой до ≤${state.finance.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — покрыт 1 ч; иначе 2 ч подачи. Сверх ${state.finance.cityKmThreshold} км — по ₽/км.</div>
       <label for="d-perkm">руб/км сверх пакета (нал)</label>
       <input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 80" />
       <label for="d-perhour">руб/час работы</label>
@@ -5246,12 +5255,13 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='finance'?'on':''}" data-cat-panel="finance">
-      <div class="hint" style="margin:0">Пакет = часы работы + подача; км в пакете = груз + после.</div>
+      <div class="hint" style="margin:0">Пакет = часы работы + подача; км в пакете = груз + после. Второй час подачи: нулевой до &gt; лимита км или дороже 1 ч.</div>
       <div class="fin-grid">
         <label>Наценка, %<input id="fin-markup" inputmode="decimal" value="${state.finance.markupPercent??15}" /></label>
         <label>Км в пакете<input id="fin-city" inputmode="numeric" value="${state.finance.cityKmThreshold??100}" /></label>
         <label>Часы работы<input id="fin-minwork" inputmode="decimal" value="${state.finance.minWorkHours??4}" /></label>
         <label>Подача, ч<input id="fin-podacha" inputmode="decimal" value="${state.finance.podachaHours??1}" /></label>
+        <label>Нулевой до, км<input id="fin-podacha-km" inputmode="numeric" value="${state.finance.podachaEmptyKmLimit??20}" title="Свыше — +1 ч подачи" /></label>
         <label>₽/час<input id="fin-perhour" inputmode="decimal" value="${state.finance.defaultRatePerHourWork||''}" /></label>
         <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${state.finance.defaultRatePerKmCash||80}" /></label>
         <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф</button>
@@ -5588,6 +5598,7 @@ function openCatalogs(){
     const city=+(($('fin-city').value||'').replace(/\D/g,'')); state.finance.cityKmThreshold=city>0?city:100;
     let minW=+(($('fin-minwork').value||'').replace(',','.')); if(!(minW>=0)) minW=4; state.finance.minWorkHours=minW;
     let pod=+(($('fin-podacha').value||'').replace(',','.')); if(!(pod>=0)) pod=1; state.finance.podachaHours=pod;
+    const podKm=+(($('fin-podacha-km').value||'').replace(/\D/g,'')); state.finance.podachaEmptyKmLimit=podKm>0?podKm:20;
     let ph=+(($('fin-perhour').value||'').replace(',','.')); state.finance.defaultRatePerHourWork=(ph>0)?ph:0;
     let pk=+(($('fin-perkm').value||'').replace(',','.')); state.finance.defaultRatePerKmCash=(pk>0)?pk:80;
     persist();
