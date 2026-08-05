@@ -525,7 +525,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-total-row-sums";
+const APP_BUILD="2026-08-05-tariff-recalc-on-save";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3761,6 +3761,28 @@ function applyPerKmCash(o){
   o.freight=selectedRate(o);
   return true;
 }
+/** После смены тарифа в справочнике — пересчитать цены заказов (нал / без НДС / с НДС). */
+function recalculateAllOrderTariffs(){
+  let updated=0;
+  const dead=deletedOrderIdSet();
+  (state.orders||[]).forEach(o=>{
+    if(!o || !o.id || o.cancelledAt || dead.has(o.id)) return;
+    const before={
+      cash:o.rateCash, noVat:o.rateWithoutVat, vat:o.rateWithVat, freight:o.freight
+    };
+    if(!applyClientTariff(o)) return;
+    const pay=metrics(o).driverPay;
+    o.earnings=pay!=null?pay:null;
+    const changed=before.cash!==o.rateCash || before.noVat!==o.rateWithoutVat
+      || before.vat!==o.rateWithVat || before.freight!==o.freight;
+    if(changed) updated++;
+  });
+  const byId=new Map((state.orders||[]).map(o=>[o.id,o]));
+  (state.shifts||[]).forEach(s=>{
+    (s.orders||[]).forEach((o,idx)=>{ const live=byId.get(o.id); if(live) s.orders[idx]=live; });
+  });
+  return updated;
+}
 function wireRateAutoFill(order){
   const map={ 'd-vat':'withVat', 'd-novat':'withoutVat', 'd-cash':'cash' };
   Object.keys(map).forEach(id=>{
@@ -5854,7 +5876,8 @@ function flashCatOk(msg){
   el.textContent=msg||'Сохранено';
   el.style.display='block';
   clearTimeout(flashCatOk._t);
-  flashCatOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, 1600);
+  const ms=(msg&&msg.length>20)?3200:1600;
+  flashCatOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, ms);
 }
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
@@ -6343,8 +6366,17 @@ function openCatalogs(){
     const podKm=+(($('fin-podacha-km').value||'').replace(/\D/g,'')); state.finance.podachaEmptyKmLimit=podKm>0?podKm:20;
     let ph=+(($('fin-perhour').value||'').replace(',','.')); state.finance.defaultRatePerHourWork=(ph>0)?ph:0;
     let pk=+(($('fin-perkm').value||'').replace(',','.')); state.finance.defaultRatePerKmCash=(pk>0)?pk:80;
+    const n=recalculateAllOrderTariffs();
+    bumpDataEpoch('tariff-recalc');
     persist();
-    flashCatOk();
+    try{
+      if(state.detailId && typeof openDetail==='function' && (state.orders||[]).some(o=>o.id===state.detailId)){
+        openDetail(state.detailId);
+      } else if(typeof renderAdmin==='function'){
+        renderAdmin();
+      }
+    }catch(_){}
+    flashCatOk(n>0?`Тариф сохранён · пересчитано ${n} заказ.`:'Тариф сохранён');
   };
 }
 
