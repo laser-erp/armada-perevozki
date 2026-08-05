@@ -192,7 +192,7 @@
     .dense-row input.mid{flex:1;min-width:0;padding:5px 10px;min-height:30px;border-radius:var(--pill);font-size:16px}
     .dense-row select.slim{flex:0 1 110px;min-width:84px;padding:5px 8px;min-height:30px;border-radius:var(--pill);font-size:.72rem}
     .drv-card{
-      display:grid;grid-template-columns:minmax(0,1.2fr) 28px minmax(0,1fr) auto auto auto;
+      display:grid;grid-template-columns:minmax(0,1.1fr) 28px minmax(0,.95fr) 52px auto auto auto;
       align-items:center;gap:3px;padding:4px 5px;background:rgba(46,46,46,.94);
       border-radius:14px;border:1px solid rgba(255,255,255,.04)
     }
@@ -201,6 +201,10 @@
     .drv-card .drv-phone{
       min-width:0;width:100%;padding:5px 8px;min-height:30px;border-radius:var(--pill);
       border:0;background:var(--field);color:var(--text);font-size:15px
+    }
+    .drv-card .drv-pin{
+      width:52px;padding:5px 4px;min-height:30px;border-radius:var(--pill);text-align:center;
+      border:0;background:var(--field);color:var(--text);font-size:14px
     }
     .drv-card .tiny,.cat-quick.drv-add .pct{
       width:26px!important;max-width:26px;padding:3px 1px!important;min-height:26px!important;
@@ -299,11 +303,19 @@
     </div>
   </div></div>
 
-  <div id="driver-pick" class="screen"><div class="center" style="justify-content:flex-start;padding-top:20px;overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <div class="sub" style="align-self:stretch;text-align:left"><button id="driver-pick-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
-    <h2 style="margin:0">Кто за рулём?</h2>
-    <div class="hint" style="margin-bottom:8px">Супер и админ могут войти под любым водителем своей зоны. Смена и ЕТО пойдут к админу этой фирмы.</div>
-    <div class="stack" id="driver-pick-list" style="max-width:360px;width:100%;padding-bottom:24px"></div>
+  <div id="driver-login" class="screen"><div class="center">
+    <div class="sub" style="align-self:stretch;text-align:left"><button id="driver-login-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
+    <h2 style="margin:0">Вход водителя</h2>
+    <div class="sub">Телефон и PIN из справочника</div>
+    <div class="pin" style="max-width:320px;width:100%">
+      <label style="text-align:left;color:var(--muted);font-size:.8rem">Телефон</label>
+      <input id="drv-login-phone" inputmode="tel" placeholder="+79650730002" autocomplete="tel" />
+      <label style="text-align:left;color:var(--muted);font-size:.8rem;margin-top:6px">PIN</label>
+      <input id="drv-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      <div class="error" id="drv-login-error"></div>
+      <button class="primary" id="drv-login-ok">Войти</button>
+      <div class="hint" style="text-align:left;margin-top:4px">PIN задаёт админ в «Справочники → Водители». Если вы также админ — можно тот же PIN, что для входа в админку.</div>
+    </div>
   </div></div>
 
   <div id="admin-pin" class="screen"><div class="center">
@@ -501,11 +513,11 @@ const DEFAULT_DRIVERS=[
 ];
 const FLUIDS=["Максимум","Середина","Минимум"];
 /** Активный водитель сессии (выбирается на экране «Водитель»). */
-let DRIVER="Наволоцкий Е.Н.";
+let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-driver-you";
+const APP_BUILD="2026-08-05-driver-phone-pin";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -712,6 +724,7 @@ function applyPayload(p){
   migrateSpaces();
   migrateDriverOrderOwners();
   migrateShiftOwners();
+  migrateDriverPins();
   purgeCancelledOrders();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -805,6 +818,7 @@ function ensureDriverInCompany(opts){
     salaryPercent:opts.salaryPercent??30,
     exchangeEnabled:!!opts.exchangeEnabled,
     phone:formatPhone(opts.phone||''),
+    pin:String(opts.pin||'').trim(),
     ownerAdminId:opts.ownerAdminId||null,
     ownerAdminName:opts.ownerAdminName||null,
     spaceId:opts.spaceId||null,
@@ -812,6 +826,44 @@ function ensureDriverInCompany(opts){
     companyName:opts.companyName||null
   });
   return true;
+}
+/** PIN водителя: свой → PIN админа с тем же ФИО → последние 4 цифры телефона. */
+function resolveDriverPin(d){
+  if(!d) return '';
+  const own=String(d.pin||'').trim();
+  if(own.length>=4) return own;
+  const adm=(state.admins||[]).find(a=>samePersonName(a.name, d.name));
+  if(adm && String(adm.pin||'').trim().length>=4) return String(adm.pin).trim();
+  const ph=formatPhone(d.phone||'');
+  if(ph.length>=4) return ph.slice(-4);
+  return '';
+}
+function migrateDriverPins(){
+  let changed=false;
+  (state.drivers||[]).forEach(d=>{
+    if(!d) return;
+    if(String(d.pin||'').trim().length>=4) return;
+    const adm=(state.admins||[]).find(a=>samePersonName(a.name, d.name));
+    if(adm && String(adm.pin||'').trim().length>=4){
+      d.pin=String(adm.pin).trim(); changed=true; return;
+    }
+    const ph=formatPhone(d.phone||'');
+    if(ph.length>=4){ d.pin=ph.slice(-4); changed=true; }
+  });
+  return changed;
+}
+function findDriversByPhone(phone){
+  const p=formatPhone(phone);
+  if(!p) return [];
+  return (state.drivers||[]).filter(d=>formatPhone(d.phone||'')===p);
+}
+function pickDriverHomeRecord(list){
+  if(!list||!list.length) return null;
+  const home=list.find(d=>{
+    const adm=(state.admins||[]).find(a=>a.id===d.ownerAdminId);
+    return adm && samePersonName(adm.name, d.name);
+  });
+  return home||list[0];
 }
 /** Парк (водители/авто) — отдельно на каждую «нашу фирму». */
 function ensureFleetPerSpaces(){
@@ -1761,7 +1813,7 @@ function saveDriverSession(){
 }
 function clearDriverSession(){
   try{ localStorage.removeItem(DRIVER_SESSION_KEY); }catch(_){}
-  DRIVER="Наволоцкий Е.Н.";
+  DRIVER="";
   DRIVER_COMPANY_ID=null;
 }
 function restoreDriverSession(){
@@ -1803,63 +1855,73 @@ function driverPickRows(preferName){
   });
   return rows;
 }
-function openDriverPick(fromAdmin){
+function openDriverLogin(fromAdmin){
   migrateSpaces();
   let dirty=ensureFleetPerSpaces();
-  if(dirty){ bumpDataEpoch('fleet-for-driver-pick'); persist(); }
-  // Не входим «по умолчанию» под Наволоцкого — только после явного выбора
+  if(migrateDriverPins()) dirty=true;
+  if(dirty){ bumpDataEpoch('driver-login-prep'); persist(); }
   DRIVER='';
   DRIVER_COMPANY_ID=null;
-  const box=$('driver-pick-list');
-  if(!box){ show('roles'); return; }
-  const youName=peekAdminSessionName();
-  let rows=driverPickRows(youName);
-  // Обычный админ — только водители своей фирмы; супер — все
-  if(currentAdmin && !isSuperAdmin()){
-    const myCo=currentOwnCompany();
-    const sid=currentSpaceId();
-    rows=rows.filter(d=>{
-      if(myCo && d.companyId===myCo.id) return true;
-      if(sid && d.spaceId===sid) return true;
-      return false;
-    });
+  const err=$('drv-login-error'); if(err) err.textContent='';
+  const phoneEl=$('drv-login-phone');
+  const pinEl=$('drv-login-pin');
+  if(pinEl) pinEl.value='';
+  // Если зашли из админки — подставить телефон своего водительского профиля
+  if(phoneEl){
+    let prefill='';
+    const you=peekAdminSessionName();
+    if(you){
+      const myCo=currentOwnCompany();
+      const rec=(myCo&&findDriverRecord(you, myCo.id))||findDriverRecord(you, null)
+        || (state.drivers||[]).find(d=>samePersonName(d.name, you) && formatPhone(d.phone||''));
+      if(rec) prefill=formatPhone(rec.phone||'');
+    }
+    phoneEl.value=prefill;
   }
-  const backHint=youName
-    ? `Сверху ваш профиль («${youName}»). Не нажимайте чужое ФИО — иначе смена уйдёт не тому водителю.`
-    : 'Выберите своё ФИО и фирму. Смена и ЕТО увидит админ этой фирмы.';
-  if(!rows.length){
-    box.innerHTML=`<div class="hint">Нет водителей в справочнике. Добавьте во вкладке «Водители».</div>`;
-  } else {
-    box.innerHTML=`<div class="hint" style="text-align:left;margin:0 0 8px">${esc(backHint)}</div>`+rows.map(d=>{
-      const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'без фирмы';
-      const ph=formatPhone(d.phone||'');
-      const isYou=youName && samePersonName(d.name, youName);
-      const coAttr=String(d.companyId||'').replace(/"/g,'');
-      const nameAttr=String(d.name||'').replace(/"/g,'');
-      return `<button type="button" class="${isYou?'primary':'secondary'} drv-pick" data-name="${nameAttr}" data-co="${coAttr}" style="text-align:left;padding:12px 14px${isYou?';box-shadow:0 0 0 2px rgba(230,26,31,.35)':''}">
-        <div style="font-weight:800">${esc(d.name)}${isYou?' · это вы':''}</div>
-        <div style="font-size:.78rem;color:${isYou?'rgba(255,255,255,.85)':'var(--muted)'};margin-top:2px">${esc(firm)}${ph?' · '+esc(ph):''}</div>
-      </button>`;
-    }).join('');
-    document.querySelectorAll('.drv-pick').forEach(b=>b.onclick=()=>{
-      const name=b.getAttribute('data-name')||'';
-      const co=b.getAttribute('data-co')||'';
-      const firm=(findCompanyById(co)||{}).name||'';
-      if(youName && name && !samePersonName(name, youName)){
-        if(!confirm(`Войти как ${name}${firm?' ('+firm+')':''}?\n\nСейчас в админке вы: ${youName}.\nЕсли вы — ${youName}, нажмите «Отмена» и выберите себя.`)) return;
-      }
-      const rec=findDriverRecord(name, co)||{name, companyId:co||null, companyName:firm||null};
-      enterAsDriver(rec);
-    });
-  }
-  const back=$('driver-pick-back');
+  const back=$('driver-login-back');
   if(back){
     back.onclick=()=>{
-      if(currentAdmin || restoreAdminSession()){ show('admin'); renderAdmin(); }
-      else show('roles');
+      if(fromAdmin || currentAdmin || peekAdminSessionName()){
+        if(currentAdmin || restoreAdminSession()){ show('admin'); renderAdmin(); return; }
+      }
+      show('roles');
     };
   }
-  show('driver-pick');
+  show('driver-login');
+  setTimeout(()=>{
+    const focusEl=(phoneEl && phoneEl.value)?($('drv-login-pin')||phoneEl):($('drv-login-phone')||phoneEl);
+    if(focusEl && focusEl.focus) focusEl.focus();
+  }, 50);
+}
+/** Обратная совместимость со старыми вызовами. */
+function openDriverPick(fromAdmin){ openDriverLogin(fromAdmin); }
+function loginDriver(){
+  migrateDriverPins();
+  const err=$('drv-login-error');
+  const showErr=msg=>{ if(err) err.textContent=msg; };
+  const phone=formatPhone((($('drv-login-phone')||{}).value||'').trim());
+  const pin=(($('drv-login-pin')||{}).value||'').trim();
+  if(!phone){ showErr('Введите телефон'); return; }
+  if(!pin||pin.length<4){ showErr('Введите PIN (от 4 цифр)'); return; }
+  const byPhone=findDriversByPhone(phone);
+  if(!byPhone.length){
+    showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
+    return;
+  }
+  const matched=byPhone.filter(d=>resolveDriverPin(d)===pin);
+  if(!matched.length){ showErr('Неверный PIN'); return; }
+  // Одно ФИО в нескольких фирмах с тем же телефоном — берём «домашнюю» (где водитель = админ фирмы)
+  const rec=pickDriverHomeRecord(matched);
+  if(!rec){ showErr('Профиль водителя не найден'); return; }
+  // закрепить pin в записи, если был только из админа/телефона
+  if(String(rec.pin||'').trim()!==pin){
+    rec.pin=pin;
+    // синхронизировать pin на все копии с тем же телефоном и ФИО
+    byPhone.forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
+    bumpDataEpoch('driver-pin-bind');
+    persist();
+  }
+  enterAsDriver(rec);
 }
 function enterAsDriver(rec){
   if(!rec||!rec.name) return;
@@ -1884,7 +1946,7 @@ function enterAsDriver(rec){
   // Явно показать, под кем вошли
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
   if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
-    state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}. Открывайте смену только если это ваше ФИО.`});
+    state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}.`});
   }
   renderChat();
   renderDriverBanner();
@@ -2609,15 +2671,17 @@ function stampShiftOwner(shift, driverName, vehiclePlate){
     const veh=(state.vehicles||[]).find(v=>v.plate===plate);
     if(veh && veh.companyId) companyId=veh.companyId;
   }
-  if(!companyId && name && DRIVER_COMPANY_ID && samePersonName(name, DRIVER)) companyId=DRIVER_COMPANY_ID;
-  const rec=findDriverRecord(name, companyId);
-  const bind=resolveDriverOrderBinding(name, plate);
-  shift.driverName=name;
-  shift.ownerAdminId=(rec&&rec.ownerAdminId)||bind.ownerAdminId||null;
-  shift.ownerAdminName=(rec&&rec.ownerAdminName)||bind.ownerAdminName||null;
-  shift.spaceId=(rec&&rec.spaceId)||bind.spaceId||null;
-  shift.ownCompanyId=companyId||(rec&&rec.companyId)||bind.ownCompanyId||null;
-  shift.ownCompanyName=(rec&&rec.companyName)||bind.ownCompanyName||null;
+  if(!companyId && name && DRIVER && DRIVER_COMPANY_ID && samePersonName(name, DRIVER)) companyId=DRIVER_COMPANY_ID;
+  const rec=name?findDriverRecord(name, companyId):null;
+  const bind=name?resolveDriverOrderBinding(name, plate):{ownerAdminId:null,ownerAdminName:null,spaceId:null,ownCompanyId:null,ownCompanyName:null};
+  if(name) shift.driverName=name;
+  if(rec||bind.ownerAdminId){
+    shift.ownerAdminId=(rec&&rec.ownerAdminId)||bind.ownerAdminId||shift.ownerAdminId||null;
+    shift.ownerAdminName=(rec&&rec.ownerAdminName)||bind.ownerAdminName||shift.ownerAdminName||null;
+  }
+  shift.spaceId=(rec&&rec.spaceId)||bind.spaceId||shift.spaceId||null;
+  shift.ownCompanyId=companyId||(rec&&rec.companyId)||bind.ownCompanyId||shift.ownCompanyId||null;
+  shift.ownCompanyName=(rec&&rec.companyName)||bind.ownCompanyName||shift.ownCompanyName||null;
   if(shift.ownCompanyId && !shift.ownCompanyName){
     const co=findCompanyById(shift.ownCompanyId);
     if(co) shift.ownCompanyName=co.name;
@@ -3210,8 +3274,8 @@ function resumeOpenShift(shift){
 function openShift(){
   try{
     if(!DRIVER){
-      state.error='Сначала выберите своё ФИО на экране «Кто за рулём?»';
-      openDriverPick(!!peekAdminSessionName());
+      state.error='Сначала войдите по телефону и PIN';
+      openDriverLogin(!!peekAdminSessionName());
       return;
     }
     if(!state.vehicles||!state.vehicles.length){
@@ -4678,6 +4742,7 @@ function openCatalogs(){
       <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
+      <input class="drv-pin" id="drv-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(d.pin||resolveDriverPin(d)||'')}" placeholder="PIN" title="PIN водителя" />
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
       <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
@@ -4738,6 +4803,7 @@ function openCatalogs(){
           <input id="own-drv-name" placeholder="ФИО" style="flex:1.2" />
           <input class="pct" id="own-drv-pct" inputmode="decimal" value="30" placeholder="%" title="%" />
           <input id="own-drv-phone" inputmode="tel" placeholder="+79650730002" style="flex:1" />
+          <input id="own-drv-pin" inputmode="numeric" maxlength="8" placeholder="PIN" title="PIN" style="flex:0 0 52px;text-align:center" />
           <label class="check" title="Биржа"><input type="checkbox" id="own-drv-ex"/> Б</label>
           <button type="button" class="icon-btn ok" id="own-drv-add" title="Добавить">+</button>
         </div>
@@ -5049,6 +5115,10 @@ function openCatalogs(){
     if(!d) return;
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     state.drivers[i].phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
+    const pin=(($('drv-pin-'+i)||{}).value||'').trim();
+    if(pin && pin.length<4){ alert('PIN водителя — от 4 цифр'); return; }
+    if(pin) state.drivers[i].pin=pin;
+    else if(!state.drivers[i].pin) state.drivers[i].pin=resolveDriverPin(state.drivers[i]);
     state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
     const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
     if(!state.drivers[i].companyId){
@@ -5076,14 +5146,18 @@ function openCatalogs(){
     const name=(($('own-drv-name')||{}).value||'').trim();
     let pct=+((($('own-drv-pct')||{}).value||'').replace(',','.'));
     const phone=formatPhone((($('own-drv-phone')||{}).value||'').trim());
+    let pin=(($('own-drv-pin')||{}).value||'').trim();
     const exchangeEnabled=!!(($('own-drv-ex')||{}).checked);
     if(!name){ alert('Укажите ФИО водителя'); return; }
+    if(!phone){ alert('Укажите телефон — по нему водитель входит'); return; }
+    if(!pin) pin=phone.slice(-4);
+    if(pin.length<4){ alert('PIN от 4 цифр'); return; }
     if(Number.isNaN(pct) || pct<0) pct=30;
     const owner=resolveAdminOwner(currentAdmin.id);
     if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
     if(driverExistsInCompany(name, owner.companyId)){ alert('Такой водитель уже есть в вашей фирме'); return; }
     state.drivers.push({
-      name, salaryPercent:pct, phone, exchangeEnabled,
+      name, salaryPercent:pct, phone, pin, exchangeEnabled,
       ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
       spaceId:owner.spaceId||null,
       companyId:owner.companyId, companyName:owner.companyName
@@ -5123,6 +5197,7 @@ try{
   if(migrateSpaces()) dirty=true;
   if(migrateDriverOrderOwners()) dirty=true;
   if(migrateShiftOwners()) dirty=true;
+  if(migrateDriverPins()) dirty=true;
   if(purgeCancelledOrders()){
     bumpDataEpoch('purge-boot');
     dirty=true;
@@ -5141,11 +5216,14 @@ try{
   }
   setTimeout(updateSyncHint, 700);
 })();
-$('role-driver').onclick=()=>openDriverPick(false);
+$('role-driver').onclick=()=>openDriverLogin(false);
 $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
   if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
-  openDriverPick(true);
+  openDriverLogin(true);
 });
+$('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
+$('drv-login-pin')&&($('drv-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginDriver(); });
+$('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ($('drv-login-pin')||{}).focus?.(); } });
 $('driver-exit').onclick=()=>leaveDriverMode();
 $('role-admin').onclick=()=>{
   migrateAdmins();
