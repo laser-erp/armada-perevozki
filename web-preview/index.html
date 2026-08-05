@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-podacha-20km";
+const APP_BUILD="2026-08-05-order-times";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3134,6 +3134,58 @@ function syncOpenShiftRuntime(){
   return state.shift;
 }
 function dayTotal(o){ if(o.emptyKmBefore==null && o.loadedKm==null && o.emptyKmAfter==null) return null; return (o.emptyKmBefore||0)+(o.loadedKm||0)+(o.emptyKmAfter||0); }
+/** Минуты между ISO-метками; null если нет данных. */
+function minutesBetween(fromIso, toIso){
+  if(!fromIso || !toIso) return null;
+  const a=new Date(fromIso).getTime(), b=new Date(toIso).getTime();
+  if(Number.isNaN(a)||Number.isNaN(b)||b<a) return null;
+  return Math.round((b-a)/60000);
+}
+function hoursFromMinutes(min){
+  if(min==null) return null;
+  return round2(min/60);
+}
+/** «1 ч 25 мин» / «45 мин» / «2 ч» */
+function formatDurationMin(min){
+  if(min==null || min<0) return '—';
+  const h=Math.floor(min/60), m=min%60;
+  if(h<=0) return `${m} мин`;
+  if(m===0) return `${h} ч`;
+  return `${h} ч ${m} мин`;
+}
+/**
+ * Времена по заказу:
+ * — до заказа: выезд → прибытие на загрузку
+ * — с грузом: загрузка → окончание перевозки
+ * — до стоянки: окончание → стоянка
+ * — всего: выезд (или загрузка) → стоянка (или окончание)
+ */
+function recomputeOrderTimes(o){
+  if(!o) return o;
+  o.timeToOrderMin=minutesBetween(o.departAt, o.arrivedAt);
+  o.timeLoadedMin=minutesBetween(o.arrivedAt, o.endAt);
+  o.timeToParkingMin=minutesBetween(o.endAt, o.parkingAt);
+  const start=o.departAt||o.arrivedAt||null;
+  const end=o.parkingAt||o.endAt||o.closedAt||null;
+  o.timeTotalMin=minutesBetween(start, end);
+  o.timeToOrderHours=hoursFromMinutes(o.timeToOrderMin);
+  o.timeLoadedHours=hoursFromMinutes(o.timeLoadedMin);
+  o.timeToParkingHours=hoursFromMinutes(o.timeToParkingMin);
+  o.timeTotalHours=hoursFromMinutes(o.timeTotalMin);
+  return o;
+}
+function orderTimesLines(o){
+  if(!o) return '';
+  recomputeOrderTimes(o);
+  if(o.timeToOrderMin==null && o.timeLoadedMin==null && o.timeToParkingMin==null && o.timeTotalMin==null) return '';
+  return `<p style="margin-top:6px">Время: до заказа ${esc(formatDurationMin(o.timeToOrderMin))} · с грузом ${esc(formatDurationMin(o.timeLoadedMin))} · до стоянки ${esc(formatDurationMin(o.timeToParkingMin))} · всего ${esc(formatDurationMin(o.timeTotalMin))}</p>`;
+}
+function orderTimesText(o){
+  if(!o) return '';
+  recomputeOrderTimes(o);
+  if(o.timeToOrderMin==null && o.timeLoadedMin==null && o.timeToParkingMin==null && o.timeTotalMin==null) return '';
+  return `Время: до заказа ${formatDurationMin(o.timeToOrderMin)} · с грузом ${formatDurationMin(o.timeLoadedMin)} · до стоянки ${formatDurationMin(o.timeToParkingMin)} · всего ${formatDurationMin(o.timeTotalMin)}`;
+}
 function kmParkingToEnd(o){
   if(o.endOdometer!=null && o.previousOdometer!=null) return Math.max(0, o.endOdometer-o.previousOdometer);
   if(o.emptyKmBefore!=null || o.loadedKm!=null) return (o.emptyKmBefore||0)+(o.loadedKm||0);
@@ -3695,7 +3747,8 @@ function submitNumber(){
     const value=+digits; const prev=state.shift.lastOdometerPoint??state.shift.odometer;
     if(prev==null){state.error='Нет одометра смены';renderInput();return;}
     if(value<prev){state.error=`Одометр не может быть меньше предыдущего (${prev})`;renderInput();return;}
-    state.draft.startOdo=value; state.draft.prevOdo=prev; add('driver',String(value));
+    state.draft.startOdo=value; state.draft.prevOdo=prev; state.draft.arrivedAt=new Date().toISOString();
+    add('driver',String(value));
     add('bot','Укажите номер заказа за день.'); state.orderStep='dayNumber'; state.error=''; upsertShift(); renderInput(); return;
   }
   if(state.orderStep==='departAssignedOdometer'){
@@ -3715,7 +3768,8 @@ function submitNumber(){
     const value=+digits; const order=openOrder();
     if(!order){state.error='Нет открытого заказа';renderInput();return;}
     if(value<order.startOdometer){state.error=`Одометр не может быть меньше начала заказа (${order.startOdometer})`;renderInput();return;}
-    state.draft.closeOdo=value; add('driver',String(value)); add('bot','Заправляли машину?');
+    state.draft.closeOdo=value; state.draft.endAt=new Date().toISOString();
+    add('driver',String(value)); add('bot','Заправляли машину?');
     state.orderStep='askRefuel'; state.error=''; upsertShift(); renderInput(); return;
   }
   if(state.orderStep==='fuelPrice'){
@@ -3845,10 +3899,12 @@ function acceptDepart(value){
   if(value<prev){ state.error=`Одометр не может быть меньше предыдущего (${prev})`; renderInput(); return; }
   order.departOdometer=value;
   order.previousOdometer=prev;
+  order.departAt=new Date().toISOString();
+  recomputeOrderTimes(order);
   if(!state.shift.orders) state.shift.orders=[];
   if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
   upsertOrder(order); add('driver',String(value));
-  add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
+  add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}\nВремя: ${dateTime(order.departAt)}\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
 function acceptArrive(value){
@@ -3860,10 +3916,13 @@ function acceptArrive(value){
   order.startOdometer=value;
   order.previousOdometer=prev;
   order.emptyKmBefore=value-prev;
+  order.arrivedAt=new Date().toISOString();
+  recomputeOrderTimes(order);
   if(!state.shift.orders) state.shift.orders=[];
   if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
   upsertOrder(order); add('driver',String(value));
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · день ${order.dayNumber}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км`);
+  const tTo=order.timeToOrderMin!=null?`\nВремя до заказа: ${formatDurationMin(order.timeToOrderMin)}`:'';
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · день ${order.dayNumber}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
@@ -3997,7 +4056,9 @@ function askClosingEmptyAfter(refueled, price, liters){
 function finalizeClose(refueled,price,liters){
   const order=openOrder(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
   const end=state.draft.closeOdo; const loaded=end-order.startOdometer;
-  order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=new Date().toISOString();
+  const now=new Date().toISOString();
+  order.endOdometer=end; order.loadedKm=loaded; order.refueled=refueled; order.closedAt=now;
+  order.endAt=state.draft.endAt||now;
   order.staysLoadedOvernight=null;
   if(refueled){
     order.fuelPricePerLiter=price; order.fuelLiters=liters; order.fuelTotalCost=round2(price*liters);
@@ -4010,13 +4071,20 @@ function finalizeClose(refueled,price,liters){
   const park=state.draft.parkingAfterOdo;
   if(park!=null && park>=end){
     order.emptyKmAfter=Math.max(0, park-end);
+    order.parkingAt=now;
     if(state.shift) state.shift.lastOdometerPoint=park;
   } else if(state.shift) state.shift.lastOdometerPoint=end;
+  recomputeOrderTimes(order);
+  // Факт часов с грузом — подсказка для тарифа, если админ ещё не ввёл
+  if(order.timeLoadedHours!=null && !(order.workHours>0)){
+    order.workHours=order.timeLoadedHours;
+  }
   const fuelBal=applyFuelRemainingOnClose(order, state.shift, refueled?liters:null);
   applyClientTariff(order);
   upsertOrder(order);
   // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
-  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
+  const times=orderTimesText(order);
+  add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}${times?'\n'+times:''}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
   state.orderStep='idle'; state.draft={}; state.error=''; upsertShift(); persist(); renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
@@ -4057,6 +4125,7 @@ function finishOrder(unloading){
     loading:d.loading, unloading:unloading,
     routePoints:defaultRoutePoints(d.loading,unloading),
     driverName:DRIVER, customer:'', emptyKmBefore:emptyKm,
+    arrivedAt:d.arrivedAt||createdAt,
     driverPercent:driverPercent(DRIVER, bind.ownCompanyId||DRIVER_COMPANY_ID),
     ownerAdminId:bind.ownerAdminId, ownerAdminName:bind.ownerAdminName,
     spaceId:bind.spaceId, ownCompanyId:bind.ownCompanyId||DRIVER_COMPANY_ID, ownCompanyName:bind.ownCompanyName,
@@ -4064,6 +4133,7 @@ function finishOrder(unloading){
   };
   stampOrderDriverPhone(order);
   ensureRoutePoints(order);
+  recomputeOrderTimes(order);
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order);
   bumpDataEpoch('driver-create-order');
   upsertOrder(order);
@@ -4578,6 +4648,7 @@ function renderAdmin(){
       ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
       ${orderScheduleLines(o, false)}
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
+      ${orderTimesLines(o)}
       ${hasRate
         ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
         : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
@@ -4793,6 +4864,7 @@ function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
   if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
+  recomputeOrderTimes(o);
   const m=metrics(o);
   let editPoints=ensureRoutePoints(o).map(p=>({...p}));
   const readPointsFromDom=()=>{
@@ -4974,6 +5046,11 @@ function openDetail(id){
       <div class="calc-row"><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
       <div class="calc-row"><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
       <div class="calc-row"><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
+      <div class="hint" style="margin-top:8px">Время</div>
+      <div class="calc-row"><span>До заказа</span><span>${esc(formatDurationMin(o.timeToOrderMin))}${o.departAt?` · ${esc(dateTime(o.departAt))}`:''}</span></div>
+      <div class="calc-row"><span>С грузом</span><span>${esc(formatDurationMin(o.timeLoadedMin))}${o.arrivedAt?` · с ${esc(dateTime(o.arrivedAt))}`:''}</span></div>
+      <div class="calc-row"><span>До стоянки</span><span>${esc(formatDurationMin(o.timeToParkingMin))}${o.parkingAt?` · ${esc(dateTime(o.parkingAt))}`:''}</span></div>
+      <div class="calc-row"><span>Всего на заказ</span><span>${esc(formatDurationMin(o.timeTotalMin))}</span></div>
       <div class="calc-row"><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
       <div class="calc-row"><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
       <div class="calc-row"><span>Заправка</span><span>${o.refueled?`${fmt(o.fuelLiters)} л`:'нет'}</span></div>
