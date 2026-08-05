@@ -351,7 +351,7 @@
           <label>Контактное лицо</label>
           <select id="create-contact-pick"><option value="">— контакт из карточки —</option></select>
           <input id="create-contact-name" placeholder="ФИО контакта (новое сохранится)" />
-          <input id="create-contact-phone" inputmode="tel" placeholder="Телефон контакта" />
+          <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
         </div>
         <div class="field-block">
           <label>Подача ТС</label>
@@ -487,7 +487,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-co-drv-phone";
+const APP_BUILD="2026-08-05-phone-fmt";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -784,7 +784,7 @@ function ensureDriverInCompany(opts){
     name,
     salaryPercent:opts.salaryPercent??30,
     exchangeEnabled:!!opts.exchangeEnabled,
-    phone:String(opts.phone||'').trim(),
+    phone:formatPhone(opts.phone||''),
     ownerAdminId:opts.ownerAdminId||null,
     ownerAdminName:opts.ownerAdminName||null,
     spaceId:opts.spaceId||null,
@@ -867,8 +867,9 @@ function ensureFleetPerSpaces(){
         if(ph) break;
       }
     }
-    if(ph){ d.phone=ph; changed=true; }
+    if(ph){ d.phone=formatPhone(ph); changed=true; }
   });
+  if(normalizeAllPhones()) changed=true;
   return changed;
 }
 function ownCompanyForSpaceId(spaceId){
@@ -1101,10 +1102,24 @@ function uniqAddrs(list){
   return out;
 }
 
+/** Единый формат: +7XXXXXXXXXX (10 цифр после +7, без пробелов и тире). */
+function formatPhone(raw){
+  let d=String(raw??'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.length===11 && d[0]==='8') d='7'+d.slice(1);
+  if(d.length===10) d='7'+d;
+  if(d.length===11 && d[0]==='7') return '+'+d;
+  // уже международный иной длины — оставляем + и цифры
+  if(d.length>11 && d[0]==='7') return '+'+d.slice(0,11);
+  if(d.length>=10) return '+7'+d.slice(-10);
+  return '';
+}
 function normalizePhone(p){
-  if(typeof p==='string'){ const n=String(p).trim(); return n?{id:uuid(),number:n,label:''}:null; }
+  if(typeof p==='string'){
+    const n=formatPhone(p); return n?{id:uuid(),number:n,label:''}:null;
+  }
   if(!p||typeof p!=='object') return null;
-  const number=String(p.number||p.phone||'').trim(); if(!number) return null;
+  const number=formatPhone(p.number||p.phone||''); if(!number) return null;
   return {id:p.id||uuid(), number, label:String(p.label||'').trim()};
 }
 function normalizeContact(c){
@@ -1128,7 +1143,40 @@ function normalizeCarrierVehicle(v){
 function normalizeCarrierDriver(d){
   if(!d||typeof d!=='object') return null;
   const name=String(d.name||'').trim(); if(!name) return null;
-  return {id:d.id||uuid(), name, phone:String(d.phone||'').trim(), vehicleId:d.vehicleId||null};
+  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), vehicleId:d.vehicleId||null};
+}
+/** Привести все телефоны в базе к +7XXXXXXXXXX. */
+function normalizeAllPhones(){
+  let changed=false;
+  const fix=v=>{
+    const f=formatPhone(v);
+    if(!v && !f) return v||'';
+    if(f && f!==v){ changed=true; return f; }
+    return v||'';
+  };
+  (state.drivers||[]).forEach(d=>{
+    const next=fix(d.phone);
+    if(next!==(d.phone||'')) d.phone=next;
+  });
+  (state.companies||[]).forEach(c=>{
+    (c.phones||[]).forEach(p=>{ if(p && p.number!=null){ const n=fix(p.number); if(n!==p.number) p.number=n; } });
+    (c.contacts||[]).forEach(ct=>{
+      (ct.phones||[]).forEach(p=>{ if(p && p.number!=null){ const n=fix(p.number); if(n!==p.number) p.number=n; } });
+      if(ct.phone){ const n=fix(ct.phone); if(n!==ct.phone){ ct.phone=n; changed=true; } }
+    });
+    (c.drivers||[]).forEach(d=>{
+      const n=fix(d.phone); if(n!==(d.phone||'')) d.phone=n;
+    });
+  });
+  (state.orders||[]).forEach(o=>{
+    if(o.contactPhone!=null){ const n=fix(o.contactPhone); if(n!==o.contactPhone){ o.contactPhone=n; changed=true; } }
+    if(o.driverPhone!=null){ const n=fix(o.driverPhone); if(n!==o.driverPhone){ o.driverPhone=n; changed=true; } }
+    if(o.transportApp && o.transportApp.driverPhone!=null){
+      const n=fix(o.transportApp.driverPhone);
+      if(n!==o.transportApp.driverPhone){ o.transportApp.driverPhone=n; changed=true; }
+    }
+  });
+  return changed;
 }
 function normalizeCompany(c){
   if(!c||typeof c!=='object') return null;
@@ -1243,8 +1291,8 @@ function rememberCustomer(order){
       c.contacts.push(person);
     }
     if(order.contactPhone){
-      const ph=String(order.contactPhone).trim();
-      if(ph && !(person.phones||[]).some(x=>x.number===ph)) person.phones.push({id:uuid(), number:ph, label:''});
+      const ph=formatPhone(order.contactPhone);
+      if(ph && !(person.phones||[]).some(x=>formatPhone(x.number)===ph)) person.phones.push({id:uuid(), number:ph, label:''});
     }
     order.contactPersonId=person.id;
     order.customerId=c.id;
@@ -1860,7 +1908,7 @@ function primaryContact(company){
 function contactPhone(contact){
   if(!contact) return '';
   const p=(contact.phones||[])[0];
-  return p?p.number:'';
+  return formatPhone(p?p.number:(contact.phone||''));
 }
 function driverExchangeEnabled(name){
   const d=state.drivers.find(x=>x.name===name);
@@ -1877,7 +1925,8 @@ function orderContactLine(o){
   const parts=[];
   if(o.customer) parts.push(o.customer);
   if(o.contactName) parts.push(o.contactName);
-  if(o.contactPhone) parts.push(o.contactPhone);
+  const ph=formatPhone(o.contactPhone||'');
+  if(ph) parts.push(ph);
   return parts.join(' · ')||'—';
 }
 /** Водителю название заказчика не показываем никогда */
@@ -1885,7 +1934,8 @@ function driverContactLine(o){
   if(!driverMaySeeContact(o)) return '';
   const parts=[];
   if(o.contactName) parts.push(o.contactName);
-  if(o.contactPhone) parts.push(o.contactPhone);
+  const ph=formatPhone(o.contactPhone||'');
+  if(ph) parts.push(ph);
   return parts.join(' · ');
 }
 /** Контакт — только после выезда/взятия в работу; на бирже и до «Выехал» — скрыт. Компанию не показываем. */
@@ -2080,7 +2130,7 @@ function findDriverRecord(name, companyId){
 }
 function driverPhone(name, companyId){
   const d=findDriverRecord(name, companyId);
-  if(d && d.phone) return String(d.phone).trim();
+  if(d && d.phone) return formatPhone(d.phone);
   // запасной: телефон из контакта «нашей фирмы» с тем же ФИО
   const cos=(state.companies||[]).filter(c=>companyHasRole(c,'own'));
   for(const c of cos){
@@ -2096,7 +2146,7 @@ function driverPhone(name, companyId){
 }
 function orderDriverPhone(o){
   if(!o) return '';
-  if(o.driverPhone) return String(o.driverPhone).trim();
+  if(o.driverPhone) return formatPhone(o.driverPhone);
   const firmId=o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o.ownCompanyId;
   return driverPhone(o.driverName, firmId);
 }
@@ -3153,7 +3203,7 @@ function showOrders(){
           <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
           ${orderScheduleLines(o, true)}
           ${contact?`<p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(contact)}</p>`:''}
-          ${driverMaySeeContact(o)&&o.contactPhone?`<p><a href="tel:${esc(o.contactPhone)}" style="color:var(--accent)">☎ ${esc(o.contactPhone)}</a></p>`:''}
+          ${(()=>{ const cp=formatPhone(o.contactPhone||''); return driverMaySeeContact(o)&&cp?`<p><a href="tel:${esc(cp)}" style="color:var(--accent)">☎ ${esc(cp)}</a></p>`:''; })()}
           ${o.departOdometer!=null&&o.startOdometer==null?`<p style="color:var(--accent);margin-top:4px">Выезд: ${o.departOdometer} — отметьте прибытие</p>`:''}
           <p style="color:var(--muted);margin-top:4px">${esc(driverPayText(o))}</p>
         </div>
@@ -3624,7 +3674,7 @@ function saveDispatcherOrder(){
   const load=($('create-load').value||'').trim(); const unload=($('create-unload').value||'').trim();
   const customer=($('create-customer').value||'').trim();
   const contactName=($('create-contact-name').value||'').trim();
-  const contactPhone=($('create-contact-phone').value||'').trim();
+  const contactPhone=formatPhone(($('create-contact-phone').value||'').trim());
   const mode=($('create-exec-mode').value||'own');
   const vehicleAt=fromDatetimeLocalValue(($('create-vehicle-at')||{}).value);
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
@@ -3671,7 +3721,7 @@ function saveDispatcherOrder(){
     driver=`[Перевозчик] ${drv.name}`;
     plate=veh.plate;
     driverPercentVal=0;
-    driverPhoneVal=(drv.phone||'').trim();
+    driverPhoneVal=formatPhone(drv.phone||'');
   } else if(mode==='exchange'){
     onExchange=true;
     driver='Биржа';
@@ -3834,7 +3884,7 @@ function openDetail(id){
       <label>Водитель / телефон</label>
       <div class="row">
         <input id="d-driver-name" value="${esc(o.driverName||'')}" placeholder="ФИО водителя" style="flex:1.2" />
-        <input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="Тел. водителя" style="flex:1" />
+        <input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="+79650730002" style="flex:1" />
       </div>
       ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
       <label for="d-own-company">От нашей фирмы</label>
@@ -3854,7 +3904,7 @@ function openDetail(id){
       <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
       <label for="d-contact-name">Контакт</label>
       <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
-      <input id="d-contact-phone" inputmode="tel" value="${esc(o.contactPhone||'')}" placeholder="Телефон" />
+      <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
       <label for="d-vehicle-at">Подача ТС</label>
       <input id="d-vehicle-at" type="datetime-local" value="${esc(toDatetimeLocalValue(o.vehicleAt))}" />
       <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,state.finance)))+' (подача + часы работы)':'укажите подачу ТС'}</div>
@@ -3984,7 +4034,7 @@ function openDetail(id){
     order.customer=($('d-customer').value||'').trim();
     const drvName=(($('d-driver-name')||{}).value||'').trim();
     if(drvName) order.driverName=drvName;
-    order.driverPhone=(($('d-driver-phone')||{}).value||'').trim();
+    order.driverPhone=formatPhone((($('d-driver-phone')||{}).value||'').trim());
     if(order.driverPhone && order.driverName){
       const firmId=order.executorType==='partner'?(order.carrierCompanyId||order.ownCompanyId):order.ownCompanyId;
       const rec=findDriverRecord(order.driverName, firmId);
@@ -4000,7 +4050,7 @@ function openDetail(id){
     if(carrSel){ order.carrierCompanyId=carrSel.id; order.carrierCompanyName=carrSel.name; }
     else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
     order.contactName=(($('d-contact-name')||{}).value||'').trim();
-    order.contactPhone=(($('d-contact-phone')||{}).value||'').trim();
+    order.contactPhone=formatPhone((($('d-contact-phone')||{}).value||'').trim());
     order.vehicleAt=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
     order.routePoints=cleaned;
     ensureRoutePoints(order);
@@ -4102,7 +4152,7 @@ function openCatalogs(){
     return `<div class="drv-card">
       <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
-      <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(d.phone||'')}" placeholder="Тел." />
+      <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
       <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
@@ -4162,7 +4212,7 @@ function openCatalogs(){
         <div class="row">
           <input id="own-drv-name" placeholder="ФИО" style="flex:1.2" />
           <input class="pct" id="own-drv-pct" inputmode="decimal" value="30" placeholder="%" title="%" />
-          <input id="own-drv-phone" inputmode="tel" placeholder="Тел." style="flex:1" />
+          <input id="own-drv-phone" inputmode="tel" placeholder="+79650730002" style="flex:1" />
           <label class="check" title="Биржа"><input type="checkbox" id="own-drv-ex"/> Б</label>
           <button type="button" class="icon-btn ok" id="own-drv-add" title="Добавить">+</button>
         </div>
@@ -4279,7 +4329,7 @@ function openCatalogs(){
           });
         } else if(d.phone){
           const p=contacts.find(x=>samePersonName(x.name, d.name));
-          if(p && !contactPhone(p)) p.phones=[{id:uuid(), number:d.phone, label:''}];
+          if(p && !contactPhone(p)){ const fp=formatPhone(d.phone); if(fp) p.phones=[{id:uuid(), number:fp, label:''}]; }
         }
       });
     }
@@ -4290,7 +4340,7 @@ function openCatalogs(){
         <div class="card" style="margin:6px 0">
           <input data-cn="${i}" placeholder="ФИО" value="${esc(p.name)}" />
           <input data-ct="${i}" placeholder="Должность" value="${esc(p.title||'')}" />
-          <input data-cp="${i}" inputmode="tel" placeholder="Телефон" value="${esc(contactPhone(p))}" />
+          <input data-cp="${i}" inputmode="tel" placeholder="+79650730002" value="${esc(contactPhone(p))}" />
           <label class="check"><input type="checkbox" data-cprim="${i}" ${p.isPrimary?'checked':''}/> Основной</label>
           <button type="button" class="secondary" data-cdel="${i}">Удалить контакт</button>
         </div>`).join('')||`<div class="hint">Нет контактов</div>`;
@@ -4301,13 +4351,13 @@ function openCatalogs(){
       const list=c.id?fleetDriversForCompany(c.id):[];
       box.innerHTML=list.length?list.map((d,i)=>{
         const idx=(state.drivers||[]).findIndex(x=>x===d || (samePersonName(x.name,d.name) && x.companyId===c.id));
-        const ph=d.phone||'';
+        const ph=formatPhone(d.phone||'');
         return `<div class="card" style="margin:6px 0">
           <div class="row" style="align-items:center">
             <div style="flex:1;font-weight:700;font-size:.85rem">${esc(d.name)}</div>
             ${ph?`<a href="tel:${esc(ph)}" style="color:var(--accent);font-size:.8rem;white-space:nowrap">☎</a>`:''}
           </div>
-          <input data-own-dp="${idx}" inputmode="tel" placeholder="Телефон водителя" value="${esc(ph)}" />
+          <input data-own-dp="${idx}" inputmode="tel" placeholder="+79650730002" value="${esc(ph)}" />
         </div>`;
       }).join(''):`<div class="hint">Нет водителей в парке — добавьте во вкладке «Водители»</div>`;
     };
@@ -4330,7 +4380,7 @@ function openCatalogs(){
       $('co-drivers').innerHTML=drivers.map((d,i)=>`
         <div class="card" style="margin:6px 0">
           <input data-dn="${i}" placeholder="ФИО водителя" value="${esc(d.name)}" />
-          <input data-dp="${i}" inputmode="tel" placeholder="Телефон" value="${esc(d.phone||'')}" />
+          <input data-dp="${i}" inputmode="tel" placeholder="+79650730002" value="${esc(formatPhone(d.phone||''))}" />
           <button type="button" class="secondary" data-ddel="${i}">Удалить</button>
         </div>`).join('')||`<div class="hint">Нет водителей</div>`;
       document.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{ drivers.splice(+b.dataset.ddel,1); paintDrivers(); });
@@ -4364,7 +4414,7 @@ function openCatalogs(){
         const phoneEl=document.querySelector(`[data-cp="${i}"]`);
         const primEl=document.querySelector(`[data-cprim="${i}"]`);
         const nm=(nameEl&&nameEl.value||'').trim();
-        const ph=(phoneEl&&phoneEl.value||'').trim();
+        const ph=formatPhone((phoneEl&&phoneEl.value||'').trim());
         return {id:p.id||uuid(), name:nm, title:(titleEl&&titleEl.value||'').trim(), phones:ph?[{id:uuid(),number:ph,label:''}]:[], isPrimary:!!(primEl&&primEl.checked)};
       }).filter(p=>p.name);
       vehicles=vehicles.map((v,i)=>{
@@ -4375,15 +4425,14 @@ function openCatalogs(){
       }).filter(v=>v.plate);
       drivers=drivers.map((d,i)=>{
         const name=(document.querySelector(`[data-dn="${i}"]`)?.value||'').trim();
-        const phone=(document.querySelector(`[data-dp="${i}"]`)?.value||'').trim();
+        const phone=formatPhone((document.querySelector(`[data-dp="${i}"]`)?.value||'').trim());
         return {id:d.id||uuid(), name, phone, vehicleId:d.vehicleId||null};
       }).filter(d=>d.name);
       // телефоны водителей фирмы из блока карточки
       document.querySelectorAll('[data-own-dp]').forEach(inp=>{
         const idx=+inp.dataset.ownDp;
         if(!(idx>=0) || !state.drivers[idx]) return;
-        const ph=(inp.value||'').trim();
-        state.drivers[idx].phone=ph;
+        state.drivers[idx].phone=formatPhone((inp.value||'').trim());
       });
       // контакт с тем же ФИО → телефон водителя этой фирмы
       if(roles.includes('own') && c.id){
@@ -4474,7 +4523,7 @@ function openCatalogs(){
     const d=state.drivers[i];
     if(!d) return;
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
-    state.drivers[i].phone=(($('drv-phone-'+i)||{}).value||'').trim();
+    state.drivers[i].phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
     state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
     const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
     if(!state.drivers[i].companyId){
@@ -4501,7 +4550,7 @@ function openCatalogs(){
     if(!currentAdmin){ alert('Войдите как администратор'); return; }
     const name=(($('own-drv-name')||{}).value||'').trim();
     let pct=+((($('own-drv-pct')||{}).value||'').replace(',','.'));
-    const phone=(($('own-drv-phone')||{}).value||'').trim();
+    const phone=formatPhone((($('own-drv-phone')||{}).value||'').trim());
     const exchangeEnabled=!!(($('own-drv-ex')||{}).checked);
     if(!name){ alert('Укажите ФИО водителя'); return; }
     if(Number.isNaN(pct) || pct<0) pct=30;
