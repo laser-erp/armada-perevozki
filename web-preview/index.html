@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-eto-sync-fix";
+const APP_BUILD="2026-08-05-transfer-eto-nechaev";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1218,6 +1218,10 @@ function upsertShift(){
   if(!state.shift) return;
   stampShiftOwner(state.shift, state.shift.driverName||DRIVER, state.shift.vehiclePlate);
   state.shift.messages=state.messages.slice();
+  // Сохраняем шаг создания/закрытия заказа — иначе после входа сбрасывается на idle
+  state.shift.orderStep=state.orderStep||'idle';
+  state.shift.draft=state.draft?structuredClone(state.draft):{};
+  state.shift.uiStep=state.step||'idle';
   const i=state.shifts.findIndex(s=>s.id===state.shift.id);
   if(i>=0) state.shifts[i]=structuredClone(state.shift);
   else state.shifts.unshift(structuredClone(state.shift));
@@ -3417,6 +3421,34 @@ function restartEtoInspection(){
   bumpDataEpoch('eto-restart');
   upsertShift(); persist(); renderInput();
 }
+/** Восстановить orderStep/draft из смены или хвоста чата (создание заказа). */
+function restoreOrderWorkflow(shift){
+  if(!shift) return false;
+  const saved=shift.orderStep && shift.orderStep!=='idle' ? shift.orderStep : '';
+  if(saved){
+    state.orderStep=saved;
+    state.draft=shift.draft?structuredClone(shift.draft):{};
+    if(!state.draft.plate && shift.vehiclePlate) state.draft.plate=shift.vehiclePlate;
+    return true;
+  }
+  const msgs=shift.messages||[];
+  const lastBot=[...msgs].reverse().find(m=>m.author==='bot');
+  const t=String(lastBot&&lastBot.text||'');
+  if(/одометр.*прибыт.*загруз|прибытию на загрузку/i.test(t)){
+    state.orderStep='arrivalOdometer';
+    state.draft=Object.assign({}, shift.draft||{}, {plate:shift.vehiclePlate||(shift.draft&&shift.draft.plate)||''});
+    return true;
+  }
+  if(/номер заказа за день/i.test(t)){
+    state.orderStep='dayNumber';
+    state.draft=Object.assign({}, shift.draft||{}, {plate:shift.vehiclePlate||''});
+    return true;
+  }
+  if(/адрес загрузки/i.test(t)){ state.orderStep='loading'; state.draft=Object.assign({}, shift.draft||{}); return true; }
+  if(/адрес выгрузки/i.test(t)){ state.orderStep='unloading'; state.draft=Object.assign({}, shift.draft||{}); return true; }
+  if(/Выберите автомобиль для заказа/i.test(t)){ state.orderStep='chooseVehicle'; state.draft={}; return true; }
+  return false;
+}
 function resumeOpenShift(shift){
   hydrateEtoFromMessages(shift);
   state.shift=shift;
@@ -3426,15 +3458,24 @@ function resumeOpenShift(shift){
   state.light=shift.light||{};
   if(isEtoDone(shift)){
     state.step='done';
-    const noted=(state.messages||[]).some(m=>String(m.text||'').includes('Смена уже открыта')||String(m.text||'').includes('Продолжаем открытую смену')||String(m.text||'').includes('ЕТО пройден'));
-    if(!state.messages.length){
-      state.messages=[{author:'bot',text:`Продолжаем открытую смену от ${dateTime(shift.startedAt)}.`}];
-    } else if(!noted){
-      const carry=inProgressOrder();
-      const carryHint=carry&&carry.staysLoadedOvernight
-        ? `\nЕсть перенесённый заказ №${carry.sequentialNumber} (машина загружена) — после работы закройте его.`
-        : '';
-      state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}`});
+    const midOrder=restoreOrderWorkflow(shift);
+    if(!midOrder){
+      const noted=(state.messages||[]).some(m=>String(m.text||'').includes('Смена уже открыта')||String(m.text||'').includes('Продолжаем открытую смену')||String(m.text||'').includes('ЕТО пройден'));
+      if(!state.messages.length){
+        state.messages=[{author:'bot',text:`Продолжаем открытую смену от ${dateTime(shift.startedAt)}.`}];
+      } else if(!noted){
+        const carry=inProgressOrder();
+        const carryHint=carry&&carry.staysLoadedOvernight
+          ? `\nЕсть перенесённый заказ №${carry.sequentialNumber} (машина загружена) — после работы закройте его.`
+          : '';
+        state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}`});
+      }
+    } else {
+      // Не дублируем «ЕТО пройден», если уже оформляем заказ
+      const last=state.messages[state.messages.length-1];
+      if(!last || !/прибытию на загрузку|номер заказа за день|адрес загрузки|адрес выгрузки|автомобиль для заказа/i.test(String(last.text||''))){
+        state.messages.push({author:'bot',text:`Продолжаем оформление заказа (${shift.vehiclePlate||'авто'}).`});
+      }
     }
     upsertShift(); persist(); renderChat(); renderInput(); return;
   }
