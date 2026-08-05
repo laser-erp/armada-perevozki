@@ -299,11 +299,11 @@
     </div>
   </div></div>
 
-  <div id="driver-pick" class="screen"><div class="center" style="justify-content:flex-start;padding-top:28px">
+  <div id="driver-pick" class="screen"><div class="center" style="justify-content:flex-start;padding-top:20px;overflow-y:auto;-webkit-overflow-scrolling:touch">
     <div class="sub" style="align-self:stretch;text-align:left"><button id="driver-pick-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
     <h2 style="margin:0">Кто за рулём?</h2>
-    <div class="hint" style="margin-bottom:8px">Выберите себя и свою фирму — смена и ЕТО пойдут к вашему админу</div>
-    <div class="stack" id="driver-pick-list" style="max-width:360px;width:100%"></div>
+    <div class="hint" style="margin-bottom:8px">Супер и админ могут войти под любым водителем своей зоны. Смена и ЕТО пойдут к админу этой фирмы.</div>
+    <div class="stack" id="driver-pick-list" style="max-width:360px;width:100%;padding-bottom:24px"></div>
   </div></div>
 
   <div id="admin-pin" class="screen"><div class="center">
@@ -325,6 +325,7 @@
       <button id="admin-exit">Выход</button>
       <h1 id="admin-title">Заявки</h1>
       <div>
+        <button id="admin-as-driver" title="Войти как водитель">Водитель</button>
         <button id="admin-activity" style="display:none">Активность</button>
         <button id="admin-catalogs">Справочники</button>
         <button id="admin-new">+ Заказ</button>
@@ -504,7 +505,7 @@ let DRIVER="Наволоцкий Е.Н.";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-driver-pick";
+const APP_BUILD="2026-08-05-driver-switch";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1790,41 +1791,70 @@ function driverPickRows(){
   });
   return rows;
 }
-function openDriverPick(){
+function openDriverPick(fromAdmin){
   migrateSpaces();
   let dirty=ensureFleetPerSpaces();
   if(dirty){ bumpDataEpoch('fleet-for-driver-pick'); persist(); }
   const box=$('driver-pick-list');
   if(!box){ show('driver'); resetChat(); renderDriverBanner(); return; }
-  const rows=driverPickRows();
+  let rows=driverPickRows();
+  // Обычный админ — только водители своей фирмы; супер — все
+  if(currentAdmin && !isSuperAdmin()){
+    const myCo=currentOwnCompany();
+    const sid=currentSpaceId();
+    rows=rows.filter(d=>{
+      if(myCo && d.companyId===myCo.id) return true;
+      if(sid && d.spaceId===sid) return true;
+      return false;
+    });
+  }
+  const backHint=fromAdmin || currentAdmin
+    ? 'Можно войти под Нечаевым, Наволоцким и др. — админ-сессия сохранится, вернётесь кнопкой «Выход»'
+    : 'Выберите ФИО и фирму — смена и ЕТО увидит админ этой фирмы';
   if(!rows.length){
-    box.innerHTML=`<div class="hint">Нет водителей в справочнике. Зайдите как админ и добавьте во вкладке «Водители».</div>`;
+    box.innerHTML=`<div class="hint">Нет водителей в справочнике. Добавьте во вкладке «Водители».</div><div class="hint" style="margin-top:8px">${esc(backHint)}</div>`;
   } else {
-    box.innerHTML=rows.map(d=>{
+    box.innerHTML=`<div class="hint" style="text-align:left;margin:0 0 8px">${esc(backHint)}</div>`+rows.map(d=>{
       const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'без фирмы';
       const ph=formatPhone(d.phone||'');
-      return `<button type="button" class="secondary drv-pick" data-name="${esc(d.name)}" data-co="${esc(d.companyId||'')}" style="text-align:left;padding:12px 14px">
+      const coAttr=String(d.companyId||'').replace(/"/g,'');
+      const nameAttr=String(d.name||'').replace(/"/g,'');
+      return `<button type="button" class="secondary drv-pick" data-name="${nameAttr}" data-co="${coAttr}" style="text-align:left;padding:12px 14px">
         <div style="font-weight:800">${esc(d.name)}</div>
         <div style="font-size:.78rem;color:var(--muted);margin-top:2px">${esc(firm)}${ph?' · '+esc(ph):''}</div>
       </button>`;
     }).join('');
     document.querySelectorAll('.drv-pick').forEach(b=>b.onclick=()=>{
-      const name=b.dataset.name||'';
-      const co=b.dataset.co||'';
-      const rec=findDriverRecord(name, co)||{name, companyId:co||null};
+      const name=b.getAttribute('data-name')||'';
+      const co=b.getAttribute('data-co')||'';
+      const rec=findDriverRecord(name, co)||{name, companyId:co||null, companyName:(findCompanyById(co)||{}).name||null};
       enterAsDriver(rec);
     });
+  }
+  // запомнить, откуда пришли — чтобы «Назад» вернул в админку
+  const back=$('driver-pick-back');
+  if(back){
+    back.onclick=()=>{
+      if(currentAdmin || restoreAdminSession()){ show('admin'); renderAdmin(); }
+      else show('roles');
+    };
   }
   show('driver-pick');
 }
 function enterAsDriver(rec){
   if(!rec||!rec.name) return;
-  DRIVER=rec.name;
+  DRIVER=String(rec.name||'').trim();
   DRIVER_COMPANY_ID=rec.companyId||null;
-  // если companyId не был — взять домашний профиль
   if(!DRIVER_COMPANY_ID){
     const bind=resolveDriverOrderBinding(DRIVER, '');
     DRIVER_COMPANY_ID=bind.ownCompanyId||null;
+  }
+  // Админ-сессию в localStorage оставляем — из водителя можно вернуться.
+  // В памяти currentAdmin сбрасываем, чтобы режим водителя не смешивался с правами админа.
+  if(currentAdmin){
+    saveAdminSession();
+    stopPresenceHeartbeat();
+    currentAdmin=null;
   }
   saveDriverSession();
   updateDriverChrome();
@@ -1832,6 +1862,16 @@ function enterAsDriver(rec){
   resetChat();
   renderDriverBanner();
   renderInput();
+}
+function leaveDriverMode(){
+  clearDriverSession();
+  state.shift=null; state.step='idle'; state.orderStep='idle'; state.messages=[]; state.draft={}; state.error='';
+  if(restoreAdminSession()){
+    show('admin');
+    renderAdmin();
+  } else {
+    show('roles');
+  }
 }
 /** Восстановить вход после обновления страницы (без повторного PIN). */
 function restoreAdminSession(){
