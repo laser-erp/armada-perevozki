@@ -525,7 +525,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-no-open-first-btn";
+const APP_BUILD="2026-08-05-total-row-sums";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -4847,29 +4847,54 @@ function canAdminSeeShift(s){
 }
 /** Суммы по списку заказов: выручка, расходы, прибыль. */
 function sumOrderMoney(list){
-  let revenue=0, expenses=0, profit=0, pay=0, bonus=0, fuel=0, rent=0, cushion=0, km=0, n=0;
-  let hasMoney=false;
+  const z={
+    count:0, emptyKmBefore:0, loadedKm:0, emptyKmAfter:0, km:0,
+    rateWithVat:0, rateWithoutVat:0, rateCash:0, bonus:0,
+    fuelLiters:0, fuelCost:0, rent:0, cushion:0, profit:0, pay:0,
+    ratePerKmCash:0, costPerKmNoVat:0, fuelPrice:0, fuelPriceN:0, perKmN:0, costPerKmN:0
+  };
   (list||[]).forEach(o=>{
-    n++;
+    z.count++;
     const m=metrics(o);
-    const rate=m.rate;
-    if(rate!=null){ revenue+=rate; hasMoney=true; }
-    const exp=(m.driverPay||0)+(m.fuelCostCalc||0)+(o.vehicleRent||0)+(m.cushion||0);
-    expenses+=exp;
-    pay+=(m.driverPay||0);
-    bonus+=(o.salaryBonus||0);
-    fuel+=(m.fuelCostCalc||0);
-    rent+=(o.vehicleRent||0);
-    cushion+=(m.cushion||0);
-    if(m.netProfit!=null){ profit+=m.netProfit; hasMoney=true; }
-    const t=dayTotal(o); if(t!=null) km+=t;
+    z.emptyKmBefore+=(o.emptyKmBefore||0);
+    z.loadedKm+=(o.loadedKm||0);
+    z.emptyKmAfter+=(o.emptyKmAfter||0);
+    const t=dayTotal(o); if(t!=null) z.km+=t;
+    z.rateWithVat+=(o.rateWithVat||0);
+    z.rateWithoutVat+=(o.rateWithoutVat||0);
+    z.rateCash+=(o.rateCash!=null?o.rateCash:(m.rate||0));
+    z.bonus+=(o.salaryBonus||0);
+    z.fuelLiters+=(m.fuelLitersCalc||0);
+    z.fuelCost+=(m.fuelCostCalc||0);
+    z.rent+=(o.vehicleRent||0);
+    z.cushion+=(m.cushion||0);
+    z.profit+=(m.netProfit||0);
+    z.pay+=(m.driverPay||0);
+    if(o.fuelPricePerLiter!=null){ z.fuelPrice+=+o.fuelPricePerLiter; z.fuelPriceN++; }
+    if(o.ratePerKmCash!=null){ z.ratePerKmCash+=+o.ratePerKmCash; z.perKmN++; }
+    if(m.costPerKmNoVat!=null){ z.costPerKmNoVat+=+m.costPerKmNoVat; z.costPerKmN++; }
   });
+  const avg=(sum,n)=>n>0?round2(sum/n):null;
   return {
-    count:n, km:round2(km),
-    revenue:hasMoney?round2(revenue):null,
-    expenses:hasMoney?round2(expenses):null,
-    profit:hasMoney?round2(profit):null,
-    pay:round2(pay), bonus:round2(bonus), fuel:round2(fuel), rent:round2(rent), cushion:round2(cushion)
+    count:z.count,
+    emptyKmBefore:round2(z.emptyKmBefore),
+    loadedKm:round2(z.loadedKm),
+    emptyKmAfter:round2(z.emptyKmAfter),
+    km:round2(z.km),
+    fuelPriceAvg:avg(z.fuelPrice, z.fuelPriceN),
+    ratePerKmCashAvg:avg(z.ratePerKmCash, z.perKmN),
+    rateWithVat:round2(z.rateWithVat),
+    rateWithoutVat:round2(z.rateWithoutVat),
+    revenue:round2(z.rateCash),
+    bonus:round2(z.bonus),
+    fuelLiters:round2(z.fuelLiters),
+    costPerKmNoVatAvg:avg(z.costPerKmNoVat, z.costPerKmN),
+    fuel:round2(z.fuelCost),
+    rent:round2(z.rent),
+    cushion:round2(z.cushion),
+    profit:round2(z.profit),
+    pay:round2(z.pay),
+    expenses:round2(z.pay+z.fuelCost+z.rent+z.cushion)
   };
 }
 /**
@@ -5229,11 +5254,31 @@ function renderAdmin(){
   groups.forEach(g=>{
     const open=!!state.adminExpandedGroups[g.id];
     const t=g.totals;
-    // Колонки как в COLS: «Доплата ЗП» = только salaryBonus; ЗП водителя — в тексте маршрута
+    // Те же колонки, что COLS: числа — суммы (или среднее, где сумму складывать нельзя)
     const sumCells=[
-      g.dayLabel, g.vehiclePlate, g.driverName, '—', `Итог · ЗП ${fmt(t.pay)} ₽ · ${t.count} зак.`, '—',
-      '—','—','—', fmt(t.km), '—','—','—','—',
-      fmt(t.revenue), (t.bonus>0?fmt(t.bonus):'—'), '—','—', fmt(t.fuel), fmt(t.rent), fmt(t.cushion), fmt(t.profit), '—'
+      g.dayLabel,
+      g.vehiclePlate,
+      g.driverName,
+      `${t.count} зак.`,
+      `Итог · ЗП ${fmt(t.pay)} ₽`,
+      t.count,
+      fmt(t.emptyKmBefore),
+      fmt(t.loadedKm),
+      fmt(t.emptyKmAfter),
+      fmt(t.km),
+      fmt(t.fuelPriceAvg),
+      fmt(t.ratePerKmCashAvg),
+      fmt(t.rateWithVat),
+      fmt(t.rateWithoutVat),
+      fmt(t.revenue),
+      fmt(t.bonus),
+      fmt(t.fuelLiters),
+      fmt(t.costPerKmNoVatAvg),
+      fmt(t.fuel),
+      fmt(t.rent),
+      fmt(t.cushion),
+      fmt(t.profit),
+      t.count
     ];
     tableRows+=`<tr class="group-total" data-group="${esc(g.id)}" title="Нажмите, чтобы ${open?'свернуть':'развернуть'} заказы">
       <td><span class="tog">${open?'▼':'▶'}</span> Итог</td>
