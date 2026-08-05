@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-create-order-skip-veh";
+const APP_BUILD="2026-08-05-eto-sync-fix";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -687,12 +687,14 @@ function scorePayload(p){
   return (p.orders&&p.orders.length||0)*10 + (p.shifts&&p.shifts.length||0)*3
     + (p.companies&&p.companies.length||0) + (p.customers&&p.customers.length||0) + (p.seq||0);
 }
-function applyPayload(p){
+function applyPayload(p, opts){
   if(!p||typeof p!=='object') return;
+  const keepShifts=opts&&opts.keepShifts;
+  const keepOrders=opts&&opts.keepOrders;
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
   // Явный массив orders с сервера (в т.ч. []) — закон. Не поднимаем заказы из смен.
   state.orders=Array.isArray(p.orders)?stripCancelledFromOrders(p.orders):[];
-  state.seq=p.seq||0;
+  state.seq=Math.max(Number(p.seq)||0, Number(state.seq)||0);
   state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles:DEFAULT_VEHICLES.map(v=>({...v}));
   state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
   state.customers=Array.isArray(p.customers)?p.customers:[];
@@ -713,6 +715,8 @@ function applyPayload(p){
   if(!('orders' in p) && state.shifts.length && !state.orders.length){
     state.orders=stripCancelledFromOrders(state.shifts.flatMap(s=>s.orders||[]));
   }
+  if(keepShifts) mergeLocalShifts(keepShifts);
+  if(keepOrders) mergeLocalOrders(keepOrders);
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
     if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
@@ -725,6 +729,7 @@ function applyPayload(p){
   migrateDriverOrderOwners();
   migrateShiftOwners();
   migrateDriverPins();
+  migrateEtoFromMessages();
   purgeCancelledOrders();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -1110,17 +1115,25 @@ async function pushServerState(){
       const localEpoch=Number(state.dataEpoch)||0;
       if(remoteEpoch>localEpoch){
         const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+        const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+        const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+        // Сначала сервер, потом аккуратно вернём локальный прогресс ЕТО/заказов
         applyPayload(remote);
-        if(mergeLocalShifts(localShifts)){
-          bumpDataEpoch('merge-shifts-remote-ahead');
+        let merged=false;
+        if(mergeLocalShifts(localShifts)) merged=true;
+        if(liveShift && mergeLocalShifts([liveShift])) merged=true;
+        if(mergeLocalOrders(localOrders)) merged=true;
+        if(migrateEtoFromMessages()) merged=true;
+        if(merged){
+          bumpDataEpoch('merge-local-remote-ahead');
           localStorage.setItem(KEY, JSON.stringify(snapshot()));
-          // сразу догоняем сервер своей сменой/ЕТО
+          // сразу догоняем сервер своей сменой/ЕТО/заказами
           try{
             const body={key:'main', payload:snapshot()};
             await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
               method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
             });
-            console.warn('PB push merged local shifts into remote epoch', remoteEpoch);
+            console.warn('PB push merged local into remote epoch', remoteEpoch);
             return {aborted:false, merged:true};
           }catch(e){ console.warn('PB merge push', e); }
         } else {
@@ -1183,7 +1196,10 @@ async function initCloudSync(){
       // Сервер — источник правды при старте, если эпоха не ниже локальной.
       // Раньше при равной эпохе «более новый» localStorage затирал очистку на сервере.
       if(remoteEpoch>=localEpoch || !localEpoch){
-        applyPayload(remote);
+        const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+        const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders});
+        migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
       } else {
         // Локальная эпоха строго выше — осознанная очистка/миграция с этого устройства.
@@ -1923,7 +1939,7 @@ function loginDriver(){
   }
   enterAsDriver(rec);
 }
-function enterAsDriver(rec){
+async function enterAsDriver(rec){
   if(!rec||!rec.name) return;
   DRIVER=String(rec.name||'').trim();
   if(!DRIVER){ alert('Не выбрано ФИО водителя'); return; }
@@ -1942,6 +1958,20 @@ function enterAsDriver(rec){
   saveDriverSession();
   updateDriverChrome();
   show('driver');
+  // Перед показом чата — свежий сервер + сохранение локального прогресса ЕТО/заказов
+  try{
+    const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+    const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+    const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+    const recState=await fetchServerState();
+    if(recState){
+      pbRecordId=recState.id;
+      applyPayload(recState.payload||{}, {keepShifts:localShifts, keepOrders:localOrders});
+      if(liveShift) mergeLocalShifts([liveShift]);
+      migrateEtoFromMessages();
+      localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    }
+  }catch(err){ console.warn('enterAsDriver sync', err); }
   resetChat();
   // Явно показать, под кем вошли
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
@@ -2774,19 +2804,27 @@ function openShiftsForDriver(){
 function findOpenShift(){
   const open=openShiftsForDriver();
   if(!open.length) return null;
-  // Текущая живая смена важнее «новой пустой»
+  // Текущая живая смена важнее «новой пустой», если у неё не хуже прогресс ЕТО
   if(state.shift && !state.shift.endedAt && open.some(s=>s.id===state.shift.id)){
-    return open.find(s=>s.id===state.shift.id)||state.shift;
+    const live=open.find(s=>s.id===state.shift.id)||state.shift;
+    const best=[...open].sort((a,b)=>etoProgressScore(b)-etoProgressScore(a) || new Date(b.startedAt)-new Date(a.startedAt))[0];
+    if(best && etoProgressScore(best)>etoProgressScore(live)) return best;
+    return live;
   }
-  return open.find(s=>isEtoDone(s)) || open[0];
+  // Сначала полностью пройденный ЕТО, иначе — максимальный прогресс (не «самая новая пустая»)
+  const done=open.find(s=>isEtoDone(s));
+  if(done) return done;
+  return [...open].sort((a,b)=>etoProgressScore(b)-etoProgressScore(a) || new Date(b.startedAt)-new Date(a.startedAt))[0];
 }
 function healDuplicateOpenShifts(keep){
   if(!keep) return;
+  const keepScore=etoProgressScore(keep);
   (state.shifts||[]).forEach(s=>{
-    // Не закрываем смены других водителей
+    // Не закрываем смены других водителей и не трогаем смены с большим прогрессом ЕТО
     if(s.id===keep.id || s.endedAt || isEtoDone(s)) return;
     if(keep.driverName && s.driverName && !samePersonName(s.driverName, keep.driverName)) return;
     if(keep.ownCompanyId && s.ownCompanyId && s.ownCompanyId!==keep.ownCompanyId) return;
+    if(etoProgressScore(s)>keepScore) return;
     if(keep.driverName && s.driverName && samePersonName(s.driverName, keep.driverName)){
       s.endedAt=new Date().toISOString();
       s.abandoned=true;
@@ -2828,6 +2866,129 @@ function mergeLocalShifts(localShifts){
       changed=true;
     }
   });
+  return changed;
+}
+/** Не потерять локальные открытые/в-пути заказы при remote_ahead. */
+function mergeLocalOrders(localOrders){
+  if(!Array.isArray(localOrders)||!localOrders.length) return false;
+  let changed=false;
+  const byId=new Map((state.orders||[]).map(o=>[o.id,o]));
+  const orderScore=o=>{
+    if(!o) return 0;
+    let n=0;
+    if(o.departOdometer!=null) n+=2;
+    if(o.startOdometer!=null) n+=3;
+    if(o.endOdometer!=null) n+=2;
+    if(o.closedAt) n+=1;
+    if(!o.closedAt && !o.cancelledAt) n+=4;
+    return n;
+  };
+  localOrders.forEach(lo=>{
+    if(!lo||!lo.id||lo.cancelledAt) return;
+    const cur=byId.get(lo.id);
+    if(!cur){
+      // Подтягиваем только живые/недавно закрытые локальные заказы
+      if(!lo.closedAt || orderScore(lo)>=3){
+        state.orders=(state.orders||[]);
+        state.orders.unshift(lo);
+        byId.set(lo.id, lo);
+        changed=true;
+      }
+      return;
+    }
+    if(orderScore(lo)>orderScore(cur) || (!!lo.closedAt && !cur.closedAt && lo.endOdometer!=null)){
+      Object.assign(cur, lo);
+      changed=true;
+    }
+  });
+  return changed;
+}
+/** Восстановить поля ЕТО из истории чата (если sync затёр поля, но сообщения остались). */
+function hydrateEtoFromMessages(shift){
+  if(!shift || !Array.isArray(shift.messages) || !shift.messages.length) return false;
+  let changed=false;
+  const msgs=shift.messages;
+  const fluidRe=new RegExp('^(ГУР|ОЖ|Масло ДВС):\\s*(' + FLUIDS.join('|') + ')\\s*$');
+  const setIf=(key, val)=>{
+    if(val==null || val==='') return;
+    if(shift[key]==null || shift[key]===''){ shift[key]=val; changed=true; }
+  };
+  // Авто из ответа бота / пузыря водителя
+  if(!shift.vehiclePlate){
+    for(const m of msgs){
+      const t=String(m.text||'');
+      const bot=t.match(/госномером\s+([A-ZА-ЯЁ0-9\s]+)/i) || t.match(/гос\.?\s*номером\s+([A-ZА-ЯЁ0-9\s]+)/i);
+      if(bot){ setIf('vehiclePlate', bot[1].replace(/\s+/g,' ').trim()); break; }
+    }
+  }
+  // Одометр / топливо / жидкости из ответов водителя по порядку шагов
+  let expect='vehicle';
+  for(const m of msgs){
+    const t=String(m.text||'').trim();
+    if(m.author==='bot'){
+      if(/одометр/i.test(t) && /стоянк/i.test(t)) expect='odometer';
+      else if(/остаток топлива/i.test(t)) expect='fuel';
+      else if(/уровен[ья].*ГУР|жидкост[иь] ГУР/i.test(t)) expect='gur';
+      else if(/уровен[ья].*ОЖ|укажите уровень ОЖ/i.test(t)) expect='coolant';
+      else if(/осветительн/i.test(t)) expect='lights';
+      else if(/масла в ДВС|уровень масла/i.test(t)) expect='oil';
+      else if(/Спасибо за прохождение ЕТО/i.test(t)){
+        if(!shift.completedAt && (shift.oil||shift.engineOilLevel)){
+          shift.completedAt=shift.startedAt||new Date().toISOString();
+          changed=true;
+        }
+      }
+      continue;
+    }
+    if(m.author!=='driver') continue;
+    const fluid=t.match(fluidRe);
+    if(fluid){
+      const kind=fluid[1], level=fluid[2];
+      if(kind==='ГУР'){ setIf('gur', level); setIf('powerSteeringLevel', level); }
+      else if(kind==='ОЖ'){ setIf('coolant', level); setIf('coolantLevel', level); }
+      else if(kind==='Масло ДВС'){ setIf('oil', level); setIf('engineOilLevel', level); }
+      continue;
+    }
+    if(/^Ближний свет:/i.test(t)){
+      const low=(t.match(/Ближний свет:\s*(Да|Нет)/i)||[])[1];
+      const brake=(t.match(/Стоп-сигналы:\s*(Да|Нет)/i)||[])[1];
+      const turn=(t.match(/Указатели поворотов:\s*(Да|Нет)/i)||[])[1];
+      if(low&&brake&&turn){
+        shift.light=Object.assign({}, shift.light||{}, {lowBeam:low, brake, turn});
+        changed=true;
+      }
+      continue;
+    }
+    if(expect==='odometer' && /^\d{4,7}$/.test(t) && shift.odometer==null){
+      shift.odometer=+t; shift.lastOdometerPoint=+t; changed=true; expect='fuel';
+    } else if(expect==='fuel'){
+      const fl=t.match(/^(\d+(?:[.,]\d+)?)\s*л?$/i);
+      if(fl && shift.fuelLiters==null){ shift.fuelLiters=+String(fl[1]).replace(',','.'); changed=true; expect='gur'; }
+    } else if(expect==='vehicle' && !shift.vehiclePlate && /[A-ZА-ЯЁ]\s*\d{3}\s*[A-ZА-ЯЁ]{2}\s*\d{2,3}/i.test(t)){
+      setIf('vehiclePlate', t.replace(/\s+/g,' ').trim());
+    }
+  }
+  // Если все пункты есть в сообщениях, но completedAt нет — выставим
+  if(!shift.completedAt && shift.vehiclePlate && shift.odometer!=null && shift.fuelLiters!=null
+    && (shift.gur||shift.powerSteeringLevel) && (shift.coolant||shift.coolantLevel)
+    && (shift.oil||shift.engineOilLevel)){
+    const L=shift.light||{};
+    if(L.lowBeam&&L.brake&&L.turn){
+      shift.completedAt=shift.startedAt||new Date().toISOString();
+      changed=true;
+    }
+  }
+  return changed;
+}
+function migrateEtoFromMessages(){
+  let changed=false;
+  (state.shifts||[]).forEach(s=>{
+    if(!s || s.endedAt) return;
+    if(hydrateEtoFromMessages(s)) changed=true;
+  });
+  if(state.shift && !state.shift.endedAt){
+    if(hydrateEtoFromMessages(state.shift)) changed=true;
+  }
   return changed;
 }
 function syncOpenShiftRuntime(){
@@ -3187,10 +3348,10 @@ function renderInput(){
   else if(state.step==='idle') html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
   else if(state.step==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
   else if(state.step==='odometer'||state.step==='fuel') html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${state.step==='odometer'?'Например, 125430':'Например, 42'}" /><button id="num-ok">OK</button></div>`;
-  else if(state.step==='gur') html+=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons();
-  else if(state.step==='coolant') html+=`<div class="hint">Уровень ОЖ</div>`+fluidButtons();
-  else if(state.step==='lights') html+=lightsUI();
-  else if(state.step==='oil') html+=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons();
+  else if(state.step==='gur') html+=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  else if(state.step==='coolant') html+=`<div class="hint">Уровень ОЖ</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  else if(state.step==='lights') html+=lightsUI()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  else if(state.step==='oil') html+=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
   else if(state.step==='done'){
     const open=inProgressOrder();
     const enRoute=enRouteOrder();
@@ -3217,6 +3378,7 @@ function wireInput(){
   document.querySelectorAll('.plate').forEach(b=>b.onclick=()=>selectVehicle(b.dataset.plate));
   $('num-ok')&&($('num-ok').onclick=submitNumber);
   document.querySelectorAll('.fluid').forEach(b=>b.onclick=()=>selectFluid(b.dataset.level));
+  $('eto-restart')&&($('eto-restart').onclick=restartEtoInspection);
   document.querySelectorAll('.yesno button[data-key]').forEach(b=>b.onclick=()=>{state.light[b.dataset.key]=b.dataset.val;state.error='';renderInput();});
   $('lights-ok')&&($('lights-ok').onclick=submitLights);
   $('create-order')&&($('create-order').onclick=startCreateOrder);
@@ -3231,7 +3393,32 @@ function wireInput(){
   $('refuel-no')&&($('refuel-no').onclick=()=>answerYesNo(false));
 }
 
+/** Сбросить незавершённый ЕТО в текущей смене и пройти заново. */
+function restartEtoInspection(){
+  const shift=state.shift||findOpenShift();
+  if(!shift || shift.endedAt) return;
+  if(isEtoDone(shift) && shift.completedAt){
+    if(!confirm('ЕТО уже пройден. Пройти осмотр заново?')) return;
+  } else if(!confirm('Начать ЕТО заново? Текущие ответы осмотра будут сброшены.')) return;
+  shift.completedAt=null;
+  shift.odometer=null;
+  shift.fuelLiters=null;
+  shift.gur=null; shift.powerSteeringLevel=null;
+  shift.coolant=null; shift.coolantLevel=null;
+  shift.oil=null; shift.engineOilLevel=null;
+  shift.light={};
+  state.light={};
+  state.shift=shift;
+  state.step=shift.vehiclePlate?'odometer':'chooseVehicle';
+  state.orderStep='idle'; state.draft={}; state.error='';
+  add('bot', shift.vehiclePlate
+    ? `ЕТО сброшен. Авто ${shift.vehiclePlate}. Напишите показания одометра до выезда со стоянки.`
+    : 'ЕТО сброшен. Выберите автомобиль.');
+  bumpDataEpoch('eto-restart');
+  upsertShift(); persist(); renderInput();
+}
 function resumeOpenShift(shift){
+  hydrateEtoFromMessages(shift);
   state.shift=shift;
   state.messages=(shift.messages&&shift.messages.length)?shift.messages.slice():[];
   state.orderStep='idle'; state.draft={}; state.error='';
@@ -3249,7 +3436,7 @@ function resumeOpenShift(shift){
         : '';
       state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}`});
     }
-    upsertShift(); persist(); renderChat(); return;
+    upsertShift(); persist(); renderChat(); renderInput(); return;
   }
   if(!shift.vehiclePlate) state.step='chooseVehicle';
   else if(shift.odometer==null) state.step='odometer';
@@ -3269,7 +3456,23 @@ function resumeOpenShift(shift){
   } else if(carryHint && !(state.messages||[]).some(m=>String(m.text||'').includes('перенесённый заказ'))){
     state.messages.push({author:'bot',text:carryHint.trim()});
   }
-  upsertShift(); persist(); renderChat();
+  // Синхронизируем последнюю подсказку бота с реальным шагом (чат мог отстать от полей)
+  const stepHints={
+    odometer:'Напишите показания одометра до выезда со стоянки.',
+    fuel:'Введите остаток топлива в литрах.',
+    gur:'Проверьте и укажите уровень жидкости ГУР:\n• Максимум\n• Середина\n• Минимум',
+    coolant:'Проверьте и укажите уровень ОЖ:\n• Максимум\n• Середина\n• Минимум',
+    lights:'Проверьте осветительные приборы. Отметьте каждый пункт.',
+    oil:'Укажите уровень масла в ДВС:\n• Максимум\n• Середина\n• Минимум'
+  };
+  const hint=stepHints[state.step];
+  if(hint){
+    const last=(state.messages||[]).slice().reverse().find(m=>m.author==='bot');
+    if(!last || String(last.text||'').indexOf(hint.slice(0,24))<0){
+      state.messages.push({author:'bot',text:`Продолжаем ЕТО — ${hint}`});
+    }
+  }
+  upsertShift(); persist(); renderChat(); renderInput();
 }
 function openShift(){
   try{
@@ -3385,6 +3588,13 @@ function selectFluid(level){
     add('driver',`Масло ДВС: ${level}`);
     add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Если есть назначенный заказ — нажмите «Выехал» перед выездом со стоянки.');
     bumpDataEpoch('eto-complete');
+    state.error=''; upsertShift(); syncOpenShiftRuntime();
+    persist();
+    // Сразу на сервер — иначе remote_ahead с другой вкладки может затереть ЕТО
+    clearTimeout(persistTimer);
+    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
+    renderInput();
+    return;
   }
   state.error=''; upsertShift(); syncOpenShiftRuntime(); persist(); renderInput();
 }
@@ -3671,10 +3881,12 @@ function finishOrder(unloading){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
 }
 function resetChat(){
+  syncOpenShiftRuntime();
   const existing=findOpenShift();
   if(existing){ resumeOpenShift(existing); return; }
   state.step='idle'; state.orderStep='idle'; state.shift=null; state.draft={}; state.error=''; state.light={}; state.messages=[];
   add('bot','Здравствуйте! Чтобы начать работу, откройте смену. Затем пройдём ежедневный технический осмотр (ЕТО).');
+  renderInput();
 }
 function startNewShiftClick(){
   if(findOpenShift()){ state.error='Сначала закройте текущую смену'; renderInput(); return; }

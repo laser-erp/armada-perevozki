@@ -8,7 +8,7 @@
 3. План → «ок» → код. Не восстанавливать проект по чату.
 4. **База знаний пользователя:** `KNOWLEDGE_BASE.md` — обновлять после каждого блока.
 
-**Сессия сохранена:** 2026-08-04 · live build `2026-08-04-firm-claim` · агент https://cursor.com/agents/bc-019fb4d1-f788-7cd1-a617-8a118a0f4317
+**Сессия сохранена:** 2026-08-05 · live build `2026-08-05-eto-sync-fix` · агент https://cursor.com/agents/bc-019fb4d1-f788-7cd1-a617-8a118a0f4317
 
 ## Где код сейчас
 - Локально: `/agent/DriverReport/` (веб: `web-preview/index.html`)
@@ -46,6 +46,8 @@
 
 ## Sync / отмена
 - `dataEpoch` + preflight push: старая вкладка не затирает новую
+- При `remote_ahead` локальные смены/ЕТО/заказы **мержатся** обратно (`mergeLocalShifts` / `mergeLocalOrders` / `hydrateEtoFromMessages`)
+- Завершение ЕТО сразу пушит на сервер (не только debounce)
 - Отмена удаляет заказ из списка
 - PocketBase `app_state` key=`main`
 
@@ -70,3 +72,4 @@
 - Заказ, созданный водителем: видят супер + админ привязанной фирмы (`ownerAdminId` / `spaceId` / `ownCompanyId`), build `2026-08-05-drv-owner`
 - Админ: вкладка **ЕТО** — открытые смены своих водителей и статус осмотра, build `2026-08-05-admin-eto`
 - Вход водителя: телефон + PIN, build `2026-08-05-driver-phone-pin`
+- ЕТО sync-fix: не терять прогресс осмотра/заказа при sync; `renderInput` после resume; кнопка «Начать ЕТО заново», build `2026-08-05-eto-sync-fix`
