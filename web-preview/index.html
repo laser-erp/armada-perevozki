@@ -487,7 +487,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-04-firm-claim";
+const APP_BUILD="2026-08-05-session-fleet";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -609,9 +609,9 @@ const $ = id => document.getElementById(id);
 function show(id){
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen'||id==='admin-activity-screen';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen';
   $('shell').classList.toggle('wide', wide);
-  if(currentAdmin && (id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-catalogs-screen'||id==='admin-activity-screen')){
+  if(currentAdmin && (id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen')){
     touchAdminPresence(id);
   }
 }
@@ -738,10 +738,7 @@ function ensureOwnCompanyForSpace(space){
   if(space.ownCompanyId){
     const existing=findCompanyById(space.ownCompanyId);
     if(existing && companyHasRole(existing,'own')){
-      if(!existing.spaceId) existing.spaceId=space.id;
-      if((existing.name||'').trim()!==(space.name||'').trim() && space.name){
-        // id сохранён — название фирмы берём из пространства
-      }
+      if(existing.spaceId!==space.id) existing.spaceId=space.id;
       return existing;
     }
     // ownCompanyId есть, а компании нет (удалили/потеряли) — восстанавливаем с тем же id
@@ -799,9 +796,25 @@ function ensureDriverInCompany(opts){
 /** Парк (водители/авто) — отдельно на каждую «нашу фирму». */
 function ensureFleetPerSpaces(){
   let changed=false;
+  // Старые «общие» водители без фирмы — привязать к фирме владельца/админа с тем же ФИО
+  (state.drivers||[]).forEach(d=>{
+    if(d.companyId && findCompanyById(d.companyId)) return;
+    const adm=(state.admins||[]).find(a=>a.id===d.ownerAdminId)
+      || (state.admins||[]).find(a=>samePersonName(a.name, d.name));
+    if(!adm) return;
+    const co=ownCompanyForAdminId(adm.id);
+    if(!co) return;
+    d.ownerAdminId=adm.id;
+    d.ownerAdminName=adm.name;
+    d.spaceId=adm.spaceId||co.spaceId||null;
+    d.companyId=co.id;
+    d.companyName=co.name;
+    changed=true;
+  });
   (state.spaces||[]).forEach(sp=>{
     const co=ensureOwnCompanyForSpace(sp);
     if(!co) return;
+    if(co.spaceId!==sp.id){ co.spaceId=sp.id; changed=true; }
     (state.drivers||[]).forEach(d=>{
       if(d.spaceId===sp.id && d.companyId!==co.id){
         d.companyId=co.id; d.companyName=co.name; changed=true;
@@ -815,6 +828,17 @@ function ensureFleetPerSpaces(){
     });
     const adm=(state.admins||[]).find(a=>a.id===sp.adminId)
       || (state.admins||[]).find(a=>a.spaceId===sp.id);
+    // В каждую фирму — известные водители (копии), чтобы не вводить заново
+    DEFAULT_DRIVERS.forEach(def=>{
+      if(ensureDriverInCompany({
+        name:def.name,
+        salaryPercent:def.salaryPercent??30,
+        exchangeEnabled:!!def.exchangeEnabled,
+        phone:def.phone||'',
+        companyId:co.id, companyName:co.name, spaceId:sp.id,
+        ownerAdminId:adm?adm.id:null, ownerAdminName:adm?adm.name:null
+      })) changed=true;
+    });
     if(adm && ensureDriverInCompany({
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
@@ -1009,6 +1033,7 @@ async function pushServerState(){
 }
 function persist(){
   localStorage.setItem(KEY, JSON.stringify(snapshot()));
+  if(currentAdmin) saveAdminSession();
   syncStatus='syncing';
   clearTimeout(persistTimer);
   persistTimer=setTimeout(()=>{
@@ -1519,13 +1544,14 @@ function restoreAdminSession(){
   migrateAdmins();
   let raw=null;
   try{ raw=JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY)||'null'); }catch(_){ raw=null; }
-  if(!raw||!raw.id) return false;
-  const adm=state.admins.find(a=>a.id===raw.id);
+  if(!raw||(!raw.id && !raw.name)) return false;
+  let adm=(state.admins||[]).find(a=>raw.id && a.id===raw.id);
+  if(!adm && raw.name) adm=(state.admins||[]).find(a=>samePersonName(a.name, raw.name));
   if(!adm){ clearAdminSession(); return false; }
   currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
   saveAdminSession();
-  touchAdminPresence('admin');
-  startPresenceHeartbeat();
+  try{ touchAdminPresence('admin'); }catch(_){}
+  try{ startPresenceHeartbeat(); }catch(_){}
   updateAdminChrome();
   return true;
 }
@@ -4360,6 +4386,10 @@ function updateSyncHint(){
   else if(syncStatus==='syncing') el.textContent='Подключение к общей базе…';
   else el.textContent='Локальный режим';
 }
+// Сразу после загрузки localStorage — без PIN, если сессия была
+try{
+  if(restoreAdminSession()) show('admin');
+}catch(_){}
 (async function boot(){
   await initCloudSync();
   migrateAdmins();
@@ -4374,15 +4404,14 @@ function updateSyncHint(){
     persist();
   }
   updateSyncHint();
-  setTimeout(()=>{
-    updateSyncHint();
-    if(restoreAdminSession()){
-      show('admin');
-      renderAdmin();
-    } else {
-      show('roles');
-    }
-  }, 700);
+  // После синка снова восстановить / обновить админа (id мог уточниться)
+  if(restoreAdminSession()){
+    show('admin');
+    renderAdmin();
+  } else if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show')){
+    show('roles');
+  }
+  setTimeout(updateSyncHint, 700);
 })();
 $('role-driver').onclick=()=>{ show('driver'); resetChat(); renderDriverBanner(); };
 $('role-admin').onclick=()=>{
