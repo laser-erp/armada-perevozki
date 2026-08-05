@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-order-times";
+const APP_BUILD="2026-08-05-order-times-visible";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3177,14 +3177,29 @@ function recomputeOrderTimes(o){
 function orderTimesLines(o){
   if(!o) return '';
   recomputeOrderTimes(o);
-  if(o.timeToOrderMin==null && o.timeLoadedMin==null && o.timeToParkingMin==null && o.timeTotalMin==null) return '';
-  return `<p style="margin-top:6px">Время: до заказа ${esc(formatDurationMin(o.timeToOrderMin))} · с грузом ${esc(formatDurationMin(o.timeLoadedMin))} · до стоянки ${esc(formatDurationMin(o.timeToParkingMin))} · всего ${esc(formatDurationMin(o.timeTotalMin))}</p>`;
+  // Всегда показываем в карточке — иначе кажется, что времени нет
+  return `<div class="hint" style="margin-top:8px;padding:8px 10px;border:1px solid rgba(232,93,4,.35);border-radius:8px;color:var(--text)">
+    <strong style="color:var(--accent)">Время на заказ</strong><br>
+    до заказа: <b>${esc(formatDurationMin(o.timeToOrderMin))}</b>
+    · с грузом: <b>${esc(formatDurationMin(o.timeLoadedMin))}</b>
+    · до стоянки: <b>${esc(formatDurationMin(o.timeToParkingMin))}</b>
+    · <b>всего: ${esc(formatDurationMin(o.timeTotalMin))}</b>
+  </div>`;
 }
 function orderTimesText(o){
   if(!o) return '';
   recomputeOrderTimes(o);
-  if(o.timeToOrderMin==null && o.timeLoadedMin==null && o.timeToParkingMin==null && o.timeTotalMin==null) return '';
   return `Время: до заказа ${formatDurationMin(o.timeToOrderMin)} · с грузом ${formatDurationMin(o.timeLoadedMin)} · до стоянки ${formatDurationMin(o.timeToParkingMin)} · всего ${formatDurationMin(o.timeTotalMin)}`;
+}
+/** Добиваем метки на старых заказах, где одометр уже есть, а ISO-времени нет. */
+function ensureOrderTimeStamps(o){
+  if(!o) return o;
+  if(o.departOdometer!=null && !o.departAt) o.departAt=o.createdAt||null;
+  if(o.startOdometer!=null && !o.arrivedAt) o.arrivedAt=o.departAt||o.createdAt||null;
+  if(o.endOdometer!=null && !o.endAt) o.endAt=o.closedAt||null;
+  if(o.emptyKmAfter!=null && o.endOdometer!=null && !o.parkingAt && o.closedAt) o.parkingAt=o.closedAt;
+  recomputeOrderTimes(o);
+  return o;
 }
 function kmParkingToEnd(o){
   if(o.endOdometer!=null && o.previousOdometer!=null) return Math.max(0, o.endOdometer-o.previousOdometer);
@@ -4645,10 +4660,10 @@ function renderAdmin(){
       <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })()}</p>
       <p>${esc(orderContactLine(o))}</p>
       <p>${esc(routeText(o))}</p>
+      ${orderTimesLines(ensureOrderTimeStamps(o))}
       ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
       ${orderScheduleLines(o, false)}
       <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
-      ${orderTimesLines(o)}
       ${hasRate
         ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
         : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
@@ -4864,7 +4879,7 @@ function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
   if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
-  recomputeOrderTimes(o);
+  recomputeOrderTimes(ensureOrderTimeStamps(o));
   const m=metrics(o);
   let editPoints=ensureRoutePoints(o).map(p=>({...p}));
   const readPointsFromDom=()=>{
@@ -4959,6 +4974,13 @@ function openDetail(id){
     <button class="secondary" id="detail-back">← Назад</button>
     <h2>Заявка №${o.sequentialNumber}</h2>
     <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</div>
+    <div class="calc" style="margin:10px 0;border:1px solid rgba(232,93,4,.45)">
+      <div class="hint" style="color:var(--accent);font-weight:800;margin:0 0 6px">⏱ Время на заказ</div>
+      <div class="calc-row"><span>До заказа</span><span>${esc(formatDurationMin(o.timeToOrderMin))}</span></div>
+      <div class="calc-row"><span>С грузом</span><span>${esc(formatDurationMin(o.timeLoadedMin))}</span></div>
+      <div class="calc-row"><span>До стоянки</span><span>${esc(formatDurationMin(o.timeToParkingMin))}</span></div>
+      <div class="calc-row"><span>Всего</span><span><b>${esc(formatDurationMin(o.timeTotalMin))}</b></span></div>
+    </div>
     <div class="hint" style="color:var(--accent)">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС считаются от нал.</div>
     ${o.transportApp?`<div class="claim-box">
       <h3>Договор‑заявка подписана</h3>
