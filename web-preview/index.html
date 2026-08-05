@@ -554,7 +554,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-company-finance";
+const APP_BUILD="2026-08-05-vehicle-odo-shift";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -864,6 +864,7 @@ function applyPayload(p, opts){
   migrateShiftOwners();
   migrateDriverPins();
   migrateCompanyFinance();
+  healVehicleOdometersFromShifts();
   migrateEtoFromMessages();
   // Заказы только в смене (потерялись из state.orders) — поднять в общий список
   (state.shifts||[]).forEach(s=>{
@@ -2881,6 +2882,43 @@ function lastKnownOdometerForPlate(plate, companyId){
     .sort((a,b)=>b.t-a.t);
   return scored.length?+scored[0].odo:null;
 }
+/** Записать одометр в карточку авто (не уменьшаем уже большее значение). */
+function applyVehicleOdometer(plate, companyId, odo){
+  if(!plate || !(+odo>=0)) return false;
+  const list=state.vehicles||[];
+  let v=companyId?list.find(x=>x.plate===plate && x.companyId===companyId):null;
+  if(!v) v=list.find(x=>x.plate===plate);
+  if(!v) return false;
+  const n=+odo;
+  if(v.currentOdometer!=null && +v.currentOdometer>n) return false;
+  if(v.currentOdometer!=null && +v.currentOdometer===n) return false;
+  v.currentOdometer=n;
+  return true;
+}
+/** После окончания смены — одометр стоянки в карточку этой машины. */
+function syncVehicleOdometerFromShift(shift){
+  if(!shift || !shift.endedAt || shift.abandoned) return false;
+  const plate=shift.vehiclePlate;
+  const odo=shift.parkingOdometer??shift.lastOdometerPoint;
+  if(odo==null || !plate) return false;
+  return applyVehicleOdometer(plate, shift.ownCompanyId||null, +odo);
+}
+/** Подтянуть одометр из последних закрытых смен в базе (для каждой машины). */
+function healVehicleOdometersFromShifts(){
+  let changed=false;
+  (state.vehicles||[]).forEach(v=>{
+    if(!v||!v.plate) return;
+    const shifts=(state.shifts||[])
+      .filter(s=>s && s.endedAt && !s.abandoned && s.vehiclePlate===v.plate
+        && (!v.companyId || !s.ownCompanyId || s.ownCompanyId===v.companyId)
+        && (s.parkingOdometer!=null || s.lastOdometerPoint!=null))
+      .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
+    if(!shifts.length) return;
+    const odo=shifts[0].parkingOdometer??shifts[0].lastOdometerPoint;
+    if(applyVehicleOdometer(v.plate, v.companyId, +odo)) changed=true;
+  });
+  return changed;
+}
 function addMonthsIso(dateStr, months){
   if(!dateStr || !(months>0)) return null;
   const d=new Date(dateStr+'T12:00:00');
@@ -2932,7 +2970,15 @@ function openVehicleCard(vehicleId){
   else return;
   v=state.vehicles[vi];
   if(v.currentOdometer==null){
-    const guess=lastKnownOdometerForPlate(v.plate, v.companyId);
+    // сначала из закрытых смен, иначе из заказов
+    const fromShift=(state.shifts||[])
+      .filter(s=>s && s.endedAt && !s.abandoned && s.vehiclePlate===v.plate
+        && (!v.companyId || !s.ownCompanyId || s.ownCompanyId===v.companyId)
+        && (s.parkingOdometer!=null || s.lastOdometerPoint!=null))
+      .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt))[0];
+    const guess=fromShift
+      ? +(fromShift.parkingOdometer??fromShift.lastOdometerPoint)
+      : lastKnownOdometerForPlate(v.plate, v.companyId);
     if(guess!=null) v.currentOdometer=guess;
   }
   const firm=v.companyName||(findCompanyById(v.companyId)||{}).name||'';
@@ -4839,6 +4885,8 @@ function acceptCloseShiftParking(value){
   state.shift.parkingOdometer=value;
   state.shift.lastOdometerPoint=value;
   state.shift.endedAt=new Date().toISOString();
+  syncVehicleOdometerFromShift(state.shift);
+  bumpDataEpoch('shift-end-odo');
   upsertShift(); persist();
   resetChat();
 }
@@ -6821,6 +6869,7 @@ try{
   if(migrateShiftOwners()) dirty=true;
   if(migrateDriverPins()) dirty=true;
   if(migrateCompanyFinance()) dirty=true;
+  if(healVehicleOdometersFromShifts()) dirty=true;
   if(purgeCancelledOrders()){
     bumpDataEpoch('purge-boot');
     dirty=true;
