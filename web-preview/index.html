@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-close-status-always";
+const APP_BUILD="2026-08-05-auto-sync-session";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -534,8 +534,10 @@ const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
 const ADMIN_SESSION_KEY="armada_admin_session_v1";
+const LAST_ROLE_KEY="armada_last_role_v1";
 const PRESENCE_ONLINE_MS=90*1000;
 const PRESENCE_TICK_MS=25*1000;
+const AUTO_SYNC_MS=8*1000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
 function uuid(){
   try{
@@ -578,6 +580,8 @@ const state={
 };
 let pbRecordId=null;
 let persistTimer=null;
+let autoSyncTimer=null;
+let autoSyncBusy=false;
 let syncStatus='local'; // local | syncing | ok | error
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
@@ -645,7 +649,11 @@ function show(id){
   $(id).classList.add('show');
   const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen';
   $('shell').classList.toggle('wide', wide);
-  if(currentAdmin && (id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen')){
+  try{
+    if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
+    else if(wide) localStorage.setItem(LAST_ROLE_KEY,'admin');
+  }catch(_){}
+  if(currentAdmin && wide){
     touchAdminPresence(id);
   }
 }
@@ -1305,6 +1313,89 @@ async function initCloudSync(){
     syncStatus='error';
     console.warn('PB init', err);
   }
+}
+/** Подтянуть новую эпоху с сервера без перезагрузки и без повторного PIN. */
+async function pullRemoteUpdates(reason){
+  if(autoSyncBusy) return false;
+  // Не мешаем активному вводу закрытия/создания — только если шаг idle или просмотр
+  const busyStep=state.orderStep&&state.orderStep!=='idle'&&state.orderStep!=='postCloseEmptyAfter';
+  if(busyStep && reason==='poll') return false;
+  autoSyncBusy=true;
+  try{
+    const rec=await fetchServerState();
+    if(!rec) return false;
+    pbRecordId=rec.id;
+    const remote=rec.payload||{};
+    const remoteEpoch=Number(remote.dataEpoch)||0;
+    const localEpoch=Number(state.dataEpoch)||0;
+    if(remoteEpoch<=localEpoch) return false;
+    const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+    const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+    const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+    const inDriver=!!DRIVER && !!document.querySelector('#driver.show');
+    const inAdmin=!!currentAdmin && !inDriver;
+    const detailId=state.detailId;
+    const keepStep=state.orderStep;
+    const keepDraft=state.draft?structuredClone(state.draft):{};
+    const keepMessages=(state.messages||[]).slice();
+    const keepUiStep=state.step;
+    const ordersOpen=!!document.querySelector('#orders-panel.show');
+    const cabinetOpen=!!document.querySelector('#cabinet-panel.show');
+    applyPayload(remote, {remoteSeq:true});
+    mergeLocalShifts(localShifts);
+    if(liveShift) mergeLocalShifts([liveShift]);
+    mergeLocalOrders(localOrders);
+    migrateEtoFromMessages();
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    if(inDriver){
+      // не поднимаем currentAdmin поверх режима водителя
+      const open=findOpenShift();
+      if(open){
+        state.shift=open;
+        if(keepStep && keepStep!=='idle'){
+          state.orderStep=keepStep;
+          state.draft=keepDraft;
+          state.step=keepUiStep||'done';
+          state.messages=keepMessages.length?keepMessages:(open.messages||[]).slice();
+        } else {
+          state.messages=(open.messages&&open.messages.length)?open.messages.slice():keepMessages;
+          state.step=isEtoDone(open)?'done':(keepUiStep||'idle');
+          restoreOrderWorkflow(open);
+        }
+      }
+      renderChat(); renderInput(); renderDriverBanner();
+      if(ordersOpen) showOrders();
+      if(cabinetOpen) showCabinet();
+    } else if(inAdmin){
+      restoreAdminSession();
+      if(detailId && (state.orders||[]).some(o=>o.id===detailId)) openDetail(detailId);
+      else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
+      else if(document.querySelector('#admin.show')) renderAdmin();
+    }
+    syncStatus='ok';
+    updateSyncHint();
+    console.info('auto-sync', reason, 'epoch', remoteEpoch);
+    return true;
+  }catch(err){
+    syncStatus='error';
+    updateSyncHint();
+    console.warn('auto-sync', reason, err);
+    return false;
+  }finally{
+    autoSyncBusy=false;
+  }
+}
+function stopAutoSync(){
+  if(autoSyncTimer){ clearInterval(autoSyncTimer); autoSyncTimer=null; }
+}
+function startAutoSync(){
+  stopAutoSync();
+  autoSyncTimer=setInterval(()=>{ pullRemoteUpdates('poll'); }, AUTO_SYNC_MS);
+}
+if(typeof document!=='undefined'){
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible') pullRemoteUpdates('visible');
+  });
 }
 function upsertShift(){
   if(!state.shift) return;
@@ -6063,14 +6154,17 @@ function openCatalogs(){
 
 function updateSyncHint(){
   const el=$('sync-hint'); if(!el) return;
-  if(syncStatus==='ok') el.textContent='Общая база подключена — данные сохраняются на сервере';
+  if(syncStatus==='ok') el.textContent='Общая база подключена — автообновление каждые 8 с, без повторного PIN';
   else if(syncStatus==='error') el.textContent='Нет связи с сервером — пока только локально в этом браузере';
   else if(syncStatus==='syncing') el.textContent='Подключение к общей базе…';
   else el.textContent='Локальный режим';
 }
 // Сразу после загрузки localStorage — без PIN, если сессия была
 try{
-  if(restoreAdminSession()) show('admin');
+  const last=localStorage.getItem(LAST_ROLE_KEY)||'';
+  if(last==='driver' && restoreDriverSession()) show('driver');
+  else if(restoreAdminSession()) show('admin');
+  else if(restoreDriverSession()) show('driver');
 }catch(_){}
 (async function boot(){
   await initCloudSync();
@@ -6089,14 +6183,29 @@ try{
     persist();
   }
   updateSyncHint();
-  // После синка снова восстановить / обновить админа (id мог уточниться)
-  if(restoreAdminSession()){
+  // Восстановить роль без PIN (админ или водитель)
+  let lastRole='';
+  try{ lastRole=localStorage.getItem(LAST_ROLE_KEY)||''; }catch(_){}
+  const tryDriver=async()=>{
+    if(!restoreDriverSession()) return false;
+    const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID)||findDriverRecord(DRIVER, null);
+    if(!rec){ clearDriverSession(); return false; }
+    await enterAsDriver(rec);
+    return true;
+  };
+  if(lastRole==='driver'){
+    if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); }
+  } else if(restoreAdminSession()){
     show('admin');
     renderAdmin();
-  } else if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show')){
-    show('roles');
+  } else if(!(await tryDriver())){
+    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show')){
+      show('roles');
+    }
   }
+  startAutoSync();
   setTimeout(updateSyncHint, 700);
+  setTimeout(()=>pullRemoteUpdates('boot'), 1200);
 })();
 $('role-driver').onclick=()=>openDriverLogin(false);
 $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
