@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>АРМАДА — учёт перевозок</title>
+  <meta name="theme-color" content="#e61a1f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="АРМАДА" />
+  <meta name="application-name" content="АРМАДА" />
+  <meta name="description" content="Учёт перевозок, ЕТО, заказы и финансы" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <style>
@@ -525,7 +535,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-tariff-recalc-closed";
+const APP_BUILD="2026-08-05-mobile-pwa";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -6482,6 +6492,11 @@ document.querySelectorAll('.back-driver').forEach(b=>{
 });
 document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{ state.adminFilter=b.dataset.filter; document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b)); renderAdmin(); });
 bindAdminCreate();
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW',err));
+  });
+}
 </script>
 </body>
 </html>

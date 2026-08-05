@@ -1,0 +1,21 @@
+{
+  "name": "armada-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capacitor-обёртка АРМАДА для iOS и Android",
+  "scripts": {
+    "sync-www": "node scripts/sync-www.js",
+    "cap:sync": "npm run sync-www && npx cap sync",
+    "cap:android": "npm run cap:sync && npx cap open android",
+    "cap:ios": "npm run cap:sync && npx cap open ios",
+    "build:android": "npm run cap:sync && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/core": "^7.4.2",
+    "@capacitor/ios": "^7.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.2"
+  }
+}
