@@ -299,6 +299,13 @@
     </div>
   </div></div>
 
+  <div id="driver-pick" class="screen"><div class="center" style="justify-content:flex-start;padding-top:28px">
+    <div class="sub" style="align-self:stretch;text-align:left"><button id="driver-pick-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
+    <h2 style="margin:0">Кто за рулём?</h2>
+    <div class="hint" style="margin-bottom:8px">Выберите себя и свою фирму — смена и ЕТО пойдут к вашему админу</div>
+    <div class="stack" id="driver-pick-list" style="max-width:360px;width:100%"></div>
+  </div></div>
+
   <div id="admin-pin" class="screen"><div class="center">
     <div class="sub" style="align-self:stretch;text-align:left"><button id="pin-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
     <h2 style="margin:0">Вход администратора</h2>
@@ -457,7 +464,7 @@
   <div id="driver" class="screen">
     <header>
       <button id="driver-exit">Выход</button>
-      <h1>Водитель</h1>
+      <h1 id="driver-title">Водитель</h1>
       <div>
         <button id="btn-cabinet">Кабинет</button>
         <button id="btn-orders">Заявки</button>
@@ -492,9 +499,12 @@ const DEFAULT_DRIVERS=[
   {name:"Нечаев А.С.",salaryPercent:30,exchangeEnabled:false,phone:""}
 ];
 const FLUIDS=["Максимум","Середина","Минимум"];
-const DRIVER="Наволоцкий Е.Н.";
+/** Активный водитель сессии (выбирается на экране «Водитель»). */
+let DRIVER="Наволоцкий Е.Н.";
+let DRIVER_COMPANY_ID=null;
+const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-admin-eto";
+const APP_BUILD="2026-08-05-driver-pick";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -852,6 +862,22 @@ function ensureFleetPerSpaces(){
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
     })) changed=true;
+    // У каждой «нашей фирмы» должен быть хотя бы один автомобиль для смены/ЕТО
+    if(!fleetVehiclesForCompany(co.id).length){
+      const nm=(co.name||'').toLowerCase();
+      const seedPlate=nm.includes('нечаев')?'К 001 КК 47'
+        :(nm.includes('армада')?(DEFAULT_VEHICLES[0]&&DEFAULT_VEHICLES[0].plate)||'О 535 МВ 198'
+        :`Х ${String(100+((co.id||co.name||'').length*17)%900).padStart(3,'0')} ХХ 47`);
+      const def=DEFAULT_VEHICLES[0]||{consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2};
+      state.vehicles.push({
+        plate:seedPlate,
+        consumptionPer100Km:def.consumptionPer100Km||20,
+        payloadTons:def.payloadTons||5,
+        bodyLengthM:def.bodyLengthM||6, bodyWidthM:def.bodyWidthM||2.4, bodyHeightM:def.bodyHeightM||2.2,
+        makeModel:'', spaceId:sp.id, companyId:co.id, companyName:co.name
+      });
+      changed=true;
+    }
   });
   // Телефоны: из контактов «нашей фирмы» / других копий того же ФИО
   (state.drivers||[]).forEach(d=>{
@@ -1030,8 +1056,23 @@ async function pushServerState(){
       const remoteEpoch=Number(remote.dataEpoch)||0;
       const localEpoch=Number(state.dataEpoch)||0;
       if(remoteEpoch>localEpoch){
+        const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
         applyPayload(remote);
-        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        if(mergeLocalShifts(localShifts)){
+          bumpDataEpoch('merge-shifts-remote-ahead');
+          localStorage.setItem(KEY, JSON.stringify(snapshot()));
+          // сразу догоняем сервер своей сменой/ЕТО
+          try{
+            const body={key:'main', payload:snapshot()};
+            await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+              method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+            });
+            console.warn('PB push merged local shifts into remote epoch', remoteEpoch);
+            return {aborted:false, merged:true};
+          }catch(e){ console.warn('PB merge push', e); }
+        } else {
+          localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        }
         console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
         return {aborted:true, reason:'remote_ahead'};
       }
@@ -1710,6 +1751,88 @@ function saveAdminSession(){
 function clearAdminSession(){
   try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(_){}
 }
+function saveDriverSession(){
+  try{
+    localStorage.setItem(DRIVER_SESSION_KEY, JSON.stringify({
+      name:DRIVER, companyId:DRIVER_COMPANY_ID||null, at:new Date().toISOString()
+    }));
+  }catch(_){}
+}
+function clearDriverSession(){
+  try{ localStorage.removeItem(DRIVER_SESSION_KEY); }catch(_){}
+  DRIVER="Наволоцкий Е.Н.";
+  DRIVER_COMPANY_ID=null;
+}
+function restoreDriverSession(){
+  let raw=null;
+  try{ raw=JSON.parse(localStorage.getItem(DRIVER_SESSION_KEY)||'null'); }catch(_){ raw=null; }
+  if(!raw||!raw.name) return false;
+  const rec=findDriverRecord(raw.name, raw.companyId)||findDriverRecord(raw.name, null);
+  if(!rec){ clearDriverSession(); return false; }
+  DRIVER=rec.name;
+  DRIVER_COMPANY_ID=rec.companyId||raw.companyId||null;
+  return true;
+}
+function updateDriverChrome(){
+  const t=$('driver-title');
+  if(!t) return;
+  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  t.textContent=firm?`${DRIVER}`:'Водитель';
+  t.title=firm?`${DRIVER} · ${firm}`:DRIVER;
+}
+function driverPickRows(){
+  const rows=(state.drivers||[]).filter(d=>(d.name||'').trim());
+  rows.sort((a,b)=>{
+    const fa=a.companyName||'', fb=b.companyName||'';
+    const c=fa.localeCompare(fb,'ru');
+    if(c) return c;
+    return String(a.name).localeCompare(String(b.name),'ru');
+  });
+  return rows;
+}
+function openDriverPick(){
+  migrateSpaces();
+  let dirty=ensureFleetPerSpaces();
+  if(dirty){ bumpDataEpoch('fleet-for-driver-pick'); persist(); }
+  const box=$('driver-pick-list');
+  if(!box){ show('driver'); resetChat(); renderDriverBanner(); return; }
+  const rows=driverPickRows();
+  if(!rows.length){
+    box.innerHTML=`<div class="hint">Нет водителей в справочнике. Зайдите как админ и добавьте во вкладке «Водители».</div>`;
+  } else {
+    box.innerHTML=rows.map(d=>{
+      const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'без фирмы';
+      const ph=formatPhone(d.phone||'');
+      return `<button type="button" class="secondary drv-pick" data-name="${esc(d.name)}" data-co="${esc(d.companyId||'')}" style="text-align:left;padding:12px 14px">
+        <div style="font-weight:800">${esc(d.name)}</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:2px">${esc(firm)}${ph?' · '+esc(ph):''}</div>
+      </button>`;
+    }).join('');
+    document.querySelectorAll('.drv-pick').forEach(b=>b.onclick=()=>{
+      const name=b.dataset.name||'';
+      const co=b.dataset.co||'';
+      const rec=findDriverRecord(name, co)||{name, companyId:co||null};
+      enterAsDriver(rec);
+    });
+  }
+  show('driver-pick');
+}
+function enterAsDriver(rec){
+  if(!rec||!rec.name) return;
+  DRIVER=rec.name;
+  DRIVER_COMPANY_ID=rec.companyId||null;
+  // если companyId не был — взять домашний профиль
+  if(!DRIVER_COMPANY_ID){
+    const bind=resolveDriverOrderBinding(DRIVER, '');
+    DRIVER_COMPANY_ID=bind.ownCompanyId||null;
+  }
+  saveDriverSession();
+  updateDriverChrome();
+  show('driver');
+  resetChat();
+  renderDriverBanner();
+  renderInput();
+}
 /** Восстановить вход после обновления страницы (без повторного PIN). */
 function restoreAdminSession(){
   migrateAdmins();
@@ -2200,16 +2323,14 @@ function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',m
 function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function add(a,t){ state.messages.push({author:a,text:t}); renderChat(); }
 function plates(){
+  // Авто фирмы активного водителя
+  const coId=DRIVER_COMPANY_ID || resolveDriverOrderBinding(DRIVER,'').ownCompanyId;
+  if(coId){
+    const list=fleetVehiclesForCompany(coId);
+    if(list.length) return list.map(v=>v.plate);
+  }
   const mine=myCatalogVehicles();
   if(mine.length) return mine.map(v=>v.plate);
-  // Режим «Водитель» без админ-сессии — только авто фирмы, к которой привязан водитель
-  if(!currentAdmin){
-    const bind=resolveDriverOrderBinding(DRIVER, '');
-    if(bind.ownCompanyId){
-      const list=fleetVehiclesForCompany(bind.ownCompanyId);
-      if(list.length) return list.map(v=>v.plate);
-    }
-  }
   return (state.vehicles||[]).map(v=>v.plate);
 }
 function vehicle(plate, companyId){
@@ -2414,11 +2535,33 @@ function stampShiftOwner(shift, driverName, vehiclePlate){
   if(!shift) return shift;
   const name=String(driverName||shift.driverName||DRIVER).trim()||DRIVER;
   const plate=String(vehiclePlate||shift.vehiclePlate||'').trim();
+  // Фирма: авто смены → компания выбранного водителя → домашний профиль
+  let companyId=null;
+  if(plate){
+    const veh=(state.vehicles||[]).find(v=>v.plate===plate);
+    if(veh && veh.companyId) companyId=veh.companyId;
+  }
+  if(!companyId && DRIVER_COMPANY_ID && samePersonName(name, DRIVER)) companyId=DRIVER_COMPANY_ID;
+  const rec=findDriverRecord(name, companyId);
   const bind=resolveDriverOrderBinding(name, plate);
   shift.driverName=name;
-  if(bind.ownerAdminId){ shift.ownerAdminId=bind.ownerAdminId; shift.ownerAdminName=bind.ownerAdminName; }
-  if(bind.spaceId) shift.spaceId=bind.spaceId;
-  if(bind.ownCompanyId){ shift.ownCompanyId=bind.ownCompanyId; shift.ownCompanyName=bind.ownCompanyName; }
+  shift.ownerAdminId=(rec&&rec.ownerAdminId)||bind.ownerAdminId||null;
+  shift.ownerAdminName=(rec&&rec.ownerAdminName)||bind.ownerAdminName||null;
+  shift.spaceId=(rec&&rec.spaceId)||bind.spaceId||null;
+  shift.ownCompanyId=companyId||(rec&&rec.companyId)||bind.ownCompanyId||null;
+  shift.ownCompanyName=(rec&&rec.companyName)||bind.ownCompanyName||null;
+  if(shift.ownCompanyId && !shift.ownCompanyName){
+    const co=findCompanyById(shift.ownCompanyId);
+    if(co) shift.ownCompanyName=co.name;
+  }
+  if(shift.ownCompanyId && !shift.spaceId){
+    const co=findCompanyById(shift.ownCompanyId);
+    if(co && co.spaceId) shift.spaceId=co.spaceId;
+  }
+  if(shift.spaceId && !shift.ownerAdminId){
+    const adm=(state.admins||[]).find(a=>a.spaceId===shift.spaceId);
+    if(adm){ shift.ownerAdminId=adm.id; shift.ownerAdminName=adm.name; }
+  }
   return shift;
 }
 function migrateShiftOwners(){
@@ -2480,8 +2623,22 @@ function openShifts(){
   return (state.shifts||[]).filter(s=>!s.endedAt)
     .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt));
 }
+/** Открытые смены только текущего водителя (и его фирмы), не чужие. */
+function openShiftsForDriver(){
+  return openShifts().filter(s=>{
+    if(s.abandoned) return false;
+    if(s.driverName && !samePersonName(s.driverName, DRIVER)) return false;
+    if(!s.driverName){
+      // старые смены без ФИО — только если авто из фирмы текущего водителя
+      if(!DRIVER_COMPANY_ID || !s.vehiclePlate) return false;
+      return fleetVehiclesForCompany(DRIVER_COMPANY_ID).some(v=>v.plate===s.vehiclePlate);
+    }
+    if(DRIVER_COMPANY_ID && s.ownCompanyId && s.ownCompanyId!==DRIVER_COMPANY_ID) return false;
+    return true;
+  });
+}
 function findOpenShift(){
-  const open=openShifts();
+  const open=openShiftsForDriver();
   if(!open.length) return null;
   // Текущая живая смена важнее «новой пустой»
   if(state.shift && !state.shift.endedAt && open.some(s=>s.id===state.shift.id)){
@@ -2492,11 +2649,52 @@ function findOpenShift(){
 function healDuplicateOpenShifts(keep){
   if(!keep) return;
   (state.shifts||[]).forEach(s=>{
-    if(s.id!==keep.id && !s.endedAt && !isEtoDone(s)){
+    // Не закрываем смены других водителей
+    if(s.id===keep.id || s.endedAt || isEtoDone(s)) return;
+    if(keep.driverName && s.driverName && !samePersonName(s.driverName, keep.driverName)) return;
+    if(keep.ownCompanyId && s.ownCompanyId && s.ownCompanyId!==keep.ownCompanyId) return;
+    if(keep.driverName && s.driverName && samePersonName(s.driverName, keep.driverName)){
       s.endedAt=new Date().toISOString();
       s.abandoned=true;
     }
   });
+}
+function etoProgressScore(s){
+  if(!s) return 0;
+  let n=0;
+  if(s.vehiclePlate) n++;
+  if(s.odometer!=null) n++;
+  if(s.fuelLiters!=null) n++;
+  if(s.gur||s.powerSteeringLevel) n++;
+  if(s.coolant||s.coolantLevel) n++;
+  const L=s.light||{};
+  if(L.lowBeam&&L.brake&&L.turn) n++;
+  if(s.oil||s.engineOilLevel) n++;
+  if(s.completedAt) n+=2;
+  if(isEtoDone(s)) n+=5;
+  return n;
+}
+/** После sync remote_ahead — не потерять локальные открытые смены с ЕТО. */
+function mergeLocalShifts(localShifts){
+  if(!Array.isArray(localShifts)||!localShifts.length) return false;
+  let changed=false;
+  const byId=new Map((state.shifts||[]).map(s=>[s.id,s]));
+  localShifts.forEach(ls=>{
+    if(!ls||!ls.id) return;
+    const cur=byId.get(ls.id);
+    if(!cur){
+      state.shifts=(state.shifts||[]);
+      state.shifts.unshift(ls);
+      byId.set(ls.id, ls);
+      changed=true;
+      return;
+    }
+    if(etoProgressScore(ls)>etoProgressScore(cur) || (!!ls.completedAt && !cur.completedAt) || (!ls.endedAt && cur.endedAt && ls.abandoned!==true)){
+      Object.assign(cur, ls);
+      changed=true;
+    }
+  });
+  return changed;
 }
 function syncOpenShiftRuntime(){
   let shift=findOpenShift();
@@ -2954,8 +3152,11 @@ function openShift(){
       ? `
 Есть перенесённый заказ №${carry.sequentialNumber} (машина загружена с прошлого дня) — после ЕТО закройте его по выгрузке.`
       : '';
-    add('bot',`Смена открыта в ${timeNow()}. Выберите автомобиль, на котором вы сегодня работаете.${carryHint}`);
-    state.step='chooseVehicle'; state.orderStep='idle'; state.error=''; upsertShift(); renderInput();
+    const firmHint=state.shift.ownCompanyName?` Фирма: ${state.shift.ownCompanyName}.`:'';
+    add('bot',`Смена открыта в ${timeNow()} (${DRIVER}).${firmHint} Выберите автомобиль, на котором вы сегодня работаете.${carryHint}`);
+    state.step='chooseVehicle'; state.orderStep='idle'; state.error='';
+    bumpDataEpoch('open-shift');
+    upsertShift(); renderInput();
   }catch(err){
     console.error('openShift', err);
     state.error='Не удалось открыть смену. Обновите страницу и попробуйте снова.';
@@ -3039,10 +3240,12 @@ function selectFluid(level){
     state.shift.oil=level;
     state.shift.engineOilLevel=level;
     state.shift.completedAt=new Date().toISOString();
+    stampShiftOwner(state.shift, DRIVER, state.shift.vehiclePlate);
     state.step='done';
     state.orderStep='idle';
     add('driver',`Масло ДВС: ${level}`);
     add('bot','Спасибо за прохождение ЕТО. Счастливого пути! Если есть назначенный заказ — нажмите «Выехал» перед выездом со стоянки.');
+    bumpDataEpoch('eto-complete');
   }
   state.error=''; upsertShift(); syncOpenShiftRuntime(); persist(); renderInput();
 }
@@ -3280,15 +3483,25 @@ function finishOrder(unloading){
   const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
   const plate=d.plate || (state.shift&&state.shift.vehiclePlate) || '';
   const bind=resolveDriverOrderBinding(DRIVER, plate);
+  if(DRIVER_COMPANY_ID && !plate){
+    const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);
+    if(rec){
+      bind.ownCompanyId=rec.companyId||bind.ownCompanyId;
+      bind.ownCompanyName=rec.companyName||bind.ownCompanyName;
+      bind.spaceId=rec.spaceId||bind.spaceId;
+      bind.ownerAdminId=rec.ownerAdminId||bind.ownerAdminId;
+      bind.ownerAdminName=rec.ownerAdminName||bind.ownerAdminName;
+    }
+  }
   const order={
     id:uuid(), sequentialNumber:state.seq, dayNumber:d.dayNumber, createdAt, source:'driver',
     vehiclePlate:plate, startOdometer:d.startOdo, previousOdometer:d.prevOdo,
     loadingAddress:d.loading, unloadingAddress:unloading,
     routePoints:defaultRoutePoints(d.loading,unloading),
     driverName:DRIVER, customer:'', emptyKmBefore:emptyKm,
-    driverPercent:driverPercent(DRIVER, bind.ownCompanyId),
+    driverPercent:driverPercent(DRIVER, bind.ownCompanyId||DRIVER_COMPANY_ID),
     ownerAdminId:bind.ownerAdminId, ownerAdminName:bind.ownerAdminName,
-    spaceId:bind.spaceId, ownCompanyId:bind.ownCompanyId, ownCompanyName:bind.ownCompanyName,
+    spaceId:bind.spaceId, ownCompanyId:bind.ownCompanyId||DRIVER_COMPANY_ID, ownCompanyName:bind.ownCompanyName,
     executorType:'own', onExchange:false
   };
   stampOrderDriverPhone(order);
@@ -3498,10 +3711,11 @@ function wireOrdersSwipe(){
 function showShifts(){
   hideDriverPanels();
   $('shifts-panel').classList.add('show');
-  $('shifts-list').innerHTML = !state.shifts.length ? `<div class="empty">Пока нет смен</div>` :
-    state.shifts.map(s=>{
-      const st=s.endedAt?'закрыта':(s.completedAt||(s.orders||[]).length?'ЕТО ок':'в процессе');
-      return `<div class="card"><h3>${esc(s.vehiclePlate||'Без номера')}</h3><p>${esc(dateTime(s.startedAt))}</p><p>${st} · заказов: ${(s.orders||[]).length}</p></div>`;
+  const mine=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER) || (!s.driverName && DRIVER_COMPANY_ID && s.ownCompanyId===DRIVER_COMPANY_ID));
+  $('shifts-list').innerHTML = !mine.length ? `<div class="empty">Пока нет ваших смен</div>` :
+    mine.map(s=>{
+      const st=s.endedAt?'закрыта':(isEtoDone(s)?'ЕТО ок':etoStepLabel(s));
+      return `<div class="card"><h3>${esc(s.vehiclePlate||'Без номера')}</h3><p>${esc(dateTime(s.startedAt))}${s.ownCompanyName?' · '+esc(s.ownCompanyName):''}</p><p>${esc(st)} · заказов: ${(s.orders||[]).length}</p></div>`;
     }).join('');
 }
 
@@ -4852,7 +5066,9 @@ try{
   }
   setTimeout(updateSyncHint, 700);
 })();
-$('role-driver').onclick=()=>{ show('driver'); resetChat(); renderDriverBanner(); };
+$('role-driver').onclick=()=>openDriverPick();
+$('driver-pick-back')&&($('driver-pick-back').onclick=()=>show('roles'));
+$('driver-exit').onclick=()=>{ clearDriverSession(); show('roles'); };
 $('role-admin').onclick=()=>{
   migrateAdmins();
   if(restoreAdminSession()){
@@ -4872,7 +5088,6 @@ $('admin-exit').onclick=logoutAdmin;
 $('admin-catalogs').onclick=()=>{ if(!currentAdmin){ show('admin-pin'); return; } openCatalogs(); };
 $('admin-activity').onclick=()=>{ if(!currentAdmin){ show('admin-pin'); return; } openAdminActivity(); };
 updateAdminChrome();
-$('driver-exit').onclick=()=>show('roles');
 $('btn-cabinet').onclick=showCabinet;
 $('btn-orders').onclick=showOrders;
 $('btn-shifts').onclick=showShifts;
