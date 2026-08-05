@@ -542,7 +542,13 @@
 const DEFAULT_VEHICLES=[
   {plate:"О 535 МВ 198",consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2},
   {plate:"М 277 НО 198",consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2},
-  {plate:"В 603 СА 47",consumptionPer100Km:20,payloadTons:10,bodyLengthM:8,bodyWidthM:2.45,bodyHeightM:2.5}
+  {plate:"В 603 СА 47",consumptionPer100Km:20,payloadTons:10,bodyLengthM:8,bodyWidthM:2.45,bodyHeightM:2.5,makeModel:"ГАЗ 33104 Валдай"}
+];
+/** Регламент по руководству ГАЗ-33104 «Валдай» (ММЗ): ТО-1 10 тыс. км, ТО-2 20 тыс. км, СО раз в год. */
+const GAZ_33104_SERVICE_INTERVALS=[
+  {name:"ТО-1 (ГАЗ 33104)", everyKm:10000, everyMonths:12, note:"По руководству ГАЗ-33104: ТО-1 каждые 10 000 км (или раз в год). В т.ч. замена масла ДВС и масляного фильтра."},
+  {name:"ТО-2 (ГАЗ 33104)", everyKm:20000, everyMonths:12, note:"По руководству ГАЗ-33104: ТО-2 каждые 20 000 км. Расширенный объём работ."},
+  {name:"СО — сезонное ТО", everyKm:null, everyMonths:12, note:"Сезонное обслуживание раз в год, совместно с очередным ТО-1 или ТО-2."}
 ];
 const DEFAULT_DRIVERS=[
   {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
@@ -554,7 +560,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-vehicle-odo-shift";
+const APP_BUILD="2026-08-05-valdai-to-intervals";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -865,6 +871,7 @@ function applyPayload(p, opts){
   migrateDriverPins();
   migrateCompanyFinance();
   healVehicleOdometersFromShifts();
+  ensureManufacturerServiceIntervals();
   migrateEtoFromMessages();
   // Заказы только в смене (потерялись из state.orders) — поднять в общий список
   (state.shifts||[]).forEach(s=>{
@@ -2916,6 +2923,27 @@ function healVehicleOdometersFromShifts(){
     if(!shifts.length) return;
     const odo=shifts[0].parkingOdometer??shifts[0].lastOdometerPoint;
     if(applyVehicleOdometer(v.plate, v.companyId, +odo)) changed=true;
+  });
+  return changed;
+}
+function normPlateKey(p){ return String(p||'').toLowerCase().replace(/\s+/g,''); }
+/** Подставить регламент ТО ГАЗ-33104 для известных Валдаев, если интервалов ещё нет. */
+function ensureManufacturerServiceIntervals(){
+  let changed=false;
+  (state.vehicles||[]).forEach(v=>{
+    if(!v||!v.plate) return;
+    const isValdai=normPlateKey(v.plate)===normPlateKey('В 603 СА 47')
+      || /33104|валдай/i.test(v.makeModel||'');
+    if(!isValdai) return;
+    if(!v.makeModel){ v.makeModel='ГАЗ 33104 Валдай'; changed=true; }
+    v.serviceIntervals=v.serviceIntervals||[];
+    const have=new Set(v.serviceIntervals.map(x=>(x.name||'').toLowerCase()));
+    GAZ_33104_SERVICE_INTERVALS.forEach(def=>{
+      const key=(def.name||'').toLowerCase();
+      if(have.has(key)) return;
+      const iv=normalizeServiceInterval(Object.assign({id:uuid()}, def));
+      if(iv){ v.serviceIntervals.push(iv); changed=true; }
+    });
   });
   return changed;
 }
@@ -6870,6 +6898,7 @@ try{
   if(migrateDriverPins()) dirty=true;
   if(migrateCompanyFinance()) dirty=true;
   if(healVehicleOdometersFromShifts()) dirty=true;
+  if(ensureManufacturerServiceIntervals()) dirty=true;
   if(purgeCancelledOrders()){
     bumpDataEpoch('purge-boot');
     dirty=true;
