@@ -487,7 +487,7 @@ const DEFAULT_DRIVERS=[
 const FLUIDS=["Максимум","Середина","Минимум"];
 const DRIVER="Наволоцкий Е.Н.";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-driver-phone";
+const APP_BUILD="2026-08-05-co-drv-phone";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -4075,8 +4075,16 @@ function openCatalogs(){
     ].join('');
     const nContacts=(c.contacts||[]).length;
     const nAddr=((c.loadingAddresses||[]).length+(c.unloadingAddresses||[]).length);
+    const prim=primaryContact(c);
+    const primPhone=prim?contactPhone(prim):'';
+    const fleetPhones=companyHasRole(c,'own')
+      ? fleetDriversForCompany(c.id).map(d=>d.phone).filter(Boolean)
+      : [];
+    const phoneHint=primPhone || fleetPhones[0] || ((c.drivers||[]).find(d=>d.phone)||{}).phone || '';
     const metaBits=[
+      phoneHint?`☎ ${phoneHint}`:null,
       nContacts?`${nContacts} конт.`:null,
+      companyHasRole(c,'own')?`вод. ${fleetDriversForCompany(c.id).length}`:null,
       companyHasRole(c,'customer')&&nAddr?`${nAddr} адр.`:null,
       companyHasRole(c,'carrier')?`ТС ${(c.vehicles||[]).length}`:null
     ].filter(Boolean).join(' · ');
@@ -4232,8 +4240,14 @@ function openCatalogs(){
       </div>
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>
+      <div class="hint" style="margin:0 0 4px">Телефон контакта — в карточке компании; у водителя с тем же ФИО подтянется сам</div>
       <div id="co-contacts"></div>
       <button type="button" class="secondary" id="co-add-contact">+ Контакт</button>
+      <div id="co-own-fleet" style="display:${isOwn?'block':'none'}">
+        <h4>Водители фирмы (телефоны)</h4>
+        <div class="hint" style="margin:0 0 4px">Парк «нашей фирмы» — ФИО и телефон. Правки сохраняются в справочник водителей.</div>
+        <div id="co-own-drivers"></div>
+      </div>
       <div id="co-customer-fields" style="display:${isCust?'block':'none'}">
         <h4>Адреса заказчика</h4>
         <label>Загрузки (каждый с новой строки)</label>
@@ -4252,6 +4266,23 @@ function openCatalogs(){
       <button class="primary cat-add-btn" id="co-save" style="margin-top:8px">Сохранить</button>
     `;
     let contacts=(c.contacts||[]).map(x=>({...x, phones:(x.phones||[]).map(p=>({...p}))}));
+    // Если у «нашей фирмы» есть водители с телефоном, а контактов нет — показать их как контакты
+    if(isOwn && c.id){
+      fleetDriversForCompany(c.id).forEach(d=>{
+        if(!(d.name||'').trim()) return;
+        const exists=contacts.some(p=>samePersonName(p.name, d.name));
+        if(!exists){
+          contacts.push({
+            id:uuid(), name:d.name, title:'Водитель',
+            phones:d.phone?[{id:uuid(), number:d.phone, label:''}]:[],
+            isPrimary:!contacts.length
+          });
+        } else if(d.phone){
+          const p=contacts.find(x=>samePersonName(x.name, d.name));
+          if(p && !contactPhone(p)) p.phones=[{id:uuid(), number:d.phone, label:''}];
+        }
+      });
+    }
     let vehicles=(c.vehicles||[]).map(x=>({...x}));
     let drivers=(c.drivers||[]).map(x=>({...x}));
     const paintContacts=()=>{
@@ -4264,6 +4295,21 @@ function openCatalogs(){
           <button type="button" class="secondary" data-cdel="${i}">Удалить контакт</button>
         </div>`).join('')||`<div class="hint">Нет контактов</div>`;
       document.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{ contacts.splice(+b.dataset.cdel,1); paintContacts(); });
+    };
+    const paintOwnDrivers=()=>{
+      const box=$('co-own-drivers'); if(!box) return;
+      const list=c.id?fleetDriversForCompany(c.id):[];
+      box.innerHTML=list.length?list.map((d,i)=>{
+        const idx=(state.drivers||[]).findIndex(x=>x===d || (samePersonName(x.name,d.name) && x.companyId===c.id));
+        const ph=d.phone||'';
+        return `<div class="card" style="margin:6px 0">
+          <div class="row" style="align-items:center">
+            <div style="flex:1;font-weight:700;font-size:.85rem">${esc(d.name)}</div>
+            ${ph?`<a href="tel:${esc(ph)}" style="color:var(--accent);font-size:.8rem;white-space:nowrap">☎</a>`:''}
+          </div>
+          <input data-own-dp="${idx}" inputmode="tel" placeholder="Телефон водителя" value="${esc(ph)}" />
+        </div>`;
+      }).join(''):`<div class="hint">Нет водителей в парке — добавьте во вкладке «Водители»</div>`;
     };
     const paintVehicles=()=>{
       $('co-vehicles').innerHTML=vehicles.map((v,i)=>`
@@ -4289,13 +4335,16 @@ function openCatalogs(){
         </div>`).join('')||`<div class="hint">Нет водителей</div>`;
       document.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{ drivers.splice(+b.dataset.ddel,1); paintDrivers(); });
     };
-    paintContacts(); paintVehicles(); paintDrivers();
+    paintContacts(); paintOwnDrivers(); paintVehicles(); paintDrivers();
     const syncRoleVisibility=()=>{
       $('co-customer-fields').style.display=$('co-role-c').checked?'block':'none';
       $('co-carrier-fields').style.display=$('co-role-r').checked?'block':'none';
+      const ownBox=$('co-own-fleet');
+      if(ownBox) ownBox.style.display=$('co-role-o')&&$('co-role-o').checked?'block':'none';
     };
     $('co-role-c').onchange=syncRoleVisibility;
     $('co-role-r').onchange=syncRoleVisibility;
+    $('co-role-o')&&($('co-role-o').onchange=syncRoleVisibility);
     $('co-add-contact').onclick=()=>{ contacts.push({id:uuid(),name:'',title:'',phones:[],isPrimary:!contacts.length}); paintContacts(); };
     $('co-add-veh').onclick=()=>{ vehicles.push({id:uuid(),plate:'',makeModel:'',payloadTons:null,bodyLengthM:null,bodyWidthM:null,bodyHeightM:null}); paintVehicles(); };
     $('co-add-drv').onclick=()=>{ drivers.push({id:uuid(),name:'',phone:'',vehicleId:null}); paintDrivers(); };
@@ -4329,6 +4378,22 @@ function openCatalogs(){
         const phone=(document.querySelector(`[data-dp="${i}"]`)?.value||'').trim();
         return {id:d.id||uuid(), name, phone, vehicleId:d.vehicleId||null};
       }).filter(d=>d.name);
+      // телефоны водителей фирмы из блока карточки
+      document.querySelectorAll('[data-own-dp]').forEach(inp=>{
+        const idx=+inp.dataset.ownDp;
+        if(!(idx>=0) || !state.drivers[idx]) return;
+        const ph=(inp.value||'').trim();
+        state.drivers[idx].phone=ph;
+      });
+      // контакт с тем же ФИО → телефон водителя этой фирмы
+      if(roles.includes('own') && c.id){
+        contacts.forEach(p=>{
+          const ph=contactPhone(p);
+          if(!ph || !p.name) return;
+          const rec=findDriverRecord(p.name, c.id);
+          if(rec) rec.phone=ph;
+        });
+      }
       const loads=uniqAddrs((($('co-loads')||{}).value||'').split(/\n/));
       const unloads=uniqAddrs((($('co-unloads')||{}).value||'').split(/\n/));
       upsertCompany({
@@ -4339,6 +4404,7 @@ function openCatalogs(){
         phones:c.phones||[],
         spaceId:c.spaceId||currentSpaceId()
       });
+      bumpDataEpoch('save-company');
       persist();
       openCatalogs();
       $('cat-ok').style.display='block';
