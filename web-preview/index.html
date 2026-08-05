@@ -110,6 +110,11 @@
     .svc-iv{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
     .svc-iv:last-child{border-bottom:0}
     .fin-grid label.svc-full{grid-column:1/-1}
+    .svc-check{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+    .svc-check label{display:flex;gap:8px;align-items:flex-start;font-size:.75rem;line-height:1.3;color:var(--muted);cursor:pointer;margin:0!important;width:auto!important}
+    .svc-check label input{margin-top:2px;flex:0 0 auto;width:16px;height:16px;accent-color:var(--accent)}
+    .svc-check label.done{color:var(--text);text-decoration:line-through;opacity:.75}
+    .svc-check-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
     .claim-box{padding:10px 12px;border-radius:16px;background:rgba(230,26,31,.08);border:1px solid rgba(230,26,31,.28);margin:8px 0}
     .claim-box h3{margin:0 0 6px;font-size:.95rem}
     .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
@@ -606,7 +611,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-to-works-list";
+const APP_BUILD="2026-08-05-to-checklist";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2882,6 +2887,32 @@ function normalizeMaterialLine(m){
   const sum=round2(m.sum!=null&&+m.sum>=0?+m.sum:qty*unitCost);
   return {name, qty, unitCost, sum};
 }
+function normalizeChecklistItem(it){
+  if(it==null) return null;
+  if(typeof it==='string'){
+    const text=it.trim();
+    return text?{id:uuid(), text, done:false}:null;
+  }
+  const text=String(it.text||it.name||'').trim();
+  if(!text) return null;
+  return {id:it.id||uuid(), text, done:!!it.done};
+}
+function checklistFromWorks(works, checkedSet){
+  return (Array.isArray(works)?works:[])
+    .map((w,i)=>{
+      const text=String(w||'').trim();
+      if(!text) return null;
+      const done=checkedSet?checkedSet.has(i)||checkedSet.has(text):false;
+      return {id:uuid(), text, done};
+    })
+    .filter(Boolean);
+}
+function checklistProgress(list){
+  const items=Array.isArray(list)?list:[];
+  const total=items.length;
+  const done=items.filter(x=>x&&x.done).length;
+  return {total, done, all:total>0 && done===total, pct:total?Math.round(done*100/total):0};
+}
 function normalizeMaintenanceLog(log){
   if(!log) return null;
   const title=String(log.title||'').trim();
@@ -2889,6 +2920,9 @@ function normalizeMaintenanceLog(log){
   const materials=(Array.isArray(log.materials)?log.materials:[]).map(normalizeMaterialLine).filter(Boolean);
   const materialsCost=round2(materials.reduce((s,m)=>s+(m.sum||0),0) || (+log.materialsCost||0));
   const workCost=round2(+log.workCost||0);
+  const checklist=(Array.isArray(log.checklist)?log.checklist:[])
+    .map(normalizeChecklistItem).filter(Boolean);
+  const prog=checklistProgress(checklist);
   return {
     id:log.id||uuid(),
     date:log.date||new Date().toISOString().slice(0,10),
@@ -2901,8 +2935,20 @@ function normalizeMaintenanceLog(log){
     total:round2(materialsCost+workCost),
     intervalId:log.intervalId||null,
     note:String(log.note||'').trim(),
+    checklist,
+    checklistDone:prog.all,
     createdAt:log.createdAt||new Date().toISOString()
   };
+}
+function applyIntervalProgressFromLog(v, log){
+  if(!v||!log||!log.intervalId) return;
+  const prog=checklistProgress(log.checklist);
+  // интервал обновляем, когда чек-лист закрыт или пунктов нет (старое поведение)
+  if(log.checklist && log.checklist.length && !prog.all) return;
+  const iv=(v.serviceIntervals||[]).find(x=>x.id===log.intervalId);
+  if(!iv) return;
+  iv.lastDate=log.date;
+  if(log.odometer!=null) iv.lastOdometer=log.odometer;
 }
 function normalizeFleetVehicle(v){
   if(!v) return null;
@@ -3105,13 +3151,33 @@ function openVehicleCard(vehicleId){
   }).join('') || `<div class="hint">Интервалов пока нет — добавьте ниже (масло, ТО…)</div>`;
   const logHtml=logs.map(l=>{
     const mats=(l.materials||[]).map(m=>`${m.name}${m.qty&&m.qty!==1?' ×'+m.qty:''} — ${fmt(m.sum)} ₽`).join('; ');
+    const prog=checklistProgress(l.checklist);
+    const checkHtml=prog.total
+      ? `<details style="margin-top:6px" ${prog.all?'':'open'}>
+          <summary style="cursor:pointer;color:var(--accent);font-weight:700;font-size:.78rem">
+            Чек-лист ${prog.done}/${prog.total}${prog.all?' · готово':''}
+          </summary>
+          <div class="svc-check" data-check-log="${esc(l.id)}">
+            ${(l.checklist||[]).map((it,idx)=>`
+              <label class="${it.done?'done':''}">
+                <input type="checkbox" data-check-item="${esc(it.id)}" ${it.done?'checked':''}/>
+                <span>${esc(it.text)}</span>
+              </label>`).join('')}
+          </div>
+          <div class="svc-check-actions">
+            <button type="button" class="secondary" data-check-all="${esc(l.id)}" style="width:auto;padding:6px 10px;font-size:.72rem">Отметить все</button>
+            <button type="button" class="secondary" data-check-none="${esc(l.id)}" style="width:auto;padding:6px 10px;font-size:.72rem">Снять все</button>
+          </div>
+        </details>`
+      : '';
     return `<div class="svc-log" data-log="${esc(l.id)}">
       <h4>${esc(kindLabel(l.kind))}: ${esc(l.title)}
         <button type="button" class="icon-btn danger" data-del-log="${esc(l.id)}" title="Удалить" style="float:right">×</button>
       </h4>
-      <div class="meta">${esc(l.date)}${l.odometer!=null?' · одометр '+fmt(l.odometer):''}</div>
-      <div class="meta">Работы: ${fmt(l.workCost)} ₽ · Материалы: ${fmt(l.materialsCost)} ₽ · <span class="svc-sum">итого ${fmt(l.total)} ₽</span></div>
+      <div class="meta">${esc(l.date)}${l.odometer!=null?' · одометр '+fmt(l.odometer):''}${prog.total?` · чек-лист ${prog.done}/${prog.total}`:''}</div>
+      <div class="meta">Стоимость работ: ${fmt(l.workCost)} ₽ · Материалы: ${fmt(l.materialsCost)} ₽ · <span class="svc-sum">итого ${fmt(l.total)} ₽</span></div>
       ${mats?`<div class="meta">${esc(mats)}</div>`:''}
+      ${checkHtml}
       ${l.note?`<div class="meta">${esc(l.note)}</div>`:''}
     </div>`;
   }).join('') || `<div class="hint">Записей пока нет</div>`;
@@ -3143,20 +3209,49 @@ function openVehicleCard(vehicleId){
     <div>${logHtml}</div>
     <h3 style="margin:14px 0 6px;font-size:.95rem">Новая запись</h3>
     <div class="fin-grid">
-      <label>Тип<select id="log-kind"><option value="repair">Ремонт</option><option value="service">ТО</option><option value="parts">Материалы</option></select></label>
+      <label>Тип<select id="log-kind"><option value="repair">Ремонт</option><option value="service" selected>ТО</option><option value="parts">Материалы</option></select></label>
       <label>Дата<input id="log-date" type="date" value="${new Date().toISOString().slice(0,10)}" /></label>
-      <label class="svc-full">Что сделали / купили<input id="log-title" placeholder="Замена масла, фильтры…" /></label>
+      <label class="svc-full">Что сделали / купили<input id="log-title" placeholder="ТО-1, замена масла…" /></label>
       <label>Одометр<input id="log-odo" inputmode="numeric" value="${v.currentOdometer??''}" /></label>
-      <label>Работы, ₽<input id="log-work" inputmode="decimal" placeholder="0" /></label>
+      <label>Стоимость работ, ₽<input id="log-work" inputmode="decimal" placeholder="0" /></label>
       <label class="svc-full">Материалы (строки: название; кол-во; цена)<textarea id="log-mats" rows="3" placeholder="Масло 5W40; 1; 4500&#10;Фильтр масляный; 1; 800"></textarea></label>
       <label class="svc-full">К интервалу<select id="log-iv">${ivOpts}</select></label>
+      <div class="svc-full" id="log-check-preview" style="display:none"></div>
       <label class="svc-full">Заметка<input id="log-note" placeholder="необязательно" /></label>
       <button type="button" class="primary cat-add-btn fin-full" id="log-add">Добавить запись</button>
     </div>
-    <div class="hint" style="margin-top:10px">Этап 1: ручной ввод. Фото чеков и распознавание — следующим этапом.</div>
+    <div class="hint" style="margin-top:10px">Выберите интервал ТО — появится чек-лист. Интервал обновится, когда отметите все пункты. Фото чеков — следующим этапом.</div>
   `;
   show('admin-vehicle-card');
   state._vehicleCardId=v.id;
+  const refreshLogCheckPreview=()=>{
+    const boxPrev=$('log-check-preview'); if(!boxPrev) return;
+    const intervalId=(($('log-iv')||{}).value||'')||null;
+    const iv=intervalId?(v.serviceIntervals||[]).find(x=>x.id===intervalId):null;
+    const works=(iv&&iv.works)||[];
+    if(!works.length){ boxPrev.style.display='none'; boxPrev.innerHTML=''; return; }
+    boxPrev.style.display='block';
+    boxPrev.innerHTML=`
+      <div class="hint" style="margin:0 0 4px">Чек-лист при сохранении (можно отметить заранее)</div>
+      <div class="svc-check" id="log-check-new">
+        ${works.map((w,i)=>`<label><input type="checkbox" data-new-check="${i}"/><span>${esc(w)}</span></label>`).join('')}
+      </div>
+      <div class="svc-check-actions">
+        <button type="button" class="secondary" id="log-check-new-all" style="width:auto;padding:6px 10px;font-size:.72rem">Отметить все</button>
+        <button type="button" class="secondary" id="log-check-new-none" style="width:auto;padding:6px 10px;font-size:.72rem">Снять все</button>
+      </div>`;
+    $('log-check-new-all')&&($('log-check-new-all').onclick=()=>{
+      boxPrev.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=true);
+    });
+    $('log-check-new-none')&&($('log-check-new-none').onclick=()=>{
+      boxPrev.querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=false);
+    });
+    const titleEl=$('log-title');
+    if(titleEl && !(titleEl.value||'').trim() && iv) titleEl.value=iv.name;
+    const kindEl=$('log-kind');
+    if(kindEl) kindEl.value='service';
+  };
+  $('log-iv')&&($('log-iv').onchange=refreshLogCheckPreview);
   $('veh-card-back').onclick=()=>{ catalogTab='vehicles'; openCatalogs(); };
   $('vc-save-head').onclick=()=>{
     v.makeModel=(($('vc-model')||{}).value||'').trim();
@@ -3194,6 +3289,42 @@ function openVehicleCard(vehicleId){
     persist();
     openVehicleCard(v.id);
   });
+  const saveChecklistState=()=>{
+    bumpDataEpoch('veh-check');
+    persist();
+  };
+  document.querySelectorAll('[data-check-item]').forEach(inp=>{
+    inp.onchange=()=>{
+      const wrap=inp.closest('[data-check-log]');
+      const logId=wrap&&wrap.dataset.checkLog;
+      const log=(v.maintenanceLogs||[]).find(x=>x.id===logId);
+      if(!log) return;
+      const item=(log.checklist||[]).find(x=>x.id===inp.dataset.checkItem);
+      if(!item) return;
+      item.done=!!inp.checked;
+      log.checklistDone=checklistProgress(log.checklist).all;
+      applyIntervalProgressFromLog(v, log);
+      saveChecklistState();
+      openVehicleCard(v.id);
+    };
+  });
+  document.querySelectorAll('[data-check-all]').forEach(b=>b.onclick=()=>{
+    const log=(v.maintenanceLogs||[]).find(x=>x.id===b.dataset.checkAll);
+    if(!log||!log.checklist) return;
+    log.checklist.forEach(it=>it.done=true);
+    log.checklistDone=true;
+    applyIntervalProgressFromLog(v, log);
+    saveChecklistState();
+    openVehicleCard(v.id);
+  });
+  document.querySelectorAll('[data-check-none]').forEach(b=>b.onclick=()=>{
+    const log=(v.maintenanceLogs||[]).find(x=>x.id===b.dataset.checkNone);
+    if(!log||!log.checklist) return;
+    log.checklist.forEach(it=>it.done=false);
+    log.checklistDone=false;
+    saveChecklistState();
+    openVehicleCard(v.id);
+  });
   $('log-add').onclick=()=>{
     const title=(($('log-title')||{}).value||'').trim();
     if(!title){ alert('Укажите, что сделали'); return; }
@@ -3208,22 +3339,25 @@ function openVehicleCard(vehicleId){
     const workCost=+String(($('log-work')||{}).value||'0').replace(',','.')||0;
     const odometer=numOrNull(($('log-odo')||{}).value);
     const intervalId=(($('log-iv')||{}).value||'')||null;
+    const iv=intervalId?(v.serviceIntervals||[]).find(x=>x.id===intervalId):null;
+    const checked=new Set();
+    document.querySelectorAll('#log-check-new input[type=checkbox]').forEach(c=>{
+      if(c.checked) checked.add(+c.dataset.newCheck);
+    });
+    const checklist=iv&&iv.works&&iv.works.length
+      ? checklistFromWorks(iv.works, checked)
+      : [];
     const log=normalizeMaintenanceLog({
       date:(($('log-date')||{}).value||'').trim()||new Date().toISOString().slice(0,10),
       odometer, kind:(($('log-kind')||{}).value||'repair'),
       title, materials, workCost, intervalId,
-      note:(($('log-note')||{}).value||'').trim()
+      note:(($('log-note')||{}).value||'').trim(),
+      checklist
     });
     v.maintenanceLogs=v.maintenanceLogs||[];
     v.maintenanceLogs.unshift(log);
     if(odometer!=null) v.currentOdometer=odometer;
-    if(intervalId){
-      const iv=(v.serviceIntervals||[]).find(x=>x.id===intervalId);
-      if(iv){
-        iv.lastDate=log.date;
-        if(odometer!=null) iv.lastOdometer=odometer;
-      }
-    }
+    applyIntervalProgressFromLog(v, log);
     bumpDataEpoch('veh-log-add');
     persist();
     openVehicleCard(v.id);
