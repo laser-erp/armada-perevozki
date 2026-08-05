@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-drop-navolotsky-dup";
+const APP_BUILD="2026-08-05-nechaev-own-orders";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1533,13 +1533,19 @@ function driverNamesOwnedByAdminId(adminId){
 /** Заказ в зоне админа: владелец / фирма / пространство. Имя водителя — только для старых заявок без штампа. */
 function orderBelongsToAdmin(o, adminId){
   if(!o || !adminId) return false;
-  if(o.ownerAdminId===adminId) return true;
+  // Явный владелец — только он (и супер отдельно)
+  if(o.ownerAdminId) return o.ownerAdminId===adminId;
   const adm=(state.admins||[]).find(a=>a.id===adminId);
   const co=ownCompanyForAdminId(adminId);
-  if(co && o.ownCompanyId && o.ownCompanyId===co.id) return true;
+  // Своё пространство фирмы
   if(adm && adm.spaceId && o.spaceId===adm.spaceId) return true;
+  // Своя «наша фирма» — только если пространство тоже совпадает или не задано
+  if(co && o.ownCompanyId && o.ownCompanyId===co.id){
+    if(!o.spaceId || (adm && o.spaceId===adm.spaceId)) return true;
+    return false;
+  }
   // Старые заявки без привязки к фирме — по ФИО водителя в парке этого админа
-  if(o.ownerAdminId || o.spaceId || o.ownCompanyId) return false;
+  if(o.spaceId || o.ownCompanyId) return false;
   const nm=(o.driverName||'').trim();
   if(!nm || nm==='—' || nm==='-' || nm==='Биржа' || nm.startsWith('[Перевозчик]')) return false;
   if(co) return fleetDriversForCompany(co.id).some(d=>samePersonName(d.name, nm));
@@ -1547,10 +1553,6 @@ function orderBelongsToAdmin(o, adminId){
 }
 function isMyFirmOrder(o){
   if(!o || !currentAdmin) return false;
-  const myCo=currentOwnCompany();
-  if(myCo && o.ownCompanyId && o.ownCompanyId===myCo.id) return true;
-  const sid=currentSpaceId();
-  if(sid && o.spaceId===sid) return true;
   return orderBelongsToAdmin(o, currentAdmin.id);
 }
 /**
@@ -1636,14 +1638,13 @@ function isPartnerOnOrder(o){
   if(o.executorAdminId && o.executorAdminId===currentAdmin.id) return true;
   return false;
 }
-/** Доступ: супер — любой; биржа — всем админам; своя фирма / партнёр по заявке. */
+/** Доступ: супер — любой; биржа — всем админам; иначе только свои (owner/space фирмы) / партнёр. */
 function canAdminSeeOrder(o){
   if(!o || !currentAdmin) return false;
   if(isSuperAdmin()) return true;
   if(o.onExchange && !o.closedAt && o.startOdometer==null) return true;
   if(isPartnerOnOrder(o)) return true;
-  const sid=currentSpaceId();
-  if(sid && o.spaceId===sid) return true;
+  // Обычный админ — только заказы своей зоны, не «чужой owner с чужим space»
   return orderBelongsToAdmin(o, currentAdmin.id);
 }
 function numOrNull(raw){
