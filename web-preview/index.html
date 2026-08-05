@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-nechaev-own-orders";
+const APP_BUILD="2026-08-05-nechaev-order2-sync";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -753,6 +753,17 @@ function applyPayload(p, opts){
   migrateShiftOwners();
   migrateDriverPins();
   migrateEtoFromMessages();
+  // Заказы только в смене (потерялись из state.orders) — поднять в общий список
+  (state.shifts||[]).forEach(s=>{
+    (s.orders||[]).forEach(o=>{
+      if(!o||!o.id) return;
+      if(deletedOrderIdSet().has(o.id)) return;
+      if(!(state.orders||[]).some(x=>x.id===o.id)){
+        state.orders.push(o);
+      }
+    });
+  });
+  state.orders=stripCancelledFromOrders(state.orders);
   purgeCancelledOrders();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -1533,18 +1544,26 @@ function driverNamesOwnedByAdminId(adminId){
 /** Заказ в зоне админа: владелец / фирма / пространство. Имя водителя — только для старых заявок без штампа. */
 function orderBelongsToAdmin(o, adminId){
   if(!o || !adminId) return false;
-  // Явный владелец — только он (и супер отдельно)
-  if(o.ownerAdminId) return o.ownerAdminId===adminId;
+  if(o.ownerAdminId===adminId) return true;
   const adm=(state.admins||[]).find(a=>a.id===adminId);
   const co=ownCompanyForAdminId(adminId);
-  // Своё пространство фирмы
-  if(adm && adm.spaceId && o.spaceId===adm.spaceId) return true;
-  // Своя «наша фирма» — только если пространство тоже совпадает или не задано
+  // Водитель из парка этой фирмы + заказ на фирму — виден админу фирмы
+  // (даже если ownerAdminId ошибочно чужой из‑за старого бага входа)
+  if(co && o.ownCompanyId===co.id && o.driverName){
+    const mine=fleetDriversForCompany(co.id).some(d=>samePersonName(d.name, o.driverName));
+    if(mine) return true;
+  }
+  // Своё пространство, если водитель наш или owner не чужой
+  if(adm && adm.spaceId && o.spaceId===adm.spaceId){
+    if(!o.ownerAdminId || o.ownerAdminId===adminId) return true;
+    if(co && o.driverName && fleetDriversForCompany(co.id).some(d=>samePersonName(d.name, o.driverName))) return true;
+  }
+  // Чужой явный владелец и не наш водитель — не показываем
+  if(o.ownerAdminId && o.ownerAdminId!==adminId) return false;
   if(co && o.ownCompanyId && o.ownCompanyId===co.id){
     if(!o.spaceId || (adm && o.spaceId===adm.spaceId)) return true;
     return false;
   }
-  // Старые заявки без привязки к фирме — по ФИО водителя в парке этого админа
   if(o.spaceId || o.ownCompanyId) return false;
   const nm=(o.driverName||'').trim();
   if(!nm || nm==='—' || nm==='-' || nm==='Биржа' || nm.startsWith('[Перевозчик]')) return false;
@@ -1564,28 +1583,45 @@ function resolveDriverOrderBinding(driverName, vehiclePlate){
   const plate=String(vehiclePlate||'').trim();
   const nm=String(driverName||'').trim();
   let companyId=null, companyName=null, spaceId=null, ownerAdminId=null, ownerAdminName=null;
-  const veh=plate?(state.vehicles||[]).find(v=>v.plate===plate):null;
+  // Активная фирма сессии водителя — главный источник (не путать с копией ФИО в другой фирме)
+  if(typeof DRIVER_COMPANY_ID!=='undefined' && DRIVER_COMPANY_ID && typeof DRIVER!=='undefined' && samePersonName(DRIVER, nm)){
+    companyId=DRIVER_COMPANY_ID;
+    const co=findCompanyById(companyId);
+    if(co){ companyName=co.name; spaceId=co.spaceId||null; }
+    const rec=findDriverRecord(nm, companyId);
+    if(rec){
+      spaceId=rec.spaceId||spaceId;
+      ownerAdminId=rec.ownerAdminId||null;
+      ownerAdminName=rec.ownerAdminName||null;
+      companyName=rec.companyName||companyName;
+    }
+  }
+  const veh=plate?(state.vehicles||[]).find(v=>v.plate===plate && (!companyId || v.companyId===companyId))
+    || (state.vehicles||[]).find(v=>v.plate===plate):null;
   if(veh){
-    companyId=veh.companyId||null;
-    companyName=veh.companyName||null;
-    spaceId=veh.spaceId||null;
+    if(!companyId){
+      companyId=veh.companyId||null;
+      companyName=veh.companyName||companyName;
+      spaceId=veh.spaceId||spaceId;
+    } else if(veh.companyId===companyId){
+      spaceId=spaceId||veh.spaceId||null;
+    }
   }
   const homeProfiles=(state.drivers||[]).filter(d=>samePersonName(d.name, nm));
-  // Домашняя запись: водитель = админ с тем же ФИО
-  let drv=homeProfiles.find(d=>{
-    const adm=(state.admins||[]).find(a=>a.id===d.ownerAdminId);
-    return adm && samePersonName(adm.name, nm);
-  }) || null;
-  if(companyId){
-    const inFirm=homeProfiles.find(d=>d.companyId===companyId);
-    if(inFirm) drv=inFirm;
+  // Домашняя запись: водитель = админ с тем же ФИО (в выбранной фирме)
+  let drv=null;
+  if(companyId) drv=homeProfiles.find(d=>d.companyId===companyId)||null;
+  if(!drv){
+    drv=homeProfiles.find(d=>{
+      const adm=(state.admins||[]).find(a=>a.id===d.ownerAdminId);
+      return adm && samePersonName(adm.name, nm);
+    }) || null;
   }
   if(!drv) drv=homeProfiles.find(d=>d.ownerAdminId && d.spaceId) || homeProfiles[0] || null;
   if(drv){
     if(!companyId && drv.companyId){ companyId=drv.companyId; companyName=drv.companyName||companyName; }
     if(!spaceId && drv.spaceId) spaceId=drv.spaceId;
-    ownerAdminId=drv.ownerAdminId||null;
-    ownerAdminName=drv.ownerAdminName||null;
+    if(!ownerAdminId){ ownerAdminId=drv.ownerAdminId||null; ownerAdminName=drv.ownerAdminName||null; }
   }
   if(companyId && !companyName){
     const co=findCompanyById(companyId);
@@ -3983,21 +4019,33 @@ function submitText(){
 function finishOrder(unloading){
   const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
   const plate=d.plate || (state.shift&&state.shift.vehiclePlate) || '';
+  // Жёстко от сессии водителя / смены — не от чужой копии ФИО
   const bind=resolveDriverOrderBinding(DRIVER, plate);
-  if(DRIVER_COMPANY_ID && !plate){
+  if(DRIVER_COMPANY_ID){
     const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);
+    bind.ownCompanyId=DRIVER_COMPANY_ID;
     if(rec){
-      bind.ownCompanyId=rec.companyId||bind.ownCompanyId;
       bind.ownCompanyName=rec.companyName||bind.ownCompanyName;
       bind.spaceId=rec.spaceId||bind.spaceId;
       bind.ownerAdminId=rec.ownerAdminId||bind.ownerAdminId;
       bind.ownerAdminName=rec.ownerAdminName||bind.ownerAdminName;
+    } else {
+      const co=findCompanyById(DRIVER_COMPANY_ID);
+      if(co){ bind.ownCompanyName=co.name; bind.spaceId=co.spaceId||bind.spaceId; }
     }
+  }
+  if(state.shift && state.shift.ownCompanyId){
+    bind.ownCompanyId=state.shift.ownCompanyId;
+    bind.ownCompanyName=state.shift.ownCompanyName||bind.ownCompanyName;
+    bind.spaceId=state.shift.spaceId||bind.spaceId;
+    bind.ownerAdminId=state.shift.ownerAdminId||bind.ownerAdminId;
+    bind.ownerAdminName=state.shift.ownerAdminName||bind.ownerAdminName;
   }
   const order={
     id:uuid(), sequentialNumber:state.seq, dayNumber:d.dayNumber, createdAt, source:'driver',
     vehiclePlate:plate, startOdometer:d.startOdo, previousOdometer:d.prevOdo,
     loadingAddress:d.loading, unloadingAddress:unloading,
+    loading:d.loading, unloading:unloading,
     routePoints:defaultRoutePoints(d.loading,unloading),
     driverName:DRIVER, customer:'', emptyKmBefore:emptyKm,
     driverPercent:driverPercent(DRIVER, bind.ownCompanyId||DRIVER_COMPANY_ID),
@@ -4013,7 +4061,11 @@ function finishOrder(unloading){
   const route=routeText(order);
   add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа за день - ${order.dayNumber}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
-  state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput();
+  state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
+  persist();
+  clearTimeout(persistTimer);
+  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
+  renderInput();
 }
 function resetChat(){
   syncOpenShiftRuntime();
