@@ -525,7 +525,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-fix-total-bonus-col";
+const APP_BUILD="2026-08-05-no-open-first-btn";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -5258,8 +5258,8 @@ function renderAdmin(){
       </div>
       ${open?`<div class="day-total-details">${g.orders.map(o=>{
         const m=metrics(o);
-        return `<p style="margin:4px 0">№${o.sequentialNumber} · ${esc(routeText(o))} · нал ${esc(fmt(m.rate))} · ЗП ${esc(fmt(m.driverPay))} · прибыль ${esc(fmt(m.netProfit))}</p>`;
-      }).join('')}<button type="button" class="secondary open-first" data-id="${g.orders[0].id}" style="margin-top:6px">Открыть первый заказ</button></div>`:''}
+        return `<p class="day-order-line" data-id="${o.id}" style="margin:4px 0;cursor:pointer">№${o.sequentialNumber} · ${esc(routeText(o))} · нал ${esc(fmt(m.rate))} · ЗП ${esc(fmt(m.driverPay))} · прибыль ${esc(fmt(m.netProfit))}</p>`;
+      }).join('')}</div>`:''}
     </div>`;
   }).join('');
   $('admin-list').innerHTML=`
@@ -5281,7 +5281,10 @@ function renderAdmin(){
       toggleGroup(card.dataset.groupCard);
     };
   });
-  document.querySelectorAll('#admin-list .open-rates, #admin-list .open-first').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+  document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+  document.querySelectorAll('#admin-list .day-order-line').forEach(line=>{
+    line.onclick=e=>{ e.stopPropagation(); openDetail(line.dataset.id); };
+  });
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
   document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
