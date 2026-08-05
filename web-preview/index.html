@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-compact-seq";
+const APP_BUILD="2026-08-05-label-za-den";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2600,6 +2600,8 @@ function fillCarrierDriverVehicle(){
 
 function timeNow(){ return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
 function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+/** Подпись номера за смену: «за день-3», не «день 3». */
+function orderDayLabel(n){ return `за день-${n}`; }
 function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
 function add(a,t){ state.messages.push({author:a,text:t,at:new Date().toISOString()}); renderChat(); }
 function plates(){
@@ -4068,7 +4070,7 @@ function beginDepart(id, fromOrders){
   hideDriverPanels();
   state.draft.assignedId=id;
   add('driver',`Выехал · заказ №${order.sequentialNumber}`);
-  add('bot',`Заказ №${order.sequentialNumber} (день ${order.dayNumber})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите одометр при выезде со стоянки.`);
+  add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите одометр при выезде со стоянки.`);
   state.orderStep='departAssignedOdometer'; state.error=''; state.step='done';
   upsertShift(); renderChat(); renderDriverBanner();
   return true;
@@ -4144,7 +4146,7 @@ function acceptArrive(value){
   if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
   upsertOrder(order); add('driver',String(value));
   const tTo=order.timeToOrderMin!=null?`\nВремя до заказа: ${formatDurationMin(order.timeToOrderMin)}`:'';
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · день ${order.dayNumber}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}`);
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
@@ -4178,7 +4180,7 @@ function startCloseOrder(){
   }
   state.draft=Object.assign({}, state.draft||{}, {closingOrderId:order.id});
   add('driver','Закрыть заказ');
-  add('bot',`Заказ №${order.sequentialNumber} (за день ${order.dayNumber}).\nУкажите показания одометра по окончании перевозки.`);
+  add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)}).\nУкажите показания одометра по окончании перевозки.`);
   state.orderStep='closingOdometer'; state.error=''; upsertShift(); renderInput();
 }
 function startCloseShift(){
@@ -4318,7 +4320,7 @@ function finalizeClose(refueled,price,liters){
   pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
   renderInput();
 }
-function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ за день №${n}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
+function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ ${orderDayLabel(n)}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
 function submitText(){
   const text=($('text')?.value||'').trim(); if(!text){state.error='Введите адрес';renderInput();return;}
   if(state.orderStep==='loading'){ state.draft.loading=text; add('driver',text); add('bot','Укажите адрес выгрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='unloading'; state.error=''; upsertShift(); renderInput(); return; }
@@ -4369,7 +4371,7 @@ function finishOrder(unloading){
   bumpDataEpoch('driver-create-order');
   upsertOrder(order);
   const route=routeText(order);
-  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа за день - ${order.dayNumber}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}`);
+  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа ${orderDayLabel(order.dayNumber)}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
   persist();
@@ -4416,7 +4418,7 @@ function showCabinet(){
       html+=paid.map(o=>`<div class="card">
         <p>${esc(dayOnly(payDate(o)))}</p>
         <h3>Заказ №${o.sequentialNumber}</h3>
-        <p>День №${o.dayNumber} · ${esc(o.vehiclePlate)}</p>
+        <p>${esc(orderDayLabel(o.dayNumber))} · ${esc(o.vehiclePlate)}</p>
         <p>${esc(routeText(o))}</p>
         <p style="color:var(--accent);font-weight:800;font-size:1.15rem;margin-top:6px">${fmt(effectivePay(o))} ₽</p>
       </div>`).join('');
@@ -4425,7 +4427,7 @@ function showCabinet(){
       html+=`<div class="hint" style="margin-top:8px">Ожидают расчёта</div>`;
       html+=pending.map(o=>`<div class="card">
         <p>${esc(dayOnly(payDate(o)))}</p>
-        <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber}</h3>
+        <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
         <p>ЗП ещё не начислена</p>
       </div>`).join('');
     }
@@ -4447,7 +4449,7 @@ function showOrders(){
   if(board.length){
     html+=`<div class="orders-hint">Биржа — маршрут и время подачи; заказчик и контакт скрыты до взятия</div>`;
     html+=board.map(o=>`<div class="card" style="margin:8px 0">
-      <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
+      <h3>Биржа · №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p>${esc(routeText(o))}</p>
       ${orderScheduleLines(o, true)}
@@ -4471,7 +4473,7 @@ function showOrders(){
       return `<div class="swipe-item" data-id="${o.id}" data-can-start="${action?1:0}" data-action="${action||''}">
         ${action?`<div class="swipe-actions"><button type="button" class="swipe-start" data-id="${o.id}" data-action="${action}">${actionLabel}</button></div>`:''}
         <div class="swipe-front">
-          <h3>№${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o).toLowerCase()}</h3>
+          <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o).toLowerCase()}</h3>
           <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
           ${orderScheduleLines(o, true)}
           ${contact?`<p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(contact)}</p>`:''}
@@ -4584,7 +4586,7 @@ function showShifts(){
     }).join('');
 }
 
-const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","№ дня","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
+const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 function filteredOrders(){
   if(state.adminFilter==='eto') return [];
   return allOrders().filter(o=>{
@@ -4808,7 +4810,7 @@ function renderAdminExchangeBoard(orders){
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
     const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join('');
     return `<div class="card" style="border-color:rgba(232,93,4,.45)">
-      <h3>Биржа · №${o.sequentialNumber} · день ${o.dayNumber}</h3>
+      <h3>Биржа · №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p style="color:var(--muted)">Заказчик перевозки: <strong>${esc(o.ownCompanyName||'—')}</strong>${mine?' · ваш заказ':''}</p>
       <p>${esc(routeText(o))}</p>
@@ -4867,7 +4869,7 @@ function renderAdmin(){
       ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
       : '';
     return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''}>
-      <h3>Заказ №${o.sequentialNumber} · день ${o.dayNumber} · ${statusText(o)}</h3>
+      <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o)}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       ${ownerLine}
       ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
@@ -5189,7 +5191,7 @@ function openDetail(id){
   $('detail-form').innerHTML=`
     <button class="secondary" id="detail-back">← Назад</button>
     <h2>Заявка №${o.sequentialNumber}</h2>
-    <div class="hint">${statusText(o)} · день ${o.dayNumber} · ${esc(o.driverName)} (${m.percent}%)${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</div>
+    <div class="hint">${statusText(o)} · ${esc(orderDayLabel(o.dayNumber))} · ${esc(o.driverName)} (${m.percent}%)${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</div>
     <div class="calc" style="margin:10px 0;border:1px solid rgba(232,93,4,.45)">
       <div class="hint" style="color:var(--accent);font-weight:800;margin:0 0 6px">⏱ Время на заказ</div>
       <div class="calc-row"><span>До заказа</span><span>${esc(formatDurationMin(o.timeToOrderMin))}</span></div>
