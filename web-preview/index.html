@@ -96,7 +96,20 @@
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
-    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen{overflow:hidden;min-height:0}
+    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen,#admin-vehicle-card{overflow:hidden;min-height:0}
+    .svc-badge{display:inline-block;border-radius:999px;padding:2px 8px;font-size:.68rem;font-weight:700}
+    .svc-ok{background:rgba(125,255,160,.18);color:#7dffa0}
+    .svc-soon{background:rgba(255,204,102,.18);color:#ffcc66}
+    .svc-over{background:rgba(255,141,141,.2);color:#ff8d8d}
+    .svc-log{background:rgba(46,46,46,.9);border-radius:12px;padding:10px 12px;margin-top:6px}
+    .svc-log h4{margin:0 0 4px;font-size:.9rem}
+    .svc-log .meta{color:var(--muted);font-size:.75rem;line-height:1.35}
+    .svc-sum{font-weight:700;color:var(--accent)}
+    .veh-card-btn{border:0;border-radius:var(--pill);padding:6px 10px;min-height:32px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.74rem}
+    .veh-card-btn:hover{background:rgba(230,26,31,.25)}
+    .svc-iv{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .svc-iv:last-child{border-bottom:0}
+    .fin-grid label.svc-full{grid-column:1/-1}
     .claim-box{padding:10px 12px;border-radius:16px;background:rgba(230,26,31,.08);border:1px solid rgba(230,26,31,.28);margin:8px 0}
     .claim-box h3{margin:0 0 6px;font-size:.95rem}
     .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
@@ -492,6 +505,12 @@
     </div>
   </div>
 
+  <div id="admin-vehicle-card" class="screen">
+    <div class="admin-form-shell">
+      <div class="admin-form-scroll" id="vehicle-card-form"></div>
+    </div>
+  </div>
+
   <div id="driver" class="screen">
     <header>
       <button id="driver-exit">Выход</button>
@@ -535,7 +554,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-hide-sync-hint";
+const APP_BUILD="2026-08-05-vehicle-service";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -666,7 +685,7 @@ const $ = id => document.getElementById(id);
 function show(id){
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-vehicle-card';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
@@ -1042,13 +1061,13 @@ function ensureFleetPerSpaces(){
         :(nm.includes('армада')?(DEFAULT_VEHICLES[0]&&DEFAULT_VEHICLES[0].plate)||'О 535 МВ 198'
         :`Х ${String(100+((co.id||co.name||'').length*17)%900).padStart(3,'0')} ХХ 47`);
       const def=DEFAULT_VEHICLES[0]||{consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2};
-      state.vehicles.push({
+      state.vehicles.push(normalizeFleetVehicle({
         plate:seedPlate,
         consumptionPer100Km:def.consumptionPer100Km||20,
         payloadTons:def.payloadTons||5,
         bodyLengthM:def.bodyLengthM||6, bodyWidthM:def.bodyWidthM||2.4, bodyHeightM:def.bodyHeightM||2.2,
         makeModel:'', spaceId:sp.id, companyId:co.id, companyName:co.name
-      });
+      }));
       changed=true;
     }
   });
@@ -1388,6 +1407,7 @@ async function pullRemoteUpdates(reason){
     } else if(inAdmin){
       restoreAdminSession();
       if(detailId && (state.orders||[]).some(o=>o.id===detailId)) openDetail(detailId);
+      else if(document.querySelector('#admin-vehicle-card.show') && state._vehicleCardId) openVehicleCard(state._vehicleCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
       else if(document.querySelector('#admin.show')) renderAdmin();
     }
@@ -2469,18 +2489,7 @@ function migrateCompanies(){
   if(!state.drivers.length && !(state.spaces||[]).length){
     state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
   }
-  state.vehicles=(state.vehicles||[]).map(v=>({
-    plate:String(v.plate||'').trim(),
-    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
-    makeModel:String(v.makeModel||'').trim(),
-    payloadTons:numOrNull(v.payloadTons),
-    bodyLengthM:numOrNull(v.bodyLengthM),
-    bodyWidthM:numOrNull(v.bodyWidthM),
-    bodyHeightM:numOrNull(v.bodyHeightM),
-    spaceId:v.spaceId||null,
-    companyId:v.companyId||null,
-    companyName:v.companyName||null
-  })).filter(v=>v.plate);
+  state.vehicles=(state.vehicles||[]).map(v=>normalizeFleetVehicle(v)).filter(v=>v&&v.plate);
   if(!state.vehicles.length && !(state.spaces||[]).length){
     state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
   }
@@ -2732,6 +2741,283 @@ function vehicle(plate, companyId){
     if(hit) return hit;
   }
   return list.find(v=>v.plate===plate)||{plate,consumptionPer100Km:20};
+}
+function normalizeServiceInterval(iv){
+  if(!iv) return null;
+  const name=String(iv.name||'').trim();
+  if(!name) return null;
+  const everyKm=numOrNull(iv.everyKm);
+  const everyMonths=numOrNull(iv.everyMonths);
+  return {
+    id:iv.id||uuid(),
+    name,
+    everyKm:everyKm>0?everyKm:null,
+    everyMonths:everyMonths>0?everyMonths:null,
+    lastDate:iv.lastDate||null,
+    lastOdometer:numOrNull(iv.lastOdometer),
+    note:String(iv.note||'').trim()
+  };
+}
+function normalizeMaterialLine(m){
+  if(!m) return null;
+  const name=String(m.name||'').trim();
+  if(!name) return null;
+  const qty=+(m.qty>0?m.qty:1);
+  const unitCost=+(m.unitCost>0?m.unitCost:0);
+  const sum=round2(m.sum!=null&&+m.sum>=0?+m.sum:qty*unitCost);
+  return {name, qty, unitCost, sum};
+}
+function normalizeMaintenanceLog(log){
+  if(!log) return null;
+  const title=String(log.title||'').trim();
+  if(!title) return null;
+  const materials=(Array.isArray(log.materials)?log.materials:[]).map(normalizeMaterialLine).filter(Boolean);
+  const materialsCost=round2(materials.reduce((s,m)=>s+(m.sum||0),0) || (+log.materialsCost||0));
+  const workCost=round2(+log.workCost||0);
+  return {
+    id:log.id||uuid(),
+    date:log.date||new Date().toISOString().slice(0,10),
+    odometer:numOrNull(log.odometer),
+    kind:['service','repair','parts'].includes(log.kind)?log.kind:'repair',
+    title,
+    materials,
+    materialsCost,
+    workCost,
+    total:round2(materialsCost+workCost),
+    intervalId:log.intervalId||null,
+    note:String(log.note||'').trim(),
+    createdAt:log.createdAt||new Date().toISOString()
+  };
+}
+function normalizeFleetVehicle(v){
+  if(!v) return null;
+  const plate=String(v.plate||'').trim();
+  if(!plate) return null;
+  return {
+    id:v.id||uuid(),
+    plate,
+    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
+    makeModel:String(v.makeModel||'').trim(),
+    payloadTons:numOrNull(v.payloadTons),
+    bodyLengthM:numOrNull(v.bodyLengthM),
+    bodyWidthM:numOrNull(v.bodyWidthM),
+    bodyHeightM:numOrNull(v.bodyHeightM),
+    spaceId:v.spaceId||null,
+    companyId:v.companyId||null,
+    companyName:v.companyName||null,
+    currentOdometer:numOrNull(v.currentOdometer),
+    serviceIntervals:(Array.isArray(v.serviceIntervals)?v.serviceIntervals:[]).map(normalizeServiceInterval).filter(Boolean),
+    maintenanceLogs:(Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]).map(normalizeMaintenanceLog).filter(Boolean)
+  };
+}
+function fleetVehicleById(id){
+  return (state.vehicles||[]).find(v=>v.id===id)||null;
+}
+function lastKnownOdometerForPlate(plate, companyId){
+  const scored=(state.orders||[])
+    .filter(o=>o.vehiclePlate===plate && (!companyId || o.ownCompanyId===companyId) && (o.endOdometer!=null || o.parkingAfterOdo!=null || o.startOdometer!=null))
+    .map(o=>({
+      odo:o.parkingAfterOdo??o.endOdometer??o.startOdometer,
+      t:new Date(o.closedAt||o.endAt||o.createdAt||0).getTime()
+    }))
+    .filter(x=>x.odo!=null && +x.odo>=0)
+    .sort((a,b)=>b.t-a.t);
+  return scored.length?+scored[0].odo:null;
+}
+function addMonthsIso(dateStr, months){
+  if(!dateStr || !(months>0)) return null;
+  const d=new Date(dateStr+'T12:00:00');
+  if(Number.isNaN(d.getTime())) return null;
+  d.setMonth(d.getMonth()+months);
+  return d.toISOString().slice(0,10);
+}
+/** Статус интервала: ok | soon | overdue */
+function serviceIntervalStatus(v, iv){
+  const odo=v.currentOdometer;
+  let kmLeft=null, daysLeft=null;
+  if(iv.everyKm>0 && iv.lastOdometer!=null && odo!=null){
+    kmLeft=(iv.lastOdometer+iv.everyKm)-odo;
+  }
+  if(iv.everyMonths>0 && iv.lastDate){
+    const due=addMonthsIso(iv.lastDate, iv.everyMonths);
+    if(due){
+      daysLeft=Math.round((new Date(due+'T12:00:00')-new Date())/(24*3600*1000));
+    }
+  }
+  const over=(kmLeft!=null && kmLeft<0) || (daysLeft!=null && daysLeft<0);
+  const soon=!over && ((kmLeft!=null && kmLeft<=1000) || (daysLeft!=null && daysLeft<=30));
+  let label='нет базы';
+  if(iv.lastOdometer==null && !iv.lastDate) label='не обслуживалось';
+  else if(over) label='просрочено';
+  else if(soon) label='скоро';
+  else if(kmLeft!=null || daysLeft!=null) label='норма';
+  const bits=[];
+  if(kmLeft!=null) bits.push(kmLeft>=0?`ещё ${fmt(kmLeft)} км`:`просрочка ${fmt(-kmLeft)} км`);
+  if(daysLeft!=null) bits.push(daysLeft>=0?`ещё ${daysLeft} дн.`:`просрочка ${-daysLeft} дн.`);
+  return {level:over?'over':soon?'soon':(label==='норма'?'ok':'soon'), label, detail:bits.join(' · ')};
+}
+function kindLabel(k){
+  if(k==='service') return 'ТО';
+  if(k==='parts') return 'Материалы';
+  return 'Ремонт';
+}
+function openVehicleCard(vehicleId){
+  if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
+  let v=fleetVehicleById(vehicleId);
+  if(!v){
+    const idx=(state.vehicles||[]).findIndex(x=>x.plate===vehicleId);
+    v=idx>=0?state.vehicles[idx]:null;
+  }
+  if(!v){ alert('Авто не найдено'); openCatalogs(); return; }
+  v=normalizeFleetVehicle(v);
+  const vi=(state.vehicles||[]).findIndex(x=>x.id===v.id || (x.plate===v.plate && x.companyId===v.companyId));
+  if(vi>=0) state.vehicles[vi]=Object.assign(state.vehicles[vi], v);
+  else return;
+  v=state.vehicles[vi];
+  if(v.currentOdometer==null){
+    const guess=lastKnownOdometerForPlate(v.plate, v.companyId);
+    if(guess!=null) v.currentOdometer=guess;
+  }
+  const firm=v.companyName||(findCompanyById(v.companyId)||{}).name||'';
+  const logs=[...(v.maintenanceLogs||[])].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt).localeCompare(String(a.createdAt)));
+  const totalSpent=round2(logs.reduce((s,l)=>s+(l.total||0),0));
+  const ivHtml=(v.serviceIntervals||[]).map(iv=>{
+    const st=serviceIntervalStatus(v, iv);
+    const every=[iv.everyKm?`каждые ${fmt(iv.everyKm)} км`:null, iv.everyMonths?`каждые ${iv.everyMonths} мес.`:null].filter(Boolean).join(' / ')||'—';
+    const last=[iv.lastDate?`посл. ${iv.lastDate}`:null, iv.lastOdometer!=null?`одометр ${fmt(iv.lastOdometer)}`:null].filter(Boolean).join(' · ')||'ещё не было';
+    return `<div class="svc-iv" data-iv="${esc(iv.id)}">
+      <div style="min-width:0;flex:1">
+        <div style="font-weight:700">${esc(iv.name)} <span class="svc-badge svc-${st.level}">${esc(st.label)}</span></div>
+        <div class="meta">${esc(every)} · ${esc(last)}${st.detail?' · '+esc(st.detail):''}</div>
+      </div>
+      <button type="button" class="icon-btn danger" data-del-iv="${esc(iv.id)}" title="Удалить">×</button>
+    </div>`;
+  }).join('') || `<div class="hint">Интервалов пока нет — добавьте ниже (масло, ТО…)</div>`;
+  const logHtml=logs.map(l=>{
+    const mats=(l.materials||[]).map(m=>`${m.name}${m.qty&&m.qty!==1?' ×'+m.qty:''} — ${fmt(m.sum)} ₽`).join('; ');
+    return `<div class="svc-log" data-log="${esc(l.id)}">
+      <h4>${esc(kindLabel(l.kind))}: ${esc(l.title)}
+        <button type="button" class="icon-btn danger" data-del-log="${esc(l.id)}" title="Удалить" style="float:right">×</button>
+      </h4>
+      <div class="meta">${esc(l.date)}${l.odometer!=null?' · одометр '+fmt(l.odometer):''}</div>
+      <div class="meta">Работы: ${fmt(l.workCost)} ₽ · Материалы: ${fmt(l.materialsCost)} ₽ · <span class="svc-sum">итого ${fmt(l.total)} ₽</span></div>
+      ${mats?`<div class="meta">${esc(mats)}</div>`:''}
+      ${l.note?`<div class="meta">${esc(l.note)}</div>`:''}
+    </div>`;
+  }).join('') || `<div class="hint">Записей пока нет</div>`;
+  const ivOpts=['<option value="">— не привязывать —</option>']
+    .concat((v.serviceIntervals||[]).map(iv=>`<option value="${esc(iv.id)}">${esc(iv.name)}</option>`)).join('');
+  const box=$('vehicle-card-form');
+  box.innerHTML=`
+    <div class="cat-sticky">
+      <div class="cat-title-row">
+        <button type="button" class="secondary cat-back" id="veh-card-back">← Авто</button>
+        <h2>${esc(v.plate)}</h2>
+      </div>
+    </div>
+    <div class="hint" style="margin:0">${esc([firm, v.makeModel, vehicleSpecText(v)].filter(Boolean).join(' · ')||'Карточка автомобиля')}</div>
+    <div class="fin-grid" style="margin-top:8px">
+      <label>Модель<input id="vc-model" value="${esc(v.makeModel||'')}" placeholder="ГАЗ Валдай" /></label>
+      <label>Одометр сейчас<input id="vc-odo" inputmode="numeric" value="${v.currentOdometer??''}" placeholder="км" /></label>
+      <button type="button" class="primary cat-add-btn fin-full" id="vc-save-head">Сохранить</button>
+    </div>
+    <h3 style="margin:14px 0 6px;font-size:.95rem">Сервисные интервалы</h3>
+    <div class="card" style="padding:8px 12px">${ivHtml}</div>
+    <div class="fin-grid" style="margin-top:8px">
+      <label class="svc-full">Название<input id="iv-name" placeholder="Замена масла ДВС" /></label>
+      <label>Каждые, км<input id="iv-km" inputmode="numeric" placeholder="10000" /></label>
+      <label>Каждые, мес.<input id="iv-mo" inputmode="numeric" placeholder="12" /></label>
+      <button type="button" class="secondary cat-add-btn fin-full" id="iv-add">+ Интервал</button>
+    </div>
+    <h3 style="margin:14px 0 4px;font-size:.95rem">Журнал работ и материалов <span class="hint">всего ${fmt(totalSpent)} ₽</span></h3>
+    <div>${logHtml}</div>
+    <h3 style="margin:14px 0 6px;font-size:.95rem">Новая запись</h3>
+    <div class="fin-grid">
+      <label>Тип<select id="log-kind"><option value="repair">Ремонт</option><option value="service">ТО</option><option value="parts">Материалы</option></select></label>
+      <label>Дата<input id="log-date" type="date" value="${new Date().toISOString().slice(0,10)}" /></label>
+      <label class="svc-full">Что сделали / купили<input id="log-title" placeholder="Замена масла, фильтры…" /></label>
+      <label>Одометр<input id="log-odo" inputmode="numeric" value="${v.currentOdometer??''}" /></label>
+      <label>Работы, ₽<input id="log-work" inputmode="decimal" placeholder="0" /></label>
+      <label class="svc-full">Материалы (строки: название; кол-во; цена)<textarea id="log-mats" rows="3" placeholder="Масло 5W40; 1; 4500&#10;Фильтр масляный; 1; 800"></textarea></label>
+      <label class="svc-full">К интервалу<select id="log-iv">${ivOpts}</select></label>
+      <label class="svc-full">Заметка<input id="log-note" placeholder="необязательно" /></label>
+      <button type="button" class="primary cat-add-btn fin-full" id="log-add">Добавить запись</button>
+    </div>
+    <div class="hint" style="margin-top:10px">Этап 1: ручной ввод. Фото чеков и распознавание — следующим этапом.</div>
+  `;
+  show('admin-vehicle-card');
+  state._vehicleCardId=v.id;
+  $('veh-card-back').onclick=()=>{ catalogTab='vehicles'; openCatalogs(); };
+  $('vc-save-head').onclick=()=>{
+    v.makeModel=(($('vc-model')||{}).value||'').trim();
+    v.currentOdometer=numOrNull(($('vc-odo')||{}).value);
+    bumpDataEpoch('veh-card-head');
+    persist();
+    openVehicleCard(v.id);
+  };
+  $('iv-add').onclick=()=>{
+    const name=(($('iv-name')||{}).value||'').trim();
+    if(!name){ alert('Укажите название интервала'); return; }
+    const iv=normalizeServiceInterval({
+      name,
+      everyKm:numOrNull(($('iv-km')||{}).value),
+      everyMonths:numOrNull(($('iv-mo')||{}).value)
+    });
+    if(!iv.everyKm && !iv.everyMonths){ alert('Укажите км и/или месяцы'); return; }
+    v.serviceIntervals=v.serviceIntervals||[];
+    v.serviceIntervals.push(iv);
+    bumpDataEpoch('veh-iv-add');
+    persist();
+    openVehicleCard(v.id);
+  };
+  document.querySelectorAll('[data-del-iv]').forEach(b=>b.onclick=()=>{
+    if(!confirm('Удалить интервал?')) return;
+    v.serviceIntervals=(v.serviceIntervals||[]).filter(x=>x.id!==b.dataset.delIv);
+    bumpDataEpoch('veh-iv-del');
+    persist();
+    openVehicleCard(v.id);
+  });
+  document.querySelectorAll('[data-del-log]').forEach(b=>b.onclick=()=>{
+    if(!confirm('Удалить запись?')) return;
+    v.maintenanceLogs=(v.maintenanceLogs||[]).filter(x=>x.id!==b.dataset.delLog);
+    bumpDataEpoch('veh-log-del');
+    persist();
+    openVehicleCard(v.id);
+  });
+  $('log-add').onclick=()=>{
+    const title=(($('log-title')||{}).value||'').trim();
+    if(!title){ alert('Укажите, что сделали'); return; }
+    const matsRaw=(($('log-mats')||{}).value||'').split(/\n/).map(s=>s.trim()).filter(Boolean);
+    const materials=matsRaw.map(line=>{
+      const parts=line.split(';').map(x=>x.trim());
+      const name=parts[0]||'';
+      const qty=+String(parts[1]||'1').replace(',','.')||1;
+      const unitCost=+String(parts[2]||'0').replace(',','.')||0;
+      return normalizeMaterialLine({name, qty, unitCost});
+    }).filter(Boolean);
+    const workCost=+String(($('log-work')||{}).value||'0').replace(',','.')||0;
+    const odometer=numOrNull(($('log-odo')||{}).value);
+    const intervalId=(($('log-iv')||{}).value||'')||null;
+    const log=normalizeMaintenanceLog({
+      date:(($('log-date')||{}).value||'').trim()||new Date().toISOString().slice(0,10),
+      odometer, kind:(($('log-kind')||{}).value||'repair'),
+      title, materials, workCost, intervalId,
+      note:(($('log-note')||{}).value||'').trim()
+    });
+    v.maintenanceLogs=v.maintenanceLogs||[];
+    v.maintenanceLogs.unshift(log);
+    if(odometer!=null) v.currentOdometer=odometer;
+    if(intervalId){
+      const iv=(v.serviceIntervals||[]).find(x=>x.id===intervalId);
+      if(iv){
+        iv.lastDate=log.date;
+        if(odometer!=null) iv.lastOdometer=odometer;
+      }
+    }
+    bumpDataEpoch('veh-log-add');
+    persist();
+    openVehicleCard(v.id);
+  };
 }
 function driverPercent(name, companyId){
   const list=state.drivers||[];
@@ -5963,15 +6249,23 @@ function openCatalogs(){
   const vehicleCards=vehicles.map(({v,i})=>{
     const coName=v.companyName||(v.companyId&&(findCompanyById(v.companyId)||{}).name)||(isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'');
     const spec=vehicleSpecText(v);
+    const ivs=v.serviceIntervals||[];
+    const overs=ivs.filter(iv=>serviceIntervalStatus(v,iv).level==='over').length;
+    const soons=ivs.filter(iv=>serviceIntervalStatus(v,iv).level==='soon').length;
+    const svcHint=overs?`<span class="svc-badge svc-over">ТО ${overs}</span>`
+      :(soons?`<span class="svc-badge svc-soon">скоро ${soons}</span>`
+      :(ivs.length?`<span class="svc-badge svc-ok">ТО ок</span>`:''));
+    const logsN=(v.maintenanceLogs||[]).length;
     return `<div class="item-card">
       <div class="item-top">
         <div class="item-name" title="${esc(coName||v.plate)}">${esc(v.plate)}</div>
         <div class="item-actions" style="flex:0 0 auto;gap:4px">
+          <button type="button" class="veh-card-btn" data-open-veh="${esc(v.id||i)}" title="Карточка">Карточка</button>
           <button type="button" class="icon-btn ok" data-save-veh="${i}" title="Сохранить">✓</button>
           <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
         </div>
       </div>
-      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}</div>
+      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
       <div class="veh-specs">
         <input id="veh-pay-${i}" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" value="${v.payloadTons??''}" />
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
@@ -6271,6 +6565,17 @@ function openCatalogs(){
     syncCustomersFromCompanies();
     persist(); openCatalogs();
   });
+  document.querySelectorAll('[data-open-veh]').forEach(b=>b.onclick=()=>{
+    const key=b.dataset.openVeh;
+    const byId=fleetVehicleById(key);
+    if(byId){ openVehicleCard(byId.id); return; }
+    const i=+key;
+    const v=state.vehicles[i];
+    if(v){
+      if(!v.id) v.id=uuid();
+      openVehicleCard(v.id);
+    }
+  });
   document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveVeh;
     const v=state.vehicles[i]; if(!v) return;
@@ -6312,10 +6617,11 @@ function openCatalogs(){
     const bodyWidthM=numOrNull(($('own-veh-w')||{}).value);
     const bodyHeightM=numOrNull(($('own-veh-h')||{}).value);
     if(!(payloadTons>0)){ alert('Укажите грузоподъёмность (т) — нужна для биржи'); return; }
-    state.vehicles.push({
+    state.vehicles.push(normalizeFleetVehicle({
       plate, consumptionPer100Km:cons, payloadTons, bodyLengthM, bodyWidthM, bodyHeightM, makeModel:'',
-      spaceId:owner.spaceId, companyId:owner.companyId, companyName:owner.companyName
-    });
+      spaceId:owner.spaceId, companyId:owner.companyId, companyName:owner.companyName,
+      serviceIntervals:[], maintenanceLogs:[]
+    }));
     bumpDataEpoch('add-vehicle');
     persist(); openCatalogs();
     flashCatOk();
