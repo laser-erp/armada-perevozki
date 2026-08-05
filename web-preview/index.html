@@ -505,7 +505,7 @@ let DRIVER="Наволоцкий Е.Н.";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-driver-switch";
+const APP_BUILD="2026-08-05-driver-you";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1774,16 +1774,28 @@ function restoreDriverSession(){
   DRIVER_COMPANY_ID=rec.companyId||raw.companyId||null;
   return true;
 }
+function peekAdminSessionName(){
+  if(currentAdmin && currentAdmin.name) return currentAdmin.name;
+  try{
+    const raw=JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY)||'null');
+    return (raw && raw.name)||'';
+  }catch(_){ return ''; }
+}
 function updateDriverChrome(){
   const t=$('driver-title');
   if(!t) return;
+  if(!DRIVER){ t.textContent='Водитель'; t.title=''; return; }
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
-  t.textContent=firm?`${DRIVER}`:'Водитель';
+  t.textContent=DRIVER;
   t.title=firm?`${DRIVER} · ${firm}`:DRIVER;
 }
-function driverPickRows(){
+function driverPickRows(preferName){
   const rows=(state.drivers||[]).filter(d=>(d.name||'').trim());
+  const prefer=String(preferName||'').trim();
   rows.sort((a,b)=>{
+    const aYou=prefer && samePersonName(a.name, prefer)?0:1;
+    const bYou=prefer && samePersonName(b.name, prefer)?0:1;
+    if(aYou!==bYou) return aYou-bYou;
     const fa=a.companyName||'', fb=b.companyName||'';
     const c=fa.localeCompare(fb,'ru');
     if(c) return c;
@@ -1795,9 +1807,13 @@ function openDriverPick(fromAdmin){
   migrateSpaces();
   let dirty=ensureFleetPerSpaces();
   if(dirty){ bumpDataEpoch('fleet-for-driver-pick'); persist(); }
+  // Не входим «по умолчанию» под Наволоцкого — только после явного выбора
+  DRIVER='';
+  DRIVER_COMPANY_ID=null;
   const box=$('driver-pick-list');
-  if(!box){ show('driver'); resetChat(); renderDriverBanner(); return; }
-  let rows=driverPickRows();
+  if(!box){ show('roles'); return; }
+  const youName=peekAdminSessionName();
+  let rows=driverPickRows(youName);
   // Обычный админ — только водители своей фирмы; супер — все
   if(currentAdmin && !isSuperAdmin()){
     const myCo=currentOwnCompany();
@@ -1808,30 +1824,34 @@ function openDriverPick(fromAdmin){
       return false;
     });
   }
-  const backHint=fromAdmin || currentAdmin
-    ? 'Можно войти под Нечаевым, Наволоцким и др. — админ-сессия сохранится, вернётесь кнопкой «Выход»'
-    : 'Выберите ФИО и фирму — смена и ЕТО увидит админ этой фирмы';
+  const backHint=youName
+    ? `Сверху ваш профиль («${youName}»). Не нажимайте чужое ФИО — иначе смена уйдёт не тому водителю.`
+    : 'Выберите своё ФИО и фирму. Смена и ЕТО увидит админ этой фирмы.';
   if(!rows.length){
-    box.innerHTML=`<div class="hint">Нет водителей в справочнике. Добавьте во вкладке «Водители».</div><div class="hint" style="margin-top:8px">${esc(backHint)}</div>`;
+    box.innerHTML=`<div class="hint">Нет водителей в справочнике. Добавьте во вкладке «Водители».</div>`;
   } else {
     box.innerHTML=`<div class="hint" style="text-align:left;margin:0 0 8px">${esc(backHint)}</div>`+rows.map(d=>{
       const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'без фирмы';
       const ph=formatPhone(d.phone||'');
+      const isYou=youName && samePersonName(d.name, youName);
       const coAttr=String(d.companyId||'').replace(/"/g,'');
       const nameAttr=String(d.name||'').replace(/"/g,'');
-      return `<button type="button" class="secondary drv-pick" data-name="${nameAttr}" data-co="${coAttr}" style="text-align:left;padding:12px 14px">
-        <div style="font-weight:800">${esc(d.name)}</div>
-        <div style="font-size:.78rem;color:var(--muted);margin-top:2px">${esc(firm)}${ph?' · '+esc(ph):''}</div>
+      return `<button type="button" class="${isYou?'primary':'secondary'} drv-pick" data-name="${nameAttr}" data-co="${coAttr}" style="text-align:left;padding:12px 14px${isYou?';box-shadow:0 0 0 2px rgba(230,26,31,.35)':''}">
+        <div style="font-weight:800">${esc(d.name)}${isYou?' · это вы':''}</div>
+        <div style="font-size:.78rem;color:${isYou?'rgba(255,255,255,.85)':'var(--muted)'};margin-top:2px">${esc(firm)}${ph?' · '+esc(ph):''}</div>
       </button>`;
     }).join('');
     document.querySelectorAll('.drv-pick').forEach(b=>b.onclick=()=>{
       const name=b.getAttribute('data-name')||'';
       const co=b.getAttribute('data-co')||'';
-      const rec=findDriverRecord(name, co)||{name, companyId:co||null, companyName:(findCompanyById(co)||{}).name||null};
+      const firm=(findCompanyById(co)||{}).name||'';
+      if(youName && name && !samePersonName(name, youName)){
+        if(!confirm(`Войти как ${name}${firm?' ('+firm+')':''}?\n\nСейчас в админке вы: ${youName}.\nЕсли вы — ${youName}, нажмите «Отмена» и выберите себя.`)) return;
+      }
+      const rec=findDriverRecord(name, co)||{name, companyId:co||null, companyName:firm||null};
       enterAsDriver(rec);
     });
   }
-  // запомнить, откуда пришли — чтобы «Назад» вернул в админку
   const back=$('driver-pick-back');
   if(back){
     back.onclick=()=>{
@@ -1844,6 +1864,7 @@ function openDriverPick(fromAdmin){
 function enterAsDriver(rec){
   if(!rec||!rec.name) return;
   DRIVER=String(rec.name||'').trim();
+  if(!DRIVER){ alert('Не выбрано ФИО водителя'); return; }
   DRIVER_COMPANY_ID=rec.companyId||null;
   if(!DRIVER_COMPANY_ID){
     const bind=resolveDriverOrderBinding(DRIVER, '');
@@ -1860,6 +1881,12 @@ function enterAsDriver(rec){
   updateDriverChrome();
   show('driver');
   resetChat();
+  // Явно показать, под кем вошли
+  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
+    state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}. Открывайте смену только если это ваше ФИО.`});
+  }
+  renderChat();
   renderDriverBanner();
   renderInput();
 }
@@ -2573,15 +2600,16 @@ function invalidateStaleEto(shift){
 /** Привязать смену к водителю и фирме (как заказ с source=driver). */
 function stampShiftOwner(shift, driverName, vehiclePlate){
   if(!shift) return shift;
-  const name=String(driverName||shift.driverName||DRIVER).trim()||DRIVER;
+  const name=String(driverName||shift.driverName||'').trim();
   const plate=String(vehiclePlate||shift.vehiclePlate||'').trim();
+  if(!name && !plate) return shift;
   // Фирма: авто смены → компания выбранного водителя → домашний профиль
   let companyId=null;
   if(plate){
     const veh=(state.vehicles||[]).find(v=>v.plate===plate);
     if(veh && veh.companyId) companyId=veh.companyId;
   }
-  if(!companyId && DRIVER_COMPANY_ID && samePersonName(name, DRIVER)) companyId=DRIVER_COMPANY_ID;
+  if(!companyId && name && DRIVER_COMPANY_ID && samePersonName(name, DRIVER)) companyId=DRIVER_COMPANY_ID;
   const rec=findDriverRecord(name, companyId);
   const bind=resolveDriverOrderBinding(name, plate);
   shift.driverName=name;
@@ -2608,8 +2636,10 @@ function migrateShiftOwners(){
   let changed=false;
   (state.shifts||[]).forEach(s=>{
     if(!s) return;
+    // Не подставляем активного DRIVER сессии — только данные самой смены
+    if(!s.driverName && !s.vehiclePlate) return;
     const before=JSON.stringify({d:s.driverName,o:s.ownerAdminId,sp:s.spaceId,c:s.ownCompanyId});
-    stampShiftOwner(s, s.driverName||DRIVER, s.vehiclePlate);
+    stampShiftOwner(s, s.driverName||null, s.vehiclePlate);
     const after=JSON.stringify({d:s.driverName,o:s.ownerAdminId,sp:s.spaceId,c:s.ownCompanyId});
     if(before!==after) changed=true;
   });
@@ -3179,6 +3209,11 @@ function resumeOpenShift(shift){
 }
 function openShift(){
   try{
+    if(!DRIVER){
+      state.error='Сначала выберите своё ФИО на экране «Кто за рулём?»';
+      openDriverPick(!!peekAdminSessionName());
+      return;
+    }
     if(!state.vehicles||!state.vehicles.length){
       state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
     }
