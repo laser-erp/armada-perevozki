@@ -525,7 +525,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-shift-day-totals";
+const APP_BUILD="2026-08-05-fix-total-bonus-col";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -4847,7 +4847,7 @@ function canAdminSeeShift(s){
 }
 /** Суммы по списку заказов: выручка, расходы, прибыль. */
 function sumOrderMoney(list){
-  let revenue=0, expenses=0, profit=0, pay=0, fuel=0, rent=0, cushion=0, km=0, n=0;
+  let revenue=0, expenses=0, profit=0, pay=0, bonus=0, fuel=0, rent=0, cushion=0, km=0, n=0;
   let hasMoney=false;
   (list||[]).forEach(o=>{
     n++;
@@ -4857,6 +4857,7 @@ function sumOrderMoney(list){
     const exp=(m.driverPay||0)+(m.fuelCostCalc||0)+(o.vehicleRent||0)+(m.cushion||0);
     expenses+=exp;
     pay+=(m.driverPay||0);
+    bonus+=(o.salaryBonus||0);
     fuel+=(m.fuelCostCalc||0);
     rent+=(o.vehicleRent||0);
     cushion+=(m.cushion||0);
@@ -4868,7 +4869,7 @@ function sumOrderMoney(list){
     revenue:hasMoney?round2(revenue):null,
     expenses:hasMoney?round2(expenses):null,
     profit:hasMoney?round2(profit):null,
-    pay:round2(pay), fuel:round2(fuel), rent:round2(rent), cushion:round2(cushion)
+    pay:round2(pay), bonus:round2(bonus), fuel:round2(fuel), rent:round2(rent), cushion:round2(cushion)
   };
 }
 /**
@@ -5228,10 +5229,11 @@ function renderAdmin(){
   groups.forEach(g=>{
     const open=!!state.adminExpandedGroups[g.id];
     const t=g.totals;
+    // Колонки как в COLS: «Доплата ЗП» = только salaryBonus; ЗП водителя — в тексте маршрута
     const sumCells=[
-      g.dayLabel, g.vehiclePlate, g.driverName, '—', `Итог смены · ${t.count} заказ.`, '—',
+      g.dayLabel, g.vehiclePlate, g.driverName, '—', `Итог · ЗП ${fmt(t.pay)} ₽ · ${t.count} зак.`, '—',
       '—','—','—', fmt(t.km), '—','—','—','—',
-      fmt(t.revenue), fmt(t.pay), '—','—', fmt(t.fuel), fmt(t.rent), fmt(t.cushion), fmt(t.profit), '—'
+      fmt(t.revenue), (t.bonus>0?fmt(t.bonus):'—'), '—','—', fmt(t.fuel), fmt(t.rent), fmt(t.cushion), fmt(t.profit), '—'
     ];
     tableRows+=`<tr class="group-total" data-group="${esc(g.id)}" title="Нажмите, чтобы ${open?'свернуть':'развернуть'} заказы">
       <td><span class="tog">${open?'▼':'▶'}</span> Итог</td>
