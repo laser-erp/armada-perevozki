@@ -517,7 +517,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-05-eto-fuel-morning";
+const APP_BUILD="2026-08-05-compact-seq";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -672,6 +672,51 @@ function stripCancelledFromOrders(orders){
   const dead=deletedOrderIdSet();
   return (orders||[]).filter(o=>o && !isCancelledOrder(o) && !dead.has(o.id));
 }
+/** Вычистить retired/отменённые из orders и смен (чтобы дубль не висел на сервере). */
+function purgeDeadOrdersEverywhere(){
+  unionDeletedOrderIds([]);
+  const before=(state.orders||[]).length;
+  state.orders=stripCancelledFromOrders(state.orders);
+  (state.shifts||[]).forEach(s=>{
+    if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders);
+  });
+  return before!==(state.orders||[]).length;
+}
+/**
+ * Сквозные № базы без дыр: 1…N по дате создания.
+ * Иначе после удаления дубля следующий заказ получает max+1 (№5 при живых 1–3).
+ */
+function compactSequentialNumbers(){
+  purgeDeadOrdersEverywhere();
+  const list=(state.orders||[]).slice().sort((a,b)=>{
+    const ta=new Date(a.createdAt||0).getTime();
+    const tb=new Date(b.createdAt||0).getTime();
+    if(ta!==tb) return ta-tb;
+    return String(a.id||'').localeCompare(String(b.id||''));
+  });
+  let changed=false;
+  list.forEach((o,i)=>{
+    const n=i+1;
+    if(+o.sequentialNumber!==n){ o.sequentialNumber=n; changed=true; }
+  });
+  const next=list.length;
+  if(+state.seq!==next){ state.seq=next; changed=true; }
+  const byId=new Map(list.map(o=>[o.id,o]));
+  (state.shifts||[]).forEach(s=>{
+    if(!Array.isArray(s.orders)) return;
+    s.orders.forEach((o,idx)=>{
+      const live=byId.get(o.id);
+      if(live) s.orders[idx]=live;
+    });
+  });
+  state.orders=list.slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  return changed;
+}
+function nextSequentialNumber(){
+  compactSequentialNumbers();
+  state.seq=(Number(state.seq)||0)+1;
+  return state.seq;
+}
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
   console.info('dataEpoch →', state.dataEpoch, reason||'');
@@ -713,7 +758,10 @@ function applyPayload(p, opts){
   if(!p||typeof p!=='object') return;
   const keepShifts=opts&&opts.keepShifts;
   const keepOrders=opts&&opts.keepOrders;
+  // Сначала tombstone (+ RETIRED), потом фильтр заказов — иначе дубль снова попадает в список
+  unionDeletedOrderIds(p.deletedOrderIds||[]);
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
+  (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
   // Явный массив orders с сервера (в т.ч. []) — закон. Не поднимаем заказы из смен.
   state.orders=Array.isArray(p.orders)?stripCancelledFromOrders(p.orders):[];
   // remoteSeq: сервер задаёт счётчик № базы целиком (после удаления дубля можно сжать нумерацию).
@@ -728,7 +776,6 @@ function applyPayload(p, opts){
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   state.settings=Object.assign({dadataToken:''}, state.settings||{}, p.settings||{});
   state.dataEpoch=Number(p.dataEpoch)||0;
-  unionDeletedOrderIds(p.deletedOrderIds||[]);
   mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
@@ -771,6 +818,7 @@ function applyPayload(p, opts){
   state.orders=stripCancelledFromOrders(state.orders);
   healAllOrders();
   purgeCancelledOrders();
+  compactSequentialNumbers();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
 function migrateDriverOwners(){
@@ -2692,6 +2740,7 @@ function cancelOrder(id, reason){
   rememberDeletedOrderId(id);
   state.orders=(state.orders||[]).filter(x=>x.id!==id);
   state.shifts.forEach(s=>{ if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>x.id!==id); });
+  compactSequentialNumbers();
   bumpDataEpoch('cancelOrder');
   persist();
   return true;
@@ -3346,11 +3395,13 @@ function hydrateOrdersFromMessages(){
 }
 function healAllOrders(){
   let changed=false;
+  if(purgeDeadOrdersEverywhere()) changed=true;
   if(hydrateOrdersFromMessages()) changed=true;
   (state.orders||[]).forEach(o=>{ if(healOrderCloseState(o)) changed=true; ensureOrderTimeStamps(o); });
   (state.shifts||[]).forEach(s=>{
     (s.orders||[]).forEach(o=>{ if(healOrderCloseState(o)) changed=true; ensureOrderTimeStamps(o); });
   });
+  if(compactSequentialNumbers()) changed=true;
   return changed;
 }
 function kmParkingToEnd(o){
@@ -4274,7 +4325,7 @@ function submitText(){
   if(state.orderStep==='unloading') finishOrder(text);
 }
 function finishOrder(unloading){
-  const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; state.seq+=1; const createdAt=new Date().toISOString();
+  const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; const seqNo=nextSequentialNumber(); const createdAt=new Date().toISOString();
   const plate=d.plate || (state.shift&&state.shift.vehiclePlate) || '';
   // Жёстко от сессии водителя / смены — не от чужой копии ФИО
   const bind=resolveDriverOrderBinding(DRIVER, plate);
@@ -4299,7 +4350,7 @@ function finishOrder(unloading){
     bind.ownerAdminName=state.shift.ownerAdminName||bind.ownerAdminName;
   }
   const order={
-    id:uuid(), sequentialNumber:state.seq, dayNumber:d.dayNumber, createdAt, source:'driver',
+    id:uuid(), sequentialNumber:seqNo, dayNumber:d.dayNumber, createdAt, source:'driver',
     vehiclePlate:plate, startOdometer:d.startOdo, previousOdometer:d.prevOdo,
     loadingAddress:d.loading, unloadingAddress:unloading,
     loading:d.loading, unloading:unloading,
@@ -5003,13 +5054,13 @@ function saveDispatcherOrder(){
       $('create-error').textContent='Выбранное авто меньше требований к ТС'; return;
     }
   }
-  state.seq+=1;
+  const seqNo=nextSequentialNumber();
   if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
   const orderSpaceId=ownCo.spaceId || currentAdmin.spaceId || null;
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId && a.spaceId===orderSpaceId) || currentAdmin;
   const company=upsertCompany({name:customer, roles:['customer'], spaceId:orderSpaceId});
   const order={
-    id:uuid(), sequentialNumber:state.seq, dayNumber:createDay,
+    id:uuid(), sequentialNumber:seqNo, dayNumber:createDay,
     createdAt:new Date().toISOString(), source:'dispatcher',
     ownerAdminId:spaceAdm.id,
     ownerAdminName:spaceAdm.name,
