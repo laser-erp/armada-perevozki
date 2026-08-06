@@ -731,7 +731,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-06-post-close-where";
+const APP_BUILD="2026-08-06-link-empty-after";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -4391,11 +4391,45 @@ function kmParkingToEnd(o){
   if(o.emptyKmBefore!=null || o.loadedKm!=null) return (o.emptyKmBefore||0)+(o.loadedKm||0);
   return null;
 }
-/** Км для списания топлива: полная цепочка, иначе стоянка→конец заказа. */
+/** Км для списания топлива: полная цепочка; зеркальный «после» (тот же путь, что «нулевой до» следующего) не дублируем. */
 function tripKmForFuel(o){
+  if(o && o.emptyAfterLinkedFromNext){
+    const has=o.emptyKmBefore!=null||o.loadedKm!=null;
+    if(has) return (o.emptyKmBefore||0)+(o.loadedKm||0);
+    return kmParkingToEnd(o);
+  }
   const total=dayTotal(o);
   if(total!=null) return total;
   return kmParkingToEnd(o);
+}
+/** Предыдущий закрытый заказ, ждущий «до стоянки» от следующего. */
+function findOrderAwaitingEmptyAfterLink(nextOrder){
+  if(!nextOrder) return null;
+  const plate=nextOrder.vehiclePlate||'';
+  const driver=nextOrder.driverName||DRIVER||'';
+  const list=(state.orders||[])
+    .filter(o=>o && o.closedAt && o.endOdometer!=null && o.linkEmptyAfterToNext
+      && o.id!==nextOrder.id
+      && (!plate || o.vehiclePlate===plate)
+      && (!driver || samePersonName(o.driverName||'', driver)))
+    .sort((a,b)=>new Date(b.closedAt)-new Date(a.closedAt));
+  return list[0]||null;
+}
+/** «До стоянки» предыдущего = «нулевой до» нового (один и тот же путь между заказами). */
+function linkEmptyAfterFromNextEmptyBefore(nextOrder){
+  if(!nextOrder || nextOrder.emptyKmBefore==null) return null;
+  const prev=findOrderAwaitingEmptyAfterLink(nextOrder);
+  if(!prev) return null;
+  prev.emptyKmAfter=Math.max(0, +nextOrder.emptyKmBefore||0);
+  prev.emptyAfterLinkedFromNext=true;
+  prev.linkEmptyAfterToNext=false;
+  if(nextOrder.arrivedAt) prev.parkingAt=nextOrder.arrivedAt;
+  else if(!prev.parkingAt) prev.parkingAt=new Date().toISOString();
+  recomputeOrderTimes(prev);
+  applyClientTariff(prev);
+  bumpDataEpoch('link-empty-after');
+  upsertOrder(prev);
+  return prev;
 }
 /** Остаток до заказа: прошлый заказ по авто, иначе ЕТО смены. Не подставляем 80 л. */
 function lastFuelRemainingLiters(plate, exceptId){
@@ -5215,8 +5249,10 @@ function acceptArrive(value){
   if(!state.shift.orders) state.shift.orders=[];
   if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
   upsertOrder(order); add('driver',String(value));
+  const linked=linkEmptyAfterFromNextEmptyBefore(order);
   const tTo=order.timeToOrderMin!=null?`\nВремя до заказа: ${formatDurationMin(order.timeToOrderMin)}`:'';
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}`);
+  const linkNote=linked?`\nУ заказа №${linked.sequentialNumber} «до стоянки» = ${order.emptyKmBefore} км (как нулевой до этого).`:'';
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
@@ -5292,6 +5328,8 @@ function acceptCloseShiftParking(value){
     const last=closed[closed.length-1];
     if(last){
       last.emptyKmAfter=Math.max(0, value-last.endOdometer);
+      last.linkEmptyAfterToNext=false;
+      last.emptyAfterLinkedFromNext=false;
       upsertOrder(last);
     }
     add('bot','Смена закрыта. Хорошего отдыха!');
@@ -5418,6 +5456,8 @@ function finishPostCloseWhere(where){
   if(order){
     if(where==='here'){
       order.emptyKmAfter=0;
+      order.linkEmptyAfterToNext=false;
+      order.emptyAfterLinkedFromNext=false;
       order.parkingAt=new Date().toISOString();
       recomputeOrderTimes(order);
       applyClientTariff(order);
@@ -5428,15 +5468,20 @@ function finishPostCloseWhere(where){
     } else if(where==='parking'){
       // Пробег до стоянки посчитается при закрытии смены по одометру стоянки
       if(order.emptyKmAfter==null) order.emptyKmAfter=0;
+      order.linkEmptyAfterToNext=false;
+      order.emptyAfterLinkedFromNext=false;
       upsertOrder(order);
       add('driver','На стоянку');
       add('bot',`Ок. Одометр на стоянке укажете при «Закрыть смену» — пробег после выгрузки посчитается сам (от ${end}).`);
     } else {
-      // next order — нулевой после = 0; путь до следующего заказа войдёт в «нулевой до» следующего
+      // следующий заказ: «до стоянки» проставится = «нулевой до» нового
       order.emptyKmAfter=0;
+      order.linkEmptyAfterToNext=true;
+      order.emptyAfterLinkedFromNext=false;
       upsertOrder(order);
+      if(state.shift) state.shift.pendingEmptyAfterOrderId=order.id;
       add('driver','На следующий заказ');
-      add('bot',`Ок. Точка отсчёта для следующего заказа — одометр ${end}.\nНа загрузке следующего укажите только новый одометр: нулевой до него посчитается сам.`);
+      add('bot',`Ок. Точка отсчёта — одометр ${end}.\nКогда укажете одометр на загрузке следующего заказа, «нулевой до» него и «до стоянки» у заказа №${order.sequentialNumber} станут одинаковыми.`);
     }
   } else {
     add('driver', where==='here'?'Уже на стоянке':where==='parking'?'На стоянку':'На следующий заказ');
@@ -5497,8 +5542,10 @@ function finishOrder(unloading){
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order);
   bumpDataEpoch('driver-create-order');
   upsertOrder(order);
+  const linked=linkEmptyAfterFromNextEmptyBefore(order);
   const route=routeText(order);
-  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа ${orderDayLabel(order.dayNumber)}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}`);
+  const linkNote=linked?`\n🔵До стоянки у №${linked.sequentialNumber}: ${order.emptyKmBefore} км (= нулевой до этого)`:'';
+  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа ${orderDayLabel(order.dayNumber)}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}\n🔵Нулевой до заказа - ${order.emptyKmBefore} км${linkNote}`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
   persist();
