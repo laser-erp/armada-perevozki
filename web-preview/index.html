@@ -89,9 +89,11 @@
     table.admin tr.group-detail td{background:rgba(255,255,255,.03);font-weight:400}
     table.admin tr.group-total .tog{display:inline-block;min-width:1.2em;color:var(--accent)}
     .day-total-card{border:1px solid rgba(230,26,31,.35)}
+    .day-total-card.open-shift{border-color:rgba(255,204,102,.45)}
     .day-total-card .tot-row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:6px;font-size:.82rem}
     .day-total-card .tot-row b{color:var(--accent)}
     .day-total-details{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+    .day-total-details .card{margin-top:8px}
     .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:640px;margin:0 auto;padding:12px 12px 28px;text-align:left;direction:ltr}
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
@@ -731,7 +733,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-06-link-empty-after";
+const APP_BUILD="2026-08-06-admin-card-groups";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -5834,16 +5836,20 @@ function sumOrderMoney(list){
   };
 }
 /**
- * Группы «итог смены» после закрытия смены: день + водитель.
- * Заказы без закрытой смены остаются отдельными строками.
+ * Группы «итог за день»: закрытые и открытые смены + оставшиеся заказы по дню/водителю.
+ * Карточки над таблицей и строки таблицы используют одни и те же группы.
  */
 function buildAdminShiftDayGroups(orders){
   const byId=new Map((orders||[]).map(o=>[o.id,o]));
   const used=new Set();
   const groups=[];
   const shifts=(state.shifts||[])
-    .filter(s=>s && s.endedAt && canAdminSeeShift(s))
-    .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
+    .filter(s=>s && canAdminSeeShift(s))
+    .sort((a,b)=>{
+      const ta=new Date(a.endedAt||a.startedAt||0).getTime();
+      const tb=new Date(b.endedAt||b.startedAt||0).getTime();
+      return tb-ta;
+    });
   shifts.forEach(s=>{
     const dayKey=dayKeyFromIso(s.endedAt||s.startedAt);
     if(!dayKey) return;
@@ -5861,16 +5867,99 @@ function buildAdminShiftDayGroups(orders){
     if(!list.length) return;
     list.forEach(o=>used.add(o.id));
     list.sort((a,b)=>(a.sequentialNumber||0)-(b.sequentialNumber||0));
-    const id=`${s.id||(dayKey+'|'+(s.driverName||''))}`;
+    const openShift=!s.endedAt;
+    const id=`${s.id||(dayKey+'|'+(s.driverName||'')+(openShift?'|open':''))}`;
     groups.push({
       id, shift:s, dayKey, dayLabel:dayOnly(s.endedAt||s.startedAt),
       driverName:s.driverName||list[0].driverName||'—',
       vehiclePlate:s.vehiclePlate||list[0].vehiclePlate||'—',
+      openShift,
       orders:list, totals:sumOrderMoney(list)
     });
   });
-  const ungrouped=(orders||[]).filter(o=>!used.has(o.id));
-  return {groups, ungrouped};
+  // Оставшиеся заказы без смены — всё равно свернуть по дню + водителю
+  const leftover=new Map();
+  (orders||[]).forEach(o=>{
+    if(used.has(o.id)) return;
+    const dayKey=dayKeyFromIso(o.closedAt||o.createdAt)||'без-даты';
+    const driver=o.driverName||'—';
+    const key=dayKey+'|'+String(driver).toLowerCase();
+    if(!leftover.has(key)) leftover.set(key, {dayKey, driverName:driver, orders:[]});
+    leftover.get(key).orders.push(o);
+  });
+  [...leftover.values()].forEach(bundle=>{
+    const list=bundle.orders.slice().sort((a,b)=>(a.sequentialNumber||0)-(b.sequentialNumber||0));
+    list.forEach(o=>used.add(o.id));
+    const id=`day|${bundle.dayKey}|${bundle.driverName}`;
+    groups.push({
+      id, shift:null, dayKey:bundle.dayKey,
+      dayLabel:dayOnly(list[0].closedAt||list[0].createdAt)||bundle.dayKey,
+      driverName:bundle.driverName,
+      vehiclePlate:list[0].vehiclePlate||'—',
+      openShift:list.some(o=>!looksClosedOrder(o)),
+      orders:list, totals:sumOrderMoney(list)
+    });
+  });
+  groups.sort((a,b)=>{
+    if(a.dayKey!==b.dayKey) return String(b.dayKey).localeCompare(String(a.dayKey));
+    return String(a.driverName).localeCompare(String(b.driverName),'ru');
+  });
+  return {groups, ungrouped:[]};
+}
+function adminOrderCardHtml(o){
+  const m=metrics(o);
+  const hasRate=selectedRate(o)!=null;
+  const pay=m.driverPay;
+  const onEx=!!o.onExchange && !looksClosedOrder(o) && o.startOdometer==null;
+  const sp=findSpaceById(o.spaceId);
+  const ownerLine=isSuperAdmin()
+    ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
+    : '';
+  return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''} data-order-card="${esc(o.id)}">
+    <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o)}</h3>
+    <p>${esc(dateTime(o.createdAt))}</p>
+    ${ownerLine}
+    ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
+    <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
+    ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
+    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })()}</p>
+    <p>${esc(orderContactLine(o))}</p>
+    <p>${esc(routeText(o))}</p>
+    ${orderTimesLines(ensureOrderTimeStamps(o))}
+    ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
+    ${orderScheduleLines(o, false)}
+    <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
+    ${hasRate
+      ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
+      : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
+      ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
+      ${!onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:''}
+      ${!looksClosedOrder(o)&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
+    </div>
+  </div>`;
+}
+function adminGroupCardHtml(g){
+  const open=!!state.adminExpandedGroups[g.id];
+  const t=g.totals;
+  const shiftNote=g.shift
+    ? (g.openShift?`смена открыта`:`смена закрыта ${dateTime(g.shift.endedAt)}`)
+    : 'без смены';
+  const title=g.openShift?'Смена (открыта)':'Итог за день';
+  return `<div class="card day-total-card${g.openShift?' open-shift':''}" data-group-card="${esc(g.id)}">
+    <h3><span class="tog">${open?'▼':'▶'}</span> ${esc(title)} · ${esc(g.dayLabel)} · ${esc(g.driverName)}</h3>
+    <p>${esc(g.vehiclePlate)} · заказов: ${t.count} · ${esc(shiftNote)}</p>
+    <div class="tot-row">
+      <span>Выручка (нал): <b>${esc(fmt(t.revenue))} ₽</b></span>
+      <span>Расходы: <b>${esc(fmt(t.expenses))} ₽</b></span>
+      <span>ЗП: <b>${esc(fmt(t.pay))} ₽</b></span>
+      <span>ГСМ: <b>${esc(fmt(t.fuel))} ₽</b></span>
+      <span>Прибыль: <b>${esc(fmt(t.profit))} ₽</b></span>
+      <span>Км: <b>${esc(fmt(t.km))}</b></span>
+    </div>
+    ${open?`<div class="day-total-details">${g.orders.map(adminOrderCardHtml).join('')}</div>`:''}
+  </div>`;
 }
 function filteredOrders(){
   if(state.adminFilter==='eto') return [];
@@ -6144,42 +6233,12 @@ function renderAdmin(){
     return;
   }
   const exCount=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.closedAt && o.onExchange && o.startOdometer==null).length;
-  const cards=orders.map(o=>{
-    const m=metrics(o);
-    const hasRate=selectedRate(o)!=null;
-    const pay=m.driverPay;
-    const onEx=!!o.onExchange && !looksClosedOrder(o) && o.startOdometer==null;
-    const sp=findSpaceById(o.spaceId);
-    const ownerLine=isSuperAdmin()
-      ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
-      : '';
-    return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''}>
-      <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o)}</h3>
-      <p>${esc(dateTime(o.createdAt))}</p>
-      ${ownerLine}
-      ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
-      <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
-      ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
-      <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })()}</p>
-      <p>${esc(orderContactLine(o))}</p>
-      <p>${esc(routeText(o))}</p>
-      ${orderTimesLines(ensureOrderTimeStamps(o))}
-      ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
-      ${orderScheduleLines(o, false)}
-      <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
-      ${hasRate
-        ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
-        : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
-      <div class="row" style="margin-top:8px">
-        <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
-        ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
-        ${!onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:''}
-        ${!looksClosedOrder(o)&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
-      </div>
-    </div>`;
-  }).join('');
   if(!state.adminExpandedGroups || typeof state.adminExpandedGroups!=='object') state.adminExpandedGroups={};
-  const {groups, ungrouped}=buildAdminShiftDayGroups(orders);
+  const {groups}=buildAdminShiftDayGroups(orders);
+  // Открытую смену раскрываем по умолчанию (один раз)
+  groups.forEach(g=>{
+    if(g.openShift && state.adminExpandedGroups[g.id]===undefined) state.adminExpandedGroups[g.id]=true;
+  });
   const orderRowHtml=o=>{
     const m=metrics(o);
     const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', routeText(o), o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.ratePerKmCash), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
@@ -6190,13 +6249,12 @@ function renderAdmin(){
   groups.forEach(g=>{
     const open=!!state.adminExpandedGroups[g.id];
     const t=g.totals;
-    // Те же колонки, что COLS: числа — суммы (или среднее, где сумму складывать нельзя)
     const sumCells=[
       g.dayLabel,
       g.vehiclePlate,
       g.driverName,
       `${t.count} зак.`,
-      `Итог · ЗП ${fmt(t.pay)} ₽`,
+      `${g.openShift?'Смена':'Итог'} · ЗП ${fmt(t.pay)} ₽`,
       t.count,
       fmt(t.emptyKmBefore),
       fmt(t.loadedKm),
@@ -6217,37 +6275,16 @@ function renderAdmin(){
       t.count
     ];
     tableRows+=`<tr class="group-total" data-group="${esc(g.id)}" title="Нажмите, чтобы ${open?'свернуть':'развернуть'} заказы">
-      <td><span class="tog">${open?'▼':'▶'}</span> Итог</td>
+      <td><span class="tog">${open?'▼':'▶'}</span> ${g.openShift?'Смена':'Итог'}</td>
       ${sumCells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}
     </tr>`;
     if(open) tableRows+=g.orders.map(orderRowHtml).join('');
   });
-  tableRows+=ungrouped.map(orderRowHtml).join('');
-  const totalCards=groups.map(g=>{
-    const open=!!state.adminExpandedGroups[g.id];
-    const t=g.totals;
-    return `<div class="card day-total-card" data-group-card="${esc(g.id)}">
-      <h3><span class="tog">${open?'▼':'▶'}</span> Итог смены · ${esc(g.dayLabel)} · ${esc(g.driverName)}</h3>
-      <p>${esc(g.vehiclePlate)} · заказов: ${t.count} · смена закрыта ${esc(dateTime(g.shift.endedAt))}</p>
-      <div class="tot-row">
-        <span>Выручка (нал): <b>${esc(fmt(t.revenue))} ₽</b></span>
-        <span>Расходы: <b>${esc(fmt(t.expenses))} ₽</b></span>
-        <span>ЗП: <b>${esc(fmt(t.pay))} ₽</b></span>
-        <span>ГСМ: <b>${esc(fmt(t.fuel))} ₽</b></span>
-        <span>Прибыль: <b>${esc(fmt(t.profit))} ₽</b></span>
-        <span>Км: <b>${esc(fmt(t.km))}</b></span>
-      </div>
-      ${open?`<div class="day-total-details">${g.orders.map(o=>{
-        const m=metrics(o);
-        return `<p class="day-order-line" data-id="${o.id}" style="margin:4px 0;cursor:pointer">№${o.sequentialNumber} · ${esc(routeText(o))} · нал ${esc(fmt(m.rate))} · ЗП ${esc(fmt(m.driverPay))} · прибыль ${esc(fmt(m.netProfit))}</p>`;
-      }).join('')}</div>`:''}
-    </div>`;
-  }).join('');
+  const groupCards=groups.map(adminGroupCardHtml).join('');
   $('admin-list').innerHTML=`
-    <div class="hint" style="padding:8px 16px 0">После закрытия смены — итоговая строка по водителю за день (нажмите ▶ чтобы раскрыть заказы).${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</div>
-    ${totalCards?`<div class="admin-cards">${totalCards}</div>`:''}
-    <div class="admin-cards">${cards}</div>
-    <div class="hint" style="padding:0 16px">Таблица: итог смены сверху группы, затем детали. Без закрытой смены — обычные строки.</div>
+    <div class="hint" style="padding:8px 16px 0">Заказы свёрнуты по дню и водителю (▶). Открытая смена развёрнута.${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</div>
+    <div class="admin-cards">${groupCards||'<div class="empty">Нет групп</div>'}</div>
+    <div class="hint" style="padding:0 16px">Таблица — те же группы. Прошлые дни свёрнуты, чтобы не листать.</div>
     <div class="table-wrap" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`;
   const toggleGroup=id=>{
     state.adminExpandedGroups[id]=!state.adminExpandedGroups[id];
@@ -6258,14 +6295,11 @@ function renderAdmin(){
   });
   document.querySelectorAll('#admin-list [data-group-card]').forEach(card=>{
     card.onclick=e=>{
-      if(e.target.closest('button')) return;
+      if(e.target.closest('button,a,input,select,textarea')) return;
       toggleGroup(card.dataset.groupCard);
     };
   });
   document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
-  document.querySelectorAll('#admin-list .day-order-line').forEach(line=>{
-    line.onclick=e=>{ e.stopPropagation(); openDetail(line.dataset.id); };
-  });
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
   document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
