@@ -30,10 +30,22 @@
       --touch:40px;
     }
     *{box-sizing:border-box}
-    html,body{margin:0;height:100%;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg0);color:var(--text);font-size:var(--fs);-webkit-text-size-adjust:100%}
-    .phone{max-width:480px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:var(--bg0);position:relative}
+    html,body{
+      margin:0;height:100%;height:100dvh;overflow:hidden;
+      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg0);color:var(--text);font-size:var(--fs);
+      -webkit-text-size-adjust:100%;text-size-adjust:100%
+    }
+    button,a,label,input,select,textarea{touch-action:manipulation}
+    button,a{-webkit-tap-highlight-color:rgba(239,68,68,.14)}
+    .phone{
+      max-width:480px;width:100%;height:100%;height:100dvh;max-height:100dvh;margin:0 auto;
+      display:flex;flex-direction:column;background:var(--bg0);position:relative;
+      padding-top:env(safe-area-inset-top,0);padding-left:env(safe-area-inset-left,0);padding-right:env(safe-area-inset-right,0);
+      overflow:hidden
+    }
     .phone.wide{max-width:min(960px,100%)}
-    .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg0)}
+    .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg0);min-height:0;overflow:hidden}
     .screen.show{display:flex}
     .driver-panel{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)}
     .driver-panel.show{display:flex;animation:panelIn .2s ease}
@@ -84,7 +96,7 @@
     .eto-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;font-size:.78rem}
     .eto-grid span{color:var(--muted)}
     .eto-grid b{font-weight:700;color:var(--text)}
-    #admin-owner-filters{display:none;border-top:1px solid rgba(255,255,255,.06);padding-top:4px}
+    #admin-owner-filters{display:none;border-top:1px solid var(--border);padding-top:4px}
     #admin-owner-filters.show{display:flex}
     #admin-owner-filters button{font-size:.68rem;padding:5px 10px;min-height:28px;background:var(--field)}
     #admin-owner-filters button.on{background:var(--accent);color:#fff}
@@ -495,6 +507,43 @@
     .cat-sticky{background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:none}
     .cat-tabs{background:var(--field)}
     .cat-tabs button{color:var(--muted)}
+    /* Мобильная полировка */
+    @media (max-width:699px){
+      :root{ --touch:44px; --fs:15px; --fs-sm:12.5px; --ctrl-pad:10px 12px; }
+      .phone,.phone.wide{max-width:100%}
+      .filters,#admin-owner-filters{
+        flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+        overscroll-behavior-x:contain
+      }
+      .filters::-webkit-scrollbar,#admin-owner-filters::-webkit-scrollbar{display:none}
+      .filters button,#admin-owner-filters button{flex:0 0 auto;min-height:40px;padding:8px 14px;font-size:.8rem}
+      .stat-row{gap:6px;padding:8px 8px 0}
+      .stat-card{padding:8px 8px}
+      .stat-card .lbl{font-size:.62rem}
+      .stat-card .val{font-size:.9rem}
+      .admin-cards{padding:8px 8px 18px;gap:8px}
+      .admin-desktop-only{display:none!important}
+      .driver-nav button{min-height:44px;font-size:.84rem}
+      .driver-shift-chip{max-width:36%;font-size:.62rem;padding:6px 7px}
+      .driver-banner{margin:8px 8px 0}
+      #chat{padding:10px 10px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+      .admin-content,.admin-form-scroll,.panel-body,.table-wrap{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+      .form-meta{display:none}
+      .metric-strip{grid-template-columns:repeat(2,1fr)}
+      .form-pair{grid-template-columns:1fr}
+      .center{padding:16px 14px calc(16px + env(safe-area-inset-bottom,0))}
+      .pin,.stack{max-width:100%}
+      button.primary:active,button.secondary:active,.nums button:active,.yesno button:active,
+      .admin-nav-item:active,.driver-nav button:active{transform:scale(.985)}
+    }
+    @media (max-width:380px){
+      .driver-who h1{font-size:.92rem}
+      .admin-top-cta{padding:8px 10px;font-size:.78rem}
+      .stat-row{grid-template-columns:1fr 1fr 1fr;gap:4px}
+    }
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+    }
 </style>
 </head>
 <body>
@@ -957,7 +1006,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-driver-polish";
+const APP_BUILD="2026-08-07-mobile-polish";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -7305,8 +7354,8 @@ function renderAdmin(){
     ${statsHtml}
     <div class="hint" style="padding:8px 16px 0">Сводка по ${openG?esc(openG.dayLabel+' · '+openG.driverName):'выборке'}. Группы по дню (▶).${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</div>
     <div class="admin-cards">${groupCards||'<div class="empty">Нет групп</div>'}</div>
-    <div class="hint" style="padding:0 16px">Таблица — те же группы.</div>
-    <div class="table-wrap" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`;
+    <div class="hint admin-desktop-only" style="padding:0 16px">Таблица — те же группы.</div>
+    <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`;
   const toggleGroup=id=>{
     state.adminExpandedGroups[id]=!state.adminExpandedGroups[id];
     renderAdmin();
@@ -8566,6 +8615,20 @@ document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
   renderAdmin();
 });
 bindAdminCreate();
+(function bindMobileFocusScroll(){
+  let t=null;
+  document.addEventListener('focusin',e=>{
+    const el=e.target;
+    if(!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    if(window.matchMedia && !window.matchMedia('(max-width:699px)').matches) return;
+    clearTimeout(t);
+    t=setTimeout(()=>{
+      try{ el.scrollIntoView({block:'center', behavior:'smooth'}); }catch(_){
+        try{ el.scrollIntoView(true); }catch(__){}
+      }
+    }, 280);
+  }, true);
+})();
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW',err));
