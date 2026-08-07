@@ -35,10 +35,10 @@
     .phone.wide{max-width:min(960px,100%)}
     .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg0)}
     .screen.show{display:flex}
-    .driver-panel{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;background:var(--bg0)}
-    .driver-panel.show{display:flex}
-    .driver-panel header{background:var(--surface);position:sticky;top:0;z-index:2}
-    .driver-panel .panel-body{background:transparent;flex:1;min-height:0}
+    .driver-panel{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)}
+    .driver-panel.show{display:flex;animation:panelIn .2s ease}
+    .driver-panel .form-topbar{flex-shrink:0}
+    .driver-panel .panel-body{background:transparent;flex:1;min-height:0;padding:12px 14px 20px}
     .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px 16px;text-align:center}
     .logo{width:88px;height:auto}
     .brand{font-size:1.55rem;font-weight:700;letter-spacing:.08em;color:var(--text)}
@@ -51,11 +51,15 @@
     header h1{margin:0;font-size:.95rem}
     header button{background:0;border:0;color:var(--accent);font-weight:700;cursor:pointer;white-space:nowrap;font-size:.85rem;padding:6px 4px;min-height:36px}
     #chat{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
-    .bubble{max-width:88%;padding:10px 12px;border-radius:12px;white-space:pre-wrap;line-height:1.4;font-size:.9rem}
-    .bot{align-self:flex-start;background:var(--bot);color:var(--text);border:1px solid var(--border)}
-    .driver{align-self:flex-end;background:var(--accent);color:#fff;font-weight:600}
-    #input-bar{padding:8px 10px calc(10px + env(safe-area-inset-bottom,0));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+    .bubble{max-width:88%;padding:10px 12px;border-radius:12px;white-space:pre-wrap;line-height:1.4;font-size:.9rem;box-shadow:var(--shadow-sm)}
+    .bubble.bubble-in{animation:bubbleIn .22s ease both}
+    .bot{align-self:flex-start;background:var(--surface);color:var(--text);border:1px solid var(--border)}
+    .driver{align-self:flex-end;background:var(--accent);color:#fff;font-weight:600;border:1px solid transparent}
+    #input-bar{padding:10px 12px calc(12px + env(safe-area-inset-bottom,0));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;background:var(--surface);box-shadow:0 -4px 12px rgba(17,24,39,.04);flex-shrink:0}
     .error{color:#DC2626;font-size:var(--fs-sm)}.hint{color:var(--muted);font-size:var(--fs-sm);line-height:1.3}
+    @keyframes bubbleIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    @keyframes bannerIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+    @keyframes panelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
     .row{display:flex;gap:6px;align-items:stretch}
     .row input,.row textarea,.row select,.pin input,
     .form-grid input,.form-grid select,.form-grid textarea,
@@ -195,14 +199,65 @@
     .swipe-front h3{margin:0 0 2px;font-size:.92rem}
     .swipe-front p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .orders-hint{color:var(--muted);font-size:var(--fs-sm);padding:0 2px 2px}
-    .driver-banner{margin:6px 10px 0;padding:10px 12px;border-radius:var(--radius);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);display:none}
-    .driver-banner.show{display:block}
+    .driver-banner{margin:8px 10px 0;padding:10px 12px;border-radius:var(--radius);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);display:none;flex-shrink:0}
+    .driver-banner.show{display:block;animation:bannerIn .25s ease}
     .driver-banner.remind-close{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.45)}
-    .driver-banner strong{display:block;font-size:.92rem;margin:0 0 2px}
+    .driver-banner strong{display:block;font-size:.92rem;margin:0 0 2px;color:var(--text)}
     .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
     .hint.warn-close{color:var(--accent);font-weight:600}
+    #driver{background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 36%)}
+    .driver-topbar{
+      display:flex;align-items:center;gap:8px;padding:10px 12px;min-height:56px;flex-shrink:0;
+      background:var(--surface);border-bottom:1px solid var(--border)
+    }
+    .driver-who{flex:1;min-width:0}
+    .driver-who h1{margin:0;font-size:1rem;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .driver-sub{margin-top:1px;font-size:.72rem;color:var(--muted);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1em}
+    .driver-shift-chip{
+      flex:0 0 auto;max-width:38%;padding:5px 8px;border-radius:var(--radius);font-size:.68rem;font-weight:700;
+      line-height:1.2;text-align:center;border:1px solid var(--border);background:var(--field);color:var(--text)
+    }
+    .driver-shift-chip.ok{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
+    .driver-shift-chip.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .driver-shift-chip.warn{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:var(--accent)}
+    .driver-nav{
+      display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px 10px;flex-shrink:0;
+      background:var(--surface);border-bottom:1px solid var(--border)
+    }
+    .driver-nav button{
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--field);color:var(--text);
+      font-weight:600;font-size:.8rem;min-height:36px;cursor:pointer;padding:6px 8px;font-family:inherit
+    }
+    .driver-nav button.on{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:var(--accent)}
+    #chat{
+      background:
+        radial-gradient(ellipse at top, rgba(239,68,68,.04), transparent 55%),
+        linear-gradient(180deg, #F3F4F6 0%, var(--bg0) 50%);
+    }
+    .drv-earn{
+      padding:14px 14px 12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);
+      box-shadow:var(--shadow-sm);margin-bottom:4px
+    }
+    .drv-earn .lbl{display:block;font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.03em;text-transform:uppercase}
+    .drv-earn .val{display:block;margin-top:4px;font-size:1.7rem;font-weight:800;color:var(--accent);line-height:1.1}
+    .drv-earn .sub{display:block;margin-top:4px;font-size:.78rem;color:var(--muted)}
+    .drv-pay-row{
+      display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+      padding:10px 0;border-bottom:1px solid var(--border)
+    }
+    .drv-pay-row:last-child{border-bottom:0}
+    .drv-pay-row .name{font-weight:700;font-size:.9rem;color:var(--text)}
+    .drv-pay-row .meta{margin-top:2px;font-size:.76rem;color:var(--muted);line-height:1.35}
+    .drv-pay-row .amt{flex:0 0 auto;font-weight:800;color:var(--accent);font-size:1rem;white-space:nowrap}
+    .drv-section-label{margin:12px 0 4px;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+    .drv-shift-row{
+      display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px solid var(--border)
+    }
+    .drv-shift-row:last-child{border-bottom:0}
+    .drv-shift-row .name{font-weight:700;font-size:.92rem}
+    .drv-shift-row .meta{font-size:.76rem;color:var(--muted);line-height:1.35}
     /* Справочники — компакт + круглые кнопки */
     .cat-sticky{
       position:sticky;top:0;z-index:6;margin:0 -12px;padding:6px 12px 5px;
@@ -440,7 +495,6 @@
     .cat-sticky{background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:none}
     .cat-tabs{background:var(--field)}
     .cat-tabs button{color:var(--muted)}
-    #chat{background:var(--bg0)}
 </style>
 </head>
 <body>
@@ -699,28 +753,32 @@
   </div>
 
   <div id="driver" class="screen">
-    <header>
-      <button id="driver-exit">Выход</button>
-      <h1 id="driver-title">Водитель</h1>
-      <div>
-        <button id="btn-cabinet">Кабинет</button>
-        <button id="btn-orders">Заявки</button>
-        <button id="btn-shifts">Смены</button>
+    <header class="driver-topbar">
+      <button type="button" class="form-back" id="driver-exit">Выход</button>
+      <div class="driver-who">
+        <h1 id="driver-title">Водитель</h1>
+        <div class="driver-sub" id="driver-sub"></div>
       </div>
+      <div class="driver-shift-chip" id="driver-shift-chip" hidden></div>
     </header>
+    <nav class="driver-nav" aria-label="Разделы водителя">
+      <button type="button" id="btn-cabinet">Кабинет</button>
+      <button type="button" id="btn-orders">Заявки</button>
+      <button type="button" id="btn-shifts">Смены</button>
+    </nav>
     <div id="driver-banner" class="driver-banner" aria-live="polite"></div>
     <div id="chat"></div>
     <div id="input-bar"></div>
     <div id="cabinet-panel" class="driver-panel">
-      <header><button type="button" class="back-driver">← Назад</button><h1>Личный кабинет</h1><span></span></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Кабинет</h1></header>
       <div class="panel-body" id="cabinet-list"></div>
     </div>
     <div id="orders-panel" class="driver-panel">
-      <header><button type="button" class="back-driver">← Назад</button><h1>Заявки</h1><span></span></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Заявки</h1></header>
       <div class="panel-body" id="orders-list"></div>
     </div>
     <div id="shifts-panel" class="driver-panel">
-      <header><button type="button" class="back-driver">← Назад</button><h1>Смены</h1><span></span></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Смены</h1></header>
       <div class="panel-body" id="shifts-list"></div>
     </div>
   </div>
@@ -899,7 +957,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-order-form-ux";
+const APP_BUILD="2026-08-07-driver-polish";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2638,13 +2696,38 @@ function peekAdminSessionName(){
     return (raw && raw.name)||'';
   }catch(_){ return ''; }
 }
+function setDriverNav(which){
+  ['btn-cabinet','btn-orders','btn-shifts'].forEach(id=>{
+    const b=$(id); if(b) b.classList.toggle('on', !!which && id===which);
+  });
+}
 function updateDriverChrome(){
   const t=$('driver-title');
-  if(!t) return;
-  if(!DRIVER){ t.textContent='Водитель'; t.title=''; return; }
+  const sub=$('driver-sub');
+  const chip=$('driver-shift-chip');
+  if(!DRIVER){
+    if(t){ t.textContent='Водитель'; t.title=''; }
+    if(sub) sub.textContent='';
+    if(chip){ chip.hidden=true; chip.textContent=''; chip.className='driver-shift-chip'; }
+    return;
+  }
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
-  t.textContent=DRIVER;
-  t.title=firm?`${DRIVER} · ${firm}`:DRIVER;
+  if(t){ t.textContent=DRIVER; t.title=firm?`${DRIVER} · ${firm}`:DRIVER; }
+  if(sub) sub.textContent=firm||'';
+  if(chip){
+    const s=state.shift||findOpenShift();
+    if(s && !s.endedAt){
+      const needClose=shiftAwaitingClose();
+      const etoOk=isEtoDone(s);
+      chip.hidden=false;
+      chip.textContent=needClose?'Закройте смену':(etoOk?(s.vehiclePlate?`Смена · ${s.vehiclePlate}`:'Смена открыта'):etoStepLabel(s));
+      chip.className='driver-shift-chip '+(needClose?'warn':(etoOk?'ok':'wait'));
+    } else {
+      chip.hidden=true;
+      chip.textContent='';
+      chip.className='driver-shift-chip';
+    }
+  }
 }
 function driverPickRows(preferName){
   const rows=(state.drivers||[]).filter(d=>(d.name||'').trim());
@@ -5544,7 +5627,8 @@ function metrics(o){
 }
 
 function renderChat(){
-  $('chat').innerHTML=state.messages.map(m=>`<div class="bubble ${m.author}">${esc(m.text)}</div>`).join('');
+  const n=state.messages.length;
+  $('chat').innerHTML=state.messages.map((m,i)=>`<div class="bubble ${m.author}${i===n-1?' bubble-in':''}">${esc(m.text)}</div>`).join('');
   $('chat').scrollTop=$('chat').scrollHeight; renderInput();
 }
 function fluidButtons(){ return FLUIDS.map(l=>`<button class="secondary fluid" data-level="${l}">${l}</button>`).join(''); }
@@ -5621,6 +5705,7 @@ function renderInput(){
   }
   $('input-bar').innerHTML=html; wireInput();
   renderDriverBanner();
+  updateDriverChrome();
 }
 function wireInput(){
   $('open-shift')&&($('open-shift').onclick=openShift);
@@ -6483,33 +6568,38 @@ function driverPayText(o){
 }
 function showCabinet(){
   hideDriverPanels();
+  setDriverNav('btn-cabinet');
   $('cabinet-panel').classList.add('show');
   const mine=allOrders().filter(o=>o.driverName===DRIVER);
   const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const pending=mine.filter(o=>o.closedAt && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const total=paid.reduce((s,o)=>s+(effectivePay(o)||0),0);
-  let html=`<div class="card"><h3>${esc(DRIVER)}</h3><p>Заработано</p>
-    <p style="color:var(--accent);font-size:1.8rem;font-weight:800;margin:6px 0">${fmt(total)} ₽</p>
-    <p>По ${paid.length} заказам с расчётом</p></div>`;
+  let html=`<div class="drv-earn">
+    <span class="lbl">Заработано</span>
+    <span class="val">${fmt(total)} ₽</span>
+    <span class="sub">${esc(DRIVER)}${paid.length?` · ${paid.length} заказ.`:' · пока без расчёта'}</span>
+  </div>`;
   if(!paid.length && !pending.length){
-    html+=`<div class="empty">Пока нет начислений. После закрытия заказа и расчёта администратором суммы появятся здесь.</div>`;
+    html+=`<div class="empty">После закрытия заказа и расчёта администратором суммы появятся здесь.</div>`;
   } else {
     if(paid.length){
-      html+=`<div class="hint" style="margin-top:8px">Начисления</div>`;
-      html+=paid.map(o=>`<div class="card">
-        <p>${esc(dayOnly(payDate(o)))}</p>
-        <h3>Заказ №${o.sequentialNumber}</h3>
-        <p>${esc(orderDayLabel(o.dayNumber))} · ${esc(o.vehiclePlate)}</p>
-        <p>${esc(routeText(o))}</p>
-        <p style="color:var(--accent);font-weight:800;font-size:1.15rem;margin-top:6px">${fmt(effectivePay(o))} ₽</p>
+      html+=`<div class="drv-section-label">Начисления</div>`;
+      html+=paid.map(o=>`<div class="drv-pay-row">
+        <div>
+          <div class="name">№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</div>
+          <div class="meta">${esc(dayOnly(payDate(o)))} · ${esc(o.vehiclePlate||'—')}<br>${esc(routeText(o))}</div>
+        </div>
+        <div class="amt">${fmt(effectivePay(o))} ₽</div>
       </div>`).join('');
     }
     if(pending.length){
-      html+=`<div class="hint" style="margin-top:8px">Ожидают расчёта</div>`;
-      html+=pending.map(o=>`<div class="card">
-        <p>${esc(dayOnly(payDate(o)))}</p>
-        <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
-        <p>ЗП ещё не начислена</p>
+      html+=`<div class="drv-section-label">Ожидают расчёта</div>`;
+      html+=pending.map(o=>`<div class="drv-pay-row">
+        <div>
+          <div class="name">№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</div>
+          <div class="meta">${esc(dayOnly(payDate(o)))} · ЗП ещё не начислена</div>
+        </div>
+        <div class="amt" style="color:var(--muted);font-weight:600">—</div>
       </div>`).join('');
     }
   }
@@ -6519,22 +6609,25 @@ function hideDriverPanels(){
   ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('show');
   });
+  setDriverNav(null);
 }
 
 function showOrders(){
   hideDriverPanels();
+  setDriverNav('btn-orders');
   $('orders-panel').classList.add('show');
   const mine=allOrders().filter(o=>o.driverName===DRIVER && !o.onExchange);
   const board=driverExchangeEnabled(DRIVER)?exchangeOrders():[];
   let html='';
   if(board.length){
-    html+=`<div class="orders-hint">Биржа — маршрут и время подачи; заказчик и контакт скрыты до взятия</div>`;
-    html+=board.map(o=>`<div class="card" style="margin:8px 0">
-      <h3>Биржа · №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+    html+=`<div class="drv-section-label">Биржа</div>`;
+    html+=`<div class="orders-hint">Маршрут и подача; заказчик скрыт до взятия</div>`;
+    html+=board.map(o=>`<div class="swipe-front" style="margin:8px 0">
+      <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p>${esc(routeText(o))}</p>
       ${orderScheduleLines(o, true)}
-      <button type="button" class="primary take-exchange" data-id="${o.id}">Взять заказ</button>
+      <button type="button" class="primary take-exchange" data-id="${o.id}" style="margin-top:8px">Взять заказ</button>
     </div>`).join('');
   } else if(driverExchangeEnabled(DRIVER)){
     html+=`<div class="orders-hint">Биржа пуста</div>`;
@@ -6544,7 +6637,8 @@ function showOrders(){
     return;
   }
   if(mine.length){
-    html+=`<div class="orders-hint">Мои заявки: свайп → «Выехал» / «Прибыл»</div><div id="orders-error" class="error"></div>`;
+    html+=`<div class="drv-section-label">Мои заявки</div>`;
+    html+=`<div class="orders-hint">Свайп влево → «Выехал» / «Прибыл»</div><div id="orders-error" class="error"></div>`;
     html+=mine.map(o=>{
       const canDepart=!o.closedAt && o.startOdometer==null && o.departOdometer==null;
       const canArrive=!o.closedAt && o.departOdometer!=null && o.startOdometer==null;
@@ -6658,12 +6752,16 @@ function wireOrdersSwipe(){
 }
 function showShifts(){
   hideDriverPanels();
+  setDriverNav('btn-shifts');
   $('shifts-panel').classList.add('show');
   const mine=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER) || (!s.driverName && DRIVER_COMPANY_ID && s.ownCompanyId===DRIVER_COMPANY_ID));
   $('shifts-list').innerHTML = !mine.length ? `<div class="empty">Пока нет ваших смен</div>` :
-    mine.map(s=>{
+    `<div class="drv-section-label">История</div>`+mine.map(s=>{
       const st=s.endedAt?'закрыта':(isEtoDone(s)?'ЕТО ок':etoStepLabel(s));
-      return `<div class="card"><h3>${esc(s.vehiclePlate||'Без номера')}</h3><p>${esc(dateTime(s.startedAt))}${s.ownCompanyName?' · '+esc(s.ownCompanyName):''}</p><p>${esc(st)} · заказов: ${(s.orders||[]).length}</p></div>`;
+      return `<div class="drv-shift-row">
+        <div class="name">${esc(s.vehiclePlate||'Без номера')}</div>
+        <div class="meta">${esc(dateTime(s.startedAt))}${s.ownCompanyName?' · '+esc(s.ownCompanyName):''}<br>${esc(st)} · заказов: ${(s.orders||[]).length}</div>
+      </div>`;
     }).join('');
 }
 
