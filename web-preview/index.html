@@ -761,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-close-prev-eto-odo";
+const APP_BUILD="2026-08-07-same-driver-vehicle-odo";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3205,12 +3205,18 @@ function lastKnownOdometerForPlate(plate, companyId){
     .sort((a,b)=>b.t-a.t);
   return scored.length?+scored[0].odo:null;
 }
-/** Одометр для утреннего ЕТО: стоянка прошлой смены → карточка авто → заказы. */
-function previousShiftOdometerForPlate(plate, companyId){
+/** Один и тот же госномер (пробелы/регистр не важны). */
+function sameVehiclePlate(a,b){
+  const ka=normPlateKey(a), kb=normPlateKey(b);
+  return !!(ka && kb && ka===kb);
+}
+/** Одометр для утреннего ЕТО: стоянка прошлой смены этого водителя на этой машине. */
+function previousShiftOdometerForPlate(plate, companyId, driverName){
   if(!plate) return null;
   const shifts=(state.shifts||[])
-    .filter(s=>s && s.endedAt && !s.abandoned && s.vehiclePlate===plate
+    .filter(s=>s && s.endedAt && !s.abandoned && sameVehiclePlate(s.vehiclePlate, plate)
       && (!companyId || !s.ownCompanyId || s.ownCompanyId===companyId)
+      && (!driverName || (s.driverName && samePersonName(s.driverName, driverName)))
       && (s.parkingOdometer!=null || s.lastOdometerPoint!=null || s.odometer!=null))
     .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
   if(shifts.length){
@@ -3218,6 +3224,12 @@ function previousShiftOdometerForPlate(plate, companyId){
     const odo=s.parkingOdometer??s.lastOdometerPoint??s.odometer;
     if(odo!=null && +odo>=0) return +odo;
   }
+  // Без смены этого водителя на машине — только карточка/заказы (нижняя граница), без «Как вчера»
+  return null;
+}
+/** Подсказка одометра, если нет смены водителя: карточка авто / заказы. */
+function fallbackOdometerForPlate(plate, companyId){
+  if(!plate) return null;
   const list=state.vehicles||[];
   let v=companyId?list.find(x=>x.plate===plate && x.companyId===companyId):null;
   if(!v) v=list.find(x=>x.plate===plate);
@@ -4073,19 +4085,19 @@ function findPreviousDayOpenShift(driverName){
       && !shiftHasBlockingOpenOrder(s))
     .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt))[0]||null;
 }
-/** Закрыть вчерашние смены одометром с утреннего ЕТО (стоянка = старт сегодня). */
+/** Закрыть вчерашние смены одометром ЕТО — только тот же водитель и та же машина. */
 function closePreviousDayShiftsWithOdo(driverName, parkOdo, plate){
-  if(!driverName || parkOdo==null || Number.isNaN(+parkOdo)) return false;
+  if(!driverName || !plate || parkOdo==null || Number.isNaN(+parkOdo)) return false;
   const today=localDayKey(new Date());
   const park=+parkOdo;
   let changed=false;
   (state.shifts||[]).forEach(s=>{
     if(!s || s.endedAt) return;
     if(!s.driverName || !samePersonName(s.driverName, driverName)) return;
+    if(!s.vehiclePlate || !sameVehiclePlate(s.vehiclePlate, plate)) return;
     const day=localDayKey(s.startedAt);
     if(!day || day>=today) return;
     if(shiftHasBlockingOpenOrder(s)) return;
-    if(plate && s.vehiclePlate && s.vehiclePlate!==plate) return;
     const min=s.lastOdometerPoint??s.odometer;
     if(min!=null && park<+min) return;
     if(sealForgottenOpenShift(s, park)){
@@ -4119,6 +4131,9 @@ function sealPreviousDayOpenShiftsForDriver(driverName, opts){
 /** Закрыть вчера → открыть сегодня: спросить одометр (станет и стоянкой, и ЕТО). */
 function beginClosePrevAndOpenNew(prevShift){
   if(!prevShift || prevShift.endedAt) return false;
+  if(state.orderStep==='closePrevShiftParking' && state.draft&&state.draft.closePrevShiftId===prevShift.id){
+    renderInput(); return true;
+  }
   state.pendingClosePrevShiftId=prevShift.id;
   state.step='closePrevThenOpen';
   state.orderStep='closePrevShiftParking';
@@ -4134,8 +4149,11 @@ function beginClosePrevAndOpenNew(prevShift){
   const plateHint=prevShift.vehiclePlate?` Авто: ${prevShift.vehiclePlate}.`:'';
   const lastHint=last!=null?` Последний одометр вчера: ${last}.`:'';
   if(!(state.messages||[]).length) state.messages=[];
-  add('driver','Открыть смену');
-  add('bot',`Смена за ${dayLabel} ещё открыта — одометр стоянки не указан.${plateHint}${lastHint}\nВведите одометр сейчас: им закроем вчерашнюю смену и начнём сегодняшнюю (ЕТО).`);
+  const already=(state.messages||[]).some(m=>/ещё открыта — одометр стоянки/i.test(String(m.text||'')));
+  if(!already){
+    add('driver','Открыть смену');
+    add('bot',`Смена за ${dayLabel} ещё открыта — одометр стоянки не указан.${plateHint}${lastHint}\nВведите одометр сейчас: им закроем вчерашнюю смену и начнём сегодняшнюю ЕТО на той же машине.`);
+  }
   state.error='';
   renderChat(); renderInput();
   return true;
@@ -4193,12 +4211,16 @@ function healDuplicateOpenShifts(keep){
     if(!keep.driverName || !s.driverName) return;
     if(keep.ownCompanyId && s.ownCompanyId && s.ownCompanyId!==keep.ownCompanyId) return;
     const sDay=localDayKey(s.startedAt);
-    // Смена прошлого дня при уже открытой более новой — закрываем одометром новой (ЕТО)
+    // Смена прошлого дня при более новой — одометр ЕТО только если та же машина
     if(sDay && keepDay && sDay<keepDay){
       if(!shiftHasBlockingOpenOrder(s)){
-        const park=keep.odometer??keep.lastOdometerPoint??keep.parkingOdometer;
-        sealForgottenOpenShift(s, park);
-        syncVehicleOdometerFromShift(s);
+        const sameCar=keep.vehiclePlate && s.vehiclePlate && sameVehiclePlate(keep.vehiclePlate, s.vehiclePlate);
+        if(sameCar){
+          const park=keep.odometer??keep.lastOdometerPoint??keep.parkingOdometer;
+          sealForgottenOpenShift(s, park);
+          syncVehicleOdometerFromShift(s);
+        }
+        // другая машина — не подставляем чужой одометр
       }
       return;
     }
@@ -4448,8 +4470,8 @@ function syncOpenShiftRuntime(){
   let shift=findOpenShift();
   if(!shift && state.shift && !state.shift.endedAt) shift=state.shift;
   if(!shift) return null;
-  // Вчерашняя без активного заказа → закрыть утренним одометром, не продолжать ЕТО на старой
-  if(DRIVER && shift && !shift.endedAt){
+  // Вчерашняя на той же машине без активного заказа → закрыть утренним одометром
+  if(DRIVER && shift && !shift.endedAt && shift.vehiclePlate){
     const today=localDayKey(new Date());
     const day=localDayKey(shift.startedAt);
     if(day && day<today && !shiftHasBlockingOpenOrder(shift)){
@@ -5202,11 +5224,12 @@ function restartEtoInspection(){
   state.step=shift.vehiclePlate?'odometer':'chooseVehicle';
   state.orderStep='idle'; state.draft={}; state.error='';
   if(shift.vehiclePlate){
-    const prevOdo=previousShiftOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId);
+    const prevOdo=previousShiftOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId, DRIVER||shift.driverName);
+    const floor=prevOdo??fallbackOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId);
+    if(floor!=null && shift.lastOdometerPoint==null) shift.lastOdometerPoint=floor;
     if(prevOdo!=null){
       shift.etoOdometerSuggest=prevOdo;
-      if(shift.lastOdometerPoint==null) shift.lastOdometerPoint=prevOdo;
-      add('bot',`ЕТО сброшен. Авто ${shift.vehiclePlate}. Одометр прошлой смены: ${prevOdo} — можно нажать «Как вчера» или ввести новый.`);
+      add('bot',`ЕТО сброшен. Авто ${shift.vehiclePlate}. Ваш одометр на этой машине: ${prevOdo} — «Как вчера» или новый.`);
     } else {
       shift.etoOdometerSuggest=null;
       add('bot',`ЕТО сброшен. Авто ${shift.vehiclePlate}. Напишите показания одометра до выезда со стоянки.`);
@@ -5279,7 +5302,7 @@ function resumeOpenShift(shift){
   if(!shift) return;
   const today=localDayKey(new Date());
   const day=localDayKey(shift.startedAt);
-  if(day && today && day<today && !shiftHasBlockingOpenOrder(shift)){
+  if(day && today && day<today && shift.vehiclePlate && !shiftHasBlockingOpenOrder(shift)){
     beginClosePrevAndOpenNew(shift);
     return;
   }
@@ -5347,12 +5370,11 @@ function resumeOpenShift(shift){
     ? ` Есть перенесённый заказ №${carry.sequentialNumber} (машина загружена) — закроете после выгрузки.`
     : '';
   if(stale){
-    const sug=shift.lastOdometerPoint??previousShiftOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId);
-    if(sug!=null){
-      shift.etoOdometerSuggest=+sug;
-      shift.lastOdometerPoint=+sug;
-    }
-    const odoHint=sug!=null?` Одометр можно взять с прошлой смены: ${sug} («Как вчера»).`:'';
+    const prevOdo=previousShiftOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId, DRIVER||shift.driverName);
+    const sug=prevOdo??shift.lastOdometerPoint??fallbackOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId);
+    if(prevOdo!=null) shift.etoOdometerSuggest=+prevOdo;
+    if(sug!=null) shift.lastOdometerPoint=+sug;
+    const odoHint=prevOdo!=null?` Ваш одометр на этой машине: ${prevOdo} («Как вчера»).`:'';
     state.messages.push({author:'bot',text:`Новый день — нужно пройти ЕТО заново (за ночь с машиной могло что-то измениться).${odoHint}${carryHint}`});
   } else if(!state.messages.length){
     state.messages=[{author:'bot',text:`Смена открыта, но ЕТО не завершён. Продолжим с того места, где остановились.${carryHint}`}];
@@ -5387,9 +5409,9 @@ function openShift(){
     if(!state.vehicles||!state.vehicles.length){
       state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
     }
-    // Вчера не закрыта и нет одометра стоянки → спросить одометр (закроет вчера и откроет сегодня)
+    // Вчера не закрыта на известной машине → одометр закроет вчера и откроет сегодня на той же машине
     const prevDay=findPreviousDayOpenShift(DRIVER);
-    if(prevDay){
+    if(prevDay && prevDay.vehiclePlate){
       beginClosePrevAndOpenNew(prevDay);
       return;
     }
@@ -5434,15 +5456,17 @@ function selectVehicle(plate){
     add('bot',`Авто ${plate}. Одометр ЕТО уже ${state.shift.odometer}.\nВведите остаток топлива в литрах.`);
     state.step='fuel'; state.error=''; upsertShift(); renderInput(); return;
   }
-  const prevOdo=previousShiftOdometerForPlate(plate, state.shift.ownCompanyId);
+  const prevOdo=previousShiftOdometerForPlate(plate, state.shift.ownCompanyId, DRIVER);
+  const floor=prevOdo??fallbackOdometerForPlate(plate, state.shift.ownCompanyId);
+  if(floor!=null) state.shift.lastOdometerPoint=floor;
   if(prevOdo!=null){
     state.shift.etoOdometerSuggest=prevOdo;
-    state.shift.lastOdometerPoint=prevOdo;
-    add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nОдометр прошлой смены (стоянка): ${prevOdo}.\nЕсли машина не ездила — нажмите «Как вчера», иначе введите новый.`);
+    add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nВаш одометр на этой машине (стоянка прошлой смены): ${prevOdo}.\nЕсли не ездили — «Как вчера», иначе введите новый.`);
   } else {
     state.shift.etoOdometerSuggest=null;
     add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nНапишите показания одометра до выезда со стоянки.`);
   }
+  // Если вчерашняя смена этого водителя на этой же машине ещё открыта — закроем её одометром ЕТО
   state.step='odometer'; state.error=''; upsertShift(); renderInput();
 }
 function submitNumber(){
@@ -5518,9 +5542,9 @@ function submitNumber(){
     if(prev!=null && value<+prev){ state.error=`Одометр не может быть меньше прошлого (${prev})`; renderInput(); return; }
     state.shift.odometer=value; state.shift.lastOdometerPoint=value;
     // Наоборот: этим же одометром ЕТО закрываем вчерашнюю незакрытую смену
-    if(DRIVER && closePreviousDayShiftsWithOdo(DRIVER, value, state.shift.vehiclePlate)){
+    if(DRIVER && state.shift.vehiclePlate && closePreviousDayShiftsWithOdo(DRIVER, value, state.shift.vehiclePlate)){
       bumpDataEpoch('eto-odo-closed-prev-shift');
-      add('bot',`Вчерашняя смена закрыта одометром ЕТО ${value} (стоянка).`);
+      add('bot',`Вчерашняя смена на ${state.shift.vehiclePlate} закрыта одометром ЕТО ${value} (стоянка).`);
     }
     add('driver',String(value)); add('bot','Введите остаток топлива в литрах.'); state.step='fuel';
   } else if(state.step==='fuel'){
