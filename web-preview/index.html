@@ -761,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-shift-close-reminders";
+const APP_BUILD="2026-08-07-eto-odo-carry";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3205,6 +3205,25 @@ function lastKnownOdometerForPlate(plate, companyId){
     .sort((a,b)=>b.t-a.t);
   return scored.length?+scored[0].odo:null;
 }
+/** Одометр для утреннего ЕТО: стоянка прошлой смены → карточка авто → заказы. */
+function previousShiftOdometerForPlate(plate, companyId){
+  if(!plate) return null;
+  const shifts=(state.shifts||[])
+    .filter(s=>s && s.endedAt && !s.abandoned && s.vehiclePlate===plate
+      && (!companyId || !s.ownCompanyId || s.ownCompanyId===companyId)
+      && (s.parkingOdometer!=null || s.lastOdometerPoint!=null || s.odometer!=null))
+    .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
+  if(shifts.length){
+    const s=shifts[0];
+    const odo=s.parkingOdometer??s.lastOdometerPoint??s.odometer;
+    if(odo!=null && +odo>=0) return +odo;
+  }
+  const list=state.vehicles||[];
+  let v=companyId?list.find(x=>x.plate===plate && x.companyId===companyId):null;
+  if(!v) v=list.find(x=>x.plate===plate);
+  if(v && v.currentOdometer!=null && +v.currentOdometer>=0) return +v.currentOdometer;
+  return lastKnownOdometerForPlate(plate, companyId);
+}
 /** Записать одометр в карточку авто (не уменьшаем уже большее значение). */
 function applyVehicleOdometer(plate, companyId, odo){
   if(!plate || !(+odo>=0)) return false;
@@ -4965,7 +4984,16 @@ function renderInput(){
   else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
   else if(state.step==='idle') html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
   else if(state.step==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
-  else if(state.step==='odometer'||state.step==='fuel') html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${state.step==='odometer'?'Например, 125430':'Например, 42'}" /><button id="num-ok">OK</button></div>`;
+  else if(state.step==='odometer'||state.step==='fuel'){
+    if(state.step==='odometer'){
+      const sug=state.shift&&state.shift.etoOdometerSuggest!=null?state.shift.etoOdometerSuggest:null;
+      const ph=sug!=null?String(sug):'Например, 125430';
+      html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${sug!=null?`value="${esc(String(sug))}"`:''} /><button id="num-ok">OK</button></div>`;
+      if(sug!=null) html+=`<button class="secondary" id="eto-odo-keep">Как вчера: ${esc(String(sug))}</button>`;
+    } else {
+      html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="Например, 42" /><button id="num-ok">OK</button></div>`;
+    }
+  }
   else if(state.step==='gur') html+=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
   else if(state.step==='coolant') html+=`<div class="hint">Уровень ОЖ</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
   else if(state.step==='lights') html+=lightsUI()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
@@ -4998,6 +5026,12 @@ function wireInput(){
   $('open-shift')&&($('open-shift').onclick=openShift);
   document.querySelectorAll('.plate').forEach(b=>b.onclick=()=>selectVehicle(b.dataset.plate));
   $('num-ok')&&($('num-ok').onclick=submitNumber);
+  $('eto-odo-keep')&&($('eto-odo-keep').onclick=()=>{
+    const sug=state.shift&&state.shift.etoOdometerSuggest;
+    if(sug==null) return;
+    const inp=$('num'); if(inp) inp.value=String(sug);
+    submitNumber();
+  });
   document.querySelectorAll('.fluid').forEach(b=>b.onclick=()=>selectFluid(b.dataset.level));
   $('eto-restart')&&($('eto-restart').onclick=restartEtoInspection);
   document.querySelectorAll('.yesno button[data-key]').forEach(b=>b.onclick=()=>{state.light[b.dataset.key]=b.dataset.val;state.error='';renderInput();});
@@ -5036,9 +5070,19 @@ function restartEtoInspection(){
   state.shift=shift;
   state.step=shift.vehiclePlate?'odometer':'chooseVehicle';
   state.orderStep='idle'; state.draft={}; state.error='';
-  add('bot', shift.vehiclePlate
-    ? `ЕТО сброшен. Авто ${shift.vehiclePlate}. Напишите показания одометра до выезда со стоянки.`
-    : 'ЕТО сброшен. Выберите автомобиль.');
+  if(shift.vehiclePlate){
+    const prevOdo=previousShiftOdometerForPlate(shift.vehiclePlate, shift.ownCompanyId);
+    if(prevOdo!=null){
+      shift.etoOdometerSuggest=prevOdo;
+      if(shift.lastOdometerPoint==null) shift.lastOdometerPoint=prevOdo;
+      add('bot',`ЕТО сброшен. Авто ${shift.vehiclePlate}. Одометр прошлой смены: ${prevOdo} — можно нажать «Как вчера» или ввести новый.`);
+    } else {
+      shift.etoOdometerSuggest=null;
+      add('bot',`ЕТО сброшен. Авто ${shift.vehiclePlate}. Напишите показания одометра до выезда со стоянки.`);
+    }
+  } else {
+    add('bot','ЕТО сброшен. Выберите автомобиль.');
+  }
   bumpDataEpoch('eto-restart');
   upsertShift(); persist(); renderInput();
 }
@@ -5234,7 +5278,15 @@ function selectVehicle(plate){
   state.shift.vehiclePlate=plate;
   stampShiftOwner(state.shift, DRIVER, plate);
   add('driver',plate);
-  add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nНапишите показания одометра до выезда со стоянки.`);
+  const prevOdo=previousShiftOdometerForPlate(plate, state.shift.ownCompanyId);
+  if(prevOdo!=null){
+    state.shift.etoOdometerSuggest=prevOdo;
+    state.shift.lastOdometerPoint=prevOdo;
+    add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nОдометр прошлой смены (стоянка): ${prevOdo}.\nЕсли машина не ездила — нажмите «Как вчера», иначе введите новый.`);
+  } else {
+    state.shift.etoOdometerSuggest=null;
+    add('bot',`Вы выбрали автомобиль с госномером ${plate}.\nНапишите показания одометра до выезда со стоянки.`);
+  }
   state.step='odometer'; state.error=''; upsertShift(); renderInput();
 }
 function submitNumber(){
@@ -5301,7 +5353,10 @@ function submitNumber(){
   }
   if(state.step==='odometer'){
     const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
-    const value=+digits; state.shift.odometer=value; state.shift.lastOdometerPoint=value;
+    const value=+digits;
+    const prev=state.shift.etoOdometerSuggest??state.shift.lastOdometerPoint;
+    if(prev!=null && value<+prev){ state.error=`Одометр не может быть меньше прошлого (${prev})`; renderInput(); return; }
+    state.shift.odometer=value; state.shift.lastOdometerPoint=value;
     add('driver',String(value)); add('bot','Введите остаток топлива в литрах.'); state.step='fuel';
   } else if(state.step==='fuel'){
     const value=+raw; if(!(value>=0)){state.error='Введите остаток топлива в литрах';renderInput();return;}
