@@ -93,9 +93,45 @@
     .eto-ok{color:#059669;font-weight:700}
     .eto-wait{color:#D97706;font-weight:700}
     .eto-bad{color:#DC2626;font-weight:700}
-    .eto-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;font-size:.78rem}
-    .eto-grid span{color:var(--muted)}
+    .eto-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:8px;font-size:.78rem}
+    .eto-grid span{color:var(--muted);display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;line-height:1.3}
     .eto-grid b{font-weight:700;color:var(--text)}
+    .board-head{padding:10px 12px 0}
+    .board-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0 2px}
+    .board-metrics .m{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px}
+    .board-metrics .m span{display:block;font-size:.68rem;color:var(--muted);font-weight:500}
+    .board-metrics .m b{display:block;margin-top:2px;font-size:1.05rem;font-weight:700;color:var(--text);line-height:1.2}
+    .board-metrics .m b.warn{color:#D97706}
+    .board-metrics .m b.ok{color:#059669}
+    .eto-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:12px 14px;box-shadow:var(--shadow-sm)}
+    .eto-card.wait{border-color:rgba(245,158,11,.45)}
+    .eto-card.done{border-color:rgba(16,185,129,.35)}
+    .eto-card h3{margin:0 0 4px;font-size:.95rem;font-weight:700}
+    .eto-card p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.4}
+    .eto-status{
+      display:inline-flex;align-items:center;margin-top:8px;padding:4px 8px;border-radius:var(--radius);
+      font-size:.74rem;font-weight:700;border:1px solid var(--border);background:var(--field)
+    }
+    .eto-status.ok{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
+    .eto-status.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .ex-card{border:1px solid rgba(239,68,68,.35);border-radius:var(--radius);background:var(--surface);padding:12px 14px;box-shadow:var(--shadow-sm)}
+    .ex-card h3{margin:0 0 4px;font-size:.95rem;font-weight:700}
+    .ex-card p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.4}
+    .ex-card .ex-route{color:var(--text);font-weight:600;margin-top:6px}
+    .ex-badge{
+      display:inline-block;margin-top:6px;padding:3px 8px;border-radius:var(--radius);font-size:.68rem;font-weight:700;
+      background:rgba(239,68,68,.1);color:var(--accent);border:1px solid rgba(239,68,68,.28)
+    }
+    .ex-badge.other{background:var(--field);color:var(--muted);border-color:var(--border)}
+    .ex-assign-box{margin-top:10px;display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--border)}
+    .ex-assign-box label{margin:0;font-size:.75rem;color:var(--muted)}
+    .ex-assign-box select{
+      width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;
+      background:#fff;color:var(--text);font-size:16px;min-height:40px;font-family:inherit
+    }
+    .ex-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+    .ex-actions .row{gap:6px}
+    .ex-actions button{flex:1}
     #admin-owner-filters{display:none;border-top:1px solid var(--border);padding-top:4px}
     #admin-owner-filters.show{display:flex}
     #admin-owner-filters button{font-size:.68rem;padding:5px 10px;min-height:28px;background:var(--field)}
@@ -305,8 +341,8 @@
       padding:6px 10px;border-radius:var(--pill);font-size:16px;min-height:34px
     }
     .cat-search{
-      width:100%;padding:7px 12px;min-height:34px;border-radius:var(--pill);border:0;
-      background:var(--field);color:var(--text);font-size:16px
+      width:100%;padding:8px 12px;min-height:var(--touch);border-radius:var(--radius);border:1px solid var(--border);
+      background:#fff;color:var(--text);font-size:16px;font-family:inherit
     }
     .check{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted);white-space:nowrap;margin:0!important;width:auto!important}
     .check input{
@@ -1058,7 +1094,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-catalogs-theme1";
+const APP_BUILD="2026-08-07-eto-exchange-theme1";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -4479,7 +4515,7 @@ function etoStepLabel(shift){
   if(!(shift.oil||shift.engineOilLevel)) return 'Масло ДВС';
   return 'ЕТО не завершён';
 }
-function etoMark(ok){ return ok?'<b class="eto-ok">✓</b>':'<b class="eto-wait">…</b>'; }
+function etoMark(ok){ return ok?'<b class="eto-ok">ок</b>':'<b class="eto-wait">нет</b>'; }
 function openShifts(){
   return (state.shifts||[]).filter(s=>!s.endedAt)
     .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt));
@@ -7181,9 +7217,16 @@ function renderAdminEtoBoard(){
   const shifts=adminOpenShifts();
   const pending=shifts.filter(s=>!isEtoDone(s)).length;
   const done=shifts.filter(s=>isEtoDone(s)).length;
-  const hint=`<div class="hint" style="padding:8px 16px 0">Открытые смены водителей вашей фирмы. ЕТО пройден: <strong>${done}</strong> · в процессе: <strong>${pending}</strong></div>`;
+  const head=`<div class="board-head">
+    <p class="cat-panel-hint">Открытые смены водителей вашей фирмы</p>
+    <div class="board-metrics">
+      <div class="m"><span>Смены</span><b>${shifts.length}</b></div>
+      <div class="m"><span>ЕТО ок</span><b class="ok">${done}</b></div>
+      <div class="m"><span>В процессе</span><b class="${pending?'warn':''}">${pending}</b></div>
+    </div>
+  </div>`;
   if(!shifts.length){
-    return `${hint}<div class="empty">Нет открытых смен у водителей вашей фирмы</div>`;
+    return `${head}<div class="admin-cards"><div class="empty">Нет открытых смен</div></div>`;
   }
   const cards=shifts.map(s=>{
     const ok=isEtoDone(s);
@@ -7191,14 +7234,13 @@ function renderAdminEtoBoard(){
     const L=s.light||{};
     const ph=formatPhone((()=>{ const d=findDriverRecord(s.driverName, s.ownCompanyId); return d&&d.phone?d.phone:''; })());
     const firm=s.ownCompanyName||(findSpaceById(s.spaceId)||{}).name||'—';
-    const statusCls=ok?'eto-ok':'eto-wait';
     const openOrders=(s.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt).length
       || (state.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt && o.driverName===s.driverName && o.vehiclePlate===s.vehiclePlate).length;
-    return `<div class="card" style="${ok?'':'border:1px solid rgba(255,204,102,.35)'}">
+    return `<div class="eto-card ${ok?'done':'wait'}">
       <h3>${esc(s.driverName||'Водитель')} · ${esc(s.vehiclePlate||'без авто')}</h3>
       <p>Смена с ${esc(dateTime(s.startedAt))}${s.ownerAdminName && isSuperAdmin()?` · ${esc(s.ownerAdminName)}`:''}</p>
-      <p>Фирма: ${esc(firm)}${ph?` · <a href="tel:${esc(ph)}" style="color:var(--accent)">☎ ${esc(ph)}</a>`:''}</p>
-      <p class="${statusCls}" style="margin-top:6px">${ok?'✓ ЕТО пройден':'⏳ '+esc(step)}</p>
+      <p>Фирма: ${esc(firm)}${ph?` · <a href="tel:${esc(ph)}" style="color:var(--accent)">${esc(ph)}</a>`:''}</p>
+      <div class="eto-status ${ok?'ok':'wait'}">${ok?'ЕТО пройден':esc(step)}</div>
       <div class="eto-grid">
         <span>Авто ${etoMark(!!s.vehiclePlate)}</span>
         <span>Одометр ${etoMark(s.odometer!=null)} ${s.odometer!=null?`<b>${esc(s.odometer)}</b>`:''}</span>
@@ -7207,12 +7249,12 @@ function renderAdminEtoBoard(){
         <span>ОЖ ${etoMark(!!(s.coolant||s.coolantLevel))} ${s.coolant||s.coolantLevel?`<b>${esc(s.coolant||s.coolantLevel)}</b>`:''}</span>
         <span>Свет ${etoMark(!!(L.lowBeam&&L.brake&&L.turn))}</span>
         <span>Масло ${etoMark(!!(s.oil||s.engineOilLevel))} ${s.oil||s.engineOilLevel?`<b>${esc(s.oil||s.engineOilLevel)}</b>`:''}</span>
-        <span>Заказов в смене <b>${(s.orders||[]).length}</b>${openOrders?` · открытых: <b>${openOrders}</b>`:''}</span>
+        <span>Заказов <b>${(s.orders||[]).length}</b>${openOrders?` · открытых <b>${openOrders}</b>`:''}</span>
       </div>
-      ${ok && s.completedAt?`<p style="margin-top:6px">ЕТО завершён: ${esc(dateTime(s.completedAt))}</p>`:''}
+      ${ok && s.completedAt?`<p style="margin-top:8px">Завершён: ${esc(dateTime(s.completedAt))}</p>`:''}
     </div>`;
   }).join('');
-  return `${hint}<div class="admin-cards" style="padding:8px 12px 24px">${cards}</div>`;
+  return `${head}<div class="admin-cards">${cards}</div>`;
 }
 function unpublishFromExchange(id){
   const o=state.orders.find(x=>x.id===id);
@@ -7381,9 +7423,17 @@ function confirmClaimExchange(){
   alert('Договор‑заявка подписана. Водитель и авто внесены в заявку.');
 }
 function renderAdminExchangeBoard(orders){
-  const hint=`<div class="hint" style="padding:8px 16px 0">Биржа между фирмами: чужой заказ — <strong>Забрать</strong> (договор‑заявка + ваш парк). Свой — назначить себе или снять.</div>`;
+  const mineCount=orders.filter(o=>isMyFirmOrder(o)).length;
+  const head=`<div class="board-head">
+    <p class="cat-panel-hint">Чужой заказ — «Забрать» (договор‑заявка + ваш парк). Свой — назначить или снять.</p>
+    <div class="board-metrics">
+      <div class="m"><span>На бирже</span><b>${orders.length}</b></div>
+      <div class="m"><span>Ваши</span><b>${mineCount}</b></div>
+      <div class="m"><span>Чужие</span><b>${Math.max(0, orders.length-mineCount)}</b></div>
+    </div>
+  </div>`;
   if(!orders.length){
-    return `${hint}<div class="empty">На бирже пусто. Выставьте лишний заказ: «+ Заказ» → «На биржу» или кнопка «На биржу» у заявки.</div>`;
+    return `${head}<div class="admin-cards"><div class="empty">На бирже пусто. «+ Заказ» → «На биржу» или кнопка у заявки.</div></div>`;
   }
   const myCo=currentOwnCompany();
   const cards=orders.map(o=>{
@@ -7394,32 +7444,37 @@ function renderAdminExchangeBoard(orders){
     const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
     const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join('');
-    return `<div class="card exchange-mark">
-      <h3>Биржа · №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+    return `<div class="ex-card">
+      <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
-      <p style="color:var(--muted)">Заказчик перевозки: <strong>${esc(o.ownCompanyName||'—')}</strong>${mine?' · ваш заказ':''}</p>
-      <p>${esc(routeText(o))}</p>
+      <p>Заказчик: <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong></p>
+      <span class="ex-badge ${mine?'':'other'}">${mine?'ваш заказ':'чужой заказ'}</span>
+      <p class="ex-route">${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
-      <p><strong>ТС нужно:</strong> ${esc(req||'не указано')}</p>
+      <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(req||'не указано')}</strong></p>
       ${mine?`
-        <label style="margin-top:8px">Назначить своего водителя</label>
-        <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
-        <label>Своё авто (под требования)</label>
-        <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
-        <div class="row" style="margin-top:8px">
-          <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
-          <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
-          <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+        <div class="ex-assign-box">
+          <label for="ex-drv-${o.id}">Водитель</label>
+          <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
+          <label for="ex-plate-${o.id}">Авто под требования</label>
+          <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
+          <div class="ex-actions">
+            <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
+            <div class="row">
+              <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
+              <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+            </div>
+          </div>
         </div>
       `:`
-        <div class="row" style="margin-top:8px">
+        <div class="ex-actions">
           <button type="button" class="primary ex-claim" data-id="${o.id}">Забрать</button>
           <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
         </div>
       `}
     </div>`;
   }).join('');
-  return `${hint}<div class="admin-cards">${cards}</div>`;
+  return `${head}<div class="admin-cards">${cards}</div>`;
 }
 function renderAdmin(){
   updateAdminChrome();
