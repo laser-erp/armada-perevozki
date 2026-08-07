@@ -85,7 +85,7 @@
     .panel-body{flex:1;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
     .card{background:var(--surface);border-radius:var(--radius);padding:12px 14px;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
     .card h3{margin:0 0 4px;font-size:1rem;font-weight:600;color:var(--text)}.card p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.45}
-    .empty{color:var(--muted);text-align:center;margin-top:28px;font-size:.9rem}
+    .empty{color:var(--muted);text-align:center;margin-top:16px;font-size:.9rem;padding:14px 12px;border:1px dashed var(--border);border-radius:var(--radius);background:rgba(255,255,255,.6)}
     .pin{width:100%;max-width:280px;display:flex;flex-direction:column;gap:8px}
     .filters{display:flex;gap:4px;padding:5px 8px;flex-wrap:wrap}
     .filters button{border:0;border-radius:var(--pill);padding:6px 12px;min-height:32px;background:var(--field);color:var(--text);font-weight:700;cursor:pointer;font-size:.74rem}
@@ -121,7 +121,7 @@
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
     #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen,#admin-vehicle-card{overflow:hidden;min-height:0}
-    .svc-badge{display:inline-block;border-radius:999px;padding:2px 8px;font-size:.68rem;font-weight:700}
+    .svc-badge{display:inline-block;border-radius:var(--radius);padding:2px 8px;font-size:.68rem;font-weight:700}
     .svc-ok{background:rgba(16,185,129,.12);color:#059669}
     .svc-soon{background:rgba(245,158,11,.14);color:#D97706}
     .svc-over{background:rgba(239,68,68,.12);color:#DC2626}
@@ -153,7 +153,7 @@
     .svc-check label>span{display:flex;flex-direction:column;gap:0;min-width:0}
     .svc-work-li{margin:0 0 10px;color:var(--text)}
     .svc-work-li .svc-how{color:var(--muted)}
-    .claim-box{padding:10px 12px;border-radius:16px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);margin:8px 0}
+    .claim-box{padding:10px 12px;border-radius:var(--radius);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);margin:8px 0}
     .claim-box h3{margin:0 0 6px;font-size:.95rem}
     .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
     .veh-specs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
@@ -253,7 +253,7 @@
       box-shadow:var(--shadow-sm);margin-bottom:4px
     }
     .drv-earn .lbl{display:block;font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.03em;text-transform:uppercase}
-    .drv-earn .val{display:block;margin-top:4px;font-size:1.7rem;font-weight:800;color:var(--accent);line-height:1.1}
+    .drv-earn .val{display:block;margin-top:4px;font-size:1.7rem;font-weight:700;color:var(--accent);line-height:1.1}
     .drv-earn .sub{display:block;margin-top:4px;font-size:.78rem;color:var(--muted)}
     .drv-pay-row{
       display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
@@ -262,7 +262,7 @@
     .drv-pay-row:last-child{border-bottom:0}
     .drv-pay-row .name{font-weight:700;font-size:.9rem;color:var(--text)}
     .drv-pay-row .meta{margin-top:2px;font-size:.76rem;color:var(--muted);line-height:1.35}
-    .drv-pay-row .amt{flex:0 0 auto;font-weight:800;color:var(--accent);font-size:1rem;white-space:nowrap}
+    .drv-pay-row .amt{flex:0 0 auto;font-weight:700;color:var(--accent);font-size:1rem;white-space:nowrap}
     .drv-section-label{margin:12px 0 4px;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
     .drv-shift-row{
       display:flex;flex-direction:column;gap:2px;padding:10px 0;border-bottom:1px solid var(--border)
@@ -285,7 +285,7 @@
       color:var(--muted);font-weight:700;font-size:.68rem;cursor:pointer;line-height:1.1;transition:background .15s,color .15s,transform .12s
     }
     .cat-tabs button .n{display:block;font-size:.58rem;font-weight:600;opacity:.8}
-    .cat-tabs button.on{background:var(--accent);color:#fff;transform:translateY(-1px)}
+    .cat-tabs button.on{background:var(--accent);color:#fff}
     .cat-panel{display:none;flex-direction:column;gap:5px;padding-top:6px;animation:catIn .16s ease}
     .cat-panel.on{display:flex}
     @keyframes catIn{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -374,13 +374,13 @@
       font-size:.75rem!important;flex:0 0 26px!important;line-height:1;margin:0!important
     }
     .icon-btn{
-      border:0;border-radius:var(--pill);min-width:32px;min-height:32px;width:32px;padding:0;font-weight:800;cursor:pointer;
+      border:0;border-radius:var(--pill);min-width:32px;min-height:32px;width:32px;padding:0;font-weight:700;cursor:pointer;
       background:var(--field);color:var(--text);font-size:.85rem;flex:0 0 auto;line-height:1
     }
     .icon-btn.ok{background:var(--accent);color:#fff}
     .icon-btn.danger{color:#DC2626}
     .chip{display:inline-block;padding:2px 7px;border-radius:var(--pill);background:var(--field);font-size:.6rem;color:var(--muted);margin-right:3px;vertical-align:middle}
-    .chip.hot{background:rgba(239,68,68,.14);color:#ffc9c9}
+    .chip.hot{background:rgba(239,68,68,.14);color:#B91C1C;font-weight:700}
     .item-card{background:var(--surface);border-radius:16px;padding:7px 9px;display:flex;flex-direction:column;gap:5px}
     .item-card .item-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
     .item-card .item-name{font-weight:700;font-size:.86rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -507,6 +507,38 @@
     .cat-sticky{background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:none}
     .cat-tabs{background:var(--field)}
     .cat-tabs button{color:var(--muted)}
+    /* Визуальные nits темы 1 */
+    ::selection{background:rgba(239,68,68,.18);color:var(--ink)}
+    input:focus,select:focus,textarea:focus{
+      border-color:rgba(239,68,68,.55)!important;
+      box-shadow:0 0 0 3px rgba(239,68,68,.12);
+      outline:0
+    }
+    button:focus-visible,.admin-nav-item:focus-visible,.driver-nav button:focus-visible,.form-back:focus-visible{
+      outline:2px solid rgba(239,68,68,.55);outline-offset:2px
+    }
+    #splash,#roles,#driver-login,#admin-pin{
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(239,68,68,.08), transparent 55%),
+        linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 50%)
+    }
+    .auth-back{
+      border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;
+      padding:6px 0;min-height:36px;font-size:.85rem;font-family:inherit
+    }
+    .auth-panel{width:100%;max-width:340px;display:flex;flex-direction:column;gap:8px;text-align:left}
+    .auth-panel h2{margin:0;font-size:1.15rem;font-weight:700;color:var(--text)}
+    .auth-panel .sub{text-align:left}
+    .auth-panel label{display:block;text-align:left;color:var(--muted);font-size:.8rem;margin:0}
+    .auth-panel label+input,.auth-panel label+select{margin-top:2px}
+    .auth-panel select,.auth-panel input{
+      width:100%;border:1px solid var(--border);border-radius:var(--radius);
+      padding:10px 12px;background:#fff;color:var(--text);font-size:16px;min-height:var(--touch);font-family:inherit
+    }
+    .nums button.on,.yesno button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .exchange-mark{border-color:rgba(239,68,68,.45)!important}
+    .schedule-box{margin-top:8px;padding:8px 10px;border:1px solid rgba(239,68,68,.28);border-radius:var(--radius);color:var(--text);font-size:var(--fs-sm);line-height:1.35}
+    .schedule-box strong{color:var(--accent)}
     /* Мобильная полировка */
     @media (max-width:699px){
       :root{ --touch:44px; --fs:15px; --fs-sm:12.5px; --ctrl-pad:10px 12px; }
@@ -566,28 +598,30 @@
   </div></div>
 
   <div id="driver-login" class="screen"><div class="center">
-    <div class="sub" style="align-self:stretch;text-align:left"><button id="driver-login-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
-    <h2 style="margin:0">Вход водителя</h2>
-    <div class="sub">Телефон и PIN из справочника</div>
-    <div class="pin" style="max-width:320px;width:100%">
-      <label style="text-align:left;color:var(--muted);font-size:.8rem">Телефон</label>
+    <div class="auth-panel">
+      <button type="button" class="auth-back" id="driver-login-back">← Назад</button>
+      <img class="logo" src="logo.png" alt="АРМАДА" style="width:64px;align-self:flex-start" />
+      <h2>Вход водителя</h2>
+      <div class="sub">Телефон и PIN из справочника</div>
+      <label for="drv-login-phone">Телефон</label>
       <input id="drv-login-phone" inputmode="tel" placeholder="+79650730002" autocomplete="tel" />
-      <label style="text-align:left;color:var(--muted);font-size:.8rem;margin-top:6px">PIN</label>
+      <label for="drv-login-pin">PIN</label>
       <input id="drv-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
       <div class="error" id="drv-login-error"></div>
       <button class="primary" id="drv-login-ok">Войти</button>
-      <div class="hint" style="text-align:left;margin-top:4px">PIN задаёт админ в «Справочники → Водители». Если вы также админ — можно тот же PIN, что для входа в админку.</div>
+      <div class="hint">PIN задаёт админ в «Справочники → Водители». Если вы также админ — можно тот же PIN, что для входа в админку.</div>
     </div>
   </div></div>
 
   <div id="admin-pin" class="screen"><div class="center">
-    <div class="sub" style="align-self:stretch;text-align:left"><button id="pin-back" style="background:0;border:0;color:var(--accent);font-weight:700">Назад</button></div>
-    <h2 style="margin:0">Вход администратора</h2>
-    <div class="sub">Выберите имя и введите PIN</div>
-    <div class="pin" style="max-width:320px;width:100%">
-      <label style="text-align:left;color:var(--muted);font-size:.8rem">Администратор</label>
-      <select id="admin-name-select" style="width:100%;border:0;border-radius:999px;padding:10px 14px;background:var(--field);color:var(--text);font-size:16px;min-height:40px"></select>
-      <label style="text-align:left;color:var(--muted);font-size:.8rem;margin-top:6px">PIN</label>
+    <div class="auth-panel">
+      <button type="button" class="auth-back" id="pin-back">← Назад</button>
+      <img class="logo" src="logo.png" alt="АРМАДА" style="width:64px;align-self:flex-start" />
+      <h2>Вход администратора</h2>
+      <div class="sub">Выберите имя и введите PIN</div>
+      <label for="admin-name-select">Администратор</label>
+      <select id="admin-name-select"></select>
+      <label for="pin-input">PIN</label>
       <input id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
       <div class="error" id="pin-error"></div>
       <button class="primary" id="pin-ok">Войти</button>
@@ -1006,7 +1040,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-mobile-polish";
+const APP_BUILD="2026-08-07-visual-nits";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -5124,8 +5158,8 @@ function orderTimesLines(o){
   if(!o) return '';
   recomputeOrderTimes(o);
   // Всегда показываем в карточке — иначе кажется, что времени нет
-  return `<div class="hint" style="margin-top:8px;padding:8px 10px;border:1px solid rgba(232,93,4,.35);border-radius:8px;color:var(--text)">
-    <strong style="color:var(--accent)">Время на заказ</strong><br>
+  return `<div class="schedule-box">
+    <strong>Время на заказ</strong><br>
     до заказа: <b>${esc(formatDurationMin(o.timeToOrderMin))}</b>
     · с грузом: <b>${esc(formatDurationMin(o.timeLoadedMin))}</b>
     · до стоянки: <b>${esc(formatDurationMin(o.timeToParkingMin))}</b>
@@ -6967,7 +7001,7 @@ function adminOrderCardHtml(o){
   const ownerLine=isSuperAdmin()
     ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
     : '';
-  return `<div class="card"${onEx?' style="border-color:rgba(232,93,4,.45)"':''} data-order-card="${esc(o.id)}">
+  return `<div class="card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
     <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o)}</h3>
     <p>${esc(dateTime(o.createdAt))}</p>
     ${ownerLine}
@@ -7244,7 +7278,7 @@ function renderAdminExchangeBoard(orders){
     const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
     const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join('');
-    return `<div class="card" style="border-color:rgba(232,93,4,.45)">
+    return `<div class="card exchange-mark">
       <h3>Биржа · №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
       <p style="color:var(--muted)">Заказчик перевозки: <strong>${esc(o.ownCompanyName||'—')}</strong>${mine?' · ваш заказ':''}</p>
@@ -7451,7 +7485,14 @@ function bindAdminCreate(){
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
   $('create-save').onclick=saveDispatcherOrder;
 }
-function highlightDay(){ document.querySelectorAll('[data-cday]').forEach(b=>{ b.style.background = (+b.dataset.cday===createDay)?'var(--accent)':'var(--field)'; }); }
+function highlightDay(){
+  document.querySelectorAll('[data-cday]').forEach(b=>{
+    const on=+b.dataset.cday===createDay;
+    b.classList.toggle('on', on);
+    b.style.background=on?'var(--accent)':'var(--field)';
+    b.style.color=on?'#fff':'var(--text)';
+  });
+}
 function saveDispatcherOrder(){
   const load=($('create-load').value||'').trim(); const unload=($('create-unload').value||'').trim();
   const customer=($('create-customer').value||'').trim();
