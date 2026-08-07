@@ -527,6 +527,7 @@
       padding:6px 0;min-height:36px;font-size:.85rem;font-family:inherit
     }
     .auth-panel{width:100%;max-width:340px;display:flex;flex-direction:column;gap:8px;text-align:left}
+    .auth-panel .logo{width:64px;align-self:flex-start;margin:2px 0 4px}
     .auth-panel h2{margin:0;font-size:1.15rem;font-weight:700;color:var(--text)}
     .auth-panel .sub{text-align:left}
     .auth-panel label{display:block;text-align:left;color:var(--muted);font-size:.8rem;margin:0}
@@ -600,7 +601,7 @@
   <div id="driver-login" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="driver-login-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" style="width:64px;align-self:flex-start" />
+      <img class="logo" src="logo.png" alt="АРМАДА" />
       <h2>Вход водителя</h2>
       <div class="sub">Телефон и PIN из справочника</div>
       <label for="drv-login-phone">Телефон</label>
@@ -616,7 +617,7 @@
   <div id="admin-pin" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="pin-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" style="width:64px;align-self:flex-start" />
+      <img class="logo" src="logo.png" alt="АРМАДА" />
       <h2>Вход администратора</h2>
       <div class="sub">Выберите имя и введите PIN</div>
       <label for="admin-name-select">Администратор</label>
@@ -1040,7 +1041,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-visual-nits";
+const APP_BUILD="2026-08-07-fix-stuck-orderstep";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -5265,6 +5266,61 @@ function hydrateOrdersFromMessages(){
   }
   return changed;
 }
+/** Шаги самосоздания / прибытия — не держать, если заказа уже нет. */
+function isCreateFlowStep(os){
+  return ['chooseVehicle','arrivalOdometer','dayNumber','loading','unloading','startAssignedOdometer'].includes(os||'');
+}
+function isAssignedFlowStep(os){
+  return os==='arriveAssignedOdometer' || os==='departAssignedOdometer';
+}
+function draftHasCreateProgress(d){
+  if(!d || typeof d!=='object') return false;
+  return d.dayNumber!=null || !!(d.loading||d.load||d.loadingAddress)
+    || !!(d.unloading||d.unload||d.unloadingAddress)
+    || d.arrivalOdo!=null || d.startOdometer!=null || d.arrivalOdometer!=null;
+}
+/** Сброс залипшего orderStep после синка (закрытый заказ / пустой draft). */
+function healStuckOrderSteps(){
+  let changed=false;
+  (state.shifts||[]).forEach(s=>{
+    if(!s || s.endedAt) return;
+    const step=s.orderStep||'idle';
+    if(!step || step==='idle') return;
+    if(step==='closingEmptyAfter' || step==='askRefuel' || /^postClose|^closeShift|^closePrev/.test(step)) return;
+    const driver=s.driverName||'';
+    const open=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && samePersonName(o.driverName||'', driver));
+    const enRoute=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && samePersonName(o.driverName||'', driver));
+    if(isAssignedFlowStep(step)){
+      if(enRoute) return;
+      if(step==='departAssignedOdometer'){
+        const pending=(state.orders||[]).some(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && o.departOdometer==null && !o.onExchange && samePersonName(o.driverName||'', driver));
+        if(pending) return;
+      }
+      s.orderStep='idle'; s.draft={}; changed=true;
+      return;
+    }
+    if(!isCreateFlowStep(step)) return;
+    if(open || enRoute) return;
+    if(draftHasCreateProgress(s.draft)) return;
+    // Пустой/почти пустой draft + нет открытого заказа: смотрим, не перебил ли sync закрытым заказом
+    const msgs=s.messages||[];
+    let sawCreate=false, sawClosedAfter=false;
+    for(const m of msgs){
+      const t=String(m.text||'');
+      if(/Заказ на авто|одометр по прибытию на загрузку|Укажите номер заказа за день|адрес загрузки/i.test(t)) sawCreate=true;
+      if(sawCreate && (/закрыт \(восстановлен|Заказ №\d+: закрыт/i.test(t) || (m.author==='bot' && /восстановлен в смене/i.test(t)))){
+        sawClosedAfter=true;
+      }
+    }
+    if(sawClosedAfter || step==='arrivalOdometer'){
+      // arrivalOdometer без прогресса и без живого заказа — безопасно сбросить (можно снова «Создать заказ»)
+      s.orderStep='idle';
+      s.draft={};
+      changed=true;
+    }
+  });
+  return changed;
+}
 /** Дожать зависшее закрытие: есть closeOdo в draft смены, заказ ещё «в работе». */
 function healStuckClosing(){
   let changed=false;
@@ -5321,6 +5377,7 @@ function healAllOrders(){
   let changed=false;
   if(purgeDeadOrdersEverywhere()) changed=true;
   if(healStuckClosing()) changed=true;
+  if(healStuckOrderSteps()) changed=true;
   if(hydrateOrdersFromMessages()) changed=true;
   (state.orders||[]).forEach(o=>{ if(healOrderCloseState(o)) changed=true; ensureOrderTimeStamps(o); });
   (state.shifts||[]).forEach(s=>{
@@ -5860,8 +5917,10 @@ function restartEtoInspection(){
 /** Восстановить orderStep/draft из смены или хвоста чата (создание заказа / в пути). */
 function restoreOrderWorkflow(shift){
   if(!shift) return false;
+  // Сначала снимем залипшие шаги (закрытый заказ после синка и т.п.)
+  try{ healStuckOrderSteps(); }catch(_){}
   // Живой заказ «в пути» важнее сохранённого create-order
-  const enRoute=(state.orders||[]).find(o=>!o.closedAt && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null
+  const enRoute=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null
     && samePersonName(o.driverName||'', shift.driverName||DRIVER));
   if(enRoute){
     state.orderStep='arriveAssignedOdometer';
@@ -5886,23 +5945,57 @@ function restoreOrderWorkflow(shift){
       state.orderStep='postCloseWhere';
       return true;
     }
+    if(isAssignedFlowStep(saved)){
+      // без enRoute выше — шаг мёртвый
+      shift.orderStep='idle'; shift.draft={};
+      return false;
+    }
+    if(isCreateFlowStep(saved)){
+      if(inProgressOrder()){
+        // открытый заказ важнее полусозданного
+        shift.orderStep='idle'; shift.draft={};
+        return false;
+      }
+      if(!draftHasCreateProgress(shift.draft) && saved==='arrivalOdometer'){
+        // Только «жду одометр» без прогресса — не восстанавливаем как mid-order после синка
+        // (иначе вечный «Продолжаем оформление»). Водитель снова нажмёт «Создать заказ».
+        const msgs=shift.messages||[];
+        const healed=msgs.some(m=>/восстановлен в смене|Заказ №\d+: закрыт/i.test(String(m.text||'')));
+        if(healed){
+          shift.orderStep='idle'; shift.draft={};
+          return false;
+        }
+      }
+    }
     state.orderStep=saved;
     state.draft=shift.draft?structuredClone(shift.draft):{};
     if(!state.draft.plate && shift.vehiclePlate) state.draft.plate=shift.vehiclePlate;
     return true;
   }
   const msgs=shift.messages||[];
-  const lastBot=[...msgs].reverse().find(m=>m.author==='bot');
-  const t=String(lastBot&&lastBot.text||'');
+  // Хвост чата: не откатываемся к «прибытию», если позже заказ уже закрыли/восстановили
+  const lastMeaningful=[...msgs].reverse().find(m=>{
+    if(m.author!=='bot') return false;
+    const t=String(m.text||'');
+    return !/^Продолжаем оформление заказа/i.test(t) && !/^Продолжаем закрытие заказа/i.test(t);
+  });
+  const t=String(lastMeaningful&&lastMeaningful.text||'');
+  if(/закрыт \(восстановлен|восстановлен в смене|Заказ №\d+: закрыт/i.test(t)){
+    return false;
+  }
   if(/уже в пути|прибытию на загрузку|одометр.*прибыт.*загруз/i.test(t)){
-    const en=(state.orders||[]).find(o=>!o.closedAt && o.departOdometer!=null && o.startOdometer==null && samePersonName(o.driverName||'', DRIVER));
+    const en=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && samePersonName(o.driverName||'', DRIVER));
     if(en){
       state.orderStep='arriveAssignedOdometer';
       state.draft={assignedId:en.id, plate:shift.vehiclePlate||''};
-    } else {
-      state.orderStep='arrivalOdometer';
-      state.draft=Object.assign({}, shift.draft||{}, {plate:shift.vehiclePlate||(shift.draft&&shift.draft.plate)||''});
+      return true;
     }
+    // Самосоздание: только если после этой реплики не было закрытия
+    const idx=msgs.findLastIndex?msgs.findLastIndex(m=>m===lastMeaningful):msgs.lastIndexOf(lastMeaningful);
+    const after=idx>=0?msgs.slice(idx+1):[];
+    if(after.some(m=>/закрыт|восстановлен в смене/i.test(String(m.text||'')))) return false;
+    state.orderStep='arrivalOdometer';
+    state.draft=Object.assign({}, shift.draft||{}, {plate:shift.vehiclePlate||(shift.draft&&shift.draft.plate)||''});
     return true;
   }
   if(/номер заказа за день/i.test(t)){
@@ -5969,7 +6062,7 @@ function resumeOpenShift(shift){
           const n=(orderBeingClosed()||inProgressOrder()||{}).sequentialNumber;
           state.messages.push({author:'bot',text:n?`Продолжаем закрытие заказа №${n}.`:`Продолжаем закрытие заказа.`});
         }
-      } else if(!last || !/прибытию на загрузку|номер заказа за день|адрес загрузки|адрес выгрузки|автомобиль для заказа/i.test(String(last.text||''))){
+      } else if(!last || !/прибытию на загрузку|номер заказа за день|адрес загрузки|адрес выгрузки|автомобиль для заказа|Продолжаем оформление заказа/i.test(String(last.text||''))){
         state.messages.push({author:'bot',text:`Продолжаем оформление заказа (${shift.vehiclePlate||'авто'}).`});
       }
     }
