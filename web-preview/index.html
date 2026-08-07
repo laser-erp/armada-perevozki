@@ -761,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-block-exit-open-shift";
+const APP_BUILD="2026-08-07-sync-keep-shift-orders";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1085,6 +1085,8 @@ function applyPayload(p, opts){
     });
   });
   state.orders=stripCancelledFromOrders(state.orders);
+  // Наоборот: заказы в списке, но выпали из смены — вернуть в смену + чат
+  healOrphanOrdersIntoShifts();
   healAllOrders();
   purgeCancelledOrders();
   compactSequentialNumbers();
@@ -1521,6 +1523,7 @@ async function pushServerState(){
         if(mergeLocalShifts(localShifts)) merged=true;
         if(liveShift && mergeLocalShifts([liveShift])) merged=true;
         if(mergeLocalOrders(localOrders)) merged=true;
+        if(healOrphanOrdersIntoShifts()) merged=true;
         if(migrateEtoFromMessages()) merged=true;
         if(merged){
           bumpDataEpoch('merge-local-remote-ahead');
@@ -1597,6 +1600,7 @@ async function initCloudSync(){
         const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
         const localOrders=(state.orders||[]).map(o=>structuredClone(o));
         applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true});
+        healOrphanOrdersIntoShifts();
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
       } else {
@@ -1643,6 +1647,7 @@ async function pullRemoteUpdates(reason){
     mergeLocalShifts(localShifts);
     if(liveShift) mergeLocalShifts([liveShift]);
     mergeLocalOrders(localOrders);
+    healOrphanOrdersIntoShifts();
     migrateEtoFromMessages();
     localStorage.setItem(KEY, JSON.stringify(snapshot()));
     if(inDriver){
@@ -1650,16 +1655,21 @@ async function pullRemoteUpdates(reason){
       const open=findOpenShift();
       if(open){
         state.shift=open;
+        // Чат: берём более полную историю (локальная или сменная)
+        const shiftMsgs=(open.messages&&open.messages.length)?open.messages.slice():[];
+        const richer=keepMessages.length>shiftMsgs.length?keepMessages:shiftMsgs;
         if(keepStep && keepStep!=='idle'){
           state.orderStep=keepStep;
           state.draft=keepDraft;
           state.step=keepUiStep||'done';
-          state.messages=keepMessages.length?keepMessages:(open.messages||[]).slice();
+          state.messages=richer.length?richer:keepMessages;
         } else {
-          state.messages=(open.messages&&open.messages.length)?open.messages.slice():keepMessages;
+          state.messages=richer.length?richer:keepMessages;
           state.step=isEtoDone(open)?'done':(keepUiStep||'idle');
           restoreOrderWorkflow(open);
         }
+        // обратно в смену — чтобы не отвалилось при следующем sync
+        open.messages=state.messages.slice();
       }
       renderChat(); renderInput(); renderDriverBanner();
       if(ordersOpen) showOrders();
@@ -3763,9 +3773,27 @@ function awaitingArrive(){
   return (state.orders||[]).filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && orderBelongsToDriver(o));
 }
 function upsertOrder(order){
+  if(!order||!order.id) return;
   const i=state.orders.findIndex(o=>o.id===order.id);
   if(i>=0) state.orders[i]=order; else state.orders.unshift(order);
-  state.shifts.forEach(s=>{ const j=(s.orders||[]).findIndex(o=>o.id===order.id); if(j>=0) s.orders[j]=order; });
+  let linked=false;
+  state.shifts.forEach(s=>{
+    const j=(s.orders||[]).findIndex(o=>o.id===order.id);
+    if(j>=0){ s.orders[j]=order; linked=true; }
+  });
+  // Не оставляем заказ только в общем списке — привязываем к смене
+  if(!linked){
+    const host=findShiftForOrder(order);
+    if(host){
+      host.orders=host.orders||[];
+      host.orders.push(order);
+    } else if(state.shift && !state.shift.endedAt && state.shift.id){
+      if(!state.shift.orders) state.shift.orders=[];
+      if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
+      const si=state.shifts.findIndex(s=>s.id===state.shift.id);
+      if(si>=0) state.shifts[si]=state.shift;
+    }
+  }
   rememberCustomer(order);
   persist();
 }
@@ -4322,7 +4350,133 @@ function etoProgressScore(s){
   if(isEtoDone(s)) n+=5;
   return n;
 }
-/** После sync remote_ahead — не потерять локальные открытые смены с ЕТО. */
+/** Слить заказы двух копий смены — ничего не выбрасываем. */
+function mergeShiftOrders(cur, ls){
+  if(!cur||!ls) return false;
+  let changed=false;
+  if(!Array.isArray(cur.orders)) cur.orders=[];
+  const byId=new Map(cur.orders.map(o=>[o.id,o]));
+  (ls.orders||[]).forEach(lo=>{
+    if(!lo||!lo.id) return;
+    const existing=byId.get(lo.id);
+    if(!existing){
+      cur.orders.push(lo);
+      byId.set(lo.id, lo);
+      changed=true;
+      return;
+    }
+    if(orderProgressScore(lo)>orderProgressScore(existing)){
+      Object.assign(existing, lo);
+      changed=true;
+    } else if(mergeOrderFields(existing, lo)){
+      changed=true;
+    }
+  });
+  return changed;
+}
+/** Слить чат смены: не терять пузыри при sync. */
+function mergeShiftMessages(cur, ls){
+  if(!cur||!ls) return false;
+  const a=Array.isArray(cur.messages)?cur.messages.slice():[];
+  const b=Array.isArray(ls.messages)?ls.messages.slice():[];
+  if(!b.length) return false;
+  if(!a.length){ cur.messages=b; return true; }
+  const key=m=>`${m&&m.author}|${String(m&&m.text||'').slice(0,120)}`;
+  const base=a.length>=b.length?a:b;
+  const other=a.length>=b.length?b:a;
+  const seen=new Set(base.map(key));
+  const out=base.slice();
+  let added=false;
+  other.forEach(m=>{
+    if(!m) return;
+    const k=key(m);
+    if(seen.has(k)) return;
+    out.push(m);
+    seen.add(k);
+    added=true;
+  });
+  const prevLen=(cur.messages||[]).length;
+  if(added || out.length!==prevLen){
+    cur.messages=out;
+    return true;
+  }
+  return false;
+}
+/** Подобрать смену для заказа: тот же водитель/авто/день. */
+function findShiftForOrder(order){
+  if(!order) return null;
+  const orderDay=localDayKey(order.createdAt||order.arrivedAt||order.closedAt||order.endAt);
+  const list=(state.shifts||[]).filter(s=>{
+    if(!s||s.abandoned) return false;
+    if(order.driverName && s.driverName && !samePersonName(order.driverName, s.driverName)) return false;
+    if(order.vehiclePlate && s.vehiclePlate && !sameVehiclePlate(order.vehiclePlate, s.vehiclePlate)) return false;
+    const sDay=localDayKey(s.startedAt);
+    if(orderDay && sDay && orderDay===sDay) return true;
+    if(!s.endedAt && sDay && orderDay && sDay<=orderDay) return true;
+    return false;
+  }).sort((a,b)=>{
+    const aExact=(localDayKey(a.startedAt)===orderDay)?1:0;
+    const bExact=(localDayKey(b.startedAt)===orderDay)?1:0;
+    if(bExact!==aExact) return bExact-aExact;
+    const aOpen=a.endedAt?0:1, bOpen=b.endedAt?0:1;
+    if(bOpen!==aOpen) return bOpen-aOpen;
+    return new Date(b.startedAt)-new Date(a.startedAt);
+  });
+  return list[0]||null;
+}
+/**
+ * Заказы, которые есть в общем списке, но выпали из смены —
+ * вернуть в смену и отметить в чате (чтобы карточка и чат не расходились).
+ */
+function healOrphanOrdersIntoShifts(){
+  let changed=false;
+  const linked=new Set();
+  (state.shifts||[]).forEach(s=>{
+    (s.orders||[]).forEach(o=>{ if(o&&o.id) linked.add(o.id); });
+  });
+  const dead=deletedOrderIdSet();
+  (state.orders||[]).forEach(o=>{
+    if(!o||!o.id||o.cancelledAt||dead.has(o.id)||linked.has(o.id)) return;
+    const host=findShiftForOrder(o);
+    if(!host) return;
+    host.orders=host.orders||[];
+    host.orders.push(o);
+    linked.add(o.id);
+    changed=true;
+    const msgs=host.messages||[];
+    const n=o.sequentialNumber;
+    const noted=msgs.some(m=>{
+      const t=String(m.text||'');
+      return (n!=null && (t.includes(`порядковый номер - ${n}`) || t.includes(`Заказ №${n}`) || t.includes(`№${n} `)))
+        || t.includes('восстановлен в смене');
+    });
+    if(!noted){
+      const route=(typeof routeText==='function')?routeText(o):((o.loading||'')+' → '+(o.unloading||''));
+      const status=o.closedAt
+        ? `закрыт ${typeof dateTime==='function'?dateTime(o.closedAt):o.closedAt}`
+        : `в смене с ${typeof dateTime==='function'?dateTime(o.createdAt):o.createdAt}`;
+      host.messages=msgs.concat([{
+        author:'bot',
+        text:`Заказ №${n||'—'}: ${status} (восстановлен в смене после синка).\nМаршрут: ${route||'—'}`
+      }]);
+    }
+  });
+  // Канонические ссылки: shift.orders → объекты из state.orders
+  const byId=new Map((state.orders||[]).map(o=>[o.id,o]));
+  (state.shifts||[]).forEach(s=>{
+    if(!Array.isArray(s.orders)||!s.orders.length) return;
+    const next=s.orders.map(o=>{
+      if(!o||!o.id||dead.has(o.id)) return null;
+      return byId.get(o.id)||o;
+    }).filter(Boolean);
+    if(next.length!==s.orders.length || next.some((o,i)=>o!==s.orders[i])){
+      s.orders=next;
+      changed=true;
+    }
+  });
+  return changed;
+}
+/** После sync remote_ahead — не потерять локальные смены, заказы и чат. */
 function mergeLocalShifts(localShifts){
   if(!Array.isArray(localShifts)||!localShifts.length) return false;
   let changed=false;
@@ -4338,29 +4492,59 @@ function mergeLocalShifts(localShifts){
       return;
     }
     // Никогда не откатываем пройденный ЕТО локальной «дырявой» копией
-    if(isEtoDone(cur) && !isEtoDone(ls)) return;
-    if(etoFieldsComplete(cur) && !etoFieldsComplete(ls)) return;
-    // Локально закрытая смена важнее «открытой» копии с сервера (heal забытого закрытия)
+    const localWeakerEto=isEtoDone(cur) && !isEtoDone(ls);
+    const localWeakerFields=etoFieldsComplete(cur) && !etoFieldsComplete(ls);
+    // Локально закрытая смена важнее «открытой» копии с сервера
     if(ls.endedAt && !cur.endedAt){
+      const keepOrders=cur.orders, keepMsgs=cur.messages;
       Object.assign(cur, ls);
+      cur.orders=keepOrders||[];
+      cur.messages=keepMsgs||[];
+      if(mergeShiftOrders(cur, ls)) {}
+      if(mergeShiftMessages(cur, ls)) {}
       changed=true;
       return;
     }
     // Не открывать снова уже закрытую смену локальной открытой копией
     if(cur.endedAt && !ls.endedAt){
       if(cur.abandoned && (isEtoDone(ls) || etoProgressScore(ls)>etoProgressScore(cur))){
+        const keepOrders=cur.orders, keepMsgs=cur.messages;
         Object.assign(cur, ls);
         cur.abandoned=false;
         cur.endedAt=null;
+        cur.orders=keepOrders||[];
+        cur.messages=keepMsgs||[];
+        mergeShiftOrders(cur, ls);
+        mergeShiftMessages(cur, ls);
         changed=true;
+      } else {
+        // даже если не открываем — забрать заказы/чат с локальной копии
+        if(mergeShiftOrders(cur, ls)) changed=true;
+        if(mergeShiftMessages(cur, ls)) changed=true;
       }
       return;
     }
-    if(etoProgressScore(ls)>etoProgressScore(cur) || (!!ls.completedAt && !cur.completedAt)){
-      Object.assign(cur, ls);
-      changed=true;
+    // Поля ЕТО с более полной стороны (без слепого Object.assign — он сносил orders/messages)
+    if(!localWeakerEto && !localWeakerFields){
+      if(etoProgressScore(ls)>etoProgressScore(cur) || (!!ls.completedAt && !cur.completedAt)){
+        ['vehiclePlate','odometer','fuelLiters','gur','coolant','oil','light','completedAt',
+          'powerSteeringLevel','coolantLevel','engineOilLevel','fuelRemainingLiters',
+          'lastOdometerPoint','parkingOdometer','driverName','ownCompanyId','ownCompanyName',
+          'ownerAdminId','ownerAdminName','spaceId','lockEto'].forEach(k=>{
+          if(ls[k]!=null && ls[k]!=='') cur[k]=ls[k];
+        });
+        changed=true;
+      } else {
+        ['lastOdometerPoint','parkingOdometer','vehiclePlate'].forEach(k=>{
+          if((cur[k]==null||cur[k]==='') && ls[k]!=null && ls[k]!==''){ cur[k]=ls[k]; changed=true; }
+        });
+      }
     }
+    // Заказы и чат — всегда в обе стороны, ничего не отваливается
+    if(mergeShiftOrders(cur, ls)) changed=true;
+    if(mergeShiftMessages(cur, ls)) changed=true;
   });
+  if(healOrphanOrdersIntoShifts()) changed=true;
   return changed;
 }
 /** Полнота заказа для merge: закрытый с одометрами всегда выше «открытой дырки». */
