@@ -174,10 +174,12 @@
     .orders-hint{color:var(--muted);font-size:var(--fs-sm);padding:0 2px 2px}
     .driver-banner{margin:6px 10px 0;padding:10px 12px;border-radius:var(--radius);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.45);display:none}
     .driver-banner.show{display:block}
+    .driver-banner.remind-close{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.45)}
     .driver-banner strong{display:block;font-size:.92rem;margin:0 0 2px}
     .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
+    .hint.warn-close{color:var(--accent);font-weight:600}
     /* Справочники — компакт + круглые кнопки */
     .cat-sticky{
       position:sticky;top:0;z-index:6;margin:0 -12px;padding:6px 12px 5px;
@@ -759,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-close-stale-shifts";
+const APP_BUILD="2026-08-07-shift-close-reminders";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1691,7 +1693,17 @@ function startAutoSync(){
 }
 if(typeof document!=='undefined'){
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState==='visible') pullRemoteUpdates('visible');
+    if(document.visibilityState==='visible'){
+      pullRemoteUpdates('visible');
+      maybeNudgeCloseShift(false);
+      renderDriverBanner();
+    }
+  });
+  window.addEventListener('beforeunload', (e)=>{
+    if(typeof shiftAwaitingClose==='function' && shiftAwaitingClose()){
+      e.preventDefault();
+      e.returnValue='';
+    }
   });
 }
 function upsertShift(){
@@ -3749,12 +3761,44 @@ function canArriveMessage(orderId){
   if(mineBusy && (!target || mineBusy.id!==target.id)) return 'Сначала закройте текущий заказ';
   return null;
 }
+/** Смена открыта, работа по заказам не идёт — нужно закрыть смену. */
+function shiftAwaitingClose(shift){
+  const s=shift||state.shift||findOpenShift();
+  if(!s || s.endedAt || s.abandoned) return false;
+  if(state.orderStep && state.orderStep!=='idle' && state.orderStep!=='postCloseWhere'){
+    // Уже в процессе закрытия смены / заказа — баннер не дублируем на шаге одометра стоянки
+    if(state.orderStep==='closeShiftParking'||state.orderStep==='closeShiftStaysLoaded') return false;
+  }
+  if(!isEtoDone(s) && !etoFieldsComplete(s)) return false;
+  if(inProgressOrder()||enRouteOrder()) return false;
+  const hasClosed=(s.orders||[]).some(o=>o && !o.cancelled && (o.closedAt||looksClosedOrder(o)));
+  const day=localDayKey(s.startedAt);
+  const today=localDayKey(new Date());
+  const prevDay=!!(day && today && day<today);
+  return hasClosed || prevDay;
+}
+/** Мягкое напоминание в чат (не чаще раза в 30 мин). */
+function maybeNudgeCloseShift(force){
+  if(!DRIVER || !shiftAwaitingClose()) return false;
+  if(state.orderStep && state.orderStep!=='idle') return false;
+  const last=state.closeShiftNudgeAt || (state.shift && state.shift.closeShiftNudgeAt);
+  if(!force && last && (Date.now()-new Date(last).getTime())<30*60*1000) return false;
+  const recent=(state.messages||[]).slice(-6).some(m=>/не забудьте.*закрыть смену|закройте смену|«Закрыть смену»/i.test(String(m.text||'')));
+  if(!force && recent) return false;
+  add('bot','Не забудьте закрыть смену: нажмите «Закрыть смену» и введите одометр на стоянке. Иначе день останется открытым.');
+  state.closeShiftNudgeAt=new Date().toISOString();
+  if(state.shift) state.shift.closeShiftNudgeAt=state.closeShiftNudgeAt;
+  upsertShift();
+  renderChat();
+  return true;
+}
 function renderDriverBanner(){
   const box=$('driver-banner'); if(!box) return;
   const enRoute=awaitingArrive();
   const pending=assignedPending();
-  if(!enRoute.length && !pending.length){
-    box.classList.remove('show'); box.innerHTML=''; return;
+  const needClose=shiftAwaitingClose();
+  if(!enRoute.length && !pending.length && !needClose){
+    box.classList.remove('show','remind-close'); box.innerHTML=''; return;
   }
   let html='';
   enRoute.forEach(o=>{
@@ -3767,10 +3811,22 @@ function renderDriverBanner(){
       <p>${esc(routeText(o))}<br>Перед выездом со стоянки нажмите «Выехал» и введите одометр.</p>
       <div class="banner-actions"><button type="button" class="primary banner-depart" data-id="${o.id}">Выехал</button></div>`;
   });
+  if(needClose){
+    const s=state.shift||findOpenShift();
+    const n=(s && s.orders||[]).filter(o=>o && !o.cancelled && (o.closedAt||looksClosedOrder(o))).length;
+    const prev=s && localDayKey(s.startedAt) && localDayKey(s.startedAt)<localDayKey(new Date());
+    html+=`<strong>Не забудьте закрыть смену</strong>
+      <p>${prev?'Смена со вчера ещё открыта. ':''}${n?`Закрыто заказов: ${n}. `:''}Нажмите «Закрыть смену» и укажите одометр на стоянке.</p>
+      <div class="banner-actions"><button type="button" class="primary banner-close-shift">Закрыть смену</button></div>`;
+    box.classList.add('remind-close');
+  } else {
+    box.classList.remove('remind-close');
+  }
   box.innerHTML=html;
   box.classList.add('show');
   document.querySelectorAll('.banner-depart').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.banner-arrive').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
+  document.querySelectorAll('.banner-close-shift').forEach(b=>b.onclick=()=>startCloseShift());
 }
 function isSameLocalDay(iso, now){
   if(!iso) return false;
@@ -4926,6 +4982,9 @@ function renderInput(){
       html+=`<button class="primary arrive-assigned" data-id="${enRoute.id}">Прибыл на загрузку №${enRoute.sequentialNumber}</button>`;
       html+=`<button class="secondary" id="close-shift">Закрыть смену</button>`;
     } else {
+      if(shiftAwaitingClose()){
+        html+=`<div class="hint warn-close">Смена ещё открыта. Перед уходом нажмите «Закрыть смену» и введите одометр на стоянке.</div>`;
+      }
       assignedPending().forEach(o=>{ html+=`<button class="primary depart-assigned" data-id="${o.id}">Выехал · заказ №${o.sequentialNumber}</button>`; });
       html+=`<button class="secondary" id="create-order">Создать заказ сам</button>`;
       html+=`<button class="primary" id="close-shift">Закрыть смену</button>`;
@@ -5054,13 +5113,19 @@ function resumeOpenShift(shift){
     if(!midOrder){
       const noted=(state.messages||[]).some(m=>String(m.text||'').includes('Смена уже открыта')||String(m.text||'').includes('Продолжаем открытую смену')||String(m.text||'').includes('ЕТО пройден'));
       if(!state.messages.length){
-        state.messages=[{author:'bot',text:`Продолжаем открытую смену от ${dateTime(shift.startedAt)}.`}];
+        const closeHint=shiftAwaitingClose(shift)
+          ? '\nНе забудьте закрыть смену перед уходом (кнопка «Закрыть смену» + одометр на стоянке).'
+          : '';
+        state.messages=[{author:'bot',text:`Продолжаем открытую смену от ${dateTime(shift.startedAt)}.${closeHint}`}];
       } else if(!noted){
         const carry=inProgressOrder();
         const carryHint=carry&&carry.staysLoadedOvernight
           ? `\nЕсть перенесённый заказ №${carry.sequentialNumber} (машина загружена) — после работы закройте его.`
           : '';
-        state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}`});
+        const closeHint=(!carry && shiftAwaitingClose(shift))
+          ? '\nЕсли заказов больше не будет — закройте смену: «Закрыть смену» → одометр на стоянке.'
+          : '';
+        state.messages.push({author:'bot',text:`Смена уже открыта (${shift.vehiclePlate||'авто'}). ЕТО на сегодня пройден — можно работать с заказами или закрыть смену.${carryHint}${closeHint}`});
       }
     } else {
       const os=state.orderStep||'';
@@ -5583,7 +5648,7 @@ function finishPostCloseWhere(where){
       bumpDataEpoch('post-close-here');
       upsertOrder(order);
       add('driver','Уже на стоянке');
-      add('bot',`Заказ №${order.sequentialNumber}: после выгрузки 0 км. Можно закрывать смену.`);
+      add('bot',`Заказ №${order.sequentialNumber}: после выгрузки 0 км.\nНе забудьте закрыть смену: «Закрыть смену» → одометр на стоянке. Без этого день останется открытым.`);
     } else if(where==='parking'){
       // Пробег до стоянки посчитается при закрытии смены по одометру стоянки
       if(order.emptyKmAfter==null) order.emptyKmAfter=0;
@@ -5591,7 +5656,7 @@ function finishPostCloseWhere(where){
       order.emptyAfterLinkedFromNext=false;
       upsertOrder(order);
       add('driver','На стоянку');
-      add('bot',`Ок. Одометр на стоянке укажете при «Закрыть смену» — пробег после выгрузки посчитается сам (от ${end}).`);
+      add('bot',`Ок. Дальше обязательно закройте смену: нажмите «Закрыть смену» и введите одометр на стоянке — пробег после выгрузки посчитается сам (от ${end}).`);
     } else {
       // следующий заказ: «до стоянки» проставится = «нулевой до» нового
       order.emptyKmAfter=0;
