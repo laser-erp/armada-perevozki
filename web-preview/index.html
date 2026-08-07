@@ -761,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-same-driver-vehicle-odo";
+const APP_BUILD="2026-08-07-force-close-after-parking";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -5121,8 +5121,13 @@ function renderInput(){
     html+=`<div class="hint warn-close">Вчерашняя смена открыта — укажите одометр стоянки (он же станет ЕТО сегодня).</div>`;
     html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${min!=null?`value="${esc(String(min))}"`:''} /><button id="num-ok">OK</button></div>`;
     if(min!=null) html+=`<button class="secondary" id="eto-odo-keep">Как вчерашний последний: ${esc(String(min))}</button>`;
-  } else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='departAssignedOdometer'||os==='arriveAssignedOdometer'||os==='startAssignedOdometer'||os==='closeShiftParking'){
-    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closeShiftParking'?'Например, 277800':os==='closingOdometer'?'Например, 277720':'Например, 277690';
+  } else if(os==='closeShiftParking'){
+    const sug=state.draft&&state.draft.closeShiftSuggestOdo!=null?state.draft.closeShiftSuggestOdo:null;
+    const ph=sug!=null?String(sug):'Например, 277800';
+    html+=`<div class="hint warn-close">Одометр на стоянке — смена закроется</div>`;
+    html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${sug!=null?`value="${esc(String(sug))}"`:''} /><button id="num-ok">OK</button></div>`;
+  } else if(os==='arrivalOdometer'||os==='closingOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='departAssignedOdometer'||os==='arriveAssignedOdometer'||os==='startAssignedOdometer'){
+    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closingOdometer'?'Например, 277720':'Например, 277690';
     html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
   } else if(os==='postCloseWhere'){
     html+=`<div class="hint">Куда дальше после выгрузки?</div><div class="yesno">
@@ -5892,7 +5897,7 @@ function finishPostCloseWhere(where){
       bumpDataEpoch('post-close-here');
       upsertOrder(order);
       add('driver','Уже на стоянке');
-      add('bot',`Заказ №${order.sequentialNumber}: после выгрузки 0 км.\nНе забудьте закрыть смену: «Закрыть смену» → одометр на стоянке. Без этого день останется открытым.`);
+      add('bot',`Заказ №${order.sequentialNumber}: после выгрузки 0 км. Закрываем смену.`);
     } else if(where==='parking'){
       // Пробег до стоянки посчитается при закрытии смены по одометру стоянки
       if(order.emptyKmAfter==null) order.emptyKmAfter=0;
@@ -5900,7 +5905,6 @@ function finishPostCloseWhere(where){
       order.emptyAfterLinkedFromNext=false;
       upsertOrder(order);
       add('driver','На стоянку');
-      add('bot',`Ок. Дальше обязательно закройте смену: нажмите «Закрыть смену» и введите одометр на стоянке — пробег после выгрузки посчитается сам (от ${end}).`);
     } else {
       // следующий заказ: «до стоянки» проставится = «нулевой до» нового
       order.emptyKmAfter=0;
@@ -5913,6 +5917,30 @@ function finishPostCloseWhere(where){
     }
   } else {
     add('driver', where==='here'?'Уже на стоянке':where==='parking'?'На стоянку':'На следующий заказ');
+  }
+  // На стоянку / уже там — сразу закрытие смены (нельзя «забыть» в меню)
+  if(where==='here'||where==='parking'){
+    state.step='done';
+    state.error='';
+    if(where==='here' && end!=null && state.shift && !state.shift.endedAt && !inProgressOrder()){
+      state.orderStep='idle';
+      state.draft={};
+      upsertShift(); persist();
+      clearTimeout(persistTimer);
+      pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+      acceptCloseShiftParking(+end);
+      return;
+    }
+    state.orderStep='closeShiftParking';
+    state.draft={closeShiftSuggestOdo:end!=null?+end:null};
+    add('bot', end!=null
+      ? `Укажите одометр на стоянке — смена закроется. Пробег после выгрузки посчитается от ${end}.`
+      : 'Укажите одометр на стоянке — смена закроется.');
+    upsertShift(); persist();
+    clearTimeout(persistTimer);
+    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+    renderInput();
+    return;
   }
   state.orderStep='idle'; state.draft={}; state.error='';
   upsertShift(); persist();
