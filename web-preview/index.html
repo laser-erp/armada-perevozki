@@ -55,6 +55,45 @@
     .logo{width:88px;height:auto}
     .brand{font-size:1.55rem;font-weight:700;letter-spacing:.08em;color:var(--text)}
     .sub{color:var(--muted);font-size:.9rem}
+    /* Splash / роли — бренд первый */
+    .splash-hero{gap:10px;max-width:360px;margin:0 auto}
+    .splash-hero .logo{width:108px;filter:drop-shadow(0 8px 18px rgba(17,24,39,.08))}
+    .splash-hero .brand{
+      font-size:clamp(1.85rem,6vw,2.25rem);letter-spacing:.16em;line-height:1.05;color:var(--ink)
+    }
+    .splash-hero .sub{font-size:.95rem;letter-spacing:.02em}
+    .splash-accent{
+      width:52px;height:3px;border-radius:2px;background:var(--accent);margin-top:2px;
+      transform-origin:center
+    }
+    .splash-hero .logo{animation:splashRise .55s ease both}
+    .splash-hero .brand{animation:splashRise .55s ease .07s both}
+    .splash-hero .sub{animation:splashRise .55s ease .14s both}
+    .splash-hero .splash-accent{animation:splashRise .55s ease .2s both, splashPulse 1.25s ease .75s infinite}
+    .roles-hero{gap:10px;max-width:360px;width:100%;margin:0 auto}
+    .roles-hero .logo{width:72px}
+    .roles-hero .brand{
+      font-size:clamp(1.65rem,5.2vw,1.95rem);letter-spacing:.14em;color:var(--ink);line-height:1.05
+    }
+    .roles-hero .sub{margin-bottom:2px}
+    .roles-stack{max-width:340px;gap:10px}
+    .role-btn{
+      display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+      text-align:left;padding:14px 16px;min-height:56px
+    }
+    .role-btn-title{font-size:.98rem;font-weight:700;line-height:1.2}
+    .role-btn-desc{font-size:.78rem;font-weight:500;line-height:1.3;opacity:.9}
+    button.secondary.role-btn .role-btn-desc{color:var(--muted);opacity:1}
+    #roles.show .roles-hero .logo{animation:splashRise .4s ease both}
+    #roles.show .roles-hero .brand{animation:splashRise .4s ease .05s both}
+    #roles.show .roles-hero .sub,#roles.show .roles-hero #sync-hint{animation:splashRise .4s ease .1s both}
+    #roles.show .roles-stack .role-btn:nth-child(1){animation:splashRise .4s ease .16s both}
+    #roles.show .roles-stack .role-btn:nth-child(2){animation:splashRise .4s ease .22s both}
+    @keyframes splashRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+    @keyframes splashPulse{
+      0%,100%{opacity:.45;transform:scaleX(.72)}
+      50%{opacity:1;transform:scaleX(1)}
+    }
     button.primary,button.secondary{width:100%;border:0;border-radius:var(--pill);padding:10px 14px;min-height:var(--touch);font-size:.9rem;font-weight:700;cursor:pointer}
     button.primary{background:var(--accent);color:#fff}
     button.secondary{background:var(--field);color:var(--text)}
@@ -621,20 +660,27 @@
 </head>
 <body>
 <div class="phone" id="shell">
-  <div id="splash" class="screen show"><div class="center">
+  <div id="splash" class="screen show"><div class="center splash-hero">
     <img class="logo" src="logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Учёт перевозок</div>
+    <div class="splash-accent" aria-hidden="true"></div>
   </div></div>
 
-  <div id="roles" class="screen"><div class="center">
+  <div id="roles" class="screen"><div class="center roles-hero">
     <img class="logo" src="logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Выберите роль</div>
     <div class="hint" id="sync-hint" style="display:none;margin-bottom:8px"></div>
-    <div class="stack">
-      <button class="primary" id="role-driver">Водитель</button>
-      <button class="secondary" id="role-admin">Администратор</button>
+    <div class="stack roles-stack">
+      <button type="button" class="primary role-btn" id="role-driver">
+        <span class="role-btn-title">Водитель</span>
+        <span class="role-btn-desc">Смена, ЕТО и заказы в дороге</span>
+      </button>
+      <button type="button" class="secondary role-btn" id="role-admin">
+        <span class="role-btn-title">Администратор</span>
+        <span class="role-btn-desc">Заявки, биржа и справочники</span>
+      </button>
     </div>
   </div></div>
 
@@ -1094,7 +1140,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-eto-exchange-theme1";
+const APP_BUILD="2026-08-07-splash-roles";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1247,6 +1293,13 @@ function show(id){
   if(currentAdmin && wide){
     touchAdminPresence(id);
   }
+}
+const SPLASH_STARTED_MS=Date.now();
+const MIN_SPLASH_MS=900;
+function showAfterSplash(id){
+  const wait=Math.max(0, MIN_SPLASH_MS-(Date.now()-SPLASH_STARTED_MS));
+  if(wait<=0){ show(id); return; }
+  setTimeout(()=>show(id), wait);
 }
 function isCancelledOrder(o){
   return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));
@@ -8767,7 +8820,9 @@ try{
     renderAdmin();
   } else if(!(await tryDriver())){
     if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show')){
-      show('roles');
+      // Холодный старт: дать бренду на splash чуть проявить себя
+      if(document.querySelector('#splash.show')) showAfterSplash('roles');
+      else show('roles');
     }
   }
   startAutoSync();
