@@ -357,6 +357,60 @@
     .item-card{background:var(--surface);border:1px solid var(--border)}
     .drv-card{background:var(--surface);border:1px solid var(--border)}
     .calc{background:var(--bg0);border:1px solid var(--border)}
+    /* Админка: боковое меню + основная зона */
+    #admin{background:var(--bg0)}
+    .admin-layout{flex:1;min-height:0;display:flex;position:relative;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)}
+    .admin-sidebar{
+      width:220px;flex:0 0 220px;display:flex;flex-direction:column;gap:4px;
+      background:var(--surface);border-right:1px solid var(--border);padding:14px 12px 12px;
+      z-index:12
+    }
+    .admin-sidebar-brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.06em;font-size:.95rem;padding:2px 6px 12px;color:var(--text)}
+    .admin-sidebar-logo{border-radius:8px;object-fit:cover}
+    .admin-sidebar-user{padding:0 6px 12px;font-size:.75rem;color:var(--muted);line-height:1.35;border-bottom:1px solid var(--border);margin-bottom:8px;min-height:2.4em}
+    .admin-sidebar-nav{display:flex;flex-direction:column;gap:4px;flex:1;min-height:0;overflow:auto}
+    .admin-sidebar-foot{display:flex;flex-direction:column;gap:4px;padding-top:10px;border-top:1px solid var(--border);margin-top:8px}
+    .admin-nav-item{
+      width:100%;border:0;border-radius:var(--radius);padding:10px 12px;min-height:40px;
+      background:transparent;color:var(--text);font-weight:600;font-size:.86rem;text-align:left;cursor:pointer
+    }
+    .admin-nav-item:hover{background:var(--surface-hover)}
+    .admin-nav-item.on{background:rgba(239,68,68,.1);color:var(--accent)}
+    .admin-nav-item.ghost{color:var(--muted);font-weight:500}
+    .admin-nav-item.ghost:hover{color:var(--text)}
+    .admin-main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:transparent}
+    .admin-topbar{
+      display:flex;align-items:center;gap:8px;padding:10px 14px;min-height:56px;
+      background:var(--surface);border-bottom:1px solid var(--border)
+    }
+    .admin-topbar h1{margin:0;flex:1;min-width:0;font-size:1rem;font-weight:700}
+    .admin-menu-toggle{
+      display:none;border:1px solid var(--border);border-radius:var(--radius);background:var(--field);
+      color:var(--text);width:40px;height:40px;padding:0;font-size:1.1rem;cursor:pointer;flex:0 0 auto
+    }
+    .admin-top-cta{
+      width:auto!important;border:0;border-radius:var(--radius);padding:8px 14px;min-height:40px;
+      background:var(--accent);color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;flex:0 0 auto
+    }
+    .admin-content{flex:1;min-height:0;overflow:auto}
+    .admin-sidebar-backdrop{display:none;border:0;padding:0;margin:0;width:auto;background:transparent}
+    @media (max-width:799px){
+      .admin-sidebar{
+        position:absolute;inset:0 auto 0 0;width:min(280px,86vw);flex:none;
+        transform:translateX(-104%);transition:transform .2s ease;box-shadow:var(--shadow-md)
+      }
+      .admin-sidebar.open{transform:translateX(0)}
+      .admin-menu-toggle{display:inline-flex;align-items:center;justify-content:center}
+      .admin-sidebar-backdrop{
+        display:none;position:absolute;inset:0;background:rgba(17,24,39,.35);z-index:11;cursor:pointer
+      }
+      .admin-sidebar-backdrop.show{display:block}
+    }
+    @media (min-width:800px){
+      .phone.wide{max-width:min(1280px,100%)}
+      .admin-sidebar{position:relative;transform:none!important}
+      .admin-sidebar-backdrop,.admin-sidebar-backdrop.show{display:none!important}
+    }
     .admin-form-actions{background:var(--surface)}
     .cat-sticky{background:var(--surface);border-bottom:1px solid var(--border);backdrop-filter:none}
     .cat-tabs{background:var(--field)}
@@ -413,26 +467,42 @@
   </div></div>
 
   <div id="admin" class="screen">
-    <header>
-      <button id="admin-exit">Выход</button>
-      <h1 id="admin-title">Заявки</h1>
-      <div>
-        <button id="admin-as-driver" title="Войти как водитель">Водитель</button>
-        <button id="admin-activity" style="display:none">Активность</button>
-        <button id="admin-catalogs">Справочники</button>
-        <button id="admin-new">+ Заказ</button>
+    <div class="admin-layout">
+      <aside class="admin-sidebar" id="admin-sidebar" aria-label="Меню админки">
+        <div class="admin-sidebar-brand">
+          <img class="admin-sidebar-logo" src="icons/icon-192.png" alt="" width="28" height="28" />
+          <span>АРМАДА</span>
+        </div>
+        <div class="admin-sidebar-user" id="admin-sidebar-user"></div>
+        <nav class="admin-sidebar-nav">
+          <button type="button" class="admin-nav-item on" data-nav="orders">Заявки</button>
+          <button type="button" class="admin-nav-item" data-nav="eto">ЕТО</button>
+          <button type="button" class="admin-nav-item" data-nav="exchange">Биржа</button>
+          <button type="button" class="admin-nav-item" data-nav="catalogs" id="admin-catalogs">Справочники</button>
+          <button type="button" class="admin-nav-item" data-nav="activity" id="admin-activity" style="display:none">Активность</button>
+        </nav>
+        <div class="admin-sidebar-foot">
+          <button type="button" class="admin-nav-item ghost" id="admin-as-driver" title="Войти как водитель">Водитель</button>
+          <button type="button" class="admin-nav-item ghost" id="admin-exit">Выход</button>
+        </div>
+      </aside>
+      <button type="button" class="admin-sidebar-backdrop" id="admin-sidebar-backdrop" aria-label="Закрыть меню" hidden></button>
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <button type="button" class="admin-menu-toggle" id="admin-menu-toggle" aria-label="Меню">☰</button>
+          <h1 id="admin-title">Заявки</h1>
+          <button type="button" class="admin-top-cta" id="admin-new">+ Заказ</button>
+        </header>
+        <div class="filters" id="admin-filters">
+          <button data-filter="all" class="on">Все</button>
+          <button data-filter="assigned">Назначен</button>
+          <button data-filter="progress">В работе</button>
+          <button data-filter="closed">Закрыт</button>
+        </div>
+        <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
+        <div class="table-wrap admin-content" id="admin-list"></div>
       </div>
-    </header>
-    <div class="filters" id="admin-filters">
-      <button data-filter="all" class="on">Все</button>
-      <button data-filter="eto">ЕТО</button>
-      <button data-filter="exchange">Биржа</button>
-      <button data-filter="assigned">Назначен</button>
-      <button data-filter="progress">В работе</button>
-      <button data-filter="closed">Закрыт</button>
     </div>
-    <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
-    <div class="table-wrap" id="admin-list"></div>
   </div>
 
   <div id="admin-create" class="screen">
@@ -761,7 +831,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-close-remind-after-order";
+const APP_BUILD="2026-08-07-admin-sidebar";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2400,17 +2470,63 @@ function onlineAdmins(){
     .filter(p=>now-Date.parse(p.lastSeen||0)<PRESENCE_ONLINE_MS)
     .sort((a,b)=>Date.parse(b.lastSeen||0)-Date.parse(a.lastSeen||0));
 }
+function closeAdminSidebar(){
+  const sb=$('admin-sidebar');
+  const bd=$('admin-sidebar-backdrop');
+  if(sb) sb.classList.remove('open');
+  if(bd){ bd.classList.remove('show'); bd.hidden=true; }
+}
+function openAdminSidebar(){
+  const sb=$('admin-sidebar');
+  const bd=$('admin-sidebar-backdrop');
+  if(sb) sb.classList.add('open');
+  if(bd){ bd.hidden=false; bd.classList.add('show'); }
+}
+function syncAdminNav(){
+  const f=state.adminFilter||'all';
+  const nav=(f==='eto'||f==='exchange')?f:'orders';
+  document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.nav===nav);
+  });
+  const filters=$('admin-filters');
+  if(filters) filters.style.display=(nav==='orders')?'flex':'none';
+  const cta=$('admin-new');
+  if(cta) cta.style.display=(nav==='orders')?'':'none';
+}
+function setAdminNav(nav){
+  if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
+  closeAdminSidebar();
+  if(nav==='catalogs'){ openCatalogs(); return; }
+  if(nav==='activity'){ openAdminActivity(); return; }
+  if(nav==='eto') state.adminFilter='eto';
+  else if(nav==='exchange') state.adminFilter='exchange';
+  else {
+    if(state.adminFilter==='eto'||state.adminFilter==='exchange') state.adminFilter='all';
+  }
+  document.querySelectorAll('#admin-filters button').forEach(x=>{
+    x.classList.toggle('on', x.dataset.filter===(state.adminFilter||'all'));
+  });
+  show('admin');
+  renderAdmin();
+}
 function updateAdminChrome(){
   const act=$('admin-activity');
   if(act) act.style.display=isSuperAdmin()?'':'none';
   const title=$('admin-title');
-  if(title){
-    if(!currentAdmin) title.textContent='Заявки';
-    else {
-      const sp=findSpaceById(currentAdmin.spaceId);
-      title.textContent=sp?`Заявки · ${sp.name}`:`Заявки · ${currentAdmin.name}`;
-    }
+  const userEl=$('admin-sidebar-user');
+  if(!currentAdmin){
+    if(title) title.textContent='Заявки';
+    if(userEl) userEl.textContent='';
+  } else {
+    const sp=findSpaceById(currentAdmin.spaceId);
+    const firm=sp?sp.name:currentAdmin.name;
+    const section=state.adminFilter==='eto'?'ЕТО'
+      : state.adminFilter==='exchange'?'Биржа'
+      : 'Заявки';
+    if(title) title.textContent=section;
+    if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}`;
   }
+  syncAdminNav();
   paintAdminOwnerFilters();
 }
 function saveAdminSession(){
@@ -5389,6 +5505,7 @@ function renderInput(){
     const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closingOdometer'?'Например, 277720':'Например, 277690';
     html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
   } else if(os==='postCloseWhere'){
+    html+=`<div class="hint warn-close">Если едете на стоянку — после этого закройте смену</div>`;
     html+=`<div class="hint">Куда дальше после выгрузки?</div><div class="yesno">
       <button id="post-next-order" class="primary">На следующий заказ</button>
       <button id="post-to-parking" class="secondary">На стоянку</button>
@@ -6030,6 +6147,7 @@ function acceptCloseShiftParking(value){
   state.shift.parkingOdometer=value;
   state.shift.lastOdometerPoint=value;
   state.shift.endedAt=new Date().toISOString();
+  clearCloseShiftReminder();
   syncVehicleOdometerFromShift(state.shift);
   bumpDataEpoch('shift-end-odo');
   upsertShift(); persist();
@@ -6180,8 +6298,9 @@ function finishPostCloseWhere(where){
   } else {
     add('driver', where==='here'?'Уже на стоянке':where==='parking'?'На стоянку':'На следующий заказ');
   }
-  // На стоянку / уже там — сразу закрытие смены (нельзя «забыть» в меню)
+  // На стоянку / уже там — напоминание + сразу закрытие смены
   if(where==='here'||where==='parking'){
+    markCloseShiftReminder();
     state.step='done';
     state.error='';
     if(where==='here' && end!=null && state.shift && !state.shift.endedAt && !inProgressOrder()){
@@ -6204,6 +6323,8 @@ function finishPostCloseWhere(where){
     renderInput();
     return;
   }
+  // Следующий заказ — напоминание про смену не нужно
+  clearCloseShiftReminder();
   state.orderStep='idle'; state.draft={}; state.error='';
   upsertShift(); persist();
   clearTimeout(persistTimer);
@@ -6755,9 +6876,7 @@ function publishToExchange(id){
   o.executorAdminId=null;
   bumpDataEpoch('publish-exchange');
   upsertOrder(o);
-  state.adminFilter='exchange';
-  document.querySelectorAll('#admin-filters [data-filter]').forEach(b=>b.classList.toggle('on', b.dataset.filter==='exchange'));
-  renderAdmin();
+  setAdminNav('exchange');
 }
 function assignExchangeToOwn(id){
   const o=state.orders.find(x=>x.id===id);
@@ -6927,7 +7046,7 @@ function renderAdminExchangeBoard(orders){
   return `${hint}<div class="admin-cards">${cards}</div>`;
 }
 function renderAdmin(){
-  paintAdminOwnerFilters();
+  updateAdminChrome();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();
     return;
@@ -7028,9 +7147,7 @@ function renderAdmin(){
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
   document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
-    state.adminFilter='exchange';
-    document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x.dataset.filter==='exchange'));
-    renderAdmin();
+    setAdminNav('exchange');
   });
   document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
@@ -8187,8 +8304,17 @@ $('pin-back').onclick=()=>show('roles');
 $('pin-ok').onclick=loginAdmin;
 $('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin(); });
 $('admin-exit').onclick=logoutAdmin;
-$('admin-catalogs').onclick=()=>{ if(!currentAdmin){ show('admin-pin'); return; } openCatalogs(); };
-$('admin-activity').onclick=()=>{ if(!currentAdmin){ show('admin-pin'); return; } openAdminActivity(); };
+$('admin-catalogs').onclick=()=>setAdminNav('catalogs');
+$('admin-activity').onclick=()=>setAdminNav('activity');
+$('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
+  const sb=$('admin-sidebar');
+  if(sb && sb.classList.contains('open')) closeAdminSidebar();
+  else openAdminSidebar();
+});
+$('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
+document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
+  b.onclick=()=>setAdminNav(b.dataset.nav);
+});
 updateAdminChrome();
 $('btn-cabinet').onclick=showCabinet;
 $('btn-orders').onclick=showOrders;
@@ -8196,7 +8322,11 @@ $('btn-shifts').onclick=showShifts;
 document.querySelectorAll('.back-driver').forEach(b=>{
   b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
 });
-document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{ state.adminFilter=b.dataset.filter; document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b)); renderAdmin(); });
+document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
+  state.adminFilter=b.dataset.filter;
+  document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
+  renderAdmin();
+});
 bindAdminCreate();
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
