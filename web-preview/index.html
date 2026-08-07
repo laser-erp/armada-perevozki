@@ -761,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-force-close-after-parking";
+const APP_BUILD="2026-08-07-block-exit-open-shift";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1691,20 +1691,89 @@ function startAutoSync(){
   stopAutoSync();
   autoSyncTimer=setInterval(()=>{ pullRemoteUpdates('poll'); }, AUTO_SYNC_MS);
 }
+/** Есть открытая смена водителя — нельзя «тихо» уйти из приложения. */
+function openShiftBlocksExit(){
+  if(!DRIVER) return false;
+  try{
+    const live=(state.shift && !state.shift.endedAt && !state.shift.abandoned)?state.shift:null;
+    const open=(typeof findOpenShift==='function'?findOpenShift():null)||live;
+    if(!open || open.endedAt || open.abandoned) return false;
+    return true;
+  }catch(_){ return false; }
+}
+function armExitGuard(){
+  if(typeof history==='undefined'||!history.pushState) return;
+  if(!openShiftBlocksExit()) return;
+  try{
+    if(!history.state || !history.state.armadaExitGuard){
+      history.pushState({armadaExitGuard:1}, '', location.href);
+    }
+  }catch(_){}
+}
+function handleBlockedExit(){
+  armExitGuard();
+  if(typeof shiftAwaitingClose==='function' && shiftAwaitingClose()){
+    state.error='Сначала закройте смену — укажите одометр на стоянке';
+    try{ startCloseShift(); }catch(_){ renderInput(); }
+    return;
+  }
+  state.error='Смена ещё открыта. Закройте смену перед выходом из приложения';
+  try{ maybeNudgeCloseShift(true); }catch(_){}
+  renderInput();
+  renderDriverBanner();
+}
 if(typeof document!=='undefined'){
   document.addEventListener('visibilitychange', ()=>{
     if(document.visibilityState==='visible'){
       pullRemoteUpdates('visible');
       maybeNudgeCloseShift(false);
       renderDriverBanner();
+      armExitGuard();
+    } else if(openShiftBlocksExit()){
+      // Полностью запретить свернуть нельзя — при возврате снова напомним
+      try{ sessionStorage.setItem('armada_exit_blocked','1'); }catch(_){}
     }
+  });
+  window.addEventListener('pageshow', ()=>{
+    try{
+      if(sessionStorage.getItem('armada_exit_blocked')==='1' && openShiftBlocksExit()){
+        sessionStorage.removeItem('armada_exit_blocked');
+        handleBlockedExit();
+      }
+    }catch(_){}
+    armExitGuard();
   });
   window.addEventListener('beforeunload', (e)=>{
-    if(typeof shiftAwaitingClose==='function' && shiftAwaitingClose()){
+    if(openShiftBlocksExit()){
       e.preventDefault();
-      e.returnValue='';
+      e.returnValue='Смена не закрыта. Закройте смену перед выходом.';
+      return e.returnValue;
     }
   });
+  window.addEventListener('popstate', ()=>{
+    if(openShiftBlocksExit()){
+      handleBlockedExit();
+    }
+  });
+  // Capacitor (Android): кнопка «Назад» — не выходим, пока смена открыта
+  (function bindNativeBackGuard(){
+    try{
+      const Cap=window.Capacitor;
+      if(!Cap || typeof Cap.isNativePlatform!=='function' || !Cap.isNativePlatform()) return;
+      const App=Cap.Plugins&&Cap.Plugins.App;
+      if(App && typeof App.addListener==='function'){
+        App.addListener('backButton', ({canGoBack})=>{
+          if(openShiftBlocksExit()){
+            handleBlockedExit();
+            return;
+          }
+          if(canGoBack) history.back();
+          else if(typeof App.exitApp==='function') App.exitApp();
+        });
+      }
+    }catch(_){}
+  })();
+  armExitGuard();
 }
 function upsertShift(){
   if(!state.shift) return;
@@ -4502,6 +4571,7 @@ function syncOpenShiftRuntime(){
     state.step=state.shift.vehiclePlate?'odometer':'chooseVehicle';
   }
   healDuplicateOpenShifts(state.shift);
+  armExitGuard();
   return state.shift;
 }
 function dayTotal(o){ if(o.emptyKmBefore==null && o.loadedKm==null && o.emptyKmAfter==null) return null; return (o.emptyKmBefore||0)+(o.loadedKm||0)+(o.emptyKmAfter||0); }
@@ -5774,6 +5844,7 @@ function acceptCloseShiftParking(value){
   bumpDataEpoch('shift-end-odo');
   upsertShift(); persist();
   resetChat();
+  armExitGuard();
 }
 function answerYesNo(yes){
   if(state.orderStep==='closeShiftStaysLoaded'){
