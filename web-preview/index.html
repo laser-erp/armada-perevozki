@@ -185,12 +185,55 @@
     table.admin tr.group-total:hover td{background:rgba(239,68,68,.16)}
     table.admin tr.group-detail td{background:var(--bg0);font-weight:400}
     table.admin tr.group-total .tog{display:inline-block;min-width:1.2em;color:var(--accent)}
-    .day-total-card{border:1px solid rgba(239,68,68,.35)}
-    .day-total-card.open-shift{border-color:rgba(245,158,11,.55)}
+    .day-total-card,.day-card{
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
+      padding:12px 14px;box-shadow:var(--shadow-sm);cursor:pointer
+    }
+    .day-total-card.open-shift,.day-card.open-shift{border-color:rgba(245,158,11,.5)}
+    .day-card:hover{border-color:rgba(239,68,68,.4)}
+    .day-card.open-shift:hover{border-color:rgba(245,158,11,.65)}
+    .day-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .day-card h3{margin:0;font-size:.95rem;font-weight:700;line-height:1.25;flex:1;min-width:0}
+    .day-tog{
+      flex:0 0 auto;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
+      border-radius:var(--radius);background:var(--field);color:var(--accent);font-size:.72rem;font-weight:700
+    }
+    .day-card > p{margin:4px 0 0;color:var(--muted);font-size:.8rem;line-height:1.4}
+    .day-status{
+      display:inline-flex;align-items:center;margin-top:8px;padding:4px 8px;border-radius:var(--radius);
+      font-size:.74rem;font-weight:700;border:1px solid var(--border);background:var(--field);color:var(--text)
+    }
+    .day-status.open{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .day-status.closed{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
+    .day-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+    .day-metrics .m{background:var(--bg0);border:1px solid var(--border);border-radius:var(--radius);padding:7px 8px}
+    .day-metrics .m span{display:block;font-size:.65rem;color:var(--muted);font-weight:500}
+    .day-metrics .m b{display:block;margin-top:2px;font-size:.88rem;font-weight:700;color:var(--text);line-height:1.15}
+    .day-metrics .m b.accent{color:var(--accent)}
     .day-total-card .tot-row{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:6px;font-size:.82rem}
     .day-total-card .tot-row b{color:var(--accent)}
-    .day-total-details{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
-    .day-total-details .card{margin-top:8px}
+    .day-total-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+    .order-card{
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--bg0);padding:12px
+    }
+    .order-card.exchange-mark{border-color:rgba(239,68,68,.45);background:var(--surface)}
+    .order-card h3{margin:0;font-size:.9rem;font-weight:700;line-height:1.25;color:var(--text)}
+    .order-card > p{margin:4px 0 0;color:var(--muted);font-size:.78rem;line-height:1.4}
+    .order-card .order-route{margin-top:6px;color:var(--text);font-weight:600}
+    .order-card .order-money{margin-top:6px;color:var(--accent);font-weight:700;font-size:.82rem}
+    .order-card .order-km{margin-top:6px;font-size:.76rem;color:var(--muted)}
+    .order-status{
+      display:inline-flex;margin-top:6px;padding:3px 8px;border-radius:var(--radius);
+      font-size:.68rem;font-weight:700;border:1px solid var(--border);background:var(--field);color:var(--text)
+    }
+    .order-status.progress{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.35);color:#2563EB}
+    .order-status.closed{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
+    .order-status.exchange{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.28);color:var(--accent)}
+    .order-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+    .order-actions .row{gap:6px}
+    .order-actions button{flex:1;margin-top:0!important}
+    .orders-board-head{padding:10px 12px 0}
+    .orders-board-head .cat-panel-hint{margin:0;color:var(--muted);font-size:.8rem;line-height:1.35}
     .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:640px;margin:0 auto;padding:12px 12px 28px;text-align:left;direction:ltr}
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
@@ -278,6 +321,7 @@
     .ok{color:#059669;font-size:var(--fs-sm)}
     .admin-cards{display:flex;flex-direction:column;gap:8px;padding:8px 10px 20px}
     .admin-cards .card button{margin-top:8px}
+    .admin-cards .order-card button{margin-top:0}
     .rate-missing{color:#DC2626;font-size:var(--fs-sm);font-weight:700}
     .swipe-item{position:relative;overflow:hidden;border-radius:var(--radius);touch-action:pan-y}
     .swipe-actions{position:absolute;inset:0 0 0 auto;display:flex;z-index:0}
@@ -521,7 +565,7 @@
     .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;box-shadow:var(--shadow-sm)}
     .stat-card .lbl{display:block;font-size:.68rem;font-weight:500;color:var(--muted);margin-bottom:2px}
     .stat-card .val{display:block;font-size:1.05rem;font-weight:700;color:var(--text);line-height:1.2}
-    .day-total-card{background:var(--surface);box-shadow:var(--shadow-sm)}
+    .orders-board-head .board-metrics{margin:8px 0 2px}
     .filters{background:var(--surface);border-bottom:1px solid var(--border);gap:6px;padding:8px 10px}
     .filters button{background:var(--field);border:1px solid var(--border);color:var(--text);font-weight:600}
     .filters button.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -1140,7 +1184,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-splash-roles";
+const APP_BUILD="2026-08-07-day-cards";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -7197,37 +7241,52 @@ function buildAdminShiftDayGroups(orders){
   });
   return {groups, ungrouped:[]};
 }
+function orderStatusClass(o){
+  if(looksClosedOrder(o)) return 'closed';
+  if(o.onExchange && o.startOdometer==null) return 'exchange';
+  if(o.startOdometer!=null || o.departOdometer!=null) return 'progress';
+  return '';
+}
 function adminOrderCardHtml(o){
   const m=metrics(o);
   const hasRate=selectedRate(o)!=null;
   const pay=m.driverPay;
   const onEx=!!o.onExchange && !looksClosedOrder(o) && o.startOdometer==null;
+  const st=statusText(o);
+  const stCls=orderStatusClass(o);
   const sp=findSpaceById(o.spaceId);
   const ownerLine=isSuperAdmin()
-    ? `<p style="color:var(--muted)">Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
+    ? `<p>Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
     : '';
-  return `<div class="card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
-    <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o)}</h3>
+  const phone=(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })();
+  const sideBtns=[
+    onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:'',
+    !onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)
+      ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:'',
+    !looksClosedOrder(o)&&!o.cancelledAt
+      ?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''
+  ].filter(Boolean).join('');
+  return `<div class="order-card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
+    <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+    <div class="order-status ${stCls}">${esc(st)}</div>
     <p>${esc(dateTime(o.createdAt))}</p>
     ${ownerLine}
-    ${o.ownCompanyName?`<p style="font-weight:700">От: ${esc(o.ownCompanyName)}</p>`:''}
+    ${o.ownCompanyName?`<p style="color:var(--text);font-weight:600">От: ${esc(o.ownCompanyName)}</p>`:''}
     <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
     ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
-    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })()}</p>
+    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${phone}</p>
     <p>${esc(orderContactLine(o))}</p>
-    <p>${esc(routeText(o))}</p>
+    <p class="order-route">${esc(routeText(o))}</p>
     ${orderTimesLines(ensureOrderTimeStamps(o))}
     ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
     ${orderScheduleLines(o, false)}
-    <p>Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
+    <p class="order-km">Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
     ${hasRate
-      ? `<p style="color:var(--accent);font-weight:700;margin-top:6px">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
+      ? `<p class="order-money">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
       : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
-    <div class="row" style="margin-top:8px">
+    <div class="order-actions">
       <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
-      ${onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:''}
-      ${!onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:''}
-      ${!looksClosedOrder(o)&&!o.cancelledAt?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''}
+      ${sideBtns?`<div class="row">${sideBtns}</div>`:''}
     </div>
   </div>`;
 }
@@ -7235,19 +7294,25 @@ function adminGroupCardHtml(g){
   const open=!!state.adminExpandedGroups[g.id];
   const t=g.totals;
   const shiftNote=g.shift
-    ? (g.openShift?`смена открыта`:`смена закрыта ${dateTime(g.shift.endedAt)}`)
-    : 'без смены';
-  const title=g.openShift?'Смена (открыта)':'Итог за день';
-  return `<div class="card day-total-card${g.openShift?' open-shift':''}" data-group-card="${esc(g.id)}">
-    <h3><span class="tog">${open?'▼':'▶'}</span> ${esc(title)} · ${esc(g.dayLabel)} · ${esc(g.driverName)}</h3>
+    ? (g.openShift?`Смена с ${dateTime(g.shift.startedAt)}`:`Смена закрыта ${dateTime(g.shift.endedAt)}`)
+    : 'Без привязки к смене';
+  const title=g.openShift?'Открытая смена':'Итог за день';
+  const statusCls=g.openShift?'open':'closed';
+  const statusLabel=g.openShift?'Смена открыта':'День закрыт';
+  return `<div class="day-card day-total-card${g.openShift?' open-shift':''}" data-group-card="${esc(g.id)}">
+    <div class="day-card-top">
+      <h3>${esc(title)} · ${esc(g.dayLabel)} · ${esc(g.driverName)}</h3>
+      <span class="day-tog" aria-hidden="true">${open?'▼':'▶'}</span>
+    </div>
     <p>${esc(g.vehiclePlate)} · заказов: ${t.count} · ${esc(shiftNote)}</p>
-    <div class="tot-row">
-      <span>Выручка (нал): <b>${esc(fmt(t.revenue))} ₽</b></span>
-      <span>Расходы: <b>${esc(fmt(t.expenses))} ₽</b></span>
-      <span>ЗП: <b>${esc(fmt(t.pay))} ₽</b></span>
-      <span>ГСМ: <b>${esc(fmt(t.fuel))} ₽</b></span>
-      <span>Прибыль: <b>${esc(fmt(t.profit))} ₽</b></span>
-      <span>Км: <b>${esc(fmt(t.km))}</b></span>
+    <div class="day-status ${statusCls}">${esc(statusLabel)}</div>
+    <div class="day-metrics">
+      <div class="m"><span>Выручка</span><b class="accent">${esc(fmt(t.revenue))} ₽</b></div>
+      <div class="m"><span>Расходы</span><b>${esc(fmt(t.expenses))} ₽</b></div>
+      <div class="m"><span>Прибыль</span><b>${esc(fmt(t.profit))} ₽</b></div>
+      <div class="m"><span>ЗП</span><b>${esc(fmt(t.pay))} ₽</b></div>
+      <div class="m"><span>ГСМ</span><b>${esc(fmt(t.fuel))} ₽</b></div>
+      <div class="m"><span>Км</span><b>${esc(fmt(t.km))}</b></div>
     </div>
     ${open?`<div class="day-total-details">${g.orders.map(adminOrderCardHtml).join('')}</div>`:''}
   </div>`;
@@ -7603,14 +7668,19 @@ function renderAdmin(){
   const allTot=sumOrderMoney(orders);
   const openG=groups.find(g=>g.openShift)||groups[0];
   const todayTot=openG?openG.totals:allTot;
-  const statsHtml=`<div class="stat-row">
-    <div class="stat-card"><span class="lbl">Заказы</span><span class="val">${todayTot.count}</span></div>
-    <div class="stat-card"><span class="lbl">Выручка</span><span class="val">${fmt(todayTot.revenue)} ₽</span></div>
-    <div class="stat-card"><span class="lbl">ЗП</span><span class="val">${fmt(todayTot.pay)} ₽</span></div>
+  const headHint=openG
+    ? `Сводка: ${esc(openG.dayLabel)} · ${esc(openG.driverName)}. Группы по дню — нажмите карточку.`
+    : 'Сводка по выборке. Группы по дню — нажмите карточку.';
+  const statsHtml=`<div class="orders-board-head">
+    <p class="cat-panel-hint">${headHint}${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</p>
+    <div class="board-metrics">
+      <div class="m"><span>Заказы</span><b>${todayTot.count}</b></div>
+      <div class="m"><span>Выручка</span><b>${fmt(todayTot.revenue)} ₽</b></div>
+      <div class="m"><span>ЗП</span><b>${fmt(todayTot.pay)} ₽</b></div>
+    </div>
   </div>`;
   $('admin-list').innerHTML=`
     ${statsHtml}
-    <div class="hint" style="padding:8px 16px 0">Сводка по ${openG?esc(openG.dayLabel+' · '+openG.driverName):'выборке'}. Группы по дню (▶).${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</div>
     <div class="admin-cards">${groupCards||'<div class="empty">Нет групп</div>'}</div>
     <div class="hint admin-desktop-only" style="padding:0 16px">Таблица — те же группы.</div>
     <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`;
