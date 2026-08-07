@@ -761,7 +761,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-sync-keep-shift-orders";
+const APP_BUILD="2026-08-07-close-remind-after-order";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3889,21 +3889,26 @@ function canArriveMessage(orderId){
   if(mineBusy && (!target || mineBusy.id!==target.id)) return 'Сначала закройте текущий заказ';
   return null;
 }
-/** Смена открыта, работа по заказам не идёт — нужно закрыть смену. */
+/** Включить напоминание закрыть смену (после закрытия заказа / «на стоянку»). */
+function markCloseShiftReminder(){
+  state.pendingCloseShiftReminder=true;
+  if(state.shift) state.shift.pendingCloseShiftReminder=true;
+}
+function clearCloseShiftReminder(){
+  state.pendingCloseShiftReminder=false;
+  if(state.shift) state.shift.pendingCloseShiftReminder=false;
+}
+/** Напоминание закрыть смену — только после закрытия заказа или выбора стоянки. */
 function shiftAwaitingClose(shift){
   const s=shift||state.shift||findOpenShift();
   if(!s || s.endedAt || s.abandoned) return false;
-  if(state.orderStep && state.orderStep!=='idle' && state.orderStep!=='postCloseWhere'){
-    // Уже в процессе закрытия смены / заказа — баннер не дублируем на шаге одометра стоянки
-    if(state.orderStep==='closeShiftParking'||state.orderStep==='closeShiftStaysLoaded') return false;
-  }
+  // Не шумим постоянно: только если явно отметили «пора закрывать смену»
+  const flagged=!!(state.pendingCloseShiftReminder || s.pendingCloseShiftReminder);
+  if(!flagged) return false;
+  if(state.orderStep==='closeShiftParking'||state.orderStep==='closeShiftStaysLoaded') return false;
   if(!isEtoDone(s) && !etoFieldsComplete(s)) return false;
   if(inProgressOrder()||enRouteOrder()) return false;
-  const hasClosed=(s.orders||[]).some(o=>o && !o.cancelled && (o.closedAt||looksClosedOrder(o)));
-  const day=localDayKey(s.startedAt);
-  const today=localDayKey(new Date());
-  const prevDay=!!(day && today && day<today);
-  return hasClosed || prevDay;
+  return true;
 }
 /** Мягкое напоминание в чат (не чаще раза в 30 мин). */
 function maybeNudgeCloseShift(force){
@@ -6124,13 +6129,14 @@ function finalizeClose(refueled,price,liters){
   // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
   const times=orderTimesText(order);
   add('bot',`Заказ №${order.sequentialNumber} закрыт.\nОдометр окончания: ${end}${times?'\n'+times:''}\nЗП по заказу появится в «Заявки» после расчёта администратором.`);
+  markCloseShiftReminder();
   // Одометр окончания уже в смене — не спрашиваем его ещё раз
   const closedId=order.id;
   const closedEnd=end;
   state.draft={postCloseOrderId:closedId, closeOdo:closedEnd};
   state.orderStep='postCloseWhere';
   state.error='';
-  add('bot','Куда дальше? Одометр окончания уже сохранён — вводить его снова не нужно.');
+  add('bot','Куда дальше? Если на стоянку — затем закройте смену. Одометр окончания уже сохранён.');
   upsertShift();
   persist();
   clearTimeout(persistTimer);
