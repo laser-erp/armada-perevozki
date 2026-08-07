@@ -5511,6 +5511,7 @@ function openShift(){
     state.step='chooseVehicle'; state.orderStep='idle'; state.error='';
     bumpDataEpoch('open-shift');
     upsertShift(); renderInput();
+    armExitGuard();
   }catch(err){
     console.error('openShift', err);
     state.error='Не удалось открыть смену. Обновите страницу и попробуйте снова.';
