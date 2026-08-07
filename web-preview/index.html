@@ -759,7 +759,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-theme-1";
+const APP_BUILD="2026-08-07-close-stale-shifts";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3950,18 +3950,83 @@ function findOpenShift(){
   if(done) return done;
   return [...open].sort((a,b)=>etoProgressScore(b)-etoProgressScore(a) || new Date(b.startedAt)-new Date(a.startedAt))[0];
 }
+/** Локальный календарный день YYYY-MM-DD (как isSameLocalDay). */
+function localDayKey(iso){
+  if(!iso) return '';
+  const d=iso instanceof Date ? iso : new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+/** Есть незакрытый заказ, из‑за которого смену нельзя «забыть» автоматически. */
+function shiftHasBlockingOpenOrder(s){
+  return (s.orders||[]).some(o=>o && !o.cancelled && !o.closedAt && !looksClosedOrder(o));
+}
+/**
+ * Закрыть забытую открытую смену (водитель закрыл заказы, но не нажал «Закрыть смену»).
+ * Одометр стоянки = уже введённый parking / lastOdometerPoint / odometer.
+ */
+function sealForgottenOpenShift(s){
+  if(!s || s.endedAt) return false;
+  const park=s.parkingOdometer!=null ? +s.parkingOdometer
+    : (s.lastOdometerPoint!=null ? +s.lastOdometerPoint : (s.odometer!=null ? +s.odometer : null));
+  if(park!=null && !Number.isNaN(park)){
+    s.parkingOdometer=park;
+    s.lastOdometerPoint=park;
+    const closed=(s.orders||[]).filter(o=>o && o.closedAt && o.endOdometer!=null)
+      .sort((a,b)=>new Date(a.closedAt)-new Date(b.closedAt));
+    const last=closed[closed.length-1];
+    if(last && !last.linkEmptyAfterToNext && !last.emptyAfterLinkedFromNext){
+      last.emptyKmAfter=Math.max(0, park - (+last.endOdometer||0));
+      upsertOrder(last);
+    }
+  }
+  s.endedAt=new Date().toISOString();
+  const hasOrders=(s.orders||[]).some(o=>o && !o.cancelled);
+  // Пустую незавершённую — abandoned; с заказами/ЕТО — обычное закрытие
+  s.abandoned=(!hasOrders && !etoFieldsComplete(s) && !s.completedAt) ? true : false;
+  return true;
+}
+/** Вчерашние открытые смены водителя без активных заказов — закрыть перед новой. */
+function sealPreviousDayOpenShiftsForDriver(driverName){
+  if(!driverName) return false;
+  const today=localDayKey(new Date());
+  let changed=false;
+  (state.shifts||[]).forEach(s=>{
+    if(!s || s.endedAt) return;
+    if(!s.driverName || !samePersonName(s.driverName, driverName)) return;
+    const day=localDayKey(s.startedAt);
+    if(!day || day>=today) return;
+    if(shiftHasBlockingOpenOrder(s)) return;
+    if(sealForgottenOpenShift(s)) changed=true;
+  });
+  return changed;
+}
 function healDuplicateOpenShifts(keep){
   if(!keep) return;
   const keepScore=etoProgressScore(keep);
+  const keepDay=localDayKey(keep.startedAt);
   (state.shifts||[]).forEach(s=>{
-    // Не закрываем смены других водителей и не трогаем смены с большим прогрессом ЕТО
-    if(s.id===keep.id || s.endedAt || isEtoDone(s)) return;
+    if(s.id===keep.id || s.endedAt) return;
     if(keep.driverName && s.driverName && !samePersonName(s.driverName, keep.driverName)) return;
+    if(!keep.driverName || !s.driverName) return;
     if(keep.ownCompanyId && s.ownCompanyId && s.ownCompanyId!==keep.ownCompanyId) return;
+    const sDay=localDayKey(s.startedAt);
+    // Смена прошлого дня при уже открытой более новой — закрываем (даже с пройденным ЕТО)
+    if(sDay && keepDay && sDay<keepDay){
+      if(!shiftHasBlockingOpenOrder(s)) sealForgottenOpenShift(s);
+      return;
+    }
+    // Не трогаем смену с большим прогрессом ЕТО
     if(etoProgressScore(s)>keepScore) return;
-    if(keep.driverName && s.driverName && samePersonName(s.driverName, keep.driverName)){
+    // Пустой незавершённый дубль — abandoned
+    if(!isEtoDone(s) && !(s.orders||[]).length){
       s.endedAt=new Date().toISOString();
       s.abandoned=true;
+      return;
+    }
+    // Два «живых» дубля одного дня — оставляем keep, второй закрываем
+    if(sDay && keepDay && sDay===keepDay && !shiftHasBlockingOpenOrder(s)){
+      sealForgottenOpenShift(s);
     }
   });
 }
@@ -3998,7 +4063,23 @@ function mergeLocalShifts(localShifts){
     // Никогда не откатываем пройденный ЕТО локальной «дырявой» копией
     if(isEtoDone(cur) && !isEtoDone(ls)) return;
     if(etoFieldsComplete(cur) && !etoFieldsComplete(ls)) return;
-    if(etoProgressScore(ls)>etoProgressScore(cur) || (!!ls.completedAt && !cur.completedAt) || (!ls.endedAt && cur.endedAt && ls.abandoned!==true)){
+    // Локально закрытая смена важнее «открытой» копии с сервера (heal забытого закрытия)
+    if(ls.endedAt && !cur.endedAt){
+      Object.assign(cur, ls);
+      changed=true;
+      return;
+    }
+    // Не открывать снова уже закрытую смену локальной открытой копией
+    if(cur.endedAt && !ls.endedAt){
+      if(cur.abandoned && (isEtoDone(ls) || etoProgressScore(ls)>etoProgressScore(cur))){
+        Object.assign(cur, ls);
+        cur.abandoned=false;
+        cur.endedAt=null;
+        changed=true;
+      }
+      return;
+    }
+    if(etoProgressScore(ls)>etoProgressScore(cur) || (!!ls.completedAt && !cur.completedAt)){
       Object.assign(cur, ls);
       changed=true;
     }
@@ -4170,6 +4251,11 @@ function migrateEtoFromMessages(){
   return changed;
 }
 function syncOpenShiftRuntime(){
+  if(DRIVER && sealPreviousDayOpenShiftsForDriver(DRIVER)){
+    bumpDataEpoch('seal-prev-day-shift');
+    if(state.shift && state.shift.endedAt) state.shift=null;
+    persist();
+  }
   let shift=findOpenShift();
   if(!shift && state.shift && !state.shift.endedAt) shift=state.shift;
   if(!shift) return null;
@@ -5047,6 +5133,11 @@ function openShift(){
     }
     if(!state.vehicles||!state.vehicles.length){
       state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
+    }
+    if(sealPreviousDayOpenShiftsForDriver(DRIVER)){
+      bumpDataEpoch('seal-prev-day-before-open');
+      if(state.shift && state.shift.endedAt) state.shift=null;
+      persist();
     }
     const existing=findOpenShift();
     if(existing){ resumeOpenShift(existing); return; }
