@@ -142,18 +142,41 @@
     .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
     .veh-specs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
     .veh-specs input{width:48px;flex:0 0 48px;padding:4px 2px;min-height:28px;text-align:center;font-size:.72rem;border-radius:var(--pill);border:0;background:var(--field);color:var(--text)}
-    .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:640px;margin:0 auto}
+    .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:640px;margin:0 auto;background:transparent}
+    .form-topbar{
+      display:flex;align-items:center;gap:8px;padding:10px 14px;min-height:56px;flex-shrink:0;
+      background:var(--surface);border-bottom:1px solid var(--border)
+    }
+    .form-topbar h1{margin:0;flex:1;min-width:0;font-size:1rem;font-weight:700;line-height:1.25}
+    .form-topbar .form-meta{flex:0 1 42%;max-width:48%;font-size:.72rem;color:var(--muted);line-height:1.3;text-align:right}
+    .form-back{
+      border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;
+      padding:6px 4px;min-height:36px;font-size:.85rem;flex:0 0 auto;font-family:inherit
+    }
+    .form-back:hover{opacity:.85}
     .admin-form-scroll{
       flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
-      padding:10px 12px 16px;display:flex;flex-direction:column;align-items:stretch;gap:8px;
+      padding:12px 14px 20px;display:flex;flex-direction:column;align-items:stretch;gap:0;
       text-align:left;direction:ltr;width:100%;max-width:100%;margin:0;box-sizing:border-box
     }
     .admin-form-scroll > *{max-width:100%}
     .admin-form-scroll label{display:block;width:100%;margin:0;padding:0;font-size:.75rem;line-height:1.25;color:var(--muted);text-align:left;unicode-bidi:isolate}
-    .admin-form-actions{flex-shrink:0;padding:8px 12px calc(10px + env(safe-area-inset-bottom,0));border-top:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;gap:6px}
+    .admin-form-actions{flex-shrink:0;padding:10px 14px calc(12px + env(safe-area-inset-bottom,0));border-top:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;gap:6px;box-shadow:0 -4px 12px rgba(17,24,39,.04)}
     .admin-form-scroll h2{margin:0;font-size:1.05rem;text-align:left;width:100%}
     .admin-form-scroll h3{margin:4px 0 0;font-size:.95rem;text-align:left;width:100%}
     .admin-form-scroll h4{margin:6px 0 0;font-size:.85rem}
+    .form-section{display:flex;flex-direction:column;gap:8px;padding:14px 0;border-bottom:1px solid var(--border)}
+    .form-section:last-child{border-bottom:0;padding-bottom:4px}
+    .form-section-title{margin:0;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+    .form-section-hint{margin:0;color:var(--muted);font-size:var(--fs-sm);line-height:1.35}
+    .form-fields{display:flex;flex-direction:column;gap:8px}
+    .form-pair{display:grid;grid-template-columns:1fr;gap:8px}
+    .form-pair > div{display:flex;flex-direction:column;gap:5px;min-width:0}
+    .metric-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+    .metric-strip .m{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px}
+    .metric-strip .m span{display:block;font-size:.68rem;color:var(--muted);font-weight:500}
+    .metric-strip .m b{display:block;margin-top:2px;font-size:.92rem;font-weight:700;color:var(--text);line-height:1.2}
+    #admin-create,#admin-detail,#admin-claim{background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 42%)}
     .field-block{display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:8px 0;border-bottom:1px solid var(--border);width:100%}
     .field-block:last-child{border-bottom:0}
     .calc{background:var(--surface);border-radius:10px;padding:8px 10px;font-size:.85rem;width:100%;text-align:left;direction:ltr}
@@ -323,9 +346,11 @@
       .phone{max-width:520px}
       .phone.wide{max-width:min(1100px,100%)}
       .admin-form-shell{max-width:720px}
+      .form-pair{grid-template-columns:1fr 1fr}
+      .metric-strip{grid-template-columns:repeat(4,1fr)}
       .logo{width:100px}
       .brand{font-size:1.75rem}
-      .admin-form-scroll{padding:14px 18px 20px;gap:10px}
+      .admin-form-scroll{padding:16px 20px 24px}
       .admin-cards{padding:12px 16px 24px;gap:10px}
       .fin-grid{grid-template-columns:1fr 1fr 1fr}
       .fin-grid .fin-full{grid-column:1 / -1}
@@ -507,81 +532,115 @@
 
   <div id="admin-create" class="screen">
     <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="create-back">← Назад</button>
+        <h1>Новый заказ</h1>
+      </header>
       <div class="admin-form-scroll">
-        <button id="create-back" class="secondary">← Назад</button>
-        <h2>Назначить заказ</h2>
-        <div class="hint">Прокрутите вниз — кнопка «Назначить» всегда внизу экрана</div>
-        <div class="field-block">
-          <label>Номер за день</label>
-          <div class="nums" id="create-day"><button data-cday="1">1</button><button data-cday="2">2</button><button data-cday="3">3</button><button data-cday="4">4</button><button data-cday="5">5</button></div>
-        </div>
-        <div class="field-block">
-          <label>От нашей фирмы (договор)</label>
-          <select id="create-own-company"></select>
-          <div class="hint">От этой фирмы — договор, и из её парка выбираются авто и водитель</div>
-        </div>
-        <div class="field-block">
-          <label>Заказчик (компания)</label>
-          <input id="create-customer" list="customer-list" placeholder="Название компании" />
-          <select id="create-customer-pick"><option value="">или выбрать сохранённого</option></select>
-          <datalist id="customer-list"></datalist>
-          <label>Контактное лицо</label>
-          <select id="create-contact-pick"><option value="">— контакт из карточки —</option></select>
-          <input id="create-contact-name" placeholder="ФИО контакта (новое сохранится)" />
-          <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
-        </div>
-        <div class="field-block">
-          <label>Подача ТС</label>
-          <input id="create-vehicle-at" type="datetime-local" />
-          <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
-        </div>
-        <div class="field-block">
-          <label>Адрес загрузки</label>
-          <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
-          <select id="create-load-pick"><option value="">или из сохранённых</option></select>
-        </div>
-        <div class="field-block">
-          <label>Адрес выгрузки</label>
-          <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
-          <select id="create-unload-pick"><option value="">или из сохранённых</option></select>
-        </div>
-        <div class="field-block">
-          <label>Перевозчик (компания)</label>
-          <select id="create-carrier-company"></select>
-          <div class="hint">Можно указать вместе с заказчиком. Карточка перевозчика — в Справочниках.</div>
-          <div id="create-carrier-people">
-            <label>Водитель перевозчика</label>
-            <select id="create-carrier-driver"></select>
-            <label>ТС перевозчика</label>
-            <select id="create-carrier-vehicle"></select>
+        <section class="form-section">
+          <h2 class="form-section-title">Основание</h2>
+          <p class="form-section-hint">Номер за день и фирма по договору — от неё же берётся парк</p>
+          <div class="form-fields">
+            <label>Номер за день</label>
+            <div class="nums" id="create-day"><button type="button" data-cday="1">1</button><button type="button" data-cday="2">2</button><button type="button" data-cday="3">3</button><button type="button" data-cday="4">4</button><button type="button" data-cday="5">5</button></div>
+            <label for="create-own-company">От нашей фирмы (договор)</label>
+            <select id="create-own-company"></select>
           </div>
-        </div>
-        <div class="field-block">
-          <label>Исполнение</label>
-          <select id="create-exec-mode">
-            <option value="own">Наш водитель</option>
-            <option value="carrier">Водитель перевозчика</option>
-            <option value="exchange">На биржу</option>
-          </select>
-          <div id="create-own-box">
-            <div class="hint" id="create-fleet-hint" style="margin:0 0 6px">Авто и водитель — только парк выбранной фирмы</div>
-            <label>Автомобиль (наш)</label>
-            <select id="create-plate"></select>
-            <label>Водитель (наш)</label>
-            <select id="create-driver"></select>
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Заказчик</h2>
+          <p class="form-section-hint">Компания и контакт — новые ФИО сохранятся в карточке</p>
+          <div class="form-fields">
+            <label for="create-customer">Заказчик (компания)</label>
+            <input id="create-customer" list="customer-list" placeholder="Название компании" />
+            <select id="create-customer-pick"><option value="">или выбрать сохранённого</option></select>
+            <datalist id="customer-list"></datalist>
+            <label for="create-contact-pick">Контактное лицо</label>
+            <select id="create-contact-pick"><option value="">— контакт из карточки —</option></select>
+            <div class="form-pair">
+              <div>
+                <label for="create-contact-name">ФИО</label>
+                <input id="create-contact-name" placeholder="ФИО контакта" />
+              </div>
+              <div>
+                <label for="create-contact-phone">Телефон</label>
+                <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
+              </div>
+            </div>
           </div>
-          <div id="create-exchange-hint" class="hint" style="display:none">Заказ увидят другие фирмы на бирже. Укажите требования к ТС — забрать сможет только подходящий транспорт.</div>
-        </div>
-        <div class="field-block" id="create-req-block">
-          <label>Требования к ТС (для биржи и подбора)</label>
-          <div class="row">
-            <input id="create-req-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" style="flex:0 0 64px;text-align:center" />
-            <input id="create-req-l" inputmode="decimal" placeholder="Д, м" title="Длина кузова, м" style="flex:1;text-align:center" />
-            <input id="create-req-w" inputmode="decimal" placeholder="Ш, м" title="Ширина, м" style="flex:1;text-align:center" />
-            <input id="create-req-h" inputmode="decimal" placeholder="В, м" title="Высота, м" style="flex:1;text-align:center" />
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Маршрут и подача</h2>
+          <div class="form-fields">
+            <label for="create-vehicle-at">Подача ТС</label>
+            <input id="create-vehicle-at" type="datetime-local" />
+            <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
+            <div class="form-pair">
+              <div>
+                <label for="create-load">Адрес загрузки</label>
+                <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
+                <select id="create-load-pick"><option value="">или из сохранённых</option></select>
+              </div>
+              <div>
+                <label for="create-unload">Адрес выгрузки</label>
+                <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
+                <select id="create-unload-pick"><option value="">или из сохранённых</option></select>
+              </div>
+            </div>
           </div>
-          <div class="hint">Авто перевозчика должно быть не меньше этих значений</div>
-        </div>
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Исполнение</h2>
+          <p class="form-section-hint">Свой водитель, перевозчик или биржа</p>
+          <div class="form-fields">
+            <label for="create-exec-mode">Кто везёт</label>
+            <select id="create-exec-mode">
+              <option value="own">Наш водитель</option>
+              <option value="carrier">Водитель перевозчика</option>
+              <option value="exchange">На биржу</option>
+            </select>
+            <div id="create-own-box">
+              <div class="hint" id="create-fleet-hint" style="margin:0 0 6px">Авто и водитель — только парк выбранной фирмы</div>
+              <div class="form-pair">
+                <div>
+                  <label for="create-plate">Автомобиль</label>
+                  <select id="create-plate"></select>
+                </div>
+                <div>
+                  <label for="create-driver">Водитель</label>
+                  <select id="create-driver"></select>
+                </div>
+              </div>
+            </div>
+            <label for="create-carrier-company">Перевозчик (компания)</label>
+            <select id="create-carrier-company"></select>
+            <div id="create-carrier-people">
+              <div class="form-pair">
+                <div>
+                  <label for="create-carrier-driver">Водитель перевозчика</label>
+                  <select id="create-carrier-driver"></select>
+                </div>
+                <div>
+                  <label for="create-carrier-vehicle">ТС перевозчика</label>
+                  <select id="create-carrier-vehicle"></select>
+                </div>
+              </div>
+            </div>
+            <div id="create-exchange-hint" class="hint" style="display:none">Заказ увидят другие фирмы на бирже. Укажите требования к ТС — забрать сможет только подходящий транспорт.</div>
+          </div>
+        </section>
+        <section class="form-section" id="create-req-block">
+          <h2 class="form-section-title">Требования к ТС</h2>
+          <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
+          <div class="form-fields">
+            <div class="row">
+              <input id="create-req-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" style="flex:0 0 64px;text-align:center" />
+              <input id="create-req-l" inputmode="decimal" placeholder="Д, м" title="Длина кузова, м" style="flex:1;text-align:center" />
+              <input id="create-req-w" inputmode="decimal" placeholder="Ш, м" title="Ширина, м" style="flex:1;text-align:center" />
+              <input id="create-req-h" inputmode="decimal" placeholder="В, м" title="Высота, м" style="flex:1;text-align:center" />
+            </div>
+          </div>
+        </section>
       </div>
       <div class="admin-form-actions">
         <div class="error" id="create-error"></div>
@@ -592,6 +651,10 @@
 
   <div id="admin-claim" class="screen">
     <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="claim-back">← Назад</button>
+        <h1 id="claim-title">Забрать заказ</h1>
+      </header>
       <div class="admin-form-scroll" id="claim-form"></div>
       <div class="admin-form-actions">
         <div class="error" id="claim-error"></div>
@@ -603,6 +666,11 @@
 
   <div id="admin-detail" class="screen">
     <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="detail-back">← Назад</button>
+        <h1 id="detail-title">Заявка</h1>
+        <div class="form-meta" id="detail-meta"></div>
+      </header>
       <div class="admin-form-scroll" id="detail-form"></div>
       <div class="admin-form-actions" id="detail-actions" style="display:none">
         <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
@@ -831,7 +899,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-admin-sidebar";
+const APP_BUILD="2026-08-07-order-form-ux";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -6919,26 +6987,37 @@ function openClaimExchange(id){
   const vehOk=vehAll.filter(v=>vehicleFitsOrder(v,o));
   const req=orderReqText(o)||'не указаны';
   $('claim-error').textContent='';
+  const claimTitle=$('claim-title');
+  if(claimTitle) claimTitle.textContent=`Забрать №${o.sequentialNumber}`;
   $('claim-form').innerHTML=`
-    <button type="button" class="secondary" id="claim-back">← Назад</button>
-    <h2>Забрать заказ №${o.sequentialNumber}</h2>
-    <div class="hint">Электронная договор‑заявка на перевозку между фирмами</div>
-    <div class="claim-box">
-      <h3>Договор‑заявка</h3>
-      <p><strong>Заказчик перевозки:</strong> ${esc(o.ownCompanyName||'—')}</p>
-      <p><strong>Перевозчик:</strong> ${esc(myCo.name)}</p>
-      <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
-      <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
-      <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
-      <p class="hint" style="margin-top:6px">После подписи перевозчик назначает водителя и авто из своего парка — они войдут в заявку.</p>
-    </div>
-    <div class="field-block">
-      <label>Водитель (ваш парк)</label>
-      <select id="claim-driver">${drvList.length?drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join(''):`<option value="">— добавьте водителя в Справочниках —</option>`}</select>
-      <label>Авто (подходящее по т / габаритам)</label>
-      <select id="claim-plate">${vehOk.length?vehOk.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join(''):`<option value="">— нет подходящего авто —</option>`}</select>
-      <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}. Неподходящие скрыты.`:'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
-    </div>
+    <section class="form-section">
+      <h2 class="form-section-title">Договор‑заявка</h2>
+      <p class="form-section-hint">Электронная заявка на перевозку между фирмами</p>
+      <div class="claim-box">
+        <p><strong>Заказчик перевозки:</strong> ${esc(o.ownCompanyName||'—')}</p>
+        <p><strong>Перевозчик:</strong> ${esc(myCo.name)}</p>
+        <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
+        <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
+        <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
+        <p class="hint" style="margin-top:6px">После подписи — водитель и авто из вашего парка войдут в заявку.</p>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Назначение</h2>
+      <div class="form-fields">
+        <div class="form-pair">
+          <div>
+            <label for="claim-driver">Водитель (ваш парк)</label>
+            <select id="claim-driver">${drvList.length?drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join(''):`<option value="">— добавьте водителя в Справочниках —</option>`}</select>
+          </div>
+          <div>
+            <label for="claim-plate">Авто (по т / габаритам)</label>
+            <select id="claim-plate">${vehOk.length?vehOk.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join(''):`<option value="">— нет подходящего авто —</option>`}</select>
+          </div>
+        </div>
+        <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}. Неподходящие скрыты.`:'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
+      </div>
+    </section>
   `;
   show('admin-claim');
   $('claim-back').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
@@ -7219,6 +7298,7 @@ function bindAdminCreate(){
     createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own';
     ['create-req-pay','create-req-l','create-req-w','create-req-h'].forEach(id=>{ if($(id)) $(id).value=''; });
     fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+    const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
@@ -7425,125 +7505,185 @@ function openDetail(id){
       renderRouteEditor();
     });
   };
+  const detailTitle=$('detail-title');
+  if(detailTitle) detailTitle.textContent=`Заявка №${o.sequentialNumber}`;
+  const detailMeta=$('detail-meta');
+  if(detailMeta){
+    detailMeta.textContent=`${statusText(o)} · ${orderDayLabel(o.dayNumber)} · ${o.driverName||'—'}${m.percent!=null?` (${m.percent}%)`:''}`;
+  }
   $('detail-form').innerHTML=`
-    <button class="secondary" id="detail-back">← Назад</button>
-    <h2>Заявка №${o.sequentialNumber}</h2>
-    <div class="hint">${statusText(o)} · ${esc(orderDayLabel(o.dayNumber))} · ${esc(o.driverName)} (${m.percent}%)${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</div>
-    <div class="calc" style="margin:10px 0;border:1px solid rgba(232,93,4,.45)">
-      <div class="hint" style="color:var(--accent);font-weight:800;margin:0 0 6px">⏱ Время на заказ</div>
-      <div class="calc-row"><span>До заказа</span><span>${esc(formatDurationMin(o.timeToOrderMin))}</span></div>
-      <div class="calc-row"><span>С грузом</span><span>${esc(formatDurationMin(o.timeLoadedMin))}</span></div>
-      <div class="calc-row"><span>До стоянки</span><span>${esc(formatDurationMin(o.timeToParkingMin))}</span></div>
-      <div class="calc-row"><span>Всего</span><span><b>${esc(formatDurationMin(o.timeTotalMin))}</b></span></div>
-    </div>
-    <div class="hint" style="color:var(--accent)">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС считаются от нал.</div>
-    ${o.transportApp?`<div class="claim-box">
-      <h3>Договор‑заявка подписана</h3>
-      <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
-      <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</p>
-      <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
-    </div>`:''}
-    <div class="field-block">
-      <label>Водитель / телефон</label>
-      <div class="row">
-        <input id="d-driver-name" value="${esc(o.driverName||'')}" placeholder="ФИО водителя" style="flex:1.2" />
-        <input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="+79650730002" style="flex:1" />
+    <section class="form-section">
+      <h2 class="form-section-title">Время на заказ</h2>
+      <div class="metric-strip">
+        <div class="m"><span>До заказа</span><b>${esc(formatDurationMin(o.timeToOrderMin))}</b></div>
+        <div class="m"><span>С грузом</span><b>${esc(formatDurationMin(o.timeLoadedMin))}</b></div>
+        <div class="m"><span>До стоянки</span><b>${esc(formatDurationMin(o.timeToParkingMin))}</b></div>
+        <div class="m"><span>Всего</span><b>${esc(formatDurationMin(o.timeTotalMin))}</b></div>
       </div>
-      ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
-      <label for="d-own-company">От нашей фирмы</label>
-      <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
-      <label>Требования к ТС (т / Д×Ш×В)</label>
-      <div class="row">
-        <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" style="flex:0 0 64px;text-align:center" />
-        <input id="d-req-l" inputmode="decimal" placeholder="Д, м" value="${o.reqLengthM??''}" style="flex:1;text-align:center" />
-        <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
-        <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
+      <p class="form-section-hint">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС — от нал.</p>
+      ${o.transportApp?`<div class="claim-box">
+        <h3>Договор‑заявка подписана</h3>
+        <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
+        <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</p>
+        <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
+      </div>`:''}
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Участники</h2>
+      <div class="form-fields">
+        <div class="form-pair">
+          <div>
+            <label for="d-driver-name">Водитель</label>
+            <input id="d-driver-name" value="${esc(o.driverName||'')}" placeholder="ФИО водителя" />
+          </div>
+          <div>
+            <label for="d-driver-phone">Телефон</label>
+            <input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="+79650730002" />
+          </div>
+        </div>
+        ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
+        <label for="d-own-company">От нашей фирмы</label>
+        <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
+        <label>Требования к ТС (т / Д×Ш×В)</label>
+        <div class="row">
+          <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" style="flex:0 0 64px;text-align:center" />
+          <input id="d-req-l" inputmode="decimal" placeholder="Д, м" value="${o.reqLengthM??''}" style="flex:1;text-align:center" />
+          <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
+          <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
+        </div>
+        <label for="d-customer">Заказчик</label>
+        <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
+        <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
+        <select id="d-customer-pick"><option value="">или выбрать сохранённого</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
+        <label for="d-carrier-company">Перевозчик</label>
+        <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+        <div class="form-pair">
+          <div>
+            <label for="d-contact-name">Контакт</label>
+            <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
+          </div>
+          <div>
+            <label for="d-contact-phone">Телефон контакта</label>
+            <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
+          </div>
+        </div>
+        <label for="d-vehicle-at">Подача ТС</label>
+        <input id="d-vehicle-at" type="datetime-local" value="${esc(toDatetimeLocalValue(o.vehicleAt))}" />
+        <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
       </div>
-      <label for="d-customer">Заказчик</label>
-      <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
-      <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
-      <select id="d-customer-pick"><option value="">или выбрать сохранённого</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
-      <label for="d-carrier-company">Перевозчик</label>
-      <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
-      <label for="d-contact-name">Контакт</label>
-      <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
-      <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
-      <label for="d-vehicle-at">Подача ТС</label>
-      <input id="d-vehicle-at" type="datetime-local" value="${esc(toDatetimeLocalValue(o.vehicleAt))}" />
-      <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
-    </div>
-    <div class="field-block">
-      <h3>Маршрут</h3>
-      <div id="route-editor"></div>
-      <label for="d-empty-after">Пробег до стоянки, км</label>
-      <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
-    </div>
-    <div class="field-block">
-      <h3>Тариф клиенту</h3>
-      <div class="hint">${(()=>{ const f=financeForOrder(o); return `Пакет фирмы: мин ${f.minWorkHours} ч работы + ${f.podachaHours} ч подачи. В пакет входит ${f.cityKmThreshold} км (груз + нулевой после). Нулевой до ≤${f.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — покрыт 1 ч; иначе 2 ч подачи. Сверх ${f.cityKmThreshold} км — по ₽/км.`; })()}</div>
-      <label for="d-perkm">руб/км сверх пакета (нал)</label>
-      <input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 80" />
-      <label for="d-perhour">руб/час работы</label>
-      <input id="d-perhour" inputmode="decimal" value="${o.ratePerHourWork??''}" placeholder="например 2000" />
-      <label for="d-estimate-km">Ориентир км (груз + после)</label>
-      <input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 80" />
-      <label for="d-estimate-hours">Ориентир часов работы</label>
-      <input id="d-estimate-hours" inputmode="decimal" value="${o.estimateWorkHours??''}" placeholder="например 4" />
-      <label for="d-work-hours">Факт часов работы</label>
-      <input id="d-work-hours" inputmode="decimal" value="${o.workHours??''}" placeholder="после закрытия" />
-      <h3>Ночное хранение груза</h3>
-      <div class="hint">Ответственность за груз ночью. В сумму клиенту входит; в ЗП водителя — нет. При «осталась загружена» число ночей +1.</div>
-      ${(o.staysLoadedOvernight||(o.overnightNights>0))?`<div class="hint" style="color:var(--accent)">Ночёвка с грузом${o.overnightNights?`: ${o.overnightNights} ноч.`:''}</div>`:''}
-      <label for="d-overnight-rate">₽ за ночь хранения (нал)</label>
-      <input id="d-overnight-rate" inputmode="decimal" value="${o.overnightStorageRateCash??''}" placeholder="например 5000" />
-      <label for="d-overnight-nights">Число ночей</label>
-      <input id="d-overnight-nights" inputmode="numeric" value="${o.overnightNights??''}" placeholder="0" />
-      <div class="calc" id="perkm-preview"></div>
-    </div>
-    <div class="field-block">
-      <div class="hint">ЗП, подушка и прибыль всегда от ставки наличные. С НДС = без НДС +22%.</div>
-      <label for="d-form">Форма для клиента (документы)</label>
-      <select id="d-form">
-        <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
-        <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
-        <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
-      </select>
-      <label for="d-vat">Ставка с НДС, руб</label>
-      <input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="считается от руб/км" />
-      <label for="d-novat">Ставка без НДС, руб</label>
-      <input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="считается от руб/км" />
-      <label for="d-cash">Ставка наличные, руб</label>
-      <input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="руб/км × км" />
-      <label for="d-bonus">Доплата к ЗП, руб</label>
-      <input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
-      <label for="d-rent">Аренда ТС, руб</label>
-      <input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
-    </div>
-    <div class="calc">
-      <div class="calc-row"><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
-      <div class="calc-row"><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
-      <div class="calc-row"><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
-      <div class="hint" style="margin-top:8px">Время</div>
-      <div class="calc-row"><span>До заказа</span><span>${esc(formatDurationMin(o.timeToOrderMin))}${o.departAt?` · ${esc(dateTime(o.departAt))}`:''}</span></div>
-      <div class="calc-row"><span>С грузом</span><span>${esc(formatDurationMin(o.timeLoadedMin))}${o.arrivedAt?` · с ${esc(dateTime(o.arrivedAt))}`:''}</span></div>
-      <div class="calc-row"><span>До стоянки</span><span>${esc(formatDurationMin(o.timeToParkingMin))}${o.parkingAt?` · ${esc(dateTime(o.parkingAt))}`:''}</span></div>
-      <div class="calc-row"><span>Всего на заказ</span><span>${esc(formatDurationMin(o.timeTotalMin))}</span></div>
-      <div class="calc-row"><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
-      <div class="calc-row"><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
-      <div class="calc-row"><span>Заправка</span><span>${o.refueled?`${fmt(o.fuelLiters)} л`:'нет'}</span></div>
-      <div class="calc-row"><span>Остаток топлива</span><span>${fmt(o.fuelRemainingLiters)} л</span></div>
-      <div class="calc-row"><span>руб/л (факт)</span><span>${fmt(o.fuelPricePerLiter)}</span></div>
-      <div class="calc-row"><span>Стоимость ГСМ</span><span>${fmt(m.fuelCostCalc)} руб</span></div>
-      <div class="calc-row"><span>руб/км без НДС</span><span>${fmt(m.costPerKmNoVat)}</span></div>
-      <div class="calc-row"><span>Подушка 10%</span><span>${fmt(m.cushion)} руб</span></div>
-      <div class="calc-row"><span>ЗП водителя</span><span>${fmt(m.driverPay)} руб</span></div>
-      <div class="calc-row"><span>Чистая прибыль</span><span>${fmt(m.netProfit)} руб</span></div>
-      <div class="hint" style="margin-top:8px">Себестоимость / ставка</div>
-      <div class="calc-row"><span>Себестоимость (фикс)</span><span>${fmt(m.fixedCosts)} руб</span></div>
-      <div class="calc-row"><span>Полная себестоимость</span><span>${fmt(m.totalCost)} руб</span></div>
-      <div class="calc-row"><span>Безубыток</span><span>${fmt(m.breakEvenRate)} руб</span></div>
-      <div class="calc-row"><span>Рекомендация +${Math.round(m.markupPercent)}%</span><span>${fmt(m.recommendedRate)} руб</span></div>
-    </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Маршрут</h2>
+      <div class="form-fields">
+        <div id="route-editor"></div>
+        <label for="d-empty-after">Пробег до стоянки, км</label>
+        <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Тариф клиенту</h2>
+      <p class="form-section-hint">${(()=>{ const f=financeForOrder(o); return `Пакет: мин ${f.minWorkHours} ч + ${f.podachaHours} ч подачи; в пакете ${f.cityKmThreshold} км. Нулевой до ≤${f.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — 1 ч; иначе 2 ч. Сверх — ₽/км.`; })()}</p>
+      <div class="form-fields">
+        <div class="form-pair">
+          <div>
+            <label for="d-perkm">руб/км сверх пакета (нал)</label>
+            <input id="d-perkm" inputmode="decimal" value="${o.ratePerKmCash??''}" placeholder="например 80" />
+          </div>
+          <div>
+            <label for="d-perhour">руб/час работы</label>
+            <input id="d-perhour" inputmode="decimal" value="${o.ratePerHourWork??''}" placeholder="например 2000" />
+          </div>
+        </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-estimate-km">Ориентир км (груз + после)</label>
+            <input id="d-estimate-km" inputmode="numeric" value="${o.estimateKm??''}" placeholder="например 80" />
+          </div>
+          <div>
+            <label for="d-estimate-hours">Ориентир часов работы</label>
+            <input id="d-estimate-hours" inputmode="decimal" value="${o.estimateWorkHours??''}" placeholder="например 4" />
+          </div>
+        </div>
+        <label for="d-work-hours">Факт часов работы</label>
+        <input id="d-work-hours" inputmode="decimal" value="${o.workHours??''}" placeholder="после закрытия" />
+        <h3 style="margin:4px 0 0;font-size:.85rem">Ночное хранение</h3>
+        <p class="form-section-hint">В сумму клиенту входит; в ЗП водителя — нет. При «осталась загружена» число ночей +1.</p>
+        ${(o.staysLoadedOvernight||(o.overnightNights>0))?`<div class="hint" style="color:var(--accent)">Ночёвка с грузом${o.overnightNights?`: ${o.overnightNights} ноч.`:''}</div>`:''}
+        <div class="form-pair">
+          <div>
+            <label for="d-overnight-rate">₽ за ночь (нал)</label>
+            <input id="d-overnight-rate" inputmode="decimal" value="${o.overnightStorageRateCash??''}" placeholder="например 5000" />
+          </div>
+          <div>
+            <label for="d-overnight-nights">Число ночей</label>
+            <input id="d-overnight-nights" inputmode="numeric" value="${o.overnightNights??''}" placeholder="0" />
+          </div>
+        </div>
+        <div class="calc" id="perkm-preview"></div>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Ставки и ЗП</h2>
+      <p class="form-section-hint">ЗП, подушка и прибыль — от ставки «наличные». С НДС = без НДС +22%.</p>
+      <div class="form-fields">
+        <label for="d-form">Форма для клиента (документы)</label>
+        <select id="d-form">
+          <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
+          <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
+          <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
+        </select>
+        <div class="form-pair">
+          <div>
+            <label for="d-vat">Ставка с НДС, руб</label>
+            <input id="d-vat" inputmode="decimal" value="${o.rateWithVat??''}" placeholder="от руб/км" />
+          </div>
+          <div>
+            <label for="d-novat">Ставка без НДС, руб</label>
+            <input id="d-novat" inputmode="decimal" value="${o.rateWithoutVat??''}" placeholder="от руб/км" />
+          </div>
+        </div>
+        <label for="d-cash">Ставка наличные, руб</label>
+        <input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="руб/км × км" />
+        <div class="form-pair">
+          <div>
+            <label for="d-bonus">Доплата к ЗП, руб</label>
+            <input id="d-bonus" inputmode="decimal" value="${o.salaryBonus??''}" placeholder="0" />
+          </div>
+          <div>
+            <label for="d-rent">Аренда ТС, руб</label>
+            <input id="d-rent" inputmode="decimal" value="${o.vehicleRent??''}" placeholder="0" />
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Итоги</h2>
+      <div class="calc">
+        <div class="calc-row"><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
+        <div class="calc-row"><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
+        <div class="calc-row"><span>От стоянки до конца</span><span>${fmt(m.km)} км</span></div>
+        <div class="hint" style="margin-top:8px">Время</div>
+        <div class="calc-row"><span>До заказа</span><span>${esc(formatDurationMin(o.timeToOrderMin))}${o.departAt?` · ${esc(dateTime(o.departAt))}`:''}</span></div>
+        <div class="calc-row"><span>С грузом</span><span>${esc(formatDurationMin(o.timeLoadedMin))}${o.arrivedAt?` · с ${esc(dateTime(o.arrivedAt))}`:''}</span></div>
+        <div class="calc-row"><span>До стоянки</span><span>${esc(formatDurationMin(o.timeToParkingMin))}${o.parkingAt?` · ${esc(dateTime(o.parkingAt))}`:''}</span></div>
+        <div class="calc-row"><span>Всего на заказ</span><span>${esc(formatDurationMin(o.timeTotalMin))}</span></div>
+        <div class="calc-row"><span>Норма авто</span><span>${fmt(m.cons)} л/100</span></div>
+        <div class="calc-row"><span>ГСМ по заказу</span><span>${fmt(m.fuelLitersCalc)} л</span></div>
+        <div class="calc-row"><span>Заправка</span><span>${o.refueled?`${fmt(o.fuelLiters)} л`:'нет'}</span></div>
+        <div class="calc-row"><span>Остаток топлива</span><span>${fmt(o.fuelRemainingLiters)} л</span></div>
+        <div class="calc-row"><span>руб/л (факт)</span><span>${fmt(o.fuelPricePerLiter)}</span></div>
+        <div class="calc-row"><span>Стоимость ГСМ</span><span>${fmt(m.fuelCostCalc)} руб</span></div>
+        <div class="calc-row"><span>руб/км без НДС</span><span>${fmt(m.costPerKmNoVat)}</span></div>
+        <div class="calc-row"><span>Подушка 10%</span><span>${fmt(m.cushion)} руб</span></div>
+        <div class="calc-row"><span>ЗП водителя</span><span>${fmt(m.driverPay)} руб</span></div>
+        <div class="calc-row"><span>Чистая прибыль</span><span>${fmt(m.netProfit)} руб</span></div>
+        <div class="hint" style="margin-top:8px">Себестоимость / ставка</div>
+        <div class="calc-row"><span>Себестоимость (фикс)</span><span>${fmt(m.fixedCosts)} руб</span></div>
+        <div class="calc-row"><span>Полная себестоимость</span><span>${fmt(m.totalCost)} руб</span></div>
+        <div class="calc-row"><span>Безубыток</span><span>${fmt(m.breakEvenRate)} руб</span></div>
+        <div class="calc-row"><span>Рекомендация +${Math.round(m.markupPercent)}%</span><span>${fmt(m.recommendedRate)} руб</span></div>
+      </div>
+    </section>
   `;
   show('admin-detail');
   const detailScroll=$('detail-form'); if(detailScroll) detailScroll.scrollTop=0;
