@@ -1225,7 +1225,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-tabbar-3";
+const APP_BUILD="2026-08-09-driver-date";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2985,12 +2985,19 @@ function showDriverHome(){
   setDriverNav('btn-home');
   updateDriverChrome();
 }
+function driverTodayLabel(){
+  const d=new Date();
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yyyy=d.getFullYear();
+  return `${dd}:${mm}:${yyyy}`;
+}
 function updateDriverChrome(){
   const t=$('driver-title');
   const sub=$('driver-sub');
   const chip=$('driver-shift-chip');
   const buildEl=$('driver-build');
-  if(buildEl) buildEl.textContent=APP_BUILD;
+  if(buildEl) buildEl.textContent=driverTodayLabel();
   if(!DRIVER){
     if(t){ t.textContent='Водитель'; t.title=''; }
     if(sub) sub.textContent='';
