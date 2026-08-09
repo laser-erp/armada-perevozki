@@ -370,6 +370,7 @@
     .driver-who{flex:1;min-width:0}
     .driver-who h1{margin:0;font-size:1rem;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .driver-sub{margin-top:1px;font-size:.72rem;color:var(--muted);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1em}
+    .driver-build{margin-top:1px;font-size:.62rem;color:var(--muted);opacity:.85;line-height:1.2}
     .driver-shift-chip{
       flex:0 0 auto;max-width:38%;padding:5px 8px;border-radius:var(--radius);font-size:.68rem;font-weight:700;
       line-height:1.2;text-align:center;border:1px solid var(--border);background:var(--field);color:var(--text)
@@ -1023,6 +1024,7 @@
       <div class="driver-who">
         <h1 id="driver-title">Водитель</h1>
         <div class="driver-sub" id="driver-sub"></div>
+        <div class="driver-build" id="driver-build" aria-hidden="true"></div>
       </div>
       <div class="driver-shift-chip" id="driver-shift-chip" hidden></div>
     </header>
@@ -1223,7 +1225,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-tabbar-2";
+const APP_BUILD="2026-08-09-driver-tabbar-3";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2987,6 +2989,8 @@ function updateDriverChrome(){
   const t=$('driver-title');
   const sub=$('driver-sub');
   const chip=$('driver-shift-chip');
+  const buildEl=$('driver-build');
+  if(buildEl) buildEl.textContent=APP_BUILD;
   if(!DRIVER){
     if(t){ t.textContent='Водитель'; t.title=''; }
     if(sub) sub.textContent='';
@@ -3112,6 +3116,7 @@ async function enterAsDriver(rec){
   saveDriverSession();
   updateDriverChrome();
   show('driver');
+  setDriverNav('btn-home');
   // Сервер — источник правды по открытой смене водителя (локальный кэш не должен откатить ЕТО)
   try{
     const localOrders=(state.orders||[]).map(o=>structuredClone(o));
@@ -9301,8 +9306,22 @@ bindAdminCreate();
   }, true);
 })();
 if('serviceWorker' in navigator){
+  let reloading=false;
+  navigator.serviceWorker.addEventListener('message',e=>{
+    if(e.data && e.data.type==='ARMADA_SW_UPDATED' && !reloading){
+      reloading=true;
+      location.reload();
+    }
+  });
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloading) return;
+    reloading=true;
+    location.reload();
+  });
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW',err));
+    navigator.serviceWorker.register('./sw.js?v='+encodeURIComponent(APP_BUILD))
+      .then(reg=>{ try{ reg.update(); }catch(_){} })
+      .catch(err=>console.warn('SW',err));
   });
 }
 </script>
