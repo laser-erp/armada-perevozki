@@ -1348,7 +1348,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-hist-cal";
+const APP_BUILD="2026-08-09-admin-orders-cal";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -7952,6 +7952,100 @@ function adminGroupCardHtml(g){
     ${open?`<div class="day-total-details">${g.orders.map(adminOrderCardHtml).join('')}</div>`:''}
   </div>`;
 }
+/** Календарь фильтра дат в админке → Заявки (UX как у водителя в Истории). */
+function ensureAdminOrdersCal(){
+  if(!state.adminOrdersCal || typeof state.adminOrdersCal!=='object'){
+    const now=new Date();
+    state.adminOrdersCal={
+      year:now.getFullYear(),
+      month:now.getMonth(),
+      from:null,
+      to:null,
+      showAll:false
+    };
+  }
+  return state.adminOrdersCal;
+}
+function adminOrdersPeriodLabel(cal){
+  if(!cal) return 'Все дни';
+  if(cal.from){
+    if(!cal.to || cal.to===cal.from) return driverHistDayLabel(cal.from);
+    const a=cal.from<cal.to?cal.from:cal.to;
+    const b=cal.from<cal.to?cal.to:cal.from;
+    return driverHistDayLabel(a)+' — '+driverHistDayLabel(b);
+  }
+  if(cal.showAll) return 'Все дни';
+  const title=new Date(cal.year,cal.month,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  return title.charAt(0).toUpperCase()+title.slice(1);
+}
+function adminOrdersFilterGroups(groups, cal){
+  if(!cal) return groups;
+  if(cal.from){
+    const a=cal.to && cal.to<cal.from?cal.to:cal.from;
+    const b=cal.to && cal.to>cal.from?cal.to:(cal.to||cal.from);
+    return (groups||[]).filter(g=>g.dayKey && g.dayKey!=='без-даты' && g.dayKey>=a && g.dayKey<=b);
+  }
+  if(cal.showAll) return groups||[];
+  const prefix=`${cal.year}-${String(cal.month+1).padStart(2,'0')}`;
+  return (groups||[]).filter(g=>g.dayKey && String(g.dayKey).startsWith(prefix));
+}
+function adminOrdersSelectDay(dayKey){
+  const cal=ensureAdminOrdersCal();
+  if(!dayKey || dayKey==='без-даты') return;
+  cal.showAll=false;
+  if(!cal.from || cal.to){
+    cal.from=dayKey;
+    cal.to=null;
+  } else if(cal.from===dayKey){
+    cal.to=null;
+  } else {
+    cal.to=dayKey;
+  }
+  const a=cal.to && cal.to<cal.from?cal.to:cal.from;
+  const b=cal.to && cal.to>cal.from?cal.to:(cal.to||cal.from);
+  if(!state.adminExpandedGroups || typeof state.adminExpandedGroups!=='object') state.adminExpandedGroups={};
+  state._adminCalPendingExpand={a,b};
+  renderAdmin();
+}
+function adminOrdersCalHtml(groups){
+  const cal=ensureAdminOrdersCal();
+  const marked=new Set((groups||[]).map(g=>g.dayKey).filter(k=>k && k!=='без-даты'));
+  const y=cal.year, m=cal.month;
+  const title=new Date(y,m,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  const first=new Date(y,m,1);
+  let startPad=(first.getDay()+6)%7;
+  const dim=new Date(y,m+1,0).getDate();
+  const todayKey=dayKeyFromIso(new Date().toISOString());
+  const a=cal.from?(cal.to && cal.to<cal.from?cal.to:cal.from):null;
+  const b=cal.from?(cal.to && cal.to>cal.from?cal.to:(cal.to||cal.from)):null;
+  let cells='';
+  for(let i=0;i<startPad;i++) cells+=`<button type="button" class="mute" disabled>·</button>`;
+  for(let day=1;day<=dim;day++){
+    const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cls=[
+      marked.has(key)?'has':'',
+      key===todayKey?'today':'',
+      a && key===a?'edge':'',
+      b && key===b?'edge':'',
+      a && b && key>a && key<b?'in':''
+    ].filter(Boolean).join(' ');
+    cells+=`<button type="button" class="${cls}" data-admin-cal-day="${esc(key)}">${day}</button>`;
+  }
+  const showReset=!!(cal.from || cal.showAll===false);
+  return `<div class="drv-cal" id="admin-orders-cal">
+    <div class="drv-cal-head">
+      <button type="button" id="admin-cal-prev" aria-label="Предыдущий месяц">‹</button>
+      <h3>${esc(title)}</h3>
+      <button type="button" id="admin-cal-next" aria-label="Следующий месяц">›</button>
+    </div>
+    <div class="drv-cal-week">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="drv-cal-grid">${cells}</div>
+    <div class="drv-cal-meta">
+      <span class="period">${esc(adminOrdersPeriodLabel(cal))}</span>
+      <button type="button" id="admin-cal-reset"${showReset?'':' hidden'}>Сбросить</button>
+    </div>
+  </div>`;
+}
 function filteredOrders(){
   if(state.adminFilter==='eto') return [];
   return allOrders().filter(o=>{
@@ -8253,7 +8347,16 @@ function renderAdmin(){
   }
   const exCount=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.closedAt && o.onExchange && o.startOdometer==null).length;
   if(!state.adminExpandedGroups || typeof state.adminExpandedGroups!=='object') state.adminExpandedGroups={};
-  const {groups}=buildAdminShiftDayGroups(orders);
+  const {groups:allGroups}=buildAdminShiftDayGroups(orders);
+  const cal=ensureAdminOrdersCal();
+  if(state._adminCalPendingExpand){
+    const {a,b}=state._adminCalPendingExpand;
+    allGroups.forEach(g=>{
+      if(g.dayKey && g.dayKey>=a && g.dayKey<=b) state.adminExpandedGroups[g.id]=true;
+    });
+    state._adminCalPendingExpand=null;
+  }
+  const groups=adminOrdersFilterGroups(allGroups, cal);
   // Открытую смену раскрываем по умолчанию (один раз)
   groups.forEach(g=>{
     if(g.openShift && state.adminExpandedGroups[g.id]===undefined) state.adminExpandedGroups[g.id]=true;
@@ -8300,25 +8403,37 @@ function renderAdmin(){
     if(open) tableRows+=g.orders.map(orderRowHtml).join('');
   });
   const groupCards=groups.map(adminGroupCardHtml).join('');
-  const allTot=sumOrderMoney(orders);
-  const openG=groups.find(g=>g.openShift)||groups[0];
-  const todayTot=openG?openG.totals:allTot;
-  const headHint=openG
-    ? `Сводка: ${esc(openG.dayLabel)} · ${esc(openG.driverName)}. Группы по дню — нажмите карточку.`
-    : 'Сводка по выборке. Группы по дню — нажмите карточку.';
+  const filtOrders=groups.flatMap(g=>g.orders);
+  const periodTot=sumOrderMoney(filtOrders);
+  const periodLabel=adminOrdersPeriodLabel(cal);
+  const headHint=`Сводка: ${esc(periodLabel)}. Группы по дню — нажмите карточку.`;
+  const calHtml=adminOrdersCalHtml(allGroups);
   const statsHtml=`<div class="orders-board-head">
     <p class="cat-panel-hint">${headHint}${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</p>
     <div class="board-metrics">
-      <div class="m"><span>Заказы</span><b>${todayTot.count}</b></div>
-      <div class="m"><span>Выручка</span><b>${fmt(todayTot.revenue)} ₽</b></div>
-      <div class="m"><span>ЗП</span><b>${fmt(todayTot.pay)} ₽</b></div>
+      <div class="m"><span>Заказы</span><b>${periodTot.count}</b></div>
+      <div class="m"><span>Выручка</span><b>${fmt(periodTot.revenue)} ₽</b></div>
+      <div class="m"><span>ЗП</span><b>${fmt(periodTot.pay)} ₽</b></div>
     </div>
   </div>`;
-  $('admin-list').innerHTML=`
-    ${statsHtml}
-    <div class="admin-cards">${groupCards||'<div class="empty">Нет групп</div>'}</div>
+  const listBody=groups.length
+    ? `<div class="admin-cards">${groupCards}</div>
     <div class="hint admin-desktop-only" style="padding:0 16px">Таблица — те же группы.</div>
-    <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`;
+    <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`
+    : `<div class="empty">Нет заявок за выбранные дни</div>`;
+  $('admin-list').innerHTML=`
+    ${calHtml}
+    ${statsHtml}
+    ${listBody}`;
+  const prev=$('admin-cal-prev');
+  const next=$('admin-cal-next');
+  const reset=$('admin-cal-reset');
+  if(prev) prev.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month--; if(c.month<0){ c.month=11; c.year--; } if(!c.from) c.showAll=false; renderAdmin(); };
+  if(next) next.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month++; if(c.month>11){ c.month=0; c.year++; } if(!c.from) c.showAll=false; renderAdmin(); };
+  if(reset) reset.onclick=()=>{ const c=ensureAdminOrdersCal(); c.from=null; c.to=null; c.showAll=true; renderAdmin(); };
+  document.querySelectorAll('#admin-list [data-admin-cal-day]').forEach(btn=>{
+    btn.onclick=e=>{ e.stopPropagation(); adminOrdersSelectDay(btn.dataset.adminCalDay); };
+  });
   const toggleGroup=id=>{
     state.adminExpandedGroups[id]=!state.adminExpandedGroups[id];
     renderAdmin();
