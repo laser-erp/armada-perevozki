@@ -3,6 +3,10 @@
 **Статус:** ожидает выполнения  
 **Новый чат:** одна фраза — «Выполни задачу из `TASK_ADMIN_CALENDAR.md`»
 
+> **Важно:** в `main` только этот файл задачи. **Код приложения** (водитель, календарь и т.д.) — на ветке  
+> `cursor/driver-history-calendar-4317` (или новее `cursor/*-4317`). Перед кодом:  
+> `git fetch && git checkout cursor/driver-history-calendar-4317`
+
 ---
 
 АРМАДА учёт перевозок · aptown1.fvds.ru · GitHub laser-erp/armada-perevozki  
