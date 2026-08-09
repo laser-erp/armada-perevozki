@@ -1302,7 +1302,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-home-cta";
+const APP_BUILD="2026-08-09-driver-create-flow";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -6311,15 +6311,21 @@ function restoreOrderWorkflow(shift){
         shift.orderStep='idle'; shift.draft={};
         return false;
       }
-      if(!draftHasCreateProgress(shift.draft) && saved==='arrivalOdometer'){
-        // Только «жду одометр» без прогресса — не восстанавливаем как mid-order после синка
-        // (иначе вечный «Продолжаем оформление»). Водитель снова нажмёт «Создать заказ».
-        const msgs=shift.messages||[];
-        const healed=msgs.some(m=>/восстановлен в смене|Заказ №\d+: закрыт/i.test(String(m.text||'')));
-        if(healed){
-          shift.orderStep='idle'; shift.draft={};
-          return false;
+      // Старый шаг: одометр при создании → теперь сразу номер дня / адреса
+      if(saved==='arrivalOdometer'){
+        if(!draftHasCreateProgress(shift.draft)){
+          const msgs=shift.messages||[];
+          const healed=msgs.some(m=>/восстановлен в смене|Заказ №\d+: закрыт/i.test(String(m.text||'')));
+          if(healed){
+            shift.orderStep='idle'; shift.draft={};
+            return false;
+          }
         }
+        state.orderStep='dayNumber';
+        state.draft=shift.draft?structuredClone(shift.draft):{};
+        if(!state.draft.plate && shift.vehiclePlate) state.draft.plate=shift.vehiclePlate;
+        delete state.draft.startOdo; delete state.draft.prevOdo; delete state.draft.arrivedAt;
+        return true;
       }
     }
     state.orderStep=saved;
@@ -6345,12 +6351,13 @@ function restoreOrderWorkflow(shift){
       state.draft={assignedId:en.id, plate:shift.vehiclePlate||''};
       return true;
     }
-    // Самосоздание: только если после этой реплики не было закрытия
+    // Старое самосоздание с одометром при создании — продолжаем с номера дня
     const idx=msgs.findLastIndex?msgs.findLastIndex(m=>m===lastMeaningful):msgs.lastIndexOf(lastMeaningful);
     const after=idx>=0?msgs.slice(idx+1):[];
     if(after.some(m=>/закрыт|восстановлен в смене/i.test(String(m.text||'')))) return false;
-    state.orderStep='arrivalOdometer';
+    state.orderStep='dayNumber';
     state.draft=Object.assign({}, shift.draft||{}, {plate:shift.vehiclePlate||(shift.draft&&shift.draft.plate)||''});
+    delete state.draft.startOdo; delete state.draft.prevOdo; delete state.draft.arrivedAt;
     return true;
   }
   if(/номер заказа за день/i.test(t)){
@@ -6511,8 +6518,8 @@ function openShift(){
 function selectVehicle(plate){
   if(state.orderStep==='chooseVehicle'){
     state.draft.plate=plate; add('driver',plate);
-    add('bot',`Вы выбрали автомобиль с гос.номером ${plate}.\nУкажите показания одометра по прибытию на загрузку`);
-    state.orderStep='arrivalOdometer'; state.error=''; upsertShift(); renderInput(); return;
+    add('bot',`Вы выбрали автомобиль с гос.номером ${plate}.\nУкажите номер заказа за день.`);
+    state.orderStep='dayNumber'; state.error=''; upsertShift(); renderInput(); return;
   }
   state.shift.vehiclePlate=plate;
   stampShiftOwner(state.shift, DRIVER, plate);
@@ -6761,11 +6768,12 @@ function startCreateOrder(){
   const plate=shift.vehiclePlate||'';
   state.draft={};
   add('driver','Создать заказ');
-  // Авто уже выбрано при открытии смены / ЕТО — не спрашиваем снова
+  // Авто уже выбрано при открытии смены / ЕТО — не спрашиваем снова.
+  // Одометр — только через «Выехал» / «Прибыл», как у назначенных заявок.
   if(plate){
     state.draft.plate=plate;
-    add('bot',`Заказ на авто ${plate} (из текущей смены).\nУкажите показания одометра по прибытию на загрузку.`);
-    state.orderStep='arrivalOdometer';
+    add('bot',`Заказ на авто ${plate} (из текущей смены).\nУкажите номер заказа за день.`);
+    state.orderStep='dayNumber';
   } else {
     add('bot','Выберите автомобиль для заказа.');
     state.orderStep='chooseVehicle';
@@ -7022,7 +7030,7 @@ function submitText(){
   if(state.orderStep==='unloading') finishOrder(text);
 }
 function finishOrder(unloading){
-  const d=state.draft; const emptyKm=d.startOdo-d.prevOdo; const seqNo=nextSequentialNumber(); const createdAt=new Date().toISOString();
+  const d=state.draft; const seqNo=nextSequentialNumber(); const createdAt=new Date().toISOString();
   const plate=d.plate || (state.shift&&state.shift.vehiclePlate) || '';
   // Жёстко от сессии водителя / смены — не от чужой копии ФИО
   const bind=resolveDriverOrderBinding(DRIVER, plate);
@@ -7046,14 +7054,14 @@ function finishOrder(unloading){
     bind.ownerAdminId=state.shift.ownerAdminId||bind.ownerAdminId;
     bind.ownerAdminName=state.shift.ownerAdminName||bind.ownerAdminName;
   }
+  // Как у заявки диспетчера: сразу «Назначен», одометр — через Выехал / Прибыл
   const order={
     id:uuid(), sequentialNumber:seqNo, dayNumber:d.dayNumber, createdAt, source:'driver',
-    vehiclePlate:plate, startOdometer:d.startOdo, previousOdometer:d.prevOdo,
+    vehiclePlate:plate, startOdometer:null, departOdometer:null, previousOdometer:null,
     loadingAddress:d.loading, unloadingAddress:unloading,
     loading:d.loading, unloading:unloading,
     routePoints:defaultRoutePoints(d.loading,unloading),
-    driverName:DRIVER, customer:'', emptyKmBefore:emptyKm,
-    arrivedAt:d.arrivedAt||createdAt,
+    driverName:DRIVER, customer:'', emptyKmBefore:null,
     driverPercent:driverPercent(DRIVER, bind.ownCompanyId||DRIVER_COMPANY_ID),
     ownerAdminId:bind.ownerAdminId, ownerAdminName:bind.ownerAdminName,
     spaceId:bind.spaceId, ownCompanyId:bind.ownCompanyId||DRIVER_COMPANY_ID, ownCompanyName:bind.ownCompanyName,
@@ -7065,16 +7073,15 @@ function finishOrder(unloading){
   add('driver',unloading); if(!state.shift.orders) state.shift.orders=[]; state.shift.orders.push(order);
   bumpDataEpoch('driver-create-order');
   upsertOrder(order);
-  const linked=linkEmptyAfterFromNextEmptyBefore(order);
   const route=routeText(order);
-  const linkNote=linked?`\n🔵До стоянки у №${linked.sequentialNumber}: ${order.emptyKmBefore} км (= нулевой до этого)`:'';
-  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа ${orderDayLabel(order.dayNumber)}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Одометр на начало заказа - ${order.startOdometer}\n🔵Нулевой до заказа - ${order.emptyKmBefore} км${linkNote}`);
-  add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
+  add('bot',`Заявка оформлена🔔\n\nИнформация о заявке❗\n🔵Номер заказа ${orderDayLabel(order.dayNumber)}\n🔵Порядковый номер - ${order.sequentialNumber}\n🔵Дата - ${dateTime(createdAt)}\n🔵Водитель - ${order.driverName}\n🔵Автомобиль - ${order.vehiclePlate}\n🔵Маршрут - ${route}\n🔵Статус - Назначен`);
+  add('bot','Когда выезжаете со стоянки — нажмите «Выехал». По прибытии на загрузку — «Прибыл на загрузку».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
   persist();
   clearTimeout(persistTimer);
   pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
   renderInput();
+  renderDriverHome();
 }
 function resetChat(){
   syncOpenShiftRuntime();
