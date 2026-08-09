@@ -28,6 +28,8 @@
       --shadow-sm:0 1px 2px rgba(0,0,0,.05); --shadow-md:0 4px 6px rgba(0,0,0,.08);
       --pad:8px; --gap:8px; --radius:8px; --pill:8px; --fs:14px; --fs-sm:12px; --ctrl-pad:8px 12px;
       --touch:40px;
+      /* высота нижнего меню водителя (кнопки 50 + паддинги) + запас под бордер/тень */
+      --driver-tab-clear:62px;
     }
     *{box-sizing:border-box}
     html,body{
@@ -48,12 +50,13 @@
     .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg0);min-height:0;overflow:hidden}
     .screen.show{display:flex}
     .driver-panel{
-      position:absolute;top:0;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0));
-      z-index:25;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)
+      position:absolute;top:0;left:0;right:0;bottom:calc(var(--driver-tab-clear) + env(safe-area-inset-bottom,0px));
+      z-index:25;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%);
+      padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)
     }
     .driver-panel.show{display:flex;animation:panelIn .2s ease}
     .driver-panel .form-topbar{flex-shrink:0}
-    .driver-panel .panel-body{background:transparent;flex:1;min-height:0;padding:12px 14px 20px}
+    .driver-panel .panel-body{background:transparent;flex:1;min-height:0;padding:12px 14px 28px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
     .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px 16px;text-align:center}
     .logo{width:88px;height:auto}
     .brand{font-size:1.55rem;font-weight:700;letter-spacing:.08em;color:var(--text)}
@@ -427,22 +430,28 @@
     .driver-shift-chip.ok{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
     .driver-shift-chip.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
     .driver-shift-chip.warn{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:var(--accent)}
-    /* Водитель: нижнее меню (мобильный каркас) */
+    /* Водитель: нижнее меню (мобильный каркас) + safe-area */
     #driver.show{
       display:flex;flex-direction:column;
-      padding-bottom:calc(58px + env(safe-area-inset-bottom,0))
+      padding-bottom:calc(var(--driver-tab-clear) + env(safe-area-inset-bottom,0px));
+      padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)
     }
-    #driver #chat{flex:1;min-height:0}
+    #driver #chat{flex:1;min-height:0;padding-bottom:12px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
     #driver #input-bar{
       flex-shrink:0;
       padding-bottom:10px; /* safe-area у нижнего меню, не у поля ввода */
+      position:relative;z-index:30
     }
     .driver-nav,.driver-tabbar{
       position:absolute;left:0;right:0;bottom:0;z-index:40;
       display:grid;grid-template-columns:repeat(4,1fr);gap:2px;
-      padding:4px 6px calc(4px + env(safe-area-inset-bottom,0));
+      padding:4px 6px calc(6px + env(safe-area-inset-bottom,0px));
+      padding-left:max(6px, env(safe-area-inset-left,0px));
+      padding-right:max(6px, env(safe-area-inset-right,0px));
       background:var(--surface);border-top:1px solid var(--border);
-      box-shadow:0 -6px 16px rgba(17,24,39,.08)
+      box-shadow:0 -6px 16px rgba(17,24,39,.08);
+      /* не даём iOS «прилипать» контенту под меню */
+      padding-bottom:calc(6px + env(safe-area-inset-bottom,0px))
     }
     .driver-nav button,.driver-tabbar button{
       border:0;border-radius:var(--radius);background:transparent;color:var(--muted);
@@ -784,7 +793,8 @@
     .schedule-box strong{color:var(--accent)}
     /* Мобильная полировка */
     @media (max-width:699px){
-      :root{ --touch:44px; --fs:15px; --fs-sm:12.5px; --ctrl-pad:10px 12px; }
+      /* кнопки таббара 56px → clearance больше, иначе низ чата/панелей под меню */
+      :root{ --touch:44px; --fs:15px; --fs-sm:12.5px; --ctrl-pad:10px 12px; --driver-tab-clear:70px; }
       .phone,.phone.wide{max-width:100%}
       .filters,#admin-owner-filters{
         flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
@@ -1309,7 +1319,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-orders-hint";
+const APP_BUILD="2026-08-09-driver-safe-area";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
