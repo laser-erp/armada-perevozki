@@ -383,26 +383,34 @@
     .driver-home-summary .m b.warn{color:#D97706}
     .driver-home-summary .m b.ok{color:#059669}
     .driver-home-orders{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch}
-    .drv-active-card{
+    .drv-active-card,.drv-order-card{
       border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
-      padding:12px 12px;box-shadow:var(--shadow-sm)
+      padding:12px;box-shadow:var(--shadow-sm)
     }
-    .drv-active-card h3{margin:0;font-size:.95rem;font-weight:700;line-height:1.25}
-    .drv-active-card .st{
+    .drv-active-card h3,.drv-order-card h3{margin:0;font-size:.95rem;font-weight:700;line-height:1.25}
+    .drv-active-card .st,.drv-order-card .st{
       display:inline-flex;margin-top:6px;padding:3px 8px;border-radius:var(--radius);
       font-size:.68rem;font-weight:700;border:1px solid var(--border);background:var(--field)
     }
-    .drv-active-card .st.progress{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.35);color:#2563EB}
-    .drv-active-card .st.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
-    .drv-active-card .route{margin:8px 0 0;font-size:.84rem;font-weight:600;color:var(--text);line-height:1.35}
-    .drv-active-card .meta{margin:4px 0 0;font-size:.76rem;color:var(--muted);line-height:1.35}
-    .drv-active-card .acts{display:flex;gap:6px;margin-top:10px}
-    .drv-active-card .acts a,.drv-active-card .acts button{flex:1;min-height:44px}
-    .drv-active-card .acts a{
+    .drv-active-card .st.progress,.drv-order-card .st.progress{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.35);color:#2563EB}
+    .drv-active-card .st.wait,.drv-order-card .st.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .drv-order-card .st.closed{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
+    .drv-points{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+    .drv-points .pt{padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg0)}
+    .drv-points .pt span{display:block;font-size:.68rem;color:var(--muted);font-weight:600}
+    .drv-points .pt b{display:block;margin-top:2px;font-size:.86rem;font-weight:700;color:var(--text);line-height:1.3}
+    .drv-active-card .route,.drv-order-card .route{margin:8px 0 0;font-size:.84rem;font-weight:600;color:var(--text);line-height:1.35}
+    .drv-active-card .meta,.drv-order-card .meta{margin:6px 0 0;font-size:.76rem;color:var(--muted);line-height:1.35}
+    .drv-order-card .contact{margin:8px 0 0;font-size:.82rem;font-weight:700;color:var(--text)}
+    .drv-active-card .acts,.drv-order-card .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .drv-active-card .acts a,.drv-active-card .acts button,
+    .drv-order-card .acts a,.drv-order-card .acts button{flex:1 1 calc(50% - 6px);min-height:44px;width:auto}
+    .drv-active-card .acts a,.drv-order-card .acts a.drv-link{
       display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
       border-radius:var(--radius);background:var(--field);border:1px solid var(--border);
       color:var(--text);font-weight:700;font-size:.85rem
     }
+    .drv-order-card .acts .primary{flex:1 1 100%}
     @media (max-width:380px){
       .driver-home-summary{grid-template-columns:repeat(2,1fr)}
     }
@@ -1264,7 +1272,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-home";
+const APP_BUILD="2026-08-09-driver-order";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3088,25 +3096,8 @@ function renderDriverHome(){
     listEl.innerHTML='';
     return;
   }
-  listEl.innerHTML=st.active.map(o=>{
-    const stTxt=statusText(o);
-    const stCls=(o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait';
-    const phone=formatPhone(o.contactPhone||'');
-    const canCall=driverMaySeeContact(o)&&phone;
-    return `<div class="drv-active-card" data-home-order="${esc(o.id)}">
-      <h3>Заказ №${o.sequentialNumber}</h3>
-      <div class="st ${stCls}">${esc(stTxt)}</div>
-      <div class="route">${esc(routeText(o)||'Маршрут не указан')}</div>
-      <div class="meta">${esc(o.vehiclePlate||'—')}${o.vehicleAt?` · подача ${esc(dateTime(o.vehicleAt))}`:''}</div>
-      <div class="acts">
-        <button type="button" class="primary home-go-orders" data-id="${esc(o.id)}">К заявкам</button>
-        ${canCall?`<a href="tel:${esc(phone)}">Позвонить</a>`:''}
-      </div>
-    </div>`;
-  }).join('');
-  listEl.querySelectorAll('.home-go-orders').forEach(btn=>{
-    btn.onclick=()=>showOrders();
-  });
+  listEl.innerHTML=st.active.map(o=>driverOrderCardHtml(o,{compact:true})).join('');
+  wireDriverOrderCards(listEl);
 }
 function updateDriverChrome(){
   const t=$('driver-title');
@@ -6649,7 +6640,7 @@ function beginDepart(id, fromOrders){
   add('driver',`Выехал · заказ №${order.sequentialNumber}`);
   add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите одометр при выезде со стоянки.`);
   state.orderStep='departAssignedOdometer'; state.error=''; state.step='done';
-  upsertShift(); renderChat(); renderDriverBanner();
+  upsertShift(); renderChat(); renderDriverBanner(); renderInput();
   return true;
 }
 /** Шаг 2: прибытие на загрузку */
@@ -7135,22 +7126,77 @@ function hideDriverPanels(){
   setDriverNav('btn-home');
 }
 
+function driverOrderPointsHtml(o){
+  const pts=ensureRoutePoints(o)||[];
+  if(!pts.length){
+    return `<div class="route">${esc(routeText(o)||'Маршрут не указан')}</div>`;
+  }
+  return `<div class="drv-points">${pts.map(p=>`<div class="pt"><span>${esc(kindTitle(p.kind))}</span><b>${esc(p.address||'—')}</b></div>`).join('')}</div>`;
+}
+function driverOrderCardHtml(o, opts){
+  opts=opts||{};
+  const closed=looksClosedOrder(o)||!!o.cancelledAt;
+  const canDepart=!closed && o.startOdometer==null && o.departOdometer==null && !o.onExchange;
+  const canArrive=!closed && o.departOdometer!=null && o.startOdometer==null;
+  const inWork=!closed && o.startOdometer!=null;
+  const stCls=closed?'closed':((o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait');
+  const phone=formatPhone(o.contactPhone||'');
+  const canContact=driverMaySeeContact(o)&&!!phone;
+  const contact=driverContactLine(o);
+  const acts=[];
+  if(canDepart) acts.push(`<button type="button" class="primary drv-act-depart" data-id="${esc(o.id)}">Выехал</button>`);
+  if(canArrive) acts.push(`<button type="button" class="primary drv-act-arrive" data-id="${esc(o.id)}">Прибыл на загрузку</button>`);
+  if(inWork) acts.push(`<button type="button" class="primary drv-act-home" data-id="${esc(o.id)}">Закрыть на Главной</button>`);
+  if(canContact){
+    acts.push(`<a class="drv-link" href="tel:${esc(phone)}">Позвонить</a>`);
+    acts.push(`<a class="drv-link" href="sms:${esc(phone)}">SMS</a>`);
+  }
+  return `<div class="drv-order-card${opts.compact?' drv-active-card':''}" data-order-card="${esc(o.id)}">
+    <h3>Заказ №${o.sequentialNumber}${o.dayNumber!=null?` · ${esc(orderDayLabel(o.dayNumber))}`:''}</h3>
+    <div class="st ${stCls}">${esc(statusText(o))}</div>
+    ${driverOrderPointsHtml(o)}
+    <div class="meta">${esc(o.vehiclePlate||'—')}${o.vehicleAt?` · подача ${esc(formatRuDateTimeAt(o.vehicleAt))}`:''}</div>
+    ${o.freeAt||o.vehicleAt?`<div class="meta">${o.freeAt?`Освобождение: ${esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))}`:''}</div>`:''}
+    ${contact?`<div class="contact">${esc(contact)}</div>`:''}
+    ${canArrive?`<div class="meta" style="color:var(--accent);font-weight:600">Выезд отмечен — подтвердите прибытие</div>`:''}
+    ${closed?`<div class="meta">${esc(driverPayText(o))}</div>`:''}
+    ${acts.length?`<div class="acts">${acts.join('')}</div>`:''}
+  </div>`;
+}
+function wireDriverOrderCards(root){
+  if(!root) return;
+  root.querySelectorAll('.drv-act-depart').forEach(b=>{
+    b.onclick=()=>{
+      setDriverNav('btn-home');
+      beginDepart(b.dataset.id, true);
+    };
+  });
+  root.querySelectorAll('.drv-act-arrive').forEach(b=>{
+    b.onclick=()=>{
+      setDriverNav('btn-home');
+      beginArrive(b.dataset.id, true);
+    };
+  });
+  root.querySelectorAll('.drv-act-home').forEach(b=>{
+    b.onclick=()=>showDriverHome();
+  });
+}
 function showOrders(){
   hideDriverPanels();
   setDriverNav('btn-orders');
   $('orders-panel').classList.add('show');
-  const mine=allOrders().filter(o=>o.driverName===DRIVER && !o.onExchange);
+  const mine=allOrders().filter(o=>orderBelongsToDriver(o) && !o.onExchange);
   const board=driverExchangeEnabled(DRIVER)?exchangeOrders():[];
   let html='';
   if(board.length){
     html+=`<div class="drv-section-label">Биржа</div>`;
     html+=`<div class="orders-hint">Маршрут и подача; заказчик скрыт до взятия</div>`;
-    html+=board.map(o=>`<div class="swipe-front" style="margin:8px 0">
+    html+=board.map(o=>`<div class="drv-order-card" style="margin-bottom:8px">
       <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
-      <p>${esc(dateTime(o.createdAt))}</p>
-      <p>${esc(routeText(o))}</p>
-      ${orderScheduleLines(o, true)}
-      <button type="button" class="primary take-exchange" data-id="${o.id}" style="margin-top:8px">Взять заказ</button>
+      <div class="st wait">На бирже</div>
+      ${driverOrderPointsHtml(o)}
+      <div class="meta">${o.vehicleAt?`Подача ${esc(formatRuDateTimeAt(o.vehicleAt))}`:esc(dateTime(o.createdAt))}</div>
+      <div class="acts"><button type="button" class="primary take-exchange" data-id="${o.id}">Взять заказ</button></div>
     </div>`).join('');
   } else if(driverExchangeEnabled(DRIVER)){
     html+=`<div class="orders-hint">Биржа пуста</div>`;
@@ -7160,31 +7206,21 @@ function showOrders(){
     return;
   }
   if(mine.length){
+    const open=mine.filter(o=>!looksClosedOrder(o) && !o.cancelledAt);
+    const closed=mine.filter(o=>looksClosedOrder(o) || o.cancelledAt);
     html+=`<div class="drv-section-label">Мои заявки</div>`;
-    html+=`<div class="orders-hint">Свайп влево → «Выехал» / «Прибыл»</div><div id="orders-error" class="error"></div>`;
-    html+=mine.map(o=>{
-      const canDepart=!o.closedAt && o.startOdometer==null && o.departOdometer==null;
-      const canArrive=!o.closedAt && o.departOdometer!=null && o.startOdometer==null;
-      const action=canArrive?'arrive':(canDepart?'depart':null);
-      const actionLabel=canArrive?'Прибыл':(canDepart?'Выехал':'');
-      const contact=driverContactLine(o);
-      return `<div class="swipe-item" data-id="${o.id}" data-can-start="${action?1:0}" data-action="${action||''}">
-        ${action?`<div class="swipe-actions"><button type="button" class="swipe-start" data-id="${o.id}" data-action="${action}">${actionLabel}</button></div>`:''}
-        <div class="swipe-front">
-          <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))} · ${statusText(o).toLowerCase()}</h3>
-          <p>${esc(dateTime(o.createdAt))}</p><p>${esc(routeText(o))}</p><p>${esc(o.vehiclePlate)}</p>
-          ${orderScheduleLines(o, true)}
-          ${contact?`<p style="color:var(--accent);font-weight:700;margin-top:6px">${esc(contact)}</p>`:''}
-          ${(()=>{ const cp=formatPhone(o.contactPhone||''); return driverMaySeeContact(o)&&cp?`<p><a href="tel:${esc(cp)}" style="color:var(--accent)">☎ ${esc(cp)}</a></p>`:''; })()}
-          ${o.departOdometer!=null&&o.startOdometer==null?`<p style="color:var(--accent);margin-top:4px">Выезд: ${o.departOdometer} — отметьте прибытие</p>`:''}
-          <p style="color:var(--muted);margin-top:4px">${esc(driverPayText(o))}</p>
-        </div>
-      </div>`;
-    }).join('');
+    html+=`<div class="orders-hint">Кнопки «Выехал» / «Прибыл» — прямо в карточке</div><div id="orders-error" class="error"></div>`;
+    html+=`<div class="driver-home-orders" style="max-height:none">`;
+    html+=open.map(o=>driverOrderCardHtml(o)).join('');
+    if(closed.length){
+      html+=`<div class="drv-section-label">Закрытые</div>`;
+      html+=closed.slice(0,12).map(o=>driverOrderCardHtml(o)).join('');
+    }
+    html+=`</div>`;
   }
   $('orders-list').innerHTML=html;
   document.querySelectorAll('.take-exchange').forEach(b=>b.onclick=()=>takeExchangeOrder(b.dataset.id));
-  wireOrdersSwipe();
+  wireDriverOrderCards($('orders-list'));
   renderDriverBanner();
 }
 function takeExchangeOrder(id){
