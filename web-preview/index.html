@@ -48,7 +48,7 @@
     .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg0);min-height:0;overflow:hidden}
     .screen.show{display:flex}
     .driver-panel{
-      position:absolute;top:0;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0));
+      position:absolute;top:0;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0));
       z-index:25;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)
     }
     .driver-panel.show{display:flex;animation:panelIn .2s ease}
@@ -378,22 +378,29 @@
     .driver-shift-chip.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
     .driver-shift-chip.warn{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:var(--accent)}
     /* Водитель: нижнее меню (мобильный каркас) */
-    #driver{display:flex;flex-direction:column}
+    #driver.show{
+      display:flex;flex-direction:column;
+      padding-bottom:calc(58px + env(safe-area-inset-bottom,0))
+    }
     #driver #chat{flex:1;min-height:0}
-    #driver #input-bar{flex-shrink:0}
+    #driver #input-bar{
+      flex-shrink:0;
+      padding-bottom:10px; /* safe-area у нижнего меню, не у поля ввода */
+    }
     .driver-nav,.driver-tabbar{
-      display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
-      padding:6px 8px calc(6px + env(safe-area-inset-bottom,0));flex-shrink:0;
-      background:var(--surface);border-top:1px solid var(--border);border-bottom:0;
-      box-shadow:0 -4px 12px rgba(17,24,39,.04);z-index:20
+      position:absolute;left:0;right:0;bottom:0;z-index:40;
+      display:grid;grid-template-columns:repeat(4,1fr);gap:2px;
+      padding:4px 6px calc(4px + env(safe-area-inset-bottom,0));
+      background:var(--surface);border-top:1px solid var(--border);
+      box-shadow:0 -6px 16px rgba(17,24,39,.08)
     }
     .driver-nav button,.driver-tabbar button{
       border:0;border-radius:var(--radius);background:transparent;color:var(--muted);
-      font-weight:700;font-size:.72rem;min-height:52px;cursor:pointer;padding:6px 4px;
-      font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.15
+      font-weight:700;font-size:.7rem;min-height:50px;cursor:pointer;padding:6px 2px;
+      font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1
     }
-    .driver-nav button .tab-ico,.driver-tabbar button .tab-ico{font-size:1.05rem;font-weight:700;line-height:1;color:inherit}
-    .driver-nav button.on,.driver-tabbar button.on{background:rgba(239,68,68,.1);color:var(--accent)}
+    .driver-nav button .tab-ico,.driver-tabbar button .tab-ico{font-size:1.1rem;font-weight:700;line-height:1;color:inherit}
+    .driver-nav button.on,.driver-tabbar button.on{background:rgba(239,68,68,.12);color:var(--accent)}
     #chat{
       background:
         radial-gradient(ellipse at top, rgba(239,68,68,.04), transparent 55%),
@@ -1216,7 +1223,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-tabbar";
+const APP_BUILD="2026-08-09-driver-tabbar-2";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
