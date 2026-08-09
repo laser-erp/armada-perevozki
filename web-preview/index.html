@@ -472,6 +472,36 @@
     .drv-shift-row:last-child{border-bottom:0}
     .drv-shift-row .name{font-weight:700;font-size:.92rem}
     .drv-shift-row .meta{font-size:.76rem;color:var(--muted);line-height:1.35}
+    /* Шаг 4: История / Профиль */
+    .drv-hist-stats{
+      display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px
+    }
+    .drv-hist-stats .m,.drv-profile-stats .m{
+      background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px
+    }
+    .drv-hist-stats .m span,.drv-profile-stats .m span{display:block;font-size:.62rem;color:var(--muted);font-weight:600}
+    .drv-hist-stats .m b,.drv-profile-stats .m b{display:block;margin-top:3px;font-size:.95rem;font-weight:700;color:var(--text)}
+    .drv-hist-stats .m b.accent,.drv-profile-stats .m b.accent{color:var(--accent)}
+    .drv-hist-day{
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
+      padding:12px;margin-top:8px;cursor:pointer
+    }
+    .drv-hist-day-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .drv-hist-day h3{margin:0;font-size:.92rem;font-weight:700;line-height:1.25}
+    .drv-hist-day .tog{
+      flex:0 0 auto;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;
+      border-radius:var(--radius);background:var(--field);color:var(--accent);font-size:.72rem;font-weight:700
+    }
+    .drv-hist-day .meta{margin:4px 0 0;font-size:.76rem;color:var(--muted);line-height:1.35}
+    .drv-hist-day .tot{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:8px;font-size:.8rem}
+    .drv-hist-day .tot b{color:var(--accent)}
+    .drv-hist-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+    .drv-profile-rows{display:flex;flex-direction:column;gap:0;margin:8px 0 4px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+    .drv-profile-row{display:flex;justify-content:space-between;gap:10px;padding:12px;border-bottom:1px solid var(--border)}
+    .drv-profile-row:last-child{border-bottom:0}
+    .drv-profile-row span{font-size:.76rem;color:var(--muted);font-weight:600}
+    .drv-profile-row b{font-size:.9rem;font-weight:700;color:var(--text);text-align:right;line-height:1.3}
+    .drv-profile-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}
     /* Справочники — тема 1 */
     .cat-sticky{
       position:sticky;top:0;z-index:6;margin:0 -14px;padding:8px 14px;
@@ -1272,7 +1302,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-order";
+const APP_BUILD="2026-08-09-driver-hist-profile";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -7067,33 +7097,49 @@ function driverPayText(o){
   if(o.closedAt) return 'ЗП: ожидает расчёта администратора';
   return 'ЗП: —';
 }
+function driverProfilePlate(){
+  const open=state.shift&&!state.shift.endedAt?state.shift:(findOpenShift()||null);
+  if(open && open.vehiclePlate) return open.vehiclePlate;
+  const last=(state.shifts||[])
+    .filter(s=>samePersonName(s.driverName, DRIVER) && s.vehiclePlate)
+    .sort((a,b)=>new Date(b.endedAt||b.startedAt||0)-new Date(a.endedAt||a.startedAt||0))[0];
+  return (last&&last.vehiclePlate)||'—';
+}
 function showCabinet(){
   hideDriverPanels();
   setDriverNav('btn-cabinet');
   $('cabinet-panel').classList.add('show');
-  const mine=allOrders().filter(o=>o.driverName===DRIVER);
+  const mine=allOrders().filter(o=>orderBelongsToDriver(o));
   const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
-  const pending=mine.filter(o=>o.closedAt && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
+  const pending=mine.filter(o=>looksClosedOrder(o) && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const total=paid.reduce((s,o)=>s+(effectivePay(o)||0),0);
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
-  const phone=driverPhone(DRIVER, DRIVER_COMPANY_ID)||'';
-  const plate=(state.shift&&state.shift.vehiclePlate)||'';
+  const phone=formatPhone(driverPhone(DRIVER, DRIVER_COMPANY_ID)||'')||'—';
+  const plate=driverProfilePlate();
+  const shiftsN=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER)).length;
+  const closedN=mine.filter(o=>looksClosedOrder(o)).length;
   let html=`<div class="drv-earn">
     <span class="lbl">Профиль</span>
     <span class="val" style="font-size:1.25rem">${esc(DRIVER||'—')}</span>
-    <span class="sub">${esc(firm||'Водитель')}${phone?` · ${esc(phone)}`:''}${plate?` · ${esc(plate)}`:''}</span>
+    <span class="sub">${esc(firm||'Водитель')}</span>
   </div>`;
-  html+=`<div class="drv-earn" style="margin-top:8px">
-    <span class="lbl">Заработано</span>
-    <span class="val">${fmt(total)} ₽</span>
-    <span class="sub">${paid.length?`${paid.length} заказ.`:'пока без расчёта'}</span>
+  html+=`<div class="drv-profile-rows">
+    <div class="drv-profile-row"><span>Телефон</span><b>${esc(phone)}</b></div>
+    <div class="drv-profile-row"><span>Фирма</span><b>${esc(firm||'—')}</b></div>
+    <div class="drv-profile-row"><span>Авто</span><b>${esc(plate)}</b></div>
+  </div>`;
+  html+=`<div class="drv-profile-stats">
+    <div class="m"><span>Смен</span><b>${shiftsN}</b></div>
+    <div class="m"><span>Заказов</span><b>${closedN}</b></div>
+    <div class="m"><span>Начислено</span><b class="accent">${esc(fmt(total))} ₽</b></div>
+    <div class="m"><span>Ждут расчёта</span><b>${pending.length}</b></div>
   </div>`;
   if(!paid.length && !pending.length){
     html+=`<div class="empty">После закрытия заказа и расчёта администратором суммы появятся здесь.</div>`;
   } else {
     if(paid.length){
       html+=`<div class="drv-section-label">Начисления</div>`;
-      html+=paid.map(o=>`<div class="drv-pay-row">
+      html+=paid.slice(0,20).map(o=>`<div class="drv-pay-row">
         <div>
           <div class="name">№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</div>
           <div class="meta">${esc(dayOnly(payDate(o)))} · ${esc(o.vehiclePlate||'—')}<br>${esc(routeText(o))}</div>
@@ -7103,7 +7149,7 @@ function showCabinet(){
     }
     if(pending.length){
       html+=`<div class="drv-section-label">Ожидают расчёта</div>`;
-      html+=pending.map(o=>`<div class="drv-pay-row">
+      html+=pending.slice(0,12).map(o=>`<div class="drv-pay-row">
         <div>
           <div class="name">№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</div>
           <div class="meta">${esc(dayOnly(payDate(o)))} · ЗП ещё не начислена</div>
@@ -7114,7 +7160,8 @@ function showCabinet(){
   }
   html+=`<div class="drv-section-label">Аккаунт</div>
     <button type="button" class="secondary" id="profile-exit" style="margin-top:4px">Выход</button>
-    <div class="hint" style="margin-top:8px">Сборка ${esc(APP_BUILD)}</div>`;
+    <div class="drv-section-label" style="margin-top:14px">О приложении</div>
+    <div class="hint" style="margin-top:4px">АРМАДА · учёт перевозок<br>Сборка ${esc(APP_BUILD)}</div>`;
   $('cabinet-list').innerHTML=html;
   const ex=$('profile-exit');
   if(ex) ex.onclick=()=>leaveDriverMode();
@@ -7166,16 +7213,10 @@ function driverOrderCardHtml(o, opts){
 function wireDriverOrderCards(root){
   if(!root) return;
   root.querySelectorAll('.drv-act-depart').forEach(b=>{
-    b.onclick=()=>{
-      setDriverNav('btn-home');
-      beginDepart(b.dataset.id, true);
-    };
+    b.onclick=()=>beginDepart(b.dataset.id, true);
   });
   root.querySelectorAll('.drv-act-arrive').forEach(b=>{
-    b.onclick=()=>{
-      setDriverNav('btn-home');
-      beginArrive(b.dataset.id, true);
-    };
+    b.onclick=()=>beginArrive(b.dataset.id, true);
   });
   root.querySelectorAll('.drv-act-home').forEach(b=>{
     b.onclick=()=>showDriverHome();
@@ -7309,19 +7350,90 @@ function wireOrdersSwipe(){
     btn.onclick=()=>beginAssigned(btn.dataset.id, true);
   });
 }
+function driverHistoryDayBundles(){
+  if(!state.driverHistOpen || typeof state.driverHistOpen!=='object') state.driverHistOpen={};
+  const shifts=(state.shifts||[])
+    .filter(s=>samePersonName(s.driverName, DRIVER) || (!s.driverName && DRIVER_COMPANY_ID && s.ownCompanyId===DRIVER_COMPANY_ID))
+    .slice()
+    .sort((a,b)=>new Date(b.startedAt||0)-new Date(a.startedAt||0));
+  const byDay=new Map();
+  shifts.forEach(s=>{
+    const key=dayKeyFromIso(s.startedAt)||dayKeyFromIso(s.endedAt)||'без-даты';
+    if(!byDay.has(key)) byDay.set(key,{dayKey:key, shifts:[], orders:[]});
+    byDay.get(key).shifts.push(s);
+    (s.orders||[]).forEach(o=>{
+      const full=(state.orders||[]).find(x=>x.id===o.id)||o;
+      if(full && !byDay.get(key).orders.some(x=>x.id===full.id)) byDay.get(key).orders.push(full);
+    });
+  });
+  // заказы водителя без смены — тоже в день
+  (state.orders||[]).filter(o=>orderBelongsToDriver(o) && !o.cancelledAt).forEach(o=>{
+    const key=dayKeyFromIso(o.closedAt||o.createdAt)||'без-даты';
+    if(!byDay.has(key)) byDay.set(key,{dayKey:key, shifts:[], orders:[]});
+    const b=byDay.get(key);
+    if(!b.orders.some(x=>x.id===o.id)) b.orders.push(o);
+  });
+  return [...byDay.values()].map(b=>{
+    const orders=b.orders.slice().sort((a,c)=>(a.sequentialNumber||0)-(c.sequentialNumber||0));
+    let km=0, pay=0;
+    orders.forEach(o=>{
+      const t=dayTotal(o); if(t!=null) km+=t;
+      const p=effectivePay(o); if(p!=null) pay+=p;
+    });
+    const openShift=b.shifts.some(s=>!s.endedAt);
+    const label=b.shifts[0]?dayOnly(b.shifts[0].startedAt):(orders[0]?dayOnly(orders[0].closedAt||orders[0].createdAt):b.dayKey);
+    const plate=(b.shifts.find(s=>s.vehiclePlate)||{}).vehiclePlate||(orders[0]&&orders[0].vehiclePlate)||'—';
+    return {
+      id:b.dayKey, dayKey:b.dayKey, label, plate, openShift,
+      shifts:b.shifts, orders, km:Math.round(km), pay, count:orders.length
+    };
+  }).sort((a,b)=>String(b.dayKey).localeCompare(String(a.dayKey)));
+}
 function showShifts(){
   hideDriverPanels();
   setDriverNav('btn-shifts');
   $('shifts-panel').classList.add('show');
-  const mine=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER) || (!s.driverName && DRIVER_COMPANY_ID && s.ownCompanyId===DRIVER_COMPANY_ID));
-  $('shifts-list').innerHTML = !mine.length ? `<div class="empty">Пока нет ваших смен</div>` :
-    `<div class="drv-section-label">История</div>`+mine.map(s=>{
-      const st=s.endedAt?'закрыта':(isEtoDone(s)?'ЕТО ок':etoStepLabel(s));
-      return `<div class="drv-shift-row">
-        <div class="name">${esc(s.vehiclePlate||'Без номера')}</div>
-        <div class="meta">${esc(dateTime(s.startedAt))}${s.ownCompanyName?' · '+esc(s.ownCompanyName):''}<br>${esc(st)} · заказов: ${(s.orders||[]).length}</div>
-      </div>`;
-    }).join('');
+  const days=driverHistoryDayBundles();
+  if(!days.length){
+    $('shifts-list').innerHTML=`<div class="empty">Пока нет истории смен и заказов</div>`;
+    return;
+  }
+  const shiftsN=days.reduce((n,d)=>n+d.shifts.length,0);
+  const ordersN=days.reduce((n,d)=>n+d.count,0);
+  const kmN=days.reduce((n,d)=>n+d.km,0);
+  let html=`<div class="drv-hist-stats">
+    <div class="m"><span>Смен</span><b>${shiftsN}</b></div>
+    <div class="m"><span>Заказов</span><b>${ordersN}</b></div>
+    <div class="m"><span>Км</span><b class="accent">${esc(fmt(kmN))}</b></div>
+  </div>`;
+  html+=`<div class="drv-section-label">По дням</div>`;
+  html+=days.map(d=>{
+    const open=!!state.driverHistOpen[d.id];
+    const shiftNote=d.openShift?'смена открыта':(d.shifts.length?`смен: ${d.shifts.length}`:'без смены');
+    return `<div class="drv-hist-day" data-hist-day="${esc(d.id)}">
+      <div class="drv-hist-day-top">
+        <h3>${esc(d.label)}</h3>
+        <span class="tog" aria-hidden="true">${open?'▼':'▶'}</span>
+      </div>
+      <div class="meta">${esc(d.plate)} · ${esc(shiftNote)}</div>
+      <div class="tot">
+        <span>Заказов: <b>${d.count}</b></span>
+        <span>Км: <b>${esc(fmt(d.km))}</b></span>
+        <span>ЗП: <b>${d.pay?esc(fmt(d.pay))+' ₽':'—'}</b></span>
+      </div>
+      ${open?`<div class="drv-hist-details">${d.orders.length?d.orders.map(o=>driverOrderCardHtml(o,{compact:true})).join(''):`<div class="empty">Нет заказов за день</div>`}</div>`:''}
+    </div>`;
+  }).join('');
+  $('shifts-list').innerHTML=html;
+  document.querySelectorAll('#shifts-list [data-hist-day]').forEach(card=>{
+    card.onclick=e=>{
+      if(e.target.closest('button,a,input,select,textarea')) return;
+      const id=card.dataset.histDay;
+      state.driverHistOpen[id]=!state.driverHistOpen[id];
+      showShifts();
+    };
+  });
+  wireDriverOrderCards($('shifts-list'));
 }
 
 const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
