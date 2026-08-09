@@ -361,6 +361,12 @@
     .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
+    .driver-net{
+      display:none;flex-shrink:0;margin:0;padding:7px 12px;font-size:.72rem;font-weight:600;line-height:1.3;
+      background:rgba(245,158,11,.12);color:#92400E;border-bottom:1px solid rgba(245,158,11,.35)
+    }
+    .driver-net.show{display:block}
+    .driver-net.bad{background:rgba(239,68,68,.1);color:var(--accent);border-bottom-color:rgba(239,68,68,.35)}
     .hint.warn-close{color:var(--accent);font-weight:600}
     #driver{background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 36%)}
     .driver-topbar{
@@ -1101,6 +1107,7 @@
       </div>
       <div class="driver-shift-chip" id="driver-shift-chip" hidden></div>
     </header>
+    <div id="driver-net" class="driver-net" hidden aria-live="polite"></div>
     <div id="driver-banner" class="driver-banner" aria-live="polite"></div>
     <div id="driver-home" class="driver-home">
       <div id="driver-home-summary" class="driver-home-summary" aria-live="polite"></div>
@@ -1302,7 +1309,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-create-flow";
+const APP_BUILD="2026-08-09-driver-notify-offline";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2125,12 +2132,18 @@ async function pushServerState(){
 function persist(){
   localStorage.setItem(KEY, JSON.stringify(snapshot()));
   if(currentAdmin) saveAdminSession();
+  if(navigator.onLine===false){
+    syncStatus='error';
+    updateDriverNetHint();
+    return;
+  }
   syncStatus='syncing';
+  updateDriverNetHint();
   clearTimeout(persistTimer);
   persistTimer=setTimeout(()=>{
     pushServerState()
-      .then(()=>{ syncStatus='ok'; })
-      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); });
+      .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
+      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); });
   }, 350);
 }
 async function initCloudSync(){
@@ -3160,6 +3173,7 @@ function updateDriverChrome(){
     }
   }
   renderDriverHome();
+  updateDriverNetHint();
 }
 function driverPickRows(preferName){
   const rows=(state.drivers||[]).filter(d=>(d.name||'').trim());
@@ -4595,6 +4609,93 @@ function canArriveMessage(orderId){
   if(mineBusy && (!target || mineBusy.id!==target.id)) return 'Сначала закройте текущий заказ';
   return null;
 }
+const DRIVER_NOTIFY_KEY='armada_driver_notify_v1';
+const driverNotifyLastAt={};
+function driverNotifyWanted(){
+  try{ return localStorage.getItem(DRIVER_NOTIFY_KEY)==='1'; }catch(_){ return false; }
+}
+function setDriverNotifyWanted(on){
+  try{ localStorage.setItem(DRIVER_NOTIFY_KEY, on?'1':'0'); }catch(_){}
+}
+function driverNotifySupported(){ return typeof Notification!=='undefined'; }
+function driverNotifyActive(){
+  return driverNotifySupported() && Notification.permission==='granted' && driverNotifyWanted();
+}
+async function enableDriverNotifications(){
+  if(!driverNotifySupported()){ alert('Уведомления в этом браузере недоступны'); return false; }
+  let perm=Notification.permission;
+  if(perm!=='granted'){
+    try{ perm=await Notification.requestPermission(); }catch(_){ perm='denied'; }
+  }
+  const ok=perm==='granted';
+  setDriverNotifyWanted(ok);
+  if(!ok) alert(perm==='denied'?'Разрешите уведомления в настройках телефона / Safari.':'Не удалось включить уведомления');
+  return ok;
+}
+function driverNotify(title, body, tag){
+  if(!DRIVER || !driverNotifyActive()) return;
+  const now=Date.now();
+  const prev=driverNotifyLastAt[tag]||0;
+  if(now-prev<12*60*1000) return;
+  driverNotifyLastAt[tag]=now;
+  const opts={body:body||'', tag:tag||'armada', renotify:true, icon:'./icons/icon-192.png', badge:'./icons/icon-192.png'};
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title, opts)).catch(()=>{
+      try{ new Notification(title, opts); }catch(_){}
+    });
+  } else {
+    try{ new Notification(title, opts); }catch(_){}
+  }
+}
+/** Системные напоминания, когда экран свёрнут / вкладка в фоне. */
+function maybeDriverActionNotify(force){
+  if(!DRIVER || !document.querySelector('#driver.show')) return;
+  if(!force && !document.hidden) return;
+  const enRoute=typeof awaitingArrive==='function'?awaitingArrive():[];
+  const pending=typeof assignedPending==='function'?assignedPending():[];
+  const needClose=typeof shiftAwaitingClose==='function'?shiftAwaitingClose():false;
+  if(enRoute && enRoute.length){
+    const o=enRoute[0];
+    driverNotify('АРМАДА · прибытие', `Заказ №${o.sequentialNumber}: отметьте «Прибыл на загрузку»`, 'arrive-'+o.id);
+  } else if(pending && pending.length){
+    const o=pending[0];
+    driverNotify('АРМАДА · выезд', `Заказ №${o.sequentialNumber}: нажмите «Выехал»`, 'depart-'+o.id);
+  } else if(needClose){
+    driverNotify('АРМАДА · смена', 'Не забудьте закрыть смену и указать одометр на стоянке', 'close-shift');
+  }
+}
+function updateDriverNetHint(){
+  const el=$('driver-net'); if(!el) return;
+  if(!DRIVER || !document.querySelector('#driver.show')){
+    el.hidden=true; el.className='driver-net'; el.textContent=''; return;
+  }
+  if(navigator.onLine===false){
+    el.hidden=false; el.className='driver-net show bad';
+    el.textContent='Нет сети — смена и черновик сохранены на телефоне';
+    return;
+  }
+  if(syncStatus==='error'){
+    el.hidden=false; el.className='driver-net show bad';
+    el.textContent='Нет связи с сервером — отправим при появлении сети';
+    return;
+  }
+  if(syncStatus==='syncing'){
+    el.hidden=false; el.className='driver-net show';
+    el.textContent='Синхронизация…';
+    return;
+  }
+  el.hidden=true; el.className='driver-net'; el.textContent='';
+}
+function flushDriverSyncWhenOnline(){
+  if(navigator.onLine===false) return;
+  updateDriverNetHint();
+  syncStatus='syncing';
+  updateDriverNetHint();
+  pushServerState()
+    .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
+    .catch(err=>{ syncStatus='error'; console.warn('PB online flush', err); updateDriverNetHint(); });
+  try{ pullRemoteUpdates('online'); }catch(_){}
+}
 /** Включить напоминание закрыть смену (после закрытия заказа / «на стоянку»). */
 function markCloseShiftReminder(){
   state.pendingCloseShiftReminder=true;
@@ -4666,6 +4767,8 @@ function renderDriverBanner(){
   document.querySelectorAll('.banner-depart').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.banner-arrive').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
   document.querySelectorAll('.banner-close-shift').forEach(b=>b.onclick=()=>startCloseShift());
+  maybeDriverActionNotify(false);
+  updateDriverNetHint();
 }
 function isSameLocalDay(iso, now){
   if(!iso) return false;
@@ -7165,6 +7268,13 @@ function showCabinet(){
       </div>`).join('');
     }
   }
+  html+=`<div class="drv-section-label">Уведомления и офлайн</div>
+    <div class="hint" style="margin-top:2px">Напоминания: Выехал / Прибыл / закрыть смену. Черновик смены всегда сохраняется на телефоне.</div>`;
+  if(driverNotifyActive()){
+    html+=`<button type="button" class="secondary" id="profile-notify-off" style="margin-top:6px">Выключить уведомления</button>`;
+  } else {
+    html+=`<button type="button" class="primary" id="profile-notify-on" style="margin-top:6px">Включить уведомления</button>`;
+  }
   html+=`<div class="drv-section-label">Аккаунт</div>
     <button type="button" class="secondary" id="profile-exit" style="margin-top:4px">Выход</button>
     <div class="drv-section-label" style="margin-top:14px">О приложении</div>
@@ -7172,6 +7282,10 @@ function showCabinet(){
   $('cabinet-list').innerHTML=html;
   const ex=$('profile-exit');
   if(ex) ex.onclick=()=>leaveDriverMode();
+  const nOn=$('profile-notify-on');
+  if(nOn) nOn.onclick=async()=>{ await enableDriverNotifications(); showCabinet(); };
+  const nOff=$('profile-notify-off');
+  if(nOff) nOff.onclick=()=>{ setDriverNotifyWanted(false); showCabinet(); };
 }
 function hideDriverPanels(){
   ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
@@ -9468,6 +9582,7 @@ function updateSyncHint(){
     el.textContent='';
     el.style.display='none';
   }
+  updateDriverNetHint();
 }
 // Сразу после загрузки localStorage — без PIN, если сессия была
 try{
@@ -9586,6 +9701,12 @@ bindAdminCreate();
     }, 280);
   }, true);
 })();
+window.addEventListener('online',()=>flushDriverSyncWhenOnline());
+window.addEventListener('offline',()=>{ syncStatus='error'; updateDriverNetHint(); });
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) maybeDriverActionNotify(true);
+  else { updateDriverNetHint(); renderDriverBanner(); }
+});
 if('serviceWorker' in navigator){
   let reloading=false;
   navigator.serviceWorker.addEventListener('message',e=>{
@@ -9603,6 +9724,7 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js?v='+encodeURIComponent(APP_BUILD))
       .then(reg=>{ try{ reg.update(); }catch(_){} })
       .catch(err=>console.warn('SW',err));
+    updateDriverNetHint();
   });
 }
 </script>
