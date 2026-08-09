@@ -397,10 +397,9 @@
     }
     .driver-nav button,.driver-tabbar button{
       border:0;border-radius:var(--radius);background:transparent;color:var(--muted);
-      font-weight:700;font-size:.7rem;min-height:50px;cursor:pointer;padding:6px 2px;
-      font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1
+      font-weight:700;font-size:.8rem;min-height:50px;cursor:pointer;padding:8px 4px;
+      font-family:inherit;display:flex;align-items:center;justify-content:center;line-height:1.15
     }
-    .driver-nav button .tab-ico,.driver-tabbar button .tab-ico{font-size:1.1rem;font-weight:700;line-height:1;color:inherit}
     .driver-nav button.on,.driver-tabbar button.on{background:rgba(239,68,68,.12);color:var(--accent)}
     #chat{
       background:
@@ -1032,10 +1031,10 @@
     <div id="chat"></div>
     <div id="input-bar"></div>
     <nav class="driver-tabbar driver-nav" aria-label="Разделы водителя">
-      <button type="button" id="btn-home" class="on" aria-current="page"><span class="tab-ico" aria-hidden="true">●</span>Главная</button>
-      <button type="button" id="btn-orders"><span class="tab-ico" aria-hidden="true">☰</span>Заявки</button>
-      <button type="button" id="btn-shifts"><span class="tab-ico" aria-hidden="true">◷</span>История</button>
-      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">☺</span>Профиль</button>
+      <button type="button" id="btn-home" class="on" aria-current="page">Главная</button>
+      <button type="button" id="btn-orders">Заявки</button>
+      <button type="button" id="btn-shifts">История</button>
+      <button type="button" id="btn-cabinet">Профиль</button>
     </nav>
     <div id="cabinet-panel" class="driver-panel">
       <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль</h1></header>
@@ -1225,7 +1224,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-date";
+const APP_BUILD="2026-08-09-tabs-text";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
