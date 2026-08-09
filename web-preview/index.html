@@ -371,6 +371,41 @@
     .driver-who h1{margin:0;font-size:1rem;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .driver-sub{margin-top:1px;font-size:.72rem;color:var(--muted);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:1em}
     .driver-build{margin-top:1px;font-size:.62rem;color:var(--muted);opacity:.85;line-height:1.2}
+    /* Шаг 2: сводка на Главной */
+    .driver-home{flex-shrink:0;padding:8px 10px 0;display:flex;flex-direction:column;gap:8px}
+    .driver-home-summary{
+      display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+      padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)
+    }
+    .driver-home-summary .m span{display:block;font-size:.62rem;color:var(--muted);font-weight:600;line-height:1.2}
+    .driver-home-summary .m b{display:block;margin-top:3px;font-size:.88rem;font-weight:700;color:var(--text);line-height:1.15}
+    .driver-home-summary .m b.accent{color:var(--accent)}
+    .driver-home-summary .m b.warn{color:#D97706}
+    .driver-home-summary .m b.ok{color:#059669}
+    .driver-home-orders{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto;-webkit-overflow-scrolling:touch}
+    .drv-active-card{
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);
+      padding:12px 12px;box-shadow:var(--shadow-sm)
+    }
+    .drv-active-card h3{margin:0;font-size:.95rem;font-weight:700;line-height:1.25}
+    .drv-active-card .st{
+      display:inline-flex;margin-top:6px;padding:3px 8px;border-radius:var(--radius);
+      font-size:.68rem;font-weight:700;border:1px solid var(--border);background:var(--field)
+    }
+    .drv-active-card .st.progress{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.35);color:#2563EB}
+    .drv-active-card .st.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .drv-active-card .route{margin:8px 0 0;font-size:.84rem;font-weight:600;color:var(--text);line-height:1.35}
+    .drv-active-card .meta{margin:4px 0 0;font-size:.76rem;color:var(--muted);line-height:1.35}
+    .drv-active-card .acts{display:flex;gap:6px;margin-top:10px}
+    .drv-active-card .acts a,.drv-active-card .acts button{flex:1;min-height:44px}
+    .drv-active-card .acts a{
+      display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
+      border-radius:var(--radius);background:var(--field);border:1px solid var(--border);
+      color:var(--text);font-weight:700;font-size:.85rem
+    }
+    @media (max-width:380px){
+      .driver-home-summary{grid-template-columns:repeat(2,1fr)}
+    }
     .driver-shift-chip{
       flex:0 0 auto;max-width:38%;padding:5px 8px;border-radius:var(--radius);font-size:.68rem;font-weight:700;
       line-height:1.2;text-align:center;border:1px solid var(--border);background:var(--field);color:var(--text)
@@ -1029,6 +1064,10 @@
       <div class="driver-shift-chip" id="driver-shift-chip" hidden></div>
     </header>
     <div id="driver-banner" class="driver-banner" aria-live="polite"></div>
+    <div id="driver-home" class="driver-home">
+      <div id="driver-home-summary" class="driver-home-summary" aria-live="polite"></div>
+      <div id="driver-home-orders" class="driver-home-orders"></div>
+    </div>
     <div id="chat"></div>
     <div id="input-bar"></div>
     <nav class="driver-tabbar driver-nav" aria-label="Разделы водителя">
@@ -1225,7 +1264,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-tabs-icons";
+const APP_BUILD="2026-08-09-driver-home";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2984,6 +3023,7 @@ function showDriverHome(){
   hideDriverPanels();
   setDriverNav('btn-home');
   updateDriverChrome();
+  renderDriverHome();
 }
 function driverTodayLabel(){
   const d=new Date();
@@ -2991,6 +3031,82 @@ function driverTodayLabel(){
   const mm=String(d.getMonth()+1).padStart(2,'0');
   const yyyy=d.getFullYear();
   return `${dd}:${mm}:${yyyy}`;
+}
+function driverHomeActiveOrders(){
+  return (state.orders||[])
+    .filter(o=>o && !looksClosedOrder(o) && !o.cancelledAt && !o.onExchange && orderBelongsToDriver(o))
+    .sort((a,b)=>(a.sequentialNumber||0)-(b.sequentialNumber||0));
+}
+function driverHomeStats(){
+  const s=(state.shift&&!state.shift.endedAt)?state.shift:(findOpenShift()||null);
+  const todayKey=dayKeyFromIso(new Date().toISOString());
+  const mine=(state.orders||[]).filter(o=>o && !o.cancelledAt && orderBelongsToDriver(o));
+  const inShiftIds=new Set(((s&&s.orders)||[]).map(o=>o&&o.id).filter(Boolean));
+  const today=mine.filter(o=>{
+    if(inShiftIds.has(o.id)) return true;
+    return dayKeyFromIso(o.closedAt||o.createdAt)===todayKey;
+  });
+  const done=today.filter(o=>looksClosedOrder(o));
+  const active=driverHomeActiveOrders();
+  let km=0;
+  today.forEach(o=>{ const t=dayTotal(o); if(t!=null) km+=t; });
+  if(s && s.odometer!=null){
+    const end=s.lastOdometerPoint!=null?+s.lastOdometerPoint:(s.parkingOdometer!=null?+s.parkingOdometer:null);
+    if(end!=null && end>+s.odometer){
+      const byOdo=end-+s.odometer;
+      if(byOdo>km) km=byOdo;
+    }
+  }
+  let pay=0;
+  today.forEach(o=>{ const p=effectivePay(o); if(p!=null) pay+=p; });
+  let shiftCls='';
+  let shiftVal='Нет';
+  if(s){
+    if(shiftAwaitingClose(s)){ shiftVal='Закрыть'; shiftCls='warn'; }
+    else if(!isEtoDone(s)){ shiftVal='ЕТО'; shiftCls='warn'; }
+    else { shiftVal='Открыта'; shiftCls='ok'; }
+  }
+  return {s, km:Math.round(km), done:done.length, activeCount:active.length, pay, shiftVal, shiftCls, active};
+}
+function renderDriverHome(){
+  const sumEl=$('driver-home-summary');
+  const listEl=$('driver-home-orders');
+  const homeEl=$('driver-home');
+  if(!sumEl || !listEl || !homeEl) return;
+  if(!DRIVER || !document.querySelector('#driver.show')){
+    homeEl.style.display='none';
+    return;
+  }
+  homeEl.style.display='flex';
+  const st=driverHomeStats();
+  sumEl.innerHTML=`
+    <div class="m"><span>Смена</span><b class="${esc(st.shiftCls)}">${esc(st.shiftVal)}</b></div>
+    <div class="m"><span>Км сегодня</span><b>${esc(fmt(st.km))}</b></div>
+    <div class="m"><span>Заказы</span><b>${st.done}${st.activeCount?`+${st.activeCount}`:''}</b></div>
+    <div class="m"><span>Заработок</span><b class="accent">${st.pay?esc(fmt(st.pay))+' ₽':'—'}</b></div>`;
+  if(!st.active.length){
+    listEl.innerHTML='';
+    return;
+  }
+  listEl.innerHTML=st.active.map(o=>{
+    const stTxt=statusText(o);
+    const stCls=(o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait';
+    const phone=formatPhone(o.contactPhone||'');
+    const canCall=driverMaySeeContact(o)&&phone;
+    return `<div class="drv-active-card" data-home-order="${esc(o.id)}">
+      <h3>Заказ №${o.sequentialNumber}</h3>
+      <div class="st ${stCls}">${esc(stTxt)}</div>
+      <div class="route">${esc(routeText(o)||'Маршрут не указан')}</div>
+      <div class="meta">${esc(o.vehiclePlate||'—')}${o.vehicleAt?` · подача ${esc(dateTime(o.vehicleAt))}`:''}</div>
+      <div class="acts">
+        <button type="button" class="primary home-go-orders" data-id="${esc(o.id)}">К заявкам</button>
+        ${canCall?`<a href="tel:${esc(phone)}">Позвонить</a>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('.home-go-orders').forEach(btn=>{
+    btn.onclick=()=>showOrders();
+  });
 }
 function updateDriverChrome(){
   const t=$('driver-title');
@@ -3002,6 +3118,7 @@ function updateDriverChrome(){
     if(t){ t.textContent='Водитель'; t.title=''; }
     if(sub) sub.textContent='';
     if(chip){ chip.hidden=true; chip.textContent=''; chip.className='driver-shift-chip'; }
+    renderDriverHome();
     return;
   }
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
@@ -3021,6 +3138,7 @@ function updateDriverChrome(){
       chip.className='driver-shift-chip';
     }
   }
+  renderDriverHome();
 }
 function driverPickRows(preferName){
   const rows=(state.drivers||[]).filter(d=>(d.name||'').trim());
