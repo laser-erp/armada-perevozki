@@ -1309,7 +1309,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-offline-ui";
+const APP_BUILD="2026-08-09-orders-hint";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -7351,6 +7351,23 @@ function wireDriverOrderCards(root){
     b.onclick=()=>showDriverHome();
   });
 }
+/** Подсказка в Заявках — по состоянию открытых заказов. */
+function driverOrdersActionHint(openOrders){
+  const list=openOrders||[];
+  if(!list.length) return 'Закрытые заявки ниже. Новые появятся здесь.';
+  let needDepart=false, needArrive=false, inWork=false;
+  list.forEach(o=>{
+    if(o.onExchange) return;
+    if(o.startOdometer!=null) inWork=true;
+    else if(o.departOdometer!=null) needArrive=true;
+    else needDepart=true;
+  });
+  if(needDepart && needArrive) return 'В карточке: «Выехал» или «Прибыл на загрузку».';
+  if(needDepart) return 'В карточке нажмите «Выехал» и введите одометр.';
+  if(needArrive) return 'В карточке нажмите «Прибыл на загрузку» и введите одометр.';
+  if(inWork) return 'Заказ в работе — закройте на Главной («Закрыть заказ»).';
+  return 'Действия по заказу — в карточке.';
+}
 function showOrders(){
   hideDriverPanels();
   setDriverNav('btn-orders');
@@ -7379,7 +7396,7 @@ function showOrders(){
     const open=mine.filter(o=>!looksClosedOrder(o) && !o.cancelledAt);
     const closed=mine.filter(o=>looksClosedOrder(o) || o.cancelledAt);
     html+=`<div class="drv-section-label">Мои заявки</div>`;
-    html+=`<div class="orders-hint">Кнопки «Выехал» / «Прибыл» — прямо в карточке</div><div id="orders-error" class="error"></div>`;
+    html+=`<div class="orders-hint">${esc(driverOrdersActionHint(open))}</div><div id="orders-error" class="error"></div>`;
     html+=`<div class="driver-home-orders" style="max-height:none">`;
     html+=open.map(o=>driverOrderCardHtml(o)).join('');
     if(closed.length){
