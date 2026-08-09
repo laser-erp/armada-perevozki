@@ -47,7 +47,10 @@
     .phone.wide{max-width:min(960px,100%)}
     .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg0);min-height:0;overflow:hidden}
     .screen.show{display:flex}
-    .driver-panel{position:absolute;inset:0;z-index:30;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)}
+    .driver-panel{
+      position:absolute;top:0;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0));
+      z-index:25;display:none;flex-direction:column;background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 40%)
+    }
     .driver-panel.show{display:flex;animation:panelIn .2s ease}
     .driver-panel .form-topbar{flex-shrink:0}
     .driver-panel .panel-body{background:transparent;flex:1;min-height:0;padding:12px 14px 20px}
@@ -374,15 +377,23 @@
     .driver-shift-chip.ok{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
     .driver-shift-chip.wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
     .driver-shift-chip.warn{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:var(--accent)}
-    .driver-nav{
-      display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px 10px;flex-shrink:0;
-      background:var(--surface);border-bottom:1px solid var(--border)
+    /* Водитель: нижнее меню (мобильный каркас) */
+    #driver{display:flex;flex-direction:column}
+    #driver #chat{flex:1;min-height:0}
+    #driver #input-bar{flex-shrink:0}
+    .driver-nav,.driver-tabbar{
+      display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+      padding:6px 8px calc(6px + env(safe-area-inset-bottom,0));flex-shrink:0;
+      background:var(--surface);border-top:1px solid var(--border);border-bottom:0;
+      box-shadow:0 -4px 12px rgba(17,24,39,.04);z-index:20
     }
-    .driver-nav button{
-      border:1px solid var(--border);border-radius:var(--radius);background:var(--field);color:var(--text);
-      font-weight:600;font-size:.8rem;min-height:36px;cursor:pointer;padding:6px 8px;font-family:inherit
+    .driver-nav button,.driver-tabbar button{
+      border:0;border-radius:var(--radius);background:transparent;color:var(--muted);
+      font-weight:700;font-size:.72rem;min-height:52px;cursor:pointer;padding:6px 4px;
+      font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.15
     }
-    .driver-nav button.on{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:var(--accent)}
+    .driver-nav button .tab-ico,.driver-tabbar button .tab-ico{font-size:1.05rem;font-weight:700;line-height:1;color:inherit}
+    .driver-nav button.on,.driver-tabbar button.on{background:rgba(239,68,68,.1);color:var(--accent)}
     #chat{
       background:
         radial-gradient(ellipse at top, rgba(239,68,68,.04), transparent 55%),
@@ -700,7 +711,7 @@
       .stat-card .val{font-size:.9rem}
       .admin-cards{padding:8px 8px 18px;gap:8px}
       .admin-desktop-only{display:none!important}
-      .driver-nav button{min-height:44px;font-size:.84rem}
+      .driver-nav button,.driver-tabbar button{min-height:56px;font-size:.74rem}
       .driver-shift-chip{max-width:36%;font-size:.62rem;padding:6px 7px}
       .driver-banner{margin:8px 8px 0}
       #chat{padding:10px 10px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
@@ -711,7 +722,7 @@
       .center{padding:16px 14px calc(16px + env(safe-area-inset-bottom,0))}
       .pin,.stack{max-width:100%}
       button.primary:active,button.secondary:active,.nums button:active,.yesno button:active,
-      .admin-nav-item:active,.driver-nav button:active{transform:scale(.985)}
+      .admin-nav-item:active,.driver-nav button:active,.driver-tabbar button:active{transform:scale(.985)}
     }
     @media (max-width:380px){
       .driver-who h1{font-size:.92rem}
@@ -1002,23 +1013,23 @@
 
   <div id="driver" class="screen">
     <header class="driver-topbar">
-      <button type="button" class="form-back" id="driver-exit">Выход</button>
       <div class="driver-who">
         <h1 id="driver-title">Водитель</h1>
         <div class="driver-sub" id="driver-sub"></div>
       </div>
       <div class="driver-shift-chip" id="driver-shift-chip" hidden></div>
     </header>
-    <nav class="driver-nav" aria-label="Разделы водителя">
-      <button type="button" id="btn-cabinet">Кабинет</button>
-      <button type="button" id="btn-orders">Заявки</button>
-      <button type="button" id="btn-shifts">Смены</button>
-    </nav>
     <div id="driver-banner" class="driver-banner" aria-live="polite"></div>
     <div id="chat"></div>
     <div id="input-bar"></div>
+    <nav class="driver-tabbar driver-nav" aria-label="Разделы водителя">
+      <button type="button" id="btn-home" class="on" aria-current="page"><span class="tab-ico" aria-hidden="true">●</span>Главная</button>
+      <button type="button" id="btn-orders"><span class="tab-ico" aria-hidden="true">☰</span>Заявки</button>
+      <button type="button" id="btn-shifts"><span class="tab-ico" aria-hidden="true">◷</span>История</button>
+      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">☺</span>Профиль</button>
+    </nav>
     <div id="cabinet-panel" class="driver-panel">
-      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Кабинет</h1></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль</h1></header>
       <div class="panel-body" id="cabinet-list"></div>
     </div>
     <div id="orders-panel" class="driver-panel">
@@ -1026,7 +1037,7 @@
       <div class="panel-body" id="orders-list"></div>
     </div>
     <div id="shifts-panel" class="driver-panel">
-      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Смены</h1></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>История</h1></header>
       <div class="panel-body" id="shifts-list"></div>
     </div>
   </div>
@@ -1205,7 +1216,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-07-docs-v1";
+const APP_BUILD="2026-08-09-driver-tabbar";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -2952,9 +2963,18 @@ function peekAdminSessionName(){
   }catch(_){ return ''; }
 }
 function setDriverNav(which){
-  ['btn-cabinet','btn-orders','btn-shifts'].forEach(id=>{
-    const b=$(id); if(b) b.classList.toggle('on', !!which && id===which);
+  const active=which||'btn-home';
+  ['btn-home','btn-orders','btn-shifts','btn-cabinet'].forEach(id=>{
+    const b=$(id); if(!b) return;
+    const on=id===active;
+    b.classList.toggle('on', on);
+    if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
   });
+}
+function showDriverHome(){
+  hideDriverPanels();
+  setDriverNav('btn-home');
+  updateDriverChrome();
 }
 function updateDriverChrome(){
   const t=$('driver-title');
@@ -6927,10 +6947,18 @@ function showCabinet(){
   const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const pending=mine.filter(o=>o.closedAt && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const total=paid.reduce((s,o)=>s+(effectivePay(o)||0),0);
+  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const phone=driverPhone(DRIVER, DRIVER_COMPANY_ID)||'';
+  const plate=(state.shift&&state.shift.vehiclePlate)||'';
   let html=`<div class="drv-earn">
+    <span class="lbl">Профиль</span>
+    <span class="val" style="font-size:1.25rem">${esc(DRIVER||'—')}</span>
+    <span class="sub">${esc(firm||'Водитель')}${phone?` · ${esc(phone)}`:''}${plate?` · ${esc(plate)}`:''}</span>
+  </div>`;
+  html+=`<div class="drv-earn" style="margin-top:8px">
     <span class="lbl">Заработано</span>
     <span class="val">${fmt(total)} ₽</span>
-    <span class="sub">${esc(DRIVER)}${paid.length?` · ${paid.length} заказ.`:' · пока без расчёта'}</span>
+    <span class="sub">${paid.length?`${paid.length} заказ.`:'пока без расчёта'}</span>
   </div>`;
   if(!paid.length && !pending.length){
     html+=`<div class="empty">После закрытия заказа и расчёта администратором суммы появятся здесь.</div>`;
@@ -6956,13 +6984,18 @@ function showCabinet(){
       </div>`).join('');
     }
   }
+  html+=`<div class="drv-section-label">Аккаунт</div>
+    <button type="button" class="secondary" id="profile-exit" style="margin-top:4px">Выход</button>
+    <div class="hint" style="margin-top:8px">Сборка ${esc(APP_BUILD)}</div>`;
   $('cabinet-list').innerHTML=html;
+  const ex=$('profile-exit');
+  if(ex) ex.onclick=()=>leaveDriverMode();
 }
 function hideDriverPanels(){
   ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('show');
   });
-  setDriverNav(null);
+  setDriverNav('btn-home');
 }
 
 function showOrders(){
@@ -9205,7 +9238,7 @@ $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
 $('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
 $('drv-login-pin')&&($('drv-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginDriver(); });
 $('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ($('drv-login-pin')||{}).focus?.(); } });
-$('driver-exit').onclick=()=>leaveDriverMode();
+$('btn-home')&&($('btn-home').onclick=showDriverHome);
 $('role-admin').onclick=()=>{
   migrateAdmins();
   if(restoreAdminSession()){
