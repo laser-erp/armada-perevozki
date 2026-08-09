@@ -1309,7 +1309,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-notify-offline";
+const APP_BUILD="2026-08-09-driver-offline-ui";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -4617,7 +4617,10 @@ function driverNotifyWanted(){
 function setDriverNotifyWanted(on){
   try{ localStorage.setItem(DRIVER_NOTIFY_KEY, on?'1':'0'); }catch(_){}
 }
-function driverNotifySupported(){ return typeof Notification!=='undefined'; }
+function driverNotifySupported(){
+  // На HTTP / в обычном Safari iOS Notification часто отсутствует
+  return typeof Notification!=='undefined' && !!window.isSecureContext;
+}
 function driverNotifyActive(){
   return driverNotifySupported() && Notification.permission==='granted' && driverNotifyWanted();
 }
@@ -4738,7 +4741,9 @@ function renderDriverBanner(){
   const pending=assignedPending();
   const needClose=shiftAwaitingClose();
   if(!enRoute.length && !pending.length && !needClose){
-    box.classList.remove('show','remind-close'); box.innerHTML=''; return;
+    box.classList.remove('show','remind-close'); box.innerHTML='';
+    updateDriverNetHint();
+    return;
   }
   let html='';
   enRoute.forEach(o=>{
@@ -7268,12 +7273,14 @@ function showCabinet(){
       </div>`).join('');
     }
   }
-  html+=`<div class="drv-section-label">Уведомления и офлайн</div>
-    <div class="hint" style="margin-top:2px">Напоминания: Выехал / Прибыл / закрыть смену. Черновик смены всегда сохраняется на телефоне.</div>`;
-  if(driverNotifyActive()){
-    html+=`<button type="button" class="secondary" id="profile-notify-off" style="margin-top:6px">Выключить уведомления</button>`;
-  } else {
-    html+=`<button type="button" class="primary" id="profile-notify-on" style="margin-top:6px">Включить уведомления</button>`;
+  html+=`<div class="drv-section-label">Офлайн</div>
+    <div class="hint" style="margin-top:2px">Черновик смены сохраняется на телефоне. При появлении сети уходит на сервер. Напоминания Выехал / Прибыл — баннером в приложении.</div>`;
+  if(driverNotifySupported()){
+    if(driverNotifyActive()){
+      html+=`<button type="button" class="secondary" id="profile-notify-off" style="margin-top:6px">Выключить системные уведомления</button>`;
+    } else {
+      html+=`<button type="button" class="secondary" id="profile-notify-on" style="margin-top:6px">Системные уведомления</button>`;
+    }
   }
   html+=`<div class="drv-section-label">Аккаунт</div>
     <button type="button" class="secondary" id="profile-exit" style="margin-top:4px">Выход</button>
