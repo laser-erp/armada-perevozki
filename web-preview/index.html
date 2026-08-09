@@ -1302,7 +1302,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-driver-hist-profile";
+const APP_BUILD="2026-08-09-driver-home-cta";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -3126,7 +3126,7 @@ function renderDriverHome(){
     listEl.innerHTML='';
     return;
   }
-  listEl.innerHTML=st.active.map(o=>driverOrderCardHtml(o,{compact:true})).join('');
+  listEl.innerHTML=st.active.map(o=>driverOrderCardHtml(o,{compact:true, home:true})).join('');
   wireDriverOrderCards(listEl);
 }
 function updateDriverChrome(){
@@ -7193,7 +7193,8 @@ function driverOrderCardHtml(o, opts){
   const acts=[];
   if(canDepart) acts.push(`<button type="button" class="primary drv-act-depart" data-id="${esc(o.id)}">Выехал</button>`);
   if(canArrive) acts.push(`<button type="button" class="primary drv-act-arrive" data-id="${esc(o.id)}">Прибыл на загрузку</button>`);
-  if(inWork) acts.push(`<button type="button" class="primary drv-act-home" data-id="${esc(o.id)}">Закрыть на Главной</button>`);
+  // На Главной закрытие — кнопкой чата «Закрыть заказ»; дубль «Закрыть на Главной» не нужен
+  if(inWork && !opts.home) acts.push(`<button type="button" class="primary drv-act-home" data-id="${esc(o.id)}">Закрыть на Главной</button>`);
   if(canContact){
     acts.push(`<a class="drv-link" href="tel:${esc(phone)}">Позвонить</a>`);
     acts.push(`<a class="drv-link" href="sms:${esc(phone)}">SMS</a>`);
