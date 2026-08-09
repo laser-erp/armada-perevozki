@@ -1,0 +1,10 @@
+Выполни задачу из TASK_ADMIN_CAL_FILTERS.md
+
+Файл задачи лежит в репозитории на ветке main:
+TASK_ADMIN_CAL_FILTERS.md
+
+Код приложения брать с ветки:
+cursor/admin-orders-calendar-4317
+(не с устаревшего main)
+
+Правила: AGENT_RULES.md — только по задаче, без улучшений от себя.
