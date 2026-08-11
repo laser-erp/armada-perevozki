@@ -540,6 +540,21 @@
       border:0;background:var(--field);color:var(--text);border-radius:var(--radius);
       padding:8px 10px;min-height:36px;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;flex:0 0 auto
     }
+    .admin-cal-filters{
+      display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:0 0 8px;padding:0 2px
+    }
+    .admin-cal-filters label{
+      display:flex;flex-direction:column;gap:4px;flex:1 1 140px;min-width:120px;
+      font-size:.68rem;font-weight:700;color:var(--muted)
+    }
+    .admin-cal-filters select{
+      width:100%;min-height:36px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);
+      background:var(--field);color:var(--text);font:inherit;font-size:.8rem;font-weight:600
+    }
+    .admin-cal-filters button{
+      border:0;background:var(--field);color:var(--text);border-radius:var(--radius);
+      padding:8px 10px;min-height:36px;font-size:.76rem;font-weight:700;cursor:pointer;font-family:inherit;flex:0 0 auto
+    }
     .drv-profile-rows{display:flex;flex-direction:column;gap:0;margin:8px 0 4px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}
     .drv-profile-row{display:flex;justify-content:space-between;gap:10px;padding:12px;border-bottom:1px solid var(--border)}
     .drv-profile-row:last-child{border-bottom:0}
@@ -1348,7 +1363,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-09-admin-orders-cal";
+const APP_BUILD="2026-08-11-admin-cal-filters";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -7961,10 +7976,15 @@ function ensureAdminOrdersCal(){
       month:now.getMonth(),
       from:null,
       to:null,
-      showAll:false
+      showAll:false,
+      driver:'',
+      plate:''
     };
   }
-  return state.adminOrdersCal;
+  const cal=state.adminOrdersCal;
+  if(cal.driver==null) cal.driver='';
+  if(cal.plate==null) cal.plate='';
+  return cal;
 }
 function adminOrdersPeriodLabel(cal){
   if(!cal) return 'Все дни';
@@ -7979,15 +7999,51 @@ function adminOrdersPeriodLabel(cal){
   return title.charAt(0).toUpperCase()+title.slice(1);
 }
 function adminOrdersFilterGroups(groups, cal){
-  if(!cal) return groups;
+  let list=groups||[];
+  if(!cal) return list;
   if(cal.from){
     const a=cal.to && cal.to<cal.from?cal.to:cal.from;
     const b=cal.to && cal.to>cal.from?cal.to:(cal.to||cal.from);
-    return (groups||[]).filter(g=>g.dayKey && g.dayKey!=='без-даты' && g.dayKey>=a && g.dayKey<=b);
+    list=list.filter(g=>g.dayKey && g.dayKey!=='без-даты' && g.dayKey>=a && g.dayKey<=b);
+  } else if(!cal.showAll){
+    const prefix=`${cal.year}-${String(cal.month+1).padStart(2,'0')}`;
+    list=list.filter(g=>g.dayKey && String(g.dayKey).startsWith(prefix));
   }
-  if(cal.showAll) return groups||[];
-  const prefix=`${cal.year}-${String(cal.month+1).padStart(2,'0')}`;
-  return (groups||[]).filter(g=>g.dayKey && String(g.dayKey).startsWith(prefix));
+  const driver=String(cal.driver||'').trim();
+  const plate=String(cal.plate||'').trim();
+  if(driver) list=list.filter(g=>String(g.driverName||'').trim()===driver);
+  if(plate) list=list.filter(g=>String(g.vehiclePlate||'').trim()===plate);
+  return list;
+}
+function adminOrdersFilterOptions(groups){
+  const drivers=new Set();
+  const plates=new Set();
+  (groups||[]).forEach(g=>{
+    const d=String(g.driverName||'').trim();
+    const p=String(g.vehiclePlate||'').trim();
+    if(d) drivers.add(d);
+    if(p) plates.add(p);
+  });
+  return {
+    drivers:[...drivers].sort((a,b)=>a.localeCompare(b,'ru')),
+    plates:[...plates].sort((a,b)=>a.localeCompare(b,'ru'))
+  };
+}
+function adminOrdersFiltersHtml(groups){
+  const cal=ensureAdminOrdersCal();
+  const {drivers,plates}=adminOrdersFilterOptions(groups);
+  const driverOpts=['<option value="">Все</option>']
+    .concat(drivers.map(d=>`<option value="${esc(d)}"${d===cal.driver?' selected':''}>${esc(d)}</option>`))
+    .join('');
+  const plateOpts=['<option value="">Все</option>']
+    .concat(plates.map(p=>`<option value="${esc(p)}"${p===cal.plate?' selected':''}>${esc(p)}</option>`))
+    .join('');
+  const showClear=!!(cal.driver || cal.plate);
+  return `<div class="admin-cal-filters" id="admin-cal-filters">
+    <label>Водитель<select id="admin-cal-driver">${driverOpts}</select></label>
+    <label>Госномер<select id="admin-cal-plate">${plateOpts}</select></label>
+    <button type="button" id="admin-cal-filters-reset"${showClear?'':' hidden'}>Сбросить фильтры</button>
+  </div>`;
 }
 function adminOrdersSelectDay(dayKey){
   const cal=ensureAdminOrdersCal();
@@ -8408,6 +8464,7 @@ function renderAdmin(){
   const periodLabel=adminOrdersPeriodLabel(cal);
   const headHint=`Сводка: ${esc(periodLabel)}. Группы по дню — нажмите карточку.`;
   const calHtml=adminOrdersCalHtml(allGroups);
+  const filtersHtml=adminOrdersFiltersHtml(allGroups);
   const statsHtml=`<div class="orders-board-head">
     <p class="cat-panel-hint">${headHint}${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</p>
     <div class="board-metrics">
@@ -8416,13 +8473,15 @@ function renderAdmin(){
       <div class="m"><span>ЗП</span><b>${fmt(periodTot.pay)} ₽</b></div>
     </div>
   </div>`;
+  const emptyMsg=(cal.driver||cal.plate)?'Нет заявок по фильтру':'Нет заявок за выбранные дни';
   const listBody=groups.length
     ? `<div class="admin-cards">${groupCards}</div>
     <div class="hint admin-desktop-only" style="padding:0 16px">Таблица — те же группы.</div>
     <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`
-    : `<div class="empty">Нет заявок за выбранные дни</div>`;
+    : `<div class="empty">${emptyMsg}</div>`;
   $('admin-list').innerHTML=`
     ${calHtml}
+    ${filtersHtml}
     ${statsHtml}
     ${listBody}`;
   const prev=$('admin-cal-prev');
@@ -8431,6 +8490,12 @@ function renderAdmin(){
   if(prev) prev.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month--; if(c.month<0){ c.month=11; c.year--; } if(!c.from) c.showAll=false; renderAdmin(); };
   if(next) next.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month++; if(c.month>11){ c.month=0; c.year++; } if(!c.from) c.showAll=false; renderAdmin(); };
   if(reset) reset.onclick=()=>{ const c=ensureAdminOrdersCal(); c.from=null; c.to=null; c.showAll=true; renderAdmin(); };
+  const drvSel=$('admin-cal-driver');
+  const plateSel=$('admin-cal-plate');
+  const filtReset=$('admin-cal-filters-reset');
+  if(drvSel) drvSel.onchange=()=>{ const c=ensureAdminOrdersCal(); c.driver=drvSel.value||''; renderAdmin(); };
+  if(plateSel) plateSel.onchange=()=>{ const c=ensureAdminOrdersCal(); c.plate=plateSel.value||''; renderAdmin(); };
+  if(filtReset) filtReset.onclick=()=>{ const c=ensureAdminOrdersCal(); c.driver=''; c.plate=''; renderAdmin(); };
   document.querySelectorAll('#admin-list [data-admin-cal-day]').forEach(btn=>{
     btn.onclick=e=>{ e.stopPropagation(); adminOrdersSelectDay(btn.dataset.adminCalDay); };
   });
