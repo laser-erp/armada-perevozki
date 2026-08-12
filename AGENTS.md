@@ -21,7 +21,7 @@ cd /agent/DriverReport && git fetch origin && git checkout main && git pull orig
 
 ## Запреты
 - Подагенты, explore «по всему репо», best-of-N, параллельные агенты
-- Читать **весь** `web-preview/index.html` (JS; стили в `styles.css`, store в `store.js`)
+- Читать **весь** `web-preview/index.html` (JS; стили в `styles.css`, store в `store.js`, водитель в `driver.js`)
 - Тянуть iOS в веб-таск без запроса
 - Длинные саммари HANDOFF / KNOWLEDGE_BASE «на всякий случай»
 
@@ -37,5 +37,5 @@ cd /agent/DriverReport && git fetch origin && git checkout main && git pull orig
 Шаблон: `TASK_TEMPLATE.md`. Новый чат: `START_NEW_CHAT.txt` только при смене темы.
 
 ## Дальше (не фаза 1)
-- Фаза 2: CSS✓ store✓ · дальше driver/admin по «ок»
+- Фаза 2: CSS✓ store✓ driver✓ · дальше admin по «ок»
 - Фаза 3: ещё сжать доки
