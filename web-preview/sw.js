@@ -1,6 +1,6 @@
 /* АРМАДА PWA — HTML с сети; офлайн — оболочка из кэша; уведомления */
-const CACHE = 'armada-shell-v6';
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
+const CACHE = 'armada-shell-v7';
+const SHELL = ['./', './index.html', './styles.css', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
