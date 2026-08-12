@@ -1,40 +1,25 @@
-# AGENTS.md — АРМАДА (фаза 0–2)
+# AGENTS.md — АРМАДА
 
-Бюджет ограничен (~$10). Цель: **не читать 100k+ tok** на одну задачу.
+Бюджет ~$10. Не читать 100k+ tok / целые модули.
 
-## Источник кода
-- Репо: `https://github.com/laser-erp/armada-perevozki` · ветка **`main`**
-- Live: http://aptown1.fvds.ru/ → `/var/www/armada/`
-- Workspace = **только это репо**
-
-```bash
-cd /agent/DriverReport && git fetch origin && git checkout main && git pull origin main
-```
-
-## Веб-модули (фаза 2)
-| Файл | Что внутри |
-|------|------------|
-| `web-preview/index.html` | оболочка HTML (~20 KB), без логики |
-| `web-preview/styles.css` | стили |
-| `web-preview/store.js` | state / persist / PocketBase |
-| `web-preview/driver.js` | водитель: сессия, ЕТО, заявки, история |
-| `web-preview/admin.js` | админ: заявки, календарь, каталоги |
-| `web-preview/app.js` | общие хелперы + boot |
-
-**Не читать файлы целиком.** Grep → символ → Read offset/limit. В TASK указывать модуль + функцию.
+## Код
+- Репо `laser-erp/armada-perevozki` · ветка **`main`** · live http://aptown1.fvds.ru/
+- Модули: `styles.css` · `store.js` · `driver.js` · `admin.js` · `app.js` · `index.html` (оболочка)
+- Grep → символ → Read **кусок**. В TASK: файл + функция + строки.
 
 ## Процесс
-1. План → «ок» → код. Одна задача. Без «заодно».
-2. Та же тема → тот же чат. Новый чат — только смена темы.
-3. Ответы коротко. В конце среза — оценка tok.
+1. План → «ок» → код. **Одна** задача. Без «заодно».
+2. Та же тема → **этот чат**. Новый чат — только смена темы (+ `START_NEW_CHAT.txt` / TASK).
+3. Короткий ответ. В конце среза — оценка tok.
 
 ## Запреты
-- Подагенты, explore «по всему репо», best-of-N
-- Читать целиком любой `*.js` / старый монолит
-- iOS без запроса; длинные саммари KB/HANDOFF
+Подагенты · explore всего репо · best-of-N · iOS без запроса · всегда тащить KB/HANDOFF · обновлять KB на микрофикс
 
 ## Модель
-Быстрая по умолчанию. Thinking — только жёсткий баг по просьбе.
+Быстрая по умолчанию. Thinking — только по просьбе на жёсткий баг.
 
-## TASK
-Шаблон: `TASK_TEMPLATE.md`. Новый чат: `START_NEW_CHAT.txt` только при смене темы.
+## Доки
+- Этот файл — единственный always-on для агента.
+- `KNOWLEDGE_BASE.md` — для людей; читать/править только по запросу.
+- Архив: `docs/HANDOFF.archive.md`, `docs/TASK_*.done.md` — не открывать без нужды.
+- Шаблон задачи: `TASK_TEMPLATE.md`
