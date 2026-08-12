@@ -21,7 +21,7 @@ cd /agent/DriverReport && git fetch origin && git checkout main && git pull orig
 
 ## Запреты
 - Подагенты, explore «по всему репо», best-of-N, параллельные агенты
-- Читать **весь** `web-preview/index.html` (~550 KB)
+- Читать **весь** `web-preview/index.html` (JS; стили в `styles.css`)
 - Тянуть iOS в веб-таск без запроса
 - Длинные саммари HANDOFF / KNOWLEDGE_BASE «на всякий случай»
 
