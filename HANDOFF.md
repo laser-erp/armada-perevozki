@@ -4,7 +4,7 @@
 1. Сначала **`AGENTS.md`** (фаза 0 — экономия токенов).
 2. Дополнение: `AGENT_RULES.md`.
 3. **Код веб = ветка `main`** (после фазы 1 merge tip). Live деплой с `main`.
-4. План → «ок» → код. Не читать весь `web-preview/index.html`.
+4. План → «ок» → код. Веб в модулях (`store`/`driver`/`admin`/`app`/`styles`) — не читать целиком.
 5. `KNOWLEDGE_BASE.md` — для людей; не обновлять на каждый микрофикс.
 
 **Сессия / tip:** build `2026-08-11-admin-cal-filters` · агент https://cursor.com/agents/bc-019fb4d1-f788-7cd1-a617-8a118a0f4317
