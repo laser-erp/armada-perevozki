@@ -1,0 +1,9 @@
+# Phase 0 token stop-gate
+# Prefer AGENTS.md; do not always attach huge docs.
+HANDOFF.md
+KNOWLEDGE_BASE.md
+**/backups/**
+**/*.zip
+**/node_modules/
+**/dist/
+mobile/
