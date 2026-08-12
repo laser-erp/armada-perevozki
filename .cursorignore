@@ -1,7 +1,11 @@
-# Phase 0 token stop-gate
-# Prefer AGENTS.md; do not always attach huge docs.
+# Phase 3 — agent docs stop-gate
+# Always-on: AGENTS.md only
 HANDOFF.md
+docs/
 KNOWLEDGE_BASE.md
+AGENT_RULES.md
+CHANGELOG.md
+README.md
 **/backups/**
 **/*.zip
 **/node_modules/
