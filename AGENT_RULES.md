@@ -1,48 +1,32 @@
 # Правила агента — АРМАДА
 
-> **Агенту сначала:** `AGENTS.md` (фаза 0 — стоп-кран токенов). Этот файл — дополнение.
+> **Агенту сначала:** `AGENTS.md`. Этот файл — дополнение.
 
-## Источник правды
+## Источник правды (фаза 1)
 - Репо: `https://github.com/laser-erp/armada-perevozki`
-- **Веб-код (tip):** `cursor/admin-cal-filters-4317` · PR #101 · live http://aptown1.fvds.ru/
-- **`main`:** доки / TASK / шаблоны; HTML на `main` может быть старым — UI не брать отсюда, пока не сделан merge (фаза 1)
+- **Код и доки: ветка `main`**
+- Live: http://aptown1.fvds.ru/ → `/var/www/armada/` (деплой с `main`)
 - GitHub CLI: `laser-erp`
 
 ```bash
 gh auth status || true
-cd /agent/DriverReport && git fetch origin && git checkout cursor/admin-cal-filters-4317
+cd /agent/DriverReport && git fetch origin && git checkout main && git pull origin main
 ```
 
-## Фаза 0 (обязательно)
-См. `AGENTS.md`. Кратко:
-- тот же чат на мелкие правки; новый чат только при смене темы;
-- не читать весь `web-preview/index.html`;
-- без подагентов / explore-всего / best-of-N;
-- план → «ок» → код; одна задача; ~$10 бюджет;
-- workspace = только репо Армады.
+Новые фичи: `git checkout -b cursor/<имя>-4317` от `main` → PR **в `main`**.
+
+## Фаза 0 (стоп-кран)
+См. `AGENTS.md`: тот же чат на мелочи; не читать весь `index.html`; без подагентов; план → «ок» → код; ~$10.
 
 ## База знаний
-- Файл для **пользователя:** `KNOWLEDGE_BASE.md`
-- Агент **не** обновляет KB на каждый микрофикс
-- Обновлять KB только если пользователь просит **или** меняется пользовательский сценарий (крупный блок) — и тогда коротко
+- Для пользователя: `KNOWLEDGE_BASE.md`
+- Агент не обновляет KB на каждый микрофикс — только по просьбе или крупный сценарий
 
 ## Бэкап
-1. После блока работ: push ветки + при необходимости zip `/agent/backups/DriverReport-backup-latest.zip`
-2. Перед рискованными правками — commit/push заранее
-
-## Процесс
-- План → «ок» / «ок, делай» → код
-- Не оценивать сроки в днях/неделях
-- Пауза / стоп → минимальный ответ, без кода
-- В конце среза — краткая оценка tok
+После блока: push + при необходимости zip `/agent/backups/DriverReport-backup-latest.zip`
 
 ## Задания
-- Шаблон: `TASK_TEMPLATE.md`
-- Загрузка в новый чат (если нельзя копипаст): `START_NEW_CHAT.txt`
-- Не плодить новый чат на каждый микрофикс
-
-## Бюджет
-Ориентир ~$10. Не жечь на: распил/merge без «ок», рефакторинг, HTTPS до готовности DNS, чтение монолита целиком, параллельных агентов.
+- `TASK_TEMPLATE.md` · `START_NEW_CHAT.txt` (новая тема)
 
 ## URL
 - GitHub: https://github.com/laser-erp/armada-perevozki

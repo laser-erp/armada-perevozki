@@ -1,19 +1,19 @@
 # Задача: фильтры Водитель / Госномер в админ-календаре
 
 **Статус:** выполнено · сборка `2026-08-11-admin-cal-filters` · PR #101 · live http://aptown1.fvds.ru/  
-**База кода:** ветка `cursor/admin-orders-calendar-4317` (не устаревший `main`)  
+**База кода:** ветка ``main` (фаза 1)` (не устаревший `main`)  
 **Live:** http://aptown1.fvds.ru/ · PR календаря: #100  
 
 > В `main` лежит только этот файл задачи.  
-> **Код приложения** — на `cursor/admin-orders-calendar-4317` (или новее в цепочке PR).  
+> **Код приложения** — на ``main` (фаза 1)` (или новее в цепочке PR).  
 > Перед работой:
 > ```bash
 > cd /agent/DriverReport
 > git fetch origin
-> git checkout cursor/admin-orders-calendar-4317
-> git pull origin cursor/admin-orders-calendar-4317
+> git checkout `main` (фаза 1)
+> git pull origin `main` (фаза 1)
 > ```
-> Новую ветку: `git checkout -b cursor/admin-cal-filters-4317`  
+> Новую ветку: `git checkout -b `main` (фаза 1)`  
 > (суффикс `-4317`, префикс `cursor/`, lowercase)
 
 ---
@@ -61,7 +61,7 @@
 1. После кода: проверка на live (админ → Заявки: день + водитель + номер).
 2. Сборка: поднять `APP_BUILD` (например `2026-08-09-admin-cal-filters`).
 3. Деплой на сервер как обычно (`/var/www/armada/`).
-4. Ветка от `cursor/admin-orders-calendar-4317`, push, PR в GitHub (base = `cursor/admin-orders-calendar-4317`).
+4. Ветка от ``main` (фаза 1)`, push, PR в GitHub (base = ``main` (фаза 1)`).
 5. В этом файле на `main` статус сменить на **выполнено** + номер PR + сборка (отдельным коммитом на `main` или попросить пользователя вернуться в длинный чат).
 
 ## Отчёт пользователю

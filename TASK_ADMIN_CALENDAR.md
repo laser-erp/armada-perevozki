@@ -4,8 +4,8 @@
 **PR в GitHub:** уточнить / дожать push ветки (на сервере код есть)
 
 > **Важно:** в `main` только этот файл задачи. **Код приложения** (водитель, календарь и т.д.) — на ветке  
-> `cursor/driver-history-calendar-4317` (или новее `cursor/*-4317`). Перед кодом:  
-> `git fetch && git checkout cursor/driver-history-calendar-4317`
+> ``main` (фаза 1)` (или новее `cursor/*-4317`). Перед кодом:  
+> `git fetch && git checkout `main` (фаза 1)`
 
 ---
 

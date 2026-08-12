@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">АРМАДА</string>
+    <string name="title_activity_main">АРМАДА</string>
+    <string name="package_name">ru.armada.perevozki</string>
+    <string name="custom_url_scheme">ru.armada.perevozki</string>
+</resources>
