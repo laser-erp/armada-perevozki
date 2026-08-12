@@ -2,9 +2,10 @@
 
 > **Агенту сначала:** `AGENTS.md`. Этот файл — дополнение.
 
-## Источник правды (фаза 1)
+## Источник правды (фаза 1–2)
 - Репо: `https://github.com/laser-erp/armada-perevozki`
 - **Код и доки: ветка `main`**
+- Веб: модули в `web-preview/` (`store.js`, `driver.js`, `admin.js`, `app.js`, `styles.css`; `index.html` — оболочка)
 - Live: http://aptown1.fvds.ru/ → `/var/www/armada/` (деплой с `main`)
 - GitHub CLI: `laser-erp`
 
