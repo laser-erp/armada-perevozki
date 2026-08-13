@@ -12,8 +12,10 @@
 | **Сборка** | `2026-08-13-security-phase0` (`web-preview/store.js` → `APP_BUILD`) |
 | **Код приложения** | `DriverReport/web-preview/` |
 | **Деплой** | `scripts/deploy-fvds.sh` |
+| **Бэкапы** | `docs/BACKUP.md` · cron 03:15 · `/var/backups/armada/` |
 
 ### Недавно сделано
+- **Автобэкапы:** `scripts/backup-armada.sh`, cron, JSON + SQLite + tar pb_data.
 - Фаза 0 безопасности: PocketBase закрыт (403 на `/api`, `/_`), клиент через `/armada-api` + JWT.
 - Сервис `armada-api` (`armada-api/server.mjs`), systemd `armada-api.service`, env `/etc/armada/api.env`.
 - Объединены дубликаты ИП Нечаева в одну карточку.
@@ -60,6 +62,8 @@ FVDS_SSH_PASSWORD='…' FVDS_PB_PASSWORD='…' bash scripts/deploy-fvds.sh
 ```
 
 Пароли — локально у владельца (не в git): `backups/VPS_ACCESS.txt`, `backups/ARMADA_SITES_AND_PASSWORDS.txt`.
+
+**Бэкап:** `bash scripts/install-backup-cron.sh` (первый раз) · `docs/BACKUP.md`
 
 После правок JS: поднять `APP_BUILD` в `store.js` + `?v=` в `index.html`, commit, push, deploy.
 

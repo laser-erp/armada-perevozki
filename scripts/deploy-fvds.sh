@@ -65,6 +65,12 @@ systemctl restart armada-api
 REMOTE
 fi
 
+# Скрипт бэкапа на сервер (cron — install-backup-cron.sh)
+if [ -f "$ROOT/scripts/backup-armada.sh" ]; then
+  echo "→ backup script /opt/armada/scripts/"
+  tar czf - -C "$ROOT/scripts" backup-armada.sh | run_ssh "mkdir -p /opt/armada/scripts /var/backups/armada && tar xzf - -C /opt/armada/scripts && chmod +x /opt/armada/scripts/backup-armada.sh"
+fi
+
 CADDY_SRC="$ROOT/scripts/caddyfile.armada"
 if [ -f "$CADDY_SRC" ]; then
   echo "→ Caddy: /etc/caddy/Caddyfile"
