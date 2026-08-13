@@ -132,6 +132,7 @@ function updateAdminChrome(){
   }
   syncAdminNav();
   paintAdminOwnerFilters();
+  paintContractSignBanners();
 }
 function saveAdminSession(){
   if(!currentAdmin){ try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(_){} return; }
@@ -1310,6 +1311,7 @@ function renderAdminExchangeBoard(orders){
 }
 function renderAdmin(){
   updateAdminChrome();
+  paintContractSignBanners();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();
     return;
@@ -1837,6 +1839,83 @@ function buildOrderDocBody(kind, o){
       <div>Заказчик _______________ / _______________</div>
       <div>Исполнитель _______________ / _______________</div>
     </div>`;
+}
+function buildTransportContractDocBody(c){
+  const customer=resolveParty(c.customerCompanyId, c.customerCompanyName, null);
+  const carrier=resolveParty(c.carrierCompanyId, c.carrierCompanyName, null);
+  const renew=c.autoRenew
+    ?'Продлевается автоматически на тот же срок, если ни одна из сторон не заявила расторжение.'
+    :'Без автоматического продления.';
+  const signBlock=(party, p, title)=>{
+    const signed=party==='customer'?c.customerSignedAt:c.carrierSignedAt;
+    return `<div style="margin-bottom:14px;padding:10px;border:1px solid #e5e7eb;border-radius:6px">
+      <div style="font-weight:700;margin-bottom:6px">${esc(title)}</div>
+      ${partyLinesHtml(p)}
+      ${signed?`<p class="muted">Подписано в системе: ${esc(formatIsoDateRu(signed))}</p>`:`<p class="muted">Подпись в системе: ожидает</p>`}
+      <p style="margin:18px 0 4px">_______________________ / _______________________</p>
+      <p class="muted">подпись / ФИО</p>
+      <p class="muted" style="margin-top:6px">М.П.</p>
+    </div>`;
+  };
+  return `
+    <div class="doc-head">
+      <div class="brand">АРМАДА</div>
+      <h1>Договор транспортных услуг (ТЭУ)</h1>
+      <div class="muted">№ ${esc(c.contractNumber)} · ${esc(formatIsoDateRu(c.signedAt))}</div>
+    </div>
+    <p>${esc(customer.name)}${customer.inn?`, ИНН ${esc(customer.inn)}`:''}, именуемое в дальнейшем <strong>«Заказчик»</strong>, и ${esc(carrier.name)}${carrier.inn?`, ИНН ${esc(carrier.inn)}`:''}, именуемое <strong>«Перевозчик»</strong>, заключили настоящий договор:</p>
+    <h2>1. Предмет договора</h2>
+    <p>Перевозчик оказывает Заказчику услуги автомобильной перевозки грузов. Конкретные условия каждой перевозки (маршрут, груз, транспорт, водитель, сроки) определяются договором‑заявкой в системе АРМАДА.</p>
+    <h2>2. Срок действия</h2>
+    <p>Договор действует с <strong>${esc(formatIsoDateRu(c.effectiveFrom||c.signedAt))}</strong> по <strong>${esc(formatIsoDateRu(c.expiresAt))}</strong> (${esc(c.termMonths)} мес.). ${esc(renew)}</p>
+    <h2>3. Общие условия</h2>
+    <p>Стороны обмениваются заявками и подтверждают перевозки через систему. Оплата, ответственность и претензии — по договору‑заявке и настоящему договору. Расторжение — заявление одной стороны с действием до конца оплаченного срока.</p>
+    <h2>4. Реквизиты и подписи сторон</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    ${signBlock('customer', customer, 'Заказчик')}
+    ${signBlock('carrier', carrier, 'Перевозчик')}
+  </div>
+  <p class="muted" style="margin-top:12px">Распечатайте, подпишите уполномоченными лицами на бумаге и при необходимости обменяйте сканами. Электронная подпись в системе — в Справочники → Договоры.</p>`;
+}
+function printTransportContract(id){
+  const c=findTransportContractById(id);
+  if(!c){ alert('Договор не найден'); return; }
+  openPrintHtml(`Договор ТЭУ № ${c.contractNumber}`, buildTransportContractDocBody(c));
+}
+function paintContractSignBanners(){
+  const list=pendingTransportContractsForViewer();
+  const html=list.map(c=>{
+    const proposer=transportContractUnsignedParty(c);
+    const proposerName=proposer==='customer'?c.customerCompanyName:proposer==='carrier'?c.carrierCompanyName:'Контрагент';
+    return `<div class="admin-banner" data-tc-banner="${esc(c.id)}">
+      <strong>Договор ТЭУ № ${esc(c.contractNumber)}</strong>
+      <p>${esc(proposerName||'Контрагент')} предложил договор — подпишите со своей стороны (от ${esc(formatIsoDateRu(c.signedAt))})</p>
+      <div class="banner-actions">
+        <button type="button" class="primary tc-banner-sign" data-id="${esc(c.id)}">Подписать</button>
+        <button type="button" class="secondary tc-banner-print" data-id="${esc(c.id)}">Печать для подписания</button>
+        <button type="button" class="secondary tc-banner-open" data-id="${esc(c.id)}">Открыть</button>
+      </div>
+    </div>`;
+  }).join('');
+  ['admin-contract-banner','cat-contract-banner'].forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    if(html){ el.innerHTML=html; el.hidden=false; }
+    else { el.innerHTML=''; el.hidden=true; }
+  });
+  document.querySelectorAll('.tc-banner-sign').forEach(b=>b.onclick=()=>{
+    if(signTransportContractForViewer(b.dataset.id)){
+      bumpDataEpoch('contract-sign-banner');
+      persist();
+      paintContractSignBanners();
+      renderAdmin();
+    }
+  });
+  document.querySelectorAll('.tc-banner-print').forEach(b=>b.onclick=()=>printTransportContract(b.dataset.id));
+  document.querySelectorAll('.tc-banner-open').forEach(b=>b.onclick=()=>{
+    state._pendingContractOpenId=b.dataset.id;
+    setAdminNav('catalogs');
+  });
 }
 function openPrintHtml(title, bodyHtml){
   const w=window.open('', '_blank');
@@ -2547,7 +2626,8 @@ function openCatalogs(){
     `;
   }
   $('catalogs-form').innerHTML=`
-    <div class="cat-panel ${tab==='companies'?'on':''}" data-cat-panel="companies">
+    <div id="cat-contract-banner" class="admin-banner-wrap" hidden></div>
+  <div class="cat-panel ${tab==='companies'?'on':''}" data-cat-panel="companies">
       <div class="row" style="gap:6px">
         <input class="cat-search" id="co-search" placeholder="Поиск: название или ИНН…" style="flex:1;margin:0" />
         <button type="button" class="primary cat-add-btn" id="co-new" style="width:auto;flex:0 0 auto;padding:8px 12px!important">+</button>
@@ -2627,6 +2707,7 @@ function openCatalogs(){
   `;
   show('admin-catalogs-screen');
   showCatalogTab(tab);
+  paintContractSignBanners();
   document.querySelectorAll('#cat-tabs [data-cat-tab]').forEach(b=>b.onclick=()=>showCatalogTab(b.dataset.catTab));
   const search=$('co-search');
   if(search){
@@ -2680,6 +2761,9 @@ function openCatalogs(){
     const viewerParty=transportContractPartyForCompany(tc, myCo&&myCo.id);
     const viewerIntent=terminationIntentByForParty(viewerParty);
     const intentPartyLabel=intent.intentBy?terminationPartyLabel(tc, intent.intentBy):'';
+    const custSigned=isTransportContractPartySigned(tc,'customer');
+    const carrSigned=isTransportContractPartySigned(tc,'carrier');
+    const viewerSigned=viewerParty?isTransportContractPartySigned(tc, viewerParty):false;
     box.innerHTML=`
       <div class="row" style="align-items:center;margin-bottom:4px">
         <h3 style="margin:0;flex:1;font-size:.95rem">${contract?'Договор ТЭУ':'Новый договор ТЭУ'}</h3>
@@ -2698,9 +2782,12 @@ function openCatalogs(){
       <p class="hint" id="tc-expires-hint">Срок действия до: ${esc(formatIsoDateRu(expPreview))}</p>
       <label class="check"><input type="checkbox" id="tc-autorenew" ${tc.autoRenew?'checked':''}/> Автоматическое продление (если нет заявления о расторжении)</label>
       <p class="hint">Статус: <strong>${esc(stInfo.label)}</strong>${intentPartyLabel?` · заявление: ${esc(intentPartyLabel)}`:''}</p>
+      <p class="hint">Подписи: заказчик — ${custSigned?`✓ ${esc(formatIsoDateRu(tc.customerSignedAt))}`:'ожидает'} · перевозчик — ${carrSigned?`✓ ${esc(formatIsoDateRu(tc.carrierSignedAt))}`:'ожидает'}</p>
       ${!terminated?`<label>Причина расторжения (при заявлении)</label><input id="tc-term-reason" value="${esc(intent.reason||'')}" placeholder="Необязательно" />`:''}
       <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
         ${!terminated?`<button type="button" class="primary" id="tc-save">Сохранить</button>`:''}
+        ${contract?`<button type="button" class="secondary" id="tc-print">Печать для подписания</button>`:''}
+        ${contract&&viewerParty&&!viewerSigned?`<button type="button" class="primary" id="tc-sign">Подписать со своей стороны</button>`:''}
         ${contract&&!terminated&&!intent.intentBy&&viewerIntent?`<button type="button" class="secondary" id="tc-intent">Заявить расторжение</button>`:''}
         ${contract&&!terminated&&intent.intentBy&&viewerIntent===intent.intentBy?`<button type="button" class="secondary" id="tc-withdraw">Отозвать заявление</button>`:''}
       </div>
@@ -2729,7 +2816,7 @@ function openCatalogs(){
       const signedAt=readRuDateFromDom('tc-signed');
       if(!signedAt){ alert('Укажите дату составления в формате ДД.ММ.ГГГГ'); return; }
       const termMonths=Math.max(1, Math.min(120, +(($('tc-term')||{}).value||12)||12));
-      upsertTransportContract({
+      const saved=upsertTransportContract({
         id:tc.id, contractNumber:number,
         customerCompanyId:customerId, carrierCompanyId:carrierId,
         signedAt, effectiveFrom:signedAt, termMonths,
@@ -2737,12 +2824,27 @@ function openCatalogs(){
         autoRenew:!!($('tc-autorenew')&&$('tc-autorenew').checked),
         status:'active',
         termination:tc.termination||{intentBy:null, intentAt:null, intentByAdminId:null, reason:''},
+        customerSignedAt:tc.customerSignedAt, customerSignedByAdminId:tc.customerSignedByAdminId,
+        carrierSignedAt:tc.carrierSignedAt, carrierSignedByAdminId:tc.carrierSignedByAdminId,
         createdAt:tc.createdAt, createdByAdminId:tc.createdByAdminId||currentAdmin.id
       });
+      const party=transportContractPartyForCompany(saved, myCo&&myCo.id);
+      if(party && !isTransportContractPartySigned(saved, party)){
+        signTransportContractParty(saved, party, currentAdmin.id);
+      }
       bumpDataEpoch('save-transport-contract');
       persist();
       flashCatOk('Договор сохранён');
       openCatalogs();
+    });
+    $('tc-print')&&($('tc-print').onclick=()=>printTransportContract(tc.id));
+    $('tc-sign')&&($('tc-sign').onclick=()=>{
+      if(signTransportContractForViewer(tc.id)){
+        bumpDataEpoch('contract-sign');
+        persist();
+        flashCatOk('Договор подписан');
+        openCatalogs();
+      }
     });
     $('tc-intent')&&($('tc-intent').onclick=()=>{
       if(!viewerIntent) return;
@@ -3205,5 +3307,11 @@ function openCatalogs(){
     }catch(_){}
     flashCatOk();
   });
+  if(state._pendingContractOpenId){
+    const pid=state._pendingContractOpenId;
+    state._pendingContractOpenId=null;
+    const pendingTc=findTransportContractById(pid);
+    if(pendingTc) openContractEditor(pendingTc);
+  }
 }
 

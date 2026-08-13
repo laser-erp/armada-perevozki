@@ -385,7 +385,7 @@ function normalizeTransportContract(raw){
   const status=raw.status==='terminated'?'terminated':'active';
   const customer=findCompanyById(customerCompanyId);
   const carrier=findCompanyById(carrierCompanyId);
-  return {
+  const c={
     id:raw.id||uuid(),
     contractNumber,
     customerCompanyId,
@@ -400,10 +400,15 @@ function normalizeTransportContract(raw){
     autoRenew,
     status,
     termination:normalizeTermination(raw.termination),
+    customerSignedAt:raw.customerSignedAt||null,
+    customerSignedByAdminId:raw.customerSignedByAdminId||null,
+    carrierSignedAt:raw.carrierSignedAt||null,
+    carrierSignedByAdminId:raw.carrierSignedByAdminId||null,
     createdAt:raw.createdAt||new Date().toISOString(),
     updatedAt:raw.updatedAt||raw.createdAt||new Date().toISOString(),
     createdByAdminId:raw.createdByAdminId||null
   };
+  return c;
 }
 function contractInMySpace(c){
   if(!c) return false;
@@ -435,15 +440,79 @@ function processContractRenewals(){
     }
   });
 }
+function migrateContractSignaturesLegacy(){
+  const key='armada_contract_sig_legacy_v1';
+  try{ if(localStorage.getItem(key)) return; }catch(_){ return; }
+  (state.transportContracts||[]).forEach(c=>{
+    if(!c||c.status==='terminated') return;
+    if(c.customerSignedAt||c.carrierSignedAt) return;
+    const stamp=c.signedAt?`${c.signedAt}T12:00:00.000Z`:new Date().toISOString();
+    c.customerSignedAt=stamp;
+    c.carrierSignedAt=stamp;
+  });
+  try{ localStorage.setItem(key,'1'); }catch(_){}
+}
 function migrateTransportContracts(){
   state.transportContracts=(state.transportContracts||[]).map(normalizeTransportContract).filter(Boolean);
+  migrateContractSignaturesLegacy();
   processContractRenewals();
 }
 function findTransportContractById(id){
   return (state.transportContracts||[]).find(c=>c.id===id)||null;
 }
+function isTransportContractPartySigned(c, party){
+  if(!c||!party) return false;
+  if(party==='customer') return !!c.customerSignedAt;
+  if(party==='carrier') return !!c.carrierSignedAt;
+  return false;
+}
+function isTransportContractFullySigned(c){
+  return isTransportContractPartySigned(c,'customer') && isTransportContractPartySigned(c,'carrier');
+}
+function transportContractUnsignedParty(c){
+  if(!c) return null;
+  const cust=isTransportContractPartySigned(c,'customer');
+  const carr=isTransportContractPartySigned(c,'carrier');
+  if(cust && !carr) return 'carrier';
+  if(carr && !cust) return 'customer';
+  return null;
+}
+function pendingTransportContractsForViewer(){
+  const myCo=currentOwnCompany();
+  if(!myCo) return [];
+  processContractRenewals();
+  return (state.transportContracts||[]).filter(c=>{
+    if(!contractInMySpace(c) || c.status==='terminated') return false;
+    const party=transportContractPartyForCompany(c, myCo.id);
+    if(!party) return false;
+    return !isTransportContractPartySigned(c, party);
+  });
+}
+function signTransportContractParty(c, party, adminId){
+  if(!c||!party) return null;
+  const at=new Date().toISOString();
+  const aid=adminId||currentAdmin?.id||null;
+  if(party==='customer'){
+    c.customerSignedAt=at;
+    c.customerSignedByAdminId=aid;
+  } else if(party==='carrier'){
+    c.carrierSignedAt=at;
+    c.carrierSignedByAdminId=aid;
+  } else return null;
+  return upsertTransportContract(c);
+}
+function signTransportContractForViewer(contractId){
+  const c=findTransportContractById(contractId);
+  const myCo=currentOwnCompany();
+  if(!c||!myCo) return false;
+  const party=transportContractPartyForCompany(c, myCo.id);
+  if(!party || isTransportContractPartySigned(c, party)) return false;
+  signTransportContractParty(c, party, currentAdmin?.id);
+  return true;
+}
 function isTransportContractActive(c){
   if(!c||c.status==='terminated') return false;
+  if(!isTransportContractFullySigned(c)) return false;
   const today=isoDateOnly(new Date());
   if(c.effectiveFrom&&c.effectiveFrom>today) return false;
   if(c.expiresAt&&c.expiresAt<today) return false;
@@ -474,6 +543,12 @@ function terminationPartyLabel(c, intentBy){
 function transportContractStatusInfo(c){
   if(!c) return {level:'none', label:'—'};
   if(c.status==='terminated') return {level:'terminated', label:'Расторгнут'};
+  if(!isTransportContractFullySigned(c)){
+    const pending=[];
+    if(!isTransportContractPartySigned(c,'customer')) pending.push(c.customerCompanyName||'заказчик');
+    if(!isTransportContractPartySigned(c,'carrier')) pending.push(c.carrierCompanyName||'перевозчик');
+    return {level:'pending', label:`Ожидает подписи: ${pending.join(', ')}`};
+  }
   const today=isoDateOnly(new Date());
   if(c.termination&&c.termination.intentBy){
     const who=terminationPartyLabel(c, c.termination.intentBy);
@@ -489,7 +564,15 @@ function transportContractStatusInfo(c){
 }
 function requireActiveTransportContract(customerCompanyId, carrierCompanyId){
   const c=findActiveTransportContract(customerCompanyId, carrierCompanyId);
-  if(!c) return 'Нет действующего договора транспортных услуг. Создайте в Справочники → Договоры.';
+  if(!c){
+    const any=(state.transportContracts||[]).find(x=>
+      x.customerCompanyId===customerCompanyId && x.carrierCompanyId===carrierCompanyId && x.status!=='terminated'
+    );
+    if(any && !isTransportContractFullySigned(any)){
+      return `Договор ТЭУ № ${any.contractNumber} ожидает подписи второй стороны. Справочники → Договоры.`;
+    }
+    return 'Нет действующего договора транспортных услуг. Создайте в Справочники → Договоры.';
+  }
   if(c.termination&&c.termination.intentBy){
     return `Договор ТЭУ № ${c.contractNumber} — заявлено расторжение, действует до ${formatIsoDateRu(c.expiresAt)}.`;
   }

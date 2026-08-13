@@ -342,6 +342,12 @@
     .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
+    .admin-banner-wrap{margin:8px 12px 0;display:flex;flex-direction:column;gap:8px}
+    .admin-banner{padding:10px 12px;border-radius:var(--radius);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4)}
+    .admin-banner strong{display:block;font-size:.92rem;margin:0 0 2px;color:var(--text)}
+    .admin-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.35}
+    .admin-banner .banner-actions{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+    .admin-banner .banner-actions button{width:auto;flex:1 1 auto;padding:8px 12px!important}
     .driver-net{
       display:none;flex-shrink:0;margin:0;padding:7px 12px;font-size:.72rem;font-weight:600;line-height:1.3;
       background:rgba(245,158,11,.12);color:#92400E;border-bottom:1px solid rgba(245,158,11,.35)
