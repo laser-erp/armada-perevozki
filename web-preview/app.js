@@ -146,6 +146,11 @@ function findCompanyByName(name){
   const key=String(name||'').trim().toLowerCase(); if(!key) return null;
   return (state.companies||[]).find(c=>String(c.name||'').trim().toLowerCase()===key)||null;
 }
+function findCompanyByInn(inn){
+  const key=String(inn||'').replace(/\D/g,'');
+  if(!key) return null;
+  return (state.companies||[]).find(c=>String(c.inn||'').replace(/\D/g,'')===key)||null;
+}
 function findCustomer(name){
   // совместимость: заказчик = компания с ролью customer (или любая по имени)
   const c=findCompanyByName(name);
@@ -155,7 +160,12 @@ function findCustomer(name){
 }
 function upsertCompany(raw){
   const c=normalizeCompany(raw); if(!c) return null;
-  const i=(state.companies||[]).findIndex(x=>x.id===c.id || String(x.name).toLowerCase()===c.name.toLowerCase());
+  const innKey=String(c.inn||'').replace(/\D/g,'');
+  const i=(state.companies||[]).findIndex(x=>{
+    if(x.id===c.id) return true;
+    if(innKey && String(x.inn||'').replace(/\D/g,'')===innKey) return true;
+    return String(x.name).toLowerCase()===c.name.toLowerCase();
+  });
   if(i>=0){
     // merge addresses/contacts lightly
     const prev=state.companies[i];
@@ -194,12 +204,15 @@ function syncCustomersFromCompanies(){
 }
 function rememberCustomer(order){
   const name=String(order.customer||'').trim(); if(!name) return;
-  let c=findCompanyByName(name);
+  const innKey=String(order.customerInn||'').replace(/\D/g,'');
+  let c=innKey?findCompanyByInn(innKey):null;
+  if(!c) c=findCompanyByName(name);
   if(!c){
-    c=upsertCompany({name, roles:['customer'], loadingAddresses:[], unloadingAddresses:[], contacts:[], phones:[]});
+    c=upsertCompany({name, inn:innKey, roles:['customer'], loadingAddresses:[], unloadingAddresses:[], contacts:[], phones:[]});
   } else if(!companyHasRole(c,'customer')){
     c.roles.push('customer'); upsertCompany(c);
   }
+  if(innKey && !c.inn) c.inn=innKey;
   ensureRoutePoints(order);
   (order.routePoints||[]).forEach(p=>{
     const addr=String(p.address||'').trim(); if(!addr) return;
@@ -778,46 +791,76 @@ migrateCompanies();
 migrateAdmins();
 migrateDriverOwners();
 function fillCustomerPickers(){
-  const list=$('customer-list');
-  if(list) list.innerHTML=customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('');
-  const pick=$('create-customer-pick');
-  if(pick){
-    pick.innerHTML=`<option value="">— выбрать сохранённого —</option>`+customerNames().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    pick.onchange=()=>{ if(pick.value){ $('create-customer').value=pick.value; fillAddressPickers(pick.value); fillContactPickers(pick.value); } };
-  }
   $('create-customer')&&($('create-customer').oninput=()=>{
     const name=($('create-customer').value||'').trim();
+    const co=findCompanyByName(name);
+    if(co && co.inn && $('create-customer-inn')) $('create-customer-inn').value=co.inn;
     fillAddressPickers(name); fillContactPickers(name);
   });
 }
+async function applyCustomerFromInn(inn, statusEl, prefix='create'){
+  const st=statusEl||$(`${prefix}-customer-inn-status`);
+  const clean=String(inn||'').replace(/\D/g,'');
+  if(!clean){ if(st) st.textContent='Введите ИНН'; return null; }
+  if(st) st.textContent='Загрузка…';
+  const nameEl=$(`${prefix}-customer`);
+  const innEl=$(`${prefix}-customer-inn`);
+  try{
+    const existing=findCompanyByInn(clean);
+    if(existing){
+      if(nameEl) nameEl.value=existing.name;
+      if(innEl) innEl.value=existing.inn||clean;
+      if(prefix==='create'){
+        fillAddressPickers(existing.name);
+        fillContactPickers(existing.name);
+      }
+      if(st) st.textContent='Из справочника: '+existing.name;
+      return existing;
+    }
+    const party=await lookupPartyByInn(clean);
+    if(nameEl) nameEl.value=party.name||'';
+    if(innEl) innEl.value=party.inn||clean;
+    const co=upsertCompany({
+      name:party.name, inn:party.inn, ogrn:party.ogrn, kpp:party.kpp, address:party.address,
+      roles:['customer'], spaceId:currentSpaceId(),
+      contacts:party.director?[{id:uuid(), name:party.director, title:'', phones:[], isPrimary:true}]:[]
+    });
+    if(co){
+      if(prefix==='create'){
+        fillAddressPickers(co.name);
+        fillContactPickers(co.name);
+      }
+      bumpDataEpoch('customer-inn-lookup');
+      persist();
+    }
+    if(st) st.textContent=(party.name||'Компания')+' — данные загружены';
+    return co;
+  }catch(err){
+    if(st) st.textContent=err.message||String(err);
+    return null;
+  }
+}
+function wireCreateCustomerInn(){
+  const btn=$('create-customer-inn-lookup');
+  if(btn) btn.onclick=()=>applyCustomerFromInn((($('create-customer-inn')||{}).value||'').trim());
+}
 function fillContactPickers(name){
   const c=findCompanyByName(name);
-  const pick=$('create-contact-pick');
-  const phoneEl=$('create-contact-phone');
   const nameEl=$('create-contact-name');
-  if(!pick) return;
-  const contacts=(c&&c.contacts)||[];
-  pick.innerHTML=`<option value="">— контакт из карточки —</option>`+contacts.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${contactPhone(p)?' · '+esc(contactPhone(p)):''}</option>`).join('');
-  pick.onchange=()=>{
-    const person=(contacts||[]).find(x=>x.id===pick.value);
-    if(person){
-      if(nameEl) nameEl.value=person.name;
-      if(phoneEl) phoneEl.value=contactPhone(person);
-    }
-  };
+  const phoneEl=$('create-contact-phone');
+  if(!nameEl && !phoneEl) return;
+  const prim=primaryContact(c);
+  if(prim){
+    if(nameEl && !nameEl.value) nameEl.value=prim.name||'';
+    if(phoneEl && !phoneEl.value) phoneEl.value=contactPhone(prim);
+  }
 }
 function fillAddressPickers(name){
   const c=findCustomer(name)||{loadingAddresses:[],unloadingAddresses:[]};
-  const lp=$('create-load-pick');
-  const up=$('create-unload-pick');
-  if(lp){
-    lp.innerHTML=`<option value="">— сохранённые загрузки —</option>`+(c.loadingAddresses||[]).map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('');
-    lp.onchange=()=>{ if(lp.value) $('create-load').value=lp.value; };
-  }
-  if(up){
-    up.innerHTML=`<option value="">— сохранённые выгрузки —</option>`+(c.unloadingAddresses||[]).map(a=>`<option value="${esc(a)}">${esc(a)}</option>`).join('');
-    up.onchange=()=>{ if(up.value) $('create-unload').value=up.value; };
-  }
+  const loadEl=$('create-load');
+  const unloadEl=$('create-unload');
+  if(loadEl && !loadEl.value.trim() && (c.loadingAddresses||[])[0]) loadEl.value=c.loadingAddresses[0];
+  if(unloadEl && !unloadEl.value.trim() && (c.unloadingAddresses||[])[0]) unloadEl.value=c.unloadingAddresses[0];
 }
 function fillExecutorUI(){
   const mode=(($('create-exec-mode')||{}).value)||'own';
