@@ -1660,7 +1660,12 @@ function resolveParty(companyId, companyName, spaceId){
     inn:(co&&co.inn)||(sp&&sp.inn)||'',
     kpp:(co&&co.kpp)||(sp&&sp.kpp)||'',
     ogrn:(co&&co.ogrn)||(sp&&sp.ogrn)||'',
-    address:(co&&co.address)||(sp&&sp.address)||''
+    address:(co&&co.address)||(sp&&sp.address)||'',
+    director:(co&&co.director)||(sp&&sp.director)||'',
+    bankName:(co&&co.bankName)||'',
+    bankBik:(co&&co.bankBik)||'',
+    bankAccount:(co&&co.bankAccount)||'',
+    bankCorrAccount:(co&&co.bankCorrAccount)||''
   };
 }
 function partyLinesHtml(p){
@@ -1670,7 +1675,14 @@ function partyLinesHtml(p){
   if(p.ogrn) bits.push(`ОГРН ${esc(p.ogrn)}`);
   const req=bits.length?`<div class="muted">${bits.join(' · ')}</div>`:'';
   const addr=p.address?`<div class="muted">${esc(p.address)}</div>`:'';
-  return `<div class="party"><strong>${esc(p.name||'—')}</strong>${req}${addr}</div>`;
+  const dir=p.director?`<div class="muted">Руководитель: ${esc(p.director)}</div>`:'';
+  const bankBits=[];
+  if(p.bankName) bankBits.push(esc(p.bankName));
+  if(p.bankBik) bankBits.push(`БИК ${esc(p.bankBik)}`);
+  if(p.bankAccount) bankBits.push(`р/с ${esc(p.bankAccount)}`);
+  if(p.bankCorrAccount) bankBits.push(`к/с ${esc(p.bankCorrAccount)}`);
+  const bank=bankBits.length?`<div class="muted">${bankBits.join(' · ')}</div>`:'';
+  return `<div class="party"><strong>${esc(p.name||'—')}</strong>${req}${addr}${dir}${bank}</div>`;
 }
 function orderDocMoneyLine(o){
   const rate=clientRate(o);
@@ -2532,9 +2544,10 @@ function openCatalogs(){
       return Object.assign({
         id:uuid(), name:'', roles:['customer'], note:'', phones:[], contacts:[],
         loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
-        spaceId:currentSpaceId(), inn:'', ogrn:'', kpp:'', address:''
+        spaceId:currentSpaceId(), inn:'', ogrn:'', kpp:'', address:'', director:'',
+        bankName:'', bankBik:'', bankAccount:'', bankCorrAccount:''
       }, company, { name:String(company.name||'').trim() });
-    })():{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId(),inn:'',ogrn:'',kpp:'',address:''};
+    })():{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId(),inn:'',ogrn:'',kpp:'',address:'',director:'',bankName:'',bankBik:'',bankAccount:'',bankCorrAccount:''};
     const box=$('co-editor');
     box.classList.add('show');
     try{ box.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){}
@@ -2558,6 +2571,21 @@ function openCatalogs(){
         <div><label>КПП</label><input id="co-kpp" value="${esc(c.kpp||'')}" /></div>
       </div>
       <label>Юр. адрес</label><input id="co-address" value="${esc(c.address||'')}" />
+      <label>Руководитель</label><input id="co-director" value="${esc(c.director||'')}" />
+      <h4 style="margin:10px 0 6px;font-size:.85rem">Банковские реквизиты</h4>
+      <div class="form-pair">
+        <div>
+          <label>БИК</label>
+          <div class="row" style="gap:8px;align-items:center">
+            <input id="co-bank-bik" inputmode="numeric" maxlength="9" placeholder="9 цифр" value="${esc(c.bankBik||'')}" style="flex:1" />
+            <button type="button" class="secondary" id="co-bank-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить банк</button>
+          </div>
+        </div>
+        <div><label>Расч. счёт</label><input id="co-bank-account" inputmode="numeric" maxlength="20" placeholder="20 цифр" value="${esc(c.bankAccount||'')}" /></div>
+      </div>
+      <label>Банк</label><input id="co-bank-name" value="${esc(c.bankName||'')}" />
+      <label>Корр. счёт</label><input id="co-bank-corr" inputmode="numeric" maxlength="20" placeholder="20 цифр" value="${esc(c.bankCorrAccount||'')}" />
+      <div class="hint" id="co-bank-status"></div>
       <div class="role-toggles">
         <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/> Наша фирма</label>
         <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
@@ -2690,7 +2718,22 @@ function openCatalogs(){
         if($('co-ogrn')) $('co-ogrn').value=party.ogrn||'';
         if($('co-kpp')) $('co-kpp').value=party.kpp||'';
         if($('co-address')) $('co-address').value=party.address||'';
+        if($('co-director')) $('co-director').value=party.director||'';
         if(st) st.textContent='Реквизиты загружены';
+      }catch(err){
+        if(st) st.textContent=String(err.message||err);
+      }
+    });
+    $('co-bank-lookup')&&($('co-bank-lookup').onclick=async()=>{
+      const st=$('co-bank-status');
+      const bik=String((($('co-bank-bik')||{}).value||'')).replace(/\D/g,'');
+      if(st) st.textContent='Загрузка…';
+      try{
+        const bank=await lookupBankByBik(bik);
+        if($('co-bank-bik')) $('co-bank-bik').value=bank.bankBik||bik;
+        if($('co-bank-name')) $('co-bank-name').value=bank.bankName||'';
+        if($('co-bank-corr')) $('co-bank-corr').value=bank.bankCorrAccount||'';
+        if(st) st.textContent=bank.bankName||'Банк загружен';
       }catch(err){
         if(st) st.textContent=String(err.message||err);
       }
@@ -2747,6 +2790,11 @@ function openCatalogs(){
         inn:innRaw, ogrn:(($('co-ogrn')||{}).value||'').trim(),
         kpp:(($('co-kpp')||{}).value||'').trim(),
         address:(($('co-address')||{}).value||'').trim(),
+        director:(($('co-director')||{}).value||'').trim(),
+        bankName:(($('co-bank-name')||{}).value||'').trim(),
+        bankBik:String((($('co-bank-bik')||{}).value||'')).replace(/\D/g,'').slice(0,9),
+        bankAccount:String((($('co-bank-account')||{}).value||'')).replace(/\D/g,'').slice(0,20),
+        bankCorrAccount:String((($('co-bank-corr')||{}).value||'')).replace(/\D/g,'').slice(0,20),
         contacts, vehicles, drivers,
         loadingAddresses:roles.includes('customer')?loads:[],
         unloadingAddresses:roles.includes('customer')?unloads:[],

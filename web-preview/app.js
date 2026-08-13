@@ -127,7 +127,12 @@ function normalizeCompany(c){
     inn:String(c.inn||'').trim(),
     ogrn:String(c.ogrn||'').trim(),
     kpp:String(c.kpp||'').trim(),
-    address:String(c.address||'').trim()
+    address:String(c.address||'').trim(),
+    director:String(c.director||'').trim(),
+    bankName:String(c.bankName||'').trim(),
+    bankBik:String(c.bankBik||'').replace(/\D/g,'').slice(0,9),
+    bankAccount:String(c.bankAccount||'').replace(/\D/g,'').slice(0,20),
+    bankCorrAccount:String(c.bankCorrAccount||'').replace(/\D/g,'').slice(0,20)
   };
   if(c.finance) out.finance=normalizeFinance(c.finance);
   return out;
@@ -184,6 +189,11 @@ function upsertCompany(raw){
     c.ogrn=c.ogrn||prev.ogrn||'';
     c.kpp=c.kpp||prev.kpp||'';
     c.address=c.address||prev.address||'';
+    c.director=c.director||prev.director||'';
+    c.bankName=c.bankName||prev.bankName||'';
+    c.bankBik=c.bankBik||prev.bankBik||'';
+    c.bankAccount=c.bankAccount||prev.bankAccount||'';
+    c.bankCorrAccount=c.bankCorrAccount||prev.bankCorrAccount||'';
     if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
     state.companies[i]=c;
   } else {
@@ -847,6 +857,7 @@ async function applyCustomerFromInn(inn, statusEl, prefix='create'){
     if(innEl) innEl.value=party.inn||clean;
     const co=upsertCompany({
       name:party.name, inn:party.inn, ogrn:party.ogrn, kpp:party.kpp, address:party.address,
+      director:party.director||'',
       roles:['customer'], spaceId:currentSpaceId(),
       contacts:party.director?[{id:uuid(), name:party.director, title:'', phones:[], isPrimary:true}]:[]
     });

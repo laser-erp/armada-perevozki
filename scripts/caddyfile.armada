@@ -6,6 +6,13 @@
 	encode gzip
 
 	# Прокси ЕГРЮЛ ФНС для поиска по ИНН из браузера (без CORS)
+	handle /cbr-api/* {
+		uri strip_prefix /cbr-api
+		reverse_proxy https://www.cbr.ru {
+			header_up Host www.cbr.ru
+		}
+	}
+
 	handle /egrul-api/* {
 		uri strip_prefix /egrul-api
 		reverse_proxy https://egrul.nalog.ru {

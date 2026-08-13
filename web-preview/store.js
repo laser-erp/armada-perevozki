@@ -172,7 +172,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-fix-company-name-esc";
+const APP_BUILD="2026-08-13-party-address-bank";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -1006,23 +1006,104 @@ async function lookupPartyByInnApiFns(inn, key){
   }
   throw new Error('API-ФНС: неизвестный формат ответа');
 }
+function pickBestAddress(a, b){
+  const A=String(a||'').trim();
+  const B=String(b||'').trim();
+  if(!A) return B;
+  if(!B) return A;
+  return A.length>=B.length?A:B;
+}
+function mergePartyFields(base, extra){
+  if(!base) return extra||null;
+  if(!extra) return base;
+  const out={...base};
+  const fields=['name','inn','ogrn','kpp','address','director'];
+  fields.forEach(k=>{
+    const a=String(out[k]||'').trim();
+    const b=String(extra[k]||'').trim();
+    if(k==='address') out[k]=pickBestAddress(a, b);
+    else if(!a&&b) out[k]=b;
+    else if(a&&b&&k==='name'&&b.length>a.length) out[k]=b;
+  });
+  return out;
+}
 async function lookupPartyByInn(inn){
   const clean=String(inn||'').replace(/\D/g,'');
   if(!isValidInn(clean)) throw new Error('Некорректный ИНН');
   const fnsKey=String((state.settings&&state.settings.fnsApiKey)||'').trim();
   const dadataToken=String((state.settings&&state.settings.dadataToken)||'').trim();
+  const hits=[];
+  const tasks=[];
   if(fnsKey){
-    try{ return await lookupPartyByInnApiFns(clean, fnsKey); }
-    catch(err){ console.warn('API-ФНС', err); }
+    tasks.push(lookupPartyByInnApiFns(clean, fnsKey).catch(err=>{ console.warn('API-ФНС', err); return null; }));
   }
-  try{ return await lookupPartyByInnEgrul(clean); }
-  catch(egrulErr){
-    if(dadataToken){
-      try{ return await lookupPartyByInnDaData(clean, dadataToken); }
-      catch(_){ throw egrulErr; }
-    }
-    throw egrulErr;
+  tasks.push(lookupPartyByInnEgrul(clean).catch(err=>{ console.warn('ЕГРЮЛ', err); return null; }));
+  if(dadataToken){
+    tasks.push(lookupPartyByInnDaData(clean, dadataToken).catch(err=>{ console.warn('DaData', err); return null; }));
   }
+  const parts=await Promise.all(tasks);
+  parts.forEach(p=>{ if(p) hits.push(p); });
+  if(!hits.length) throw new Error('По ИНН ничего не найдено');
+  let result=hits[0];
+  for(let i=1;i<hits.length;i++) result=mergePartyFields(result, hits[i]);
+  return result;
+}
+function cbrBicBase(){
+  const h=(location.hostname||'').toLowerCase();
+  if(h==='aptown1.fvds.ru'||h==='176.12.67.35'||h==='localhost'||h==='127.0.0.1')
+    return location.origin.replace(/\/$/,'')+'/cbr-api';
+  return 'http://aptown1.fvds.ru/cbr-api';
+}
+async function lookupBankByBikDaData(bik, token){
+  const clean=String(bik||'').replace(/\D/g,'');
+  const res=await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/bank',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Accept':'application/json',
+      'Authorization':'Token '+token
+    },
+    body:JSON.stringify({query:clean})
+  });
+  if(!res.ok) throw new Error('DaData банк: ошибка '+res.status);
+  const data=await res.json();
+  const s=(data.suggestions&&data.suggestions[0])||null;
+  if(!s||!s.data) throw new Error('Банк не найден (DaData)');
+  const d=s.data;
+  return {
+    bankName:s.value||d.name?.payment||d.name?.short||'',
+    bankBik:d.bic||clean,
+    bankCorrAccount:d.correspondent_account||''
+  };
+}
+function parseCbrBicXml(text){
+  const t=String(text||'');
+  const nameM=t.match(/NameP="([^"]+)"/i);
+  const accM=t.match(/Account="(\d{20})"/i);
+  return {
+    bankName:nameM?nameM[1].trim():'',
+    bankCorrAccount:accM?accM[1]:''
+  };
+}
+async function lookupBankByBikCbr(bik){
+  const clean=String(bik||'').replace(/\D/g,'');
+  const url=`${cbrBicBase()}/scripts/XML_bic.asp?bic=${encodeURIComponent(clean)}`;
+  const res=await fetch(url);
+  if(!res.ok) throw new Error('ЦБ РФ: ошибка '+res.status);
+  const text=await res.text();
+  const parsed=parseCbrBicXml(text);
+  if(!parsed.bankName) throw new Error('Банк не найден (ЦБ РФ)');
+  return { bankName:parsed.bankName, bankBik:clean, bankCorrAccount:parsed.bankCorrAccount };
+}
+async function lookupBankByBik(bik){
+  const clean=String(bik||'').replace(/\D/g,'');
+  if(clean.length!==9) throw new Error('БИК: 9 цифр');
+  const dadataToken=String((state.settings&&state.settings.dadataToken)||'').trim();
+  if(dadataToken){
+    try{ return await lookupBankByBikDaData(clean, dadataToken); }
+    catch(err){ console.warn('DaData банк', err); }
+  }
+  return await lookupBankByBikCbr(clean);
 }
 async function fetchServerState(){
   const filter=encodeURIComponent("key='main'");
