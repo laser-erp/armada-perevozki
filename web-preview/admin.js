@@ -1130,16 +1130,17 @@ function openClaimExchange(id){
       <h2 class="form-section-title">Договор‑заявка</h2>
       <p class="form-section-hint">Электронная заявка на перевозку между фирмами</p>
       <div class="claim-box">
-        <p><strong>Заказчик перевозки:</strong> ${esc(o.ownCompanyName||'—')}</p>
-        <p><strong>Перевозчик:</strong> ${esc(myCo.name)}</p>
+        <p><strong>Заказчик (выложил на биржу):</strong> ${esc(o.ownCompanyName||'—')}</p>
+        <p><strong>Перевозчик:</strong> ${esc(myCo.name)} <span class="hint">(ваша фирма, свой парк)</span></p>
+        ${o.customer?`<p><strong>Клиент / груз:</strong> ${esc(o.customer)}</p>`:''}
         <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
         <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
         <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
-        <p class="hint" style="margin-top:6px">После подписи — водитель и авто из вашего парка войдут в заявку.</p>
+        <p class="hint" style="margin-top:6px">Нужен базовый договор ТЭУ: заказчик ↔ ваша фирма. Договор‑заявка — условия этой перевозки.</p>
       </div>
     </section>
     <section class="form-section">
-      <h2 class="form-section-title">Назначение</h2>
+      <h2 class="form-section-title">Назначение и водитель</h2>
       <div class="form-fields">
         <div class="form-pair">
           <div>
@@ -1151,10 +1152,29 @@ function openClaimExchange(id){
             <select id="claim-plate">${vehOk.length?vehOk.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join(''):`<option value="">— нет подходящего авто —</option>`}</select>
           </div>
         </div>
-        <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}. Неподходящие скрыты.`:'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
+        <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}.`:''} Паспорт водителя — в договор‑заявку (из справочника или вручную).</div>
+        <div class="form-pair">
+          <div><label for="claim-pass-series">Паспорт серия</label><input id="claim-pass-series" inputmode="numeric" maxlength="4" placeholder="4 цифры" /></div>
+          <div><label for="claim-pass-number">Номер</label><input id="claim-pass-number" inputmode="numeric" maxlength="6" placeholder="6 цифр" /></div>
+        </div>
+        <label for="claim-pass-issued">Кем выдан</label>
+        <input id="claim-pass-issued" placeholder="ОВД / УФМС…" />
+        <label for="claim-pass-date">Дата выдачи</label>
+        <input id="claim-pass-date" type="date" />
       </div>
     </section>
   `;
+  const fillClaimPassportFromDriver=()=>{
+    const name=(($('claim-driver')||{}).value||'').trim();
+    const rec=findDriverRecord(name, myCo.id);
+    const pp=driverPassportFields(rec);
+    if($('claim-pass-series')) $('claim-pass-series').value=pp.passportSeries||'';
+    if($('claim-pass-number')) $('claim-pass-number').value=pp.passportNumber||'';
+    if($('claim-pass-issued')) $('claim-pass-issued').value=pp.passportIssuedBy||'';
+    if($('claim-pass-date')) $('claim-pass-date').value=pp.passportIssueDate||'';
+  };
+  $('claim-driver')&&($('claim-driver').onchange=fillClaimPassportFromDriver);
+  fillClaimPassportFromDriver();
   show('admin-claim');
   $('claim-back').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
   $('claim-cancel').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
@@ -1178,29 +1198,31 @@ function confirmClaimExchange(){
   const contractErr=requireActiveTransportContract(o.ownCompanyId, myCo.id);
   if(contractErr){ $('claim-error').textContent=contractErr; return; }
   const customerCo=findCompanyById(o.ownCompanyId);
-  o.transportApp={
-    id:uuid(),
-    signedAt:new Date().toISOString(),
+  const driverRec=findDriverRecord(driver, myCo.id);
+  o.transportApp=buildTransportApp({
+    order:o,
+    carrierCo:myCo,
+    vehicle:veh,
+    driverRec,
     customerCompanyId:o.ownCompanyId||null,
     customerCompanyName:o.ownCompanyName||(customerCo&&customerCo.name)||'',
-    carrierCompanyId:myCo.id,
-    carrierCompanyName:myCo.name,
     customerAdminId:o.ownerAdminId||null,
     carrierAdminId:currentAdmin.id,
     driverName:driver,
-    vehiclePlate:plate,
-    vehiclePayloadTons:veh.payloadTons||null,
-    vehicleBodyLengthM:veh.bodyLengthM||null,
-    vehicleBodyWidthM:veh.bodyWidthM||null,
-    vehicleBodyHeightM:veh.bodyHeightM||null,
-    reqPayloadTons:o.reqPayloadTons||null,
-    reqLengthM:o.reqLengthM||null,
-    reqWidthM:o.reqWidthM||null,
-    reqHeightM:o.reqHeightM||null,
-    route:routeText(o),
-    orderSequentialNumber:o.sequentialNumber
-  };
-  stampServiceContractOnApp(o.transportApp, o.ownCompanyId, myCo.id);
+    driverPhone:driverPhone(driver, myCo.id),
+    driverPassportSeries:(($('claim-pass-series')||{}).value||'').trim(),
+    driverPassportNumber:(($('claim-pass-number')||{}).value||'').trim(),
+    driverPassportIssuedBy:(($('claim-pass-issued')||{}).value||'').trim(),
+    driverPassportIssueDate:(($('claim-pass-date')||{}).value||''),
+    commercialCustomer:o.customer||'',
+    vehiclePlate:plate
+  });
+  if(driverRec){
+    driverRec.passportSeries=(($('claim-pass-series')||{}).value||'').trim();
+    driverRec.passportNumber=(($('claim-pass-number')||{}).value||'').trim();
+    driverRec.passportIssuedBy=(($('claim-pass-issued')||{}).value||'').trim();
+    driverRec.passportIssueDate=isoDateOnly((($('claim-pass-date')||{}).value||''));
+  }
   o.onExchange=false;
   o.executorType='partner';
   o.carrierCompanyId=myCo.id;
@@ -1247,7 +1269,7 @@ function renderAdminExchangeBoard(orders){
     return `<div class="ex-card">
       <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
-      <p>Заказчик: <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong></p>
+      <p>Заказчик (выложил): <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong>${o.customer?` · клиент: ${esc(o.customer)}`:''}</p>
       <span class="ex-badge ${mine?'':'other'}">${mine?'ваш заказ':'чужой заказ'}</span>
       <p class="ex-route">${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
@@ -1751,21 +1773,31 @@ function buildOrderDocBody(kind, o){
     const left=app?resolveParty(app.customerCompanyId, app.customerCompanyName, null):own;
     const right=app?resolveParty(app.carrierCompanyId, app.carrierCompanyName, null):carrier;
     const svcContract=app&&app.serviceContractNumber
-      ?`<p>Договор транспортных услуг № <strong>${esc(app.serviceContractNumber)}</strong> от ${esc(formatIsoDateRu(app.serviceContractSignedAt))} (срок до ${esc(formatIsoDateRu(app.serviceContractExpiresAt))}${app.serviceContractAutoRenew?' · автопродление':''})</p>`
+      ?`<p>Базовый договор ТЭУ № <strong>${esc(app.serviceContractNumber)}</strong> от ${esc(formatIsoDateRu(app.serviceContractSignedAt))} (до ${esc(formatIsoDateRu(app.serviceContractExpiresAt))}${app.serviceContractAutoRenew?' · автопродление':''})</p>`
+      :'';
+    const cargoLine=app&&(app.reqPayloadTons||app.cargoDescription)
+      ?`<p><strong>Параметры груза / ТС:</strong> ${esc(app.cargoDescription||orderReqText(o)||'—')}${app.reqPayloadTons?` · ${esc(app.reqPayloadTons)} т`:''}${app.reqLengthM?` · ${esc(app.reqLengthM)}×${esc(app.reqWidthM||'—')}×${esc(app.reqHeightM||'—')} м`:''}</p>`
+      :'';
+    const passLine=app&&app.driverName
+      ?`<p><strong>Водитель:</strong> ${esc(app.driverName)}${app.driverPhone?` · ☎ ${esc(app.driverPhone)}`:''}<br><span class="muted">${transportAppDriverPassportHtml(app)}</span></p>`
       :'';
     return `${commonHead}
-      <p class="muted">${app&&app.signedAt?`Подписан в системе: ${esc(dateTime(app.signedAt))}`:'Черновик договора‑заявки по данным заказа'}</p>
+      <p class="muted">${app&&app.signedAt?`Договор‑заявка подписана: ${esc(dateTime(app.signedAt))}`:'Черновик договор‑заявки по данным заказа'}</p>
       ${svcContract}
+      ${app&&app.commercialCustomer?`<p>Клиент / грузоотправитель: <strong>${esc(app.commercialCustomer)}</strong></p>`:''}
       <h2>1. Заказчик перевозки</h2>
       ${partyLinesHtml(left)}
       <h2>2. Перевозчик</h2>
       ${partyLinesHtml(right)}
       <h2>3. Условия перевозки</h2>
+      ${cargoLine}
       <p>Маршрут: <strong>${esc((app&&app.route)||routeText(o)||'—')}</strong></p>
       <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <p>Подача: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong><br>
-      Водитель: <strong>${esc(driver)}</strong>${phone?` · ☎ ${esc(phone)}`:''}<br>
-      ТС: <strong>${esc(plate)}</strong>
+      <p>Подача: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
+      ${passLine}
+      <p>ТС: <strong>${esc(plate)}</strong>
+      ${app&&app.vehiclePayloadTons?` · ${esc(app.vehiclePayloadTons)} т`:''}
+      ${app&&(app.vehicleBodyLengthM||app.vehicleBodyWidthM)?` · ${esc(app.vehicleBodyLengthM||'—')}×${esc(app.vehicleBodyWidthM||'—')}×${esc(app.vehicleBodyHeightM||'—')} м`:''}
       ${orderReqText(o)?`<br>Требования: ${esc(orderReqText(o))}`:''}</p>
       <h2>4. Оплата</h2>
       <p>${esc(orderDocMoneyLine(o))}</p>
@@ -2025,7 +2057,9 @@ function openDetail(id){
       ${o.transportApp?`<div class="claim-box">
         <h3>Договор‑заявка подписана</h3>
         <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
+        ${o.transportApp.commercialCustomer?`<p>Клиент: ${esc(o.transportApp.commercialCustomer)}</p>`:''}
         <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</p>
+        <p class="muted">${transportAppDriverPassportHtml(o.transportApp)}</p>
         <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
       </div>`:''}
     </section>
@@ -2426,6 +2460,12 @@ function openCatalogs(){
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
       <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
+      <div class="row" style="margin-top:4px;gap:4px;flex-wrap:wrap">
+        <input class="tiny" id="drv-pass-s-${i}" inputmode="numeric" maxlength="4" placeholder="пасп. серия" value="${esc(d.passportSeries||'')}" title="Серия" style="flex:0 0 52px" />
+        <input class="tiny" id="drv-pass-n-${i}" inputmode="numeric" maxlength="6" placeholder="номер" value="${esc(d.passportNumber||'')}" title="Номер" style="flex:0 0 64px" />
+        <input id="drv-pass-i-${i}" placeholder="кем выдан" value="${esc(d.passportIssuedBy||'')}" style="flex:1;min-width:80px" />
+        <input id="drv-pass-d-${i}" type="date" value="${esc(isoDateOnly(d.passportIssueDate))}" title="Дата выдачи" style="flex:0 0 auto" />
+      </div>
     </div>`;
   }).join('') || `<div class="hint">Нет водителей</div>`;
 
@@ -2468,7 +2508,7 @@ function openCatalogs(){
     const st=transportContractStatusInfo(tc);
     return `<div class="dense-row" data-tc-row="${esc(tc.id)}">
       <button type="button" class="grow" data-edit-tc="${esc(tc.id)}">
-        <div class="name">№ ${esc(tc.contractNumber)} · ${esc(tc.ownCompanyName||'—')} → ${esc(tc.carrierCompanyName||'—')}</div>
+        <div class="name">№ ${esc(tc.contractNumber)} · ${esc(tc.customerCompanyName||'—')} → ${esc(tc.carrierCompanyName||'—')}</div>
         <div class="meta">от ${esc(formatIsoDateRu(tc.signedAt))} · ${esc(st.label)}${tc.autoRenew?' · автопродление':''}</div>
       </button>
     </div>`;
@@ -2496,7 +2536,7 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='contracts'?'on':''}" data-cat-panel="contracts">
-      <p class="cat-panel-hint">Договор транспортных услуг (ТЭУ) между вашей фирмой и перевозчиком. Обязателен при заказе с внешним перевозчиком и при «Забрать» с биржи. Автопродление — если ни одна сторона не заявила расторжение.</p>
+      <p class="cat-panel-hint">Базовый договор ТЭУ: <b>заказчик</b> (кто платит / выложил на биржу) ↔ <b>перевозчик</b> (наша фирма или внешний). Договор‑заявка на поездку — в заказе. Автопродление, если никто не заявил расторжение.</p>
       <div class="row" style="gap:6px">
         <input class="cat-search" id="tc-search" placeholder="Поиск: номер, фирма…" style="flex:1;margin:0" />
         <button type="button" class="primary cat-add-btn" id="tc-new" style="width:auto;flex:0 0 auto;padding:8px 12px!important">+</button>
@@ -2592,14 +2632,15 @@ function openCatalogs(){
 
   const openContractEditor=(contract)=>{
     showCatalogTab('contracts');
-    const owns=ownCompanies();
-    const carriers=companiesByRole('carrier');
-    const defOwn=myCo||owns[0]||null;
+    const customers=contractPartyCompanies('customer');
+    const carriers=contractPartyCompanies('carrier');
+    const defCust=customers[0]||null;
+    const defCarr=myCo||carriers.find(c=>c.id!==defCust?.id)||carriers[0]||null;
     const tc=contract?(normalizeTransportContract(contract)||contract):{
       id:uuid(),
-      contractNumber:defOwn?nextContractNumber(defOwn.id):'',
-      ownCompanyId:defOwn?defOwn.id:'',
-      carrierCompanyId:'',
+      contractNumber:defCust?nextContractNumber(defCust.id):'',
+      customerCompanyId:defCust?defCust.id:'',
+      carrierCompanyId:defCarr?defCarr.id:'',
       signedAt:isoDateOnly(new Date()),
       effectiveFrom:isoDateOnly(new Date()),
       termMonths:12,
@@ -2620,8 +2661,8 @@ function openCatalogs(){
         <h3 style="margin:0;flex:1;font-size:.95rem">${contract?'Договор ТЭУ':'Новый договор ТЭУ'}</h3>
         <button type="button" class="icon-btn" id="tc-cancel" title="Закрыть">×</button>
       </div>
-      <label>Наша фирма (заказчик услуг)</label>
-      <select id="tc-own" ${owns.length<=1?'disabled':''}>${owns.map(c=>`<option value="${esc(c.id)}" ${c.id===tc.ownCompanyId?'selected':''}>${esc(c.name)}</option>`).join('')||'<option value="">— нет фирмы —</option>'}</select>
+      <label>Заказчик (платит за перевозку)</label>
+      <select id="tc-customer">${customers.length?customers.map(c=>`<option value="${esc(c.id)}" ${c.id===tc.customerCompanyId?'selected':''}>${esc(c.name)}</option>`).join(''):'<option value="">— добавьте фирму —</option>'}</select>
       <label>Перевозчик</label>
       <select id="tc-carrier">${carriers.length?carriers.map(c=>`<option value="${esc(c.id)}" ${c.id===tc.carrierCompanyId?'selected':''}>${esc(c.name)}</option>`).join(''):'<option value="">— добавьте перевозчика —</option>'}</select>
       <label>Номер договора</label>
@@ -2648,23 +2689,24 @@ function openCatalogs(){
     };
     $('tc-signed')&&($('tc-signed').onchange=refreshExpiryHint);
     $('tc-term')&&($('tc-term').oninput=refreshExpiryHint);
-    $('tc-own')&&($('tc-own').onchange=()=>{
-      const ownId=($('tc-own').value||'');
-      if(!contract && ownId && $('tc-number') && !$('tc-number').value.trim())
-        $('tc-number').value=nextContractNumber(ownId);
+    $('tc-customer')&&($('tc-customer').onchange=()=>{
+      const custId=($('tc-customer').value||'');
+      if(!contract && custId && $('tc-number') && !$('tc-number').value.trim())
+        $('tc-number').value=nextContractNumber(custId);
     });
     $('tc-cancel').onclick=()=>{ box.classList.remove('show'); box.innerHTML=''; };
     $('tc-save')&&($('tc-save').onclick=()=>{
-      const ownId=($('tc-own')||{}).value||'';
+      const customerId=($('tc-customer')||{}).value||'';
       const carrierId=($('tc-carrier')||{}).value||'';
       const number=(($('tc-number')||{}).value||'').trim();
-      if(!ownId||!carrierId){ alert('Выберите фирму и перевозчика'); return; }
+      if(!customerId||!carrierId){ alert('Выберите заказчика и перевозчика'); return; }
+      if(customerId===carrierId){ alert('Заказчик и перевозчик должны быть разными'); return; }
       if(!number){ alert('Укажите номер договора'); return; }
       const signedAt=isoDateOnly(($('tc-signed')||{}).value)||isoDateOnly(new Date());
       const termMonths=Math.max(1, Math.min(120, +(($('tc-term')||{}).value||12)||12));
       upsertTransportContract({
         id:tc.id, contractNumber:number,
-        ownCompanyId:ownId, carrierCompanyId:carrierId,
+        customerCompanyId:customerId, carrierCompanyId:carrierId,
         signedAt, effectiveFrom:signedAt, termMonths,
         expiresAt:addMonthsIso(signedAt, termMonths),
         autoRenew:!!($('tc-autorenew')&&$('tc-autorenew').checked),
@@ -3057,6 +3099,10 @@ function openCatalogs(){
     else if(!state.drivers[i].pin) state.drivers[i].pin=resolveDriverPin(state.drivers[i]);
     state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
     const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
+    state.drivers[i].passportSeries=String((($('drv-pass-s-'+i)||{}).value||'')).trim();
+    state.drivers[i].passportNumber=String((($('drv-pass-n-'+i)||{}).value||'')).trim();
+    state.drivers[i].passportIssuedBy=String((($('drv-pass-i-'+i)||{}).value||'')).trim();
+    state.drivers[i].passportIssueDate=isoDateOnly((($('drv-pass-d-'+i)||{}).value||''));
     if(!state.drivers[i].companyId){
       const co=currentOwnCompany();
       if(co){ state.drivers[i].companyId=co.id; state.drivers[i].companyName=co.name; state.drivers[i].spaceId=currentSpaceId(); }

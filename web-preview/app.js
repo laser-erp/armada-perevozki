@@ -65,7 +65,102 @@ function normalizeCarrierVehicle(v){
 function normalizeCarrierDriver(d){
   if(!d||typeof d!=='object') return null;
   const name=String(d.name||'').trim(); if(!name) return null;
-  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), vehicleId:d.vehicleId||null};
+  return {
+    id:d.id||uuid(), name, phone:formatPhone(d.phone||''), vehicleId:d.vehicleId||null,
+    passportSeries:String(d.passportSeries||'').trim(),
+    passportNumber:String(d.passportNumber||'').trim(),
+    passportIssuedBy:String(d.passportIssuedBy||'').trim(),
+    passportIssueDate:isoDateOnly(d.passportIssueDate)||''
+  };
+}
+function driverPassportFields(d){
+  if(!d) return {passportSeries:'', passportNumber:'', passportIssuedBy:'', passportIssueDate:''};
+  return {
+    passportSeries:String(d.passportSeries||'').trim(),
+    passportNumber:String(d.passportNumber||'').trim(),
+    passportIssuedBy:String(d.passportIssuedBy||'').trim(),
+    passportIssueDate:isoDateOnly(d.passportIssueDate)||''
+  };
+}
+function normalizeTransportApp(app){
+  if(!app||typeof app!=='object') return null;
+  const pp=driverPassportFields(app);
+  return Object.assign({}, app, pp, {
+    driverName:String(app.driverName||'').trim(),
+    driverPhone:formatPhone(app.driverPhone||''),
+    cargoDescription:String(app.cargoDescription||'').trim(),
+    commercialCustomer:String(app.commercialCustomer||'').trim()
+  });
+}
+function buildTransportApp(opts){
+  const o=opts.order||{};
+  const carrierCo=opts.carrierCo||{};
+  const veh=opts.vehicle||{};
+  const driverRec=opts.driverRec||{};
+  const pp=driverPassportFields(driverRec);
+  const app={
+    id:opts.id||uuid(),
+    signedAt:opts.signedAt||new Date().toISOString(),
+    customerCompanyId:opts.customerCompanyId||null,
+    customerCompanyName:opts.customerCompanyName||'',
+    carrierCompanyId:carrierCo.id||opts.carrierCompanyId||null,
+    carrierCompanyName:carrierCo.name||opts.carrierCompanyName||'',
+    customerAdminId:opts.customerAdminId||null,
+    carrierAdminId:opts.carrierAdminId||null,
+    commercialCustomer:opts.commercialCustomer||o.customer||'',
+    driverName:opts.driverName||'',
+    driverPhone:formatPhone(opts.driverPhone||driverRec.phone||''),
+    driverPassportSeries:opts.driverPassportSeries||pp.passportSeries,
+    driverPassportNumber:opts.driverPassportNumber||pp.passportNumber,
+    driverPassportIssuedBy:opts.driverPassportIssuedBy||pp.passportIssuedBy,
+    driverPassportIssueDate:opts.driverPassportIssueDate||pp.passportIssueDate,
+    vehiclePlate:opts.vehiclePlate||veh.plate||'',
+    vehiclePayloadTons:veh.payloadTons??opts.vehiclePayloadTons??null,
+    vehicleBodyLengthM:veh.bodyLengthM??opts.vehicleBodyLengthM??null,
+    vehicleBodyWidthM:veh.bodyWidthM??opts.vehicleBodyWidthM??null,
+    vehicleBodyHeightM:veh.bodyHeightM??opts.vehicleBodyHeightM??null,
+    reqPayloadTons:o.reqPayloadTons??opts.reqPayloadTons??null,
+    reqLengthM:o.reqLengthM??opts.reqLengthM??null,
+    reqWidthM:o.reqWidthM??opts.reqWidthM??null,
+    reqHeightM:o.reqHeightM??opts.reqHeightM??null,
+    cargoDescription:opts.cargoDescription||orderReqText(o)||'',
+    route:opts.route||routeText(o)||'',
+    orderSequentialNumber:o.sequentialNumber??opts.orderSequentialNumber??null,
+    vehicleAt:o.vehicleAt||opts.vehicleAt||null
+  };
+  if(opts.customerCompanyId&&opts.carrierCompanyId)
+    stampServiceContractOnApp(app, opts.customerCompanyId, opts.carrierCompanyId);
+  return normalizeTransportApp(app);
+}
+function transportAppDriverPassportHtml(app){
+  if(!app) return '';
+  const bits=[];
+  if(app.driverPassportSeries||app.driverPassportNumber)
+    bits.push(`паспорт ${esc(app.driverPassportSeries||'—')} ${esc(app.driverPassportNumber||'')}`);
+  if(app.driverPassportIssuedBy) bits.push(`выдан ${esc(app.driverPassportIssuedBy)}`);
+  if(app.driverPassportIssueDate) bits.push(formatIsoDateRu(app.driverPassportIssueDate));
+  return bits.length?bits.join(' · '):'—';
+}
+function contractPartyCompanies(role){
+  const seen=new Set();
+  const out=[];
+  const add=c=>{
+    if(!c||!c.id||seen.has(c.id)) return;
+    if(role==='customer'){
+      if(!companyHasRole(c,'own')&&!companyHasRole(c,'customer')) return;
+    } else {
+      if(!companyHasRole(c,'own')&&!companyHasRole(c,'carrier')) return;
+    }
+    if(!isSuperAdmin() && companyHasRole(c,'own') && !companyInMySpace(c) && !companyHasRole(c,'carrier')) return;
+    seen.add(c.id);
+    out.push(c);
+  };
+  (state.companies||[]).forEach(c=>{
+    if(companyHasRole(c,'own')) add(c);
+  });
+  if(role==='customer') companiesByRole('customer').forEach(add);
+  else companiesByRole('carrier').forEach(add);
+  return out.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
 }
 /** Привести все телефоны в базе к +7XXXXXXXXXX. */
 function normalizeAllPhones(){
@@ -274,9 +369,9 @@ function normalizeTermination(t){
 }
 function normalizeTransportContract(raw){
   if(!raw||typeof raw!=='object') return null;
-  const ownCompanyId=raw.ownCompanyId||null;
+  const customerCompanyId=raw.customerCompanyId||raw.ownCompanyId||null;
   const carrierCompanyId=raw.carrierCompanyId||null;
-  if(!ownCompanyId||!carrierCompanyId) return null;
+  if(!customerCompanyId||!carrierCompanyId) return null;
   const contractNumber=String(raw.contractNumber||'').trim();
   if(!contractNumber) return null;
   let termMonths=+raw.termMonths;
@@ -288,13 +383,15 @@ function normalizeTransportContract(raw){
   if(!expiresAt) expiresAt=addMonthsIso(effectiveFrom, termMonths);
   const autoRenew=raw.autoRenew!==false;
   const status=raw.status==='terminated'?'terminated':'active';
+  const customer=findCompanyById(customerCompanyId);
+  const carrier=findCompanyById(carrierCompanyId);
   return {
     id:raw.id||uuid(),
     contractNumber,
-    ownCompanyId,
+    customerCompanyId,
     carrierCompanyId,
-    ownCompanyName:String(raw.ownCompanyName||'').trim(),
-    carrierCompanyName:String(raw.carrierCompanyName||'').trim(),
+    customerCompanyName:String(raw.customerCompanyName||raw.ownCompanyName||(customer&&customer.name)||'').trim(),
+    carrierCompanyName:String(raw.carrierCompanyName||(carrier&&carrier.name)||'').trim(),
     spaceId:raw.spaceId||null,
     signedAt,
     effectiveFrom,
@@ -311,6 +408,8 @@ function normalizeTransportContract(raw){
 function contractInMySpace(c){
   if(!c) return false;
   if(isSuperAdmin()) return true;
+  const myIds=(ownCompaniesList()||[]).map(x=>x.id);
+  if(myIds.includes(c.customerCompanyId)||myIds.includes(c.carrierCompanyId)) return true;
   const sid=currentSpaceId();
   if(!sid) return !c.spaceId;
   return !c.spaceId||c.spaceId===sid;
@@ -350,10 +449,10 @@ function isTransportContractActive(c){
   if(c.expiresAt&&c.expiresAt<today) return false;
   return true;
 }
-function findActiveTransportContract(ownCompanyId, carrierCompanyId){
+function findActiveTransportContract(customerCompanyId, carrierCompanyId){
   processContractRenewals();
   return (state.transportContracts||[]).find(c=>
-    c.ownCompanyId===ownCompanyId && c.carrierCompanyId===carrierCompanyId && isTransportContractActive(c)
+    c.customerCompanyId===customerCompanyId && c.carrierCompanyId===carrierCompanyId && isTransportContractActive(c)
   )||null;
 }
 function transportContractStatusInfo(c){
@@ -372,36 +471,35 @@ function transportContractStatusInfo(c){
   }
   return {level:'active', label:'бессрочно'};
 }
-function requireActiveTransportContract(ownCompanyId, carrierCompanyId){
-  const c=findActiveTransportContract(ownCompanyId, carrierCompanyId);
+function requireActiveTransportContract(customerCompanyId, carrierCompanyId){
+  const c=findActiveTransportContract(customerCompanyId, carrierCompanyId);
   if(!c) return 'Нет действующего договора транспортных услуг. Создайте в Справочники → Договоры.';
   if(c.termination&&c.termination.intentBy){
     return `Договор ТЭУ № ${c.contractNumber} — заявлено расторжение, действует до ${formatIsoDateRu(c.expiresAt)}.`;
   }
   return null;
 }
-function nextContractNumber(ownCompanyId){
+function nextContractNumber(customerCompanyId){
   const year=new Date().getFullYear();
   const prefix=`ТЭУ-${year}-`;
-  const n=(state.transportContracts||[]).filter(c=>c.ownCompanyId===ownCompanyId&&(c.contractNumber||'').startsWith(prefix)).length+1;
+  const n=(state.transportContracts||[]).filter(c=>c.customerCompanyId===customerCompanyId&&(c.contractNumber||'').startsWith(prefix)).length+1;
   return prefix+String(n).padStart(3,'0');
 }
 function upsertTransportContract(raw){
   const c=normalizeTransportContract(raw);
   if(!c) return null;
-  const own=findCompanyById(c.ownCompanyId);
+  const customer=findCompanyById(c.customerCompanyId);
   const carr=findCompanyById(c.carrierCompanyId);
-  if(own) c.ownCompanyName=own.name;
+  if(customer) c.customerCompanyName=customer.name;
   if(carr) c.carrierCompanyName=carr.name;
   if(!c.spaceId){
-    c.spaceId=(own&&own.spaceId)||currentSpaceId()||null;
+    const my=currentOwnCompany();
+    c.spaceId=(my&&my.spaceId)||currentSpaceId()||(customer&&customer.spaceId)||null;
   }
   const dup=(state.transportContracts||[]).find(x=>
-    x.id!==c.id && x.ownCompanyId===c.ownCompanyId && x.carrierCompanyId===c.carrierCompanyId && x.status!=='terminated'
+    x.id!==c.id && x.customerCompanyId===c.customerCompanyId && x.carrierCompanyId===c.carrierCompanyId && x.status!=='terminated'
   );
-  if(dup && c.status!=='terminated'){
-    c.id=dup.id;
-  }
+  if(dup && c.status!=='terminated') c.id=dup.id;
   const i=(state.transportContracts||[]).findIndex(x=>x.id===c.id);
   c.updatedAt=new Date().toISOString();
   if(i>=0) state.transportContracts[i]=c;
@@ -409,9 +507,9 @@ function upsertTransportContract(raw){
   state.transportContracts.sort((a,b)=>(b.signedAt||'').localeCompare(a.signedAt||'','ru'));
   return c;
 }
-function stampServiceContractOnApp(app, ownCompanyId, carrierCompanyId){
+function stampServiceContractOnApp(app, customerCompanyId, carrierCompanyId){
   if(!app) return;
-  const tc=findActiveTransportContract(ownCompanyId, carrierCompanyId);
+  const tc=findActiveTransportContract(customerCompanyId, carrierCompanyId);
   if(tc){
     app.serviceContractId=tc.id;
     app.serviceContractNumber=tc.contractNumber;
@@ -420,9 +518,9 @@ function stampServiceContractOnApp(app, ownCompanyId, carrierCompanyId){
     app.serviceContractAutoRenew=tc.autoRenew;
   }
 }
-function linkOrderServiceContract(order, ownCompanyId, carrierCompanyId){
+function linkOrderServiceContract(order, customerCompanyId, carrierCompanyId){
   if(!order) return;
-  const tc=findActiveTransportContract(ownCompanyId, carrierCompanyId);
+  const tc=findActiveTransportContract(customerCompanyId, carrierCompanyId);
   if(tc){
     order.serviceContractId=tc.id;
     order.serviceContractNumber=tc.contractNumber;
