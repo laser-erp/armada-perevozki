@@ -2039,9 +2039,9 @@ function openDetail(id){
           </div>
         </div>
         <label for="d-vehicle-date">Подача ТС — дата</label>
-        <input id="d-vehicle-date" placeholder="ДД/ММ/ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
+        <input id="d-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
         <label for="d-vehicle-time">Подача ТС — время</label>
-        <input id="d-vehicle-time" type="time" step="60" value="${esc(toTimeHmValue(o.vehicleAt))}" />
+        <input id="d-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" value="${esc(toTimeHmValue(o.vehicleAt))}" autocomplete="off" />
         <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
         <h3 style="margin:12px 0 4px;font-size:.85rem">Цены</h3>
         <div class="form-pair">

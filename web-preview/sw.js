@@ -1,5 +1,5 @@
 /* АРМАДА PWA — HTML с сети; офлайн — оболочка из кэша; уведомления */
-const CACHE = 'armada-shell-v13';
+const CACHE = 'armada-shell-v14';
 const SHELL = ['./', './index.html', './styles.css', './store.js', './driver.js', './admin.js', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {
