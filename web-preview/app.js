@@ -156,9 +156,37 @@ function findCompanyByInn(inn){
   if(!key) return null;
   return (state.companies||[]).find(c=>String(c.inn||'').replace(/\D/g,'')===key)||null;
 }
+function catalogCustomerCompanies(){
+  return (state.companies||[]).filter(c=>companyHasRole(c,'customer')&&companyInMySpace(c));
+}
+function findCompanyByInnInCatalog(inn){
+  const key=String(inn||'').replace(/\D/g,'');
+  if(!key) return null;
+  const pool=(state.companies||[]).filter(c=>String(c.inn||'').replace(/\D/g,'')===key);
+  if(!pool.length) return null;
+  if(isSuperAdmin()) return pool[0];
+  const sid=currentSpaceId();
+  if(sid) return pool.find(c=>!c.spaceId||c.spaceId===sid)||null;
+  return pool.find(c=>!c.spaceId)||pool[0];
+}
+function findCompanyForCustomer(q){
+  const s=String(q||'').trim();
+  if(!s) return null;
+  const digits=s.replace(/\D/g,'');
+  if(digits.length===10||digits.length===12){
+    const byInn=findCompanyByInnInCatalog(digits);
+    if(byInn) return byInn;
+  }
+  const pool=catalogCustomerCompanies();
+  const key=s.toLowerCase();
+  let hit=pool.find(c=>String(c.name||'').trim().toLowerCase()===key);
+  if(hit) return hit;
+  hit=pool.find(c=>String(c.name||'').trim().toLowerCase().startsWith(key));
+  if(hit) return hit;
+  return pool.find(c=>String(c.name||'').trim().toLowerCase().includes(key))||null;
+}
 function findCustomer(name){
-  // совместимость: заказчик = компания с ролью customer (или любая по имени)
-  const c=findCompanyByName(name);
+  const c=findCompanyForCustomer(name)||findCompanyByName(name);
   if(c) return c;
   const key=String(name||'').trim().toLowerCase(); if(!key) return null;
   return state.customers.find(x=>String(x.name||'').trim().toLowerCase()===key)||null;
@@ -825,13 +853,67 @@ function updateCreateFreeHint(){
 migrateCompanies();
 migrateAdmins();
 migrateDriverOwners();
+function applyCustomerFromCompany(co, prefix='create'){
+  if(!co) return;
+  const nameEl=$(`${prefix}-customer`);
+  const innEl=$(`${prefix}-customer-inn`);
+  if(nameEl) nameEl.value=co.name||'';
+  if(innEl) innEl.value=co.inn||'';
+  if(prefix==='create'){
+    fillAddressPickers(co.name);
+    const cNameEl=$('create-contact-name');
+    const cPhoneEl=$('create-contact-phone');
+    const prim=primaryContact(co);
+    if(prim){
+      if(cNameEl) cNameEl.value=prim.name||'';
+      if(cPhoneEl) cPhoneEl.value=contactPhone(prim);
+    }
+    const pick=$('create-customer-pick');
+    if(pick && co.id) pick.value=co.id;
+  }
+}
 function fillCustomerPickers(){
-  $('create-customer')&&($('create-customer').oninput=()=>{
-    const name=($('create-customer').value||'').trim();
-    const co=findCompanyByName(name);
-    if(co && co.inn && $('create-customer-inn')) $('create-customer-inn').value=co.inn;
-    fillAddressPickers(name); fillContactPickers(name);
-  });
+  const list=catalogCustomerCompanies().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const dl=$('create-customer-list');
+  if(dl) dl.innerHTML=list.map(c=>`<option value="${esc(c.name)}"></option>`).join('');
+  const pick=$('create-customer-pick');
+  if(pick){
+    pick.innerHTML='<option value="">— выберите компанию —</option>'+list.map(c=>{
+      const innHint=c.inn?` · ИНН ${esc(c.inn)}`:'';
+      return `<option value="${esc(c.id)}">${esc(c.name)}${innHint}</option>`;
+    }).join('');
+    if(!pick._bound){
+      pick._bound=true;
+      pick.onchange=()=>{
+        const co=findCompanyById(pick.value);
+        if(!co) return;
+        applyCustomerFromCompany(co,'create');
+        const st=$('create-customer-inn-status');
+        if(st) st.textContent='Из справочника: '+co.name;
+      };
+    }
+  }
+  const inp=$('create-customer');
+  if(inp && !inp._custBound){
+    inp._custBound=true;
+    inp.oninput=()=>{
+      const name=(inp.value||'').trim();
+      const co=findCompanyByName(name);
+      if(co){
+        applyCustomerFromCompany(co,'create');
+        const st=$('create-customer-inn-status');
+        if(st) st.textContent='Из справочника: '+co.name;
+      }
+    };
+    inp.onchange=()=>{
+      const co=findCompanyForCustomer(inp.value||'');
+      if(co){
+        applyCustomerFromCompany(co,'create');
+        const st=$('create-customer-inn-status');
+        if(st) st.textContent='Из справочника: '+co.name;
+      }
+    };
+  }
 }
 async function applyCustomerFromInn(inn, statusEl, prefix='create'){
   const st=statusEl||$(`${prefix}-customer-inn-status`);
@@ -841,14 +923,9 @@ async function applyCustomerFromInn(inn, statusEl, prefix='create'){
   const nameEl=$(`${prefix}-customer`);
   const innEl=$(`${prefix}-customer-inn`);
   try{
-    const existing=findCompanyByInn(clean);
+    const existing=findCompanyByInnInCatalog(clean);
     if(existing){
-      if(nameEl) nameEl.value=existing.name;
-      if(innEl) innEl.value=existing.inn||clean;
-      if(prefix==='create'){
-        fillAddressPickers(existing.name);
-        fillContactPickers(existing.name);
-      }
+      applyCustomerFromCompany(existing, prefix);
       if(st) st.textContent='Из справочника: '+existing.name;
       return existing;
     }
@@ -878,7 +955,22 @@ async function applyCustomerFromInn(inn, statusEl, prefix='create'){
 }
 function wireCreateCustomerInn(){
   const btn=$('create-customer-inn-lookup');
-  if(btn) btn.onclick=()=>applyCustomerFromInn((($('create-customer-inn')||{}).value||'').trim());
+  const inp=$('create-customer-inn');
+  const doLookup=()=>applyCustomerFromInn((inp&&inp.value||'').trim(), $('create-customer-inn-status'), 'create');
+  if(btn) btn.onclick=doLookup;
+  if(inp && !inp._innBound){
+    inp._innBound=true;
+    inp.oninput=()=>{
+      const clean=String(inp.value||'').replace(/\D/g,'');
+      if(clean.length!==10&&clean.length!==12) return;
+      const co=findCompanyByInnInCatalog(clean);
+      if(co){
+        applyCustomerFromCompany(co,'create');
+        const st=$('create-customer-inn-status');
+        if(st) st.textContent='Из справочника: '+co.name;
+      }
+    };
+  }
 }
 function fillContactPickers(name){
   const c=findCompanyByName(name);

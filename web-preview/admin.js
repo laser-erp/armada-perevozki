@@ -1482,6 +1482,7 @@ function bindAdminCreate(){
     createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-date')) $('create-vehicle-date').value=''; if($('create-vehicle-time')) $('create-vehicle-time').value=''; ['create-loading-contact-name','create-loading-contact-phone','create-unloading-contact-name','create-unloading-contact-phone'].forEach(id=>{ if($(id)) $(id).value=''; }); if($('create-exec-mode')) $('create-exec-mode').value='own';
     ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
     if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
+    if($('create-customer-pick')) $('create-customer-pick').value='';
     fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
     const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };

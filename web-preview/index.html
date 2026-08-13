@@ -145,8 +145,11 @@
               <button type="button" class="secondary" id="create-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
             </div>
             <div class="hint" id="create-customer-inn-status"></div>
+            <label for="create-customer-pick">Из справочника</label>
+            <select id="create-customer-pick"><option value="">— выберите компанию —</option></select>
             <label for="create-customer">Заказчик (наименование)</label>
-            <input id="create-customer" placeholder="Название компании" />
+            <input id="create-customer" list="create-customer-list" placeholder="Название или выберите выше" />
+            <datalist id="create-customer-list"></datalist>
             <div class="form-pair">
               <div>
                 <label for="create-contact-name">Контактное лицо</label>
@@ -368,9 +371,9 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-13-party-address-bank"></script>
-<script src="driver.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="admin.js?v=2026-08-13-party-address-bank"></script>
-<script src="app.js?v=2026-08-13-party-address-bank"></script>
+  <script src="store.js?v=2026-08-13-create-customer-pick"></script>
+<script src="driver.js?v=2026-08-13-create-customer-pick"></script>
+<script src="admin.js?v=2026-08-13-create-customer-pick"></script>
+<script src="app.js?v=2026-08-13-create-customer-pick"></script>
 </body>
 </html>
