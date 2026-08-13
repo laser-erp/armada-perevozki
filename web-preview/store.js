@@ -172,7 +172,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-fns-inn-lookup";
+const APP_BUILD="2026-08-13-fns-inn-proxy-all";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -907,7 +907,8 @@ function egrulNalogBase(){
   const h=(location.hostname||'').toLowerCase();
   if(h==='aptown1.fvds.ru'||h==='176.12.67.35'||h==='localhost'||h==='127.0.0.1')
     return location.origin.replace(/\/$/,'')+'/egrul-api';
-  return 'https://egrul.nalog.ru';
+  // С любого другого URL (GitHub Pages, закладка) — прокси на live, как PB_BASE
+  return 'http://aptown1.fvds.ru/egrul-api';
 }
 function parseEgrulDirectorField(g){
   const s=String(g||'').trim();
