@@ -1057,6 +1057,31 @@ function formatRuDateInput(v){
   const pad=n=>String(n).padStart(2,'0');
   return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
 }
+function isoDateToRuInput(iso){
+  const s=isoDateOnly(iso);
+  if(!s) return '';
+  return formatIsoDateRu(s);
+}
+function readRuDateFromDom(id){
+  const el=$(id);
+  if(!el) return '';
+  const f=formatRuDateInput((el.value||'').trim());
+  if(!f) return '';
+  const d=parseRuDate(f);
+  return d?isoDateOnly(d):'';
+}
+function wireRuDateInput(id, onChange){
+  const el=$(id);
+  if(!el) return;
+  el.setAttribute('lang','ru');
+  if(el.type==='date') el.type='text';
+  el.setAttribute('placeholder','ДД.ММ.ГГГГ');
+  el.setAttribute('inputmode','numeric');
+  el.setAttribute('maxlength','10');
+  el.setAttribute('autocomplete','off');
+  el.oninput=()=>{ el.value=maskRuDateInput(el.value); if(onChange) onChange(); };
+  el.onblur=()=>{ const f=formatRuDateInput(el.value); if(f) el.value=f; if(onChange) onChange(); };
+}
 function maskRuDateInput(raw){
   const v=String(raw||'').replace(/\D/g,'').slice(0,8);
   if(v.length<=2) return v;

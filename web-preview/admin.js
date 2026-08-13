@@ -2692,7 +2692,7 @@ function openCatalogs(){
       <label>Номер договора</label>
       <input id="tc-number" value="${esc(tc.contractNumber||'')}" />
       <div class="form-pair">
-        <div><label>Дата составления</label><input id="tc-signed" type="date" value="${esc(isoDateOnly(tc.signedAt))}" /></div>
+        <div><label>Дата составления</label><input id="tc-signed" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" value="${esc(isoDateToRuInput(tc.signedAt))}" /></div>
         <div><label>Срок, месяцев</label><input id="tc-term" inputmode="numeric" value="${termM}" /></div>
       </div>
       <p class="hint" id="tc-expires-hint">Срок действия до: ${esc(formatIsoDateRu(expPreview))}</p>
@@ -2706,12 +2706,12 @@ function openCatalogs(){
       </div>
     `;
     const refreshExpiryHint=()=>{
-      const from=isoDateOnly(($('tc-signed')||{}).value)||isoDateOnly(new Date());
+      const from=readRuDateFromDom('tc-signed')||isoDateOnly(new Date());
       const months=Math.max(1, Math.min(120, +(($('tc-term')||{}).value||12)||12));
       const el=$('tc-expires-hint');
       if(el) el.textContent='Срок действия до: '+formatIsoDateRu(addMonthsIso(from, months));
     };
-    $('tc-signed')&&($('tc-signed').onchange=refreshExpiryHint);
+    wireRuDateInput('tc-signed', refreshExpiryHint);
     $('tc-term')&&($('tc-term').oninput=refreshExpiryHint);
     $('tc-customer')&&($('tc-customer').onchange=()=>{
       const custId=($('tc-customer').value||'');
@@ -2726,7 +2726,8 @@ function openCatalogs(){
       if(!customerId||!carrierId){ alert('Выберите заказчика и перевозчика'); return; }
       if(customerId===carrierId){ alert('Заказчик и перевозчик должны быть разными'); return; }
       if(!number){ alert('Укажите номер договора'); return; }
-      const signedAt=isoDateOnly(($('tc-signed')||{}).value)||isoDateOnly(new Date());
+      const signedAt=readRuDateFromDom('tc-signed');
+      if(!signedAt){ alert('Укажите дату составления в формате ДД.ММ.ГГГГ'); return; }
       const termMonths=Math.max(1, Math.min(120, +(($('tc-term')||{}).value||12)||12));
       upsertTransportContract({
         id:tc.id, contractNumber:number,
