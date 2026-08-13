@@ -367,6 +367,90 @@ function normalizeTermination(t){
     reason:String(t.reason||'').trim()
   };
 }
+function normalizeEditProposal(raw){
+  if(!raw||typeof raw!=='object') return null;
+  const text=String(raw.text||'').trim();
+  if(!text) return null;
+  const party=raw.party==='carrier'?'carrier':'customer';
+  const status=raw.status==='accepted'?'accepted':raw.status==='rejected'?'rejected':'open';
+  return {
+    id:raw.id||uuid(),
+    party,
+    text,
+    createdAt:raw.createdAt||new Date().toISOString(),
+    createdByAdminId:raw.createdByAdminId||null,
+    status:raw.status==='accepted'?'accepted':status
+  };
+}
+function defaultTransportContractBodyText(){
+  return `1. Предмет договора
+Перевозчик оказывает Заказчику услуги автомобильной перевозки грузов. Конкретные условия каждой перевозки (маршрут, груз, транспорт, водитель, сроки) определяются договором‑заявкой в системе АРМАДА.
+
+2. Срок действия
+Срок действия, автопродление и расторжение определяются полями карточки договора и отражены в печатной форме.
+
+3. Общие условия
+Стороны обмениваются заявками и подтверждают перевозки через систему. Оплата, ответственность и претензии — по договору‑заявке и настоящему договору.`;
+}
+function resolveTransportContractBodyText(c){
+  if(!c) return defaultTransportContractBodyText();
+  const t=String(c.bodyText||'').trim();
+  return t||defaultTransportContractBodyText();
+}
+function contractBodyTextToHtml(bodyText){
+  return String(bodyText||'').split(/\n\n+/).map(block=>{
+    const lines=block.split('\n');
+    const head=lines[0]||'';
+    const rest=lines.slice(1).join('\n').trim();
+    if(/^\d+\.\s/.test(head)){
+      return `<h2>${esc(head)}</h2>${rest?`<p>${esc(rest).replace(/\n/g,'<br>')}</p>`:''}`;
+    }
+    return `<p>${esc(block).replace(/\n/g,'<br>')}</p>`;
+  }).join('');
+}
+function transportContractOtherParty(party){
+  return party==='customer'?'carrier':party==='carrier'?'customer':null;
+}
+function canEditTransportContractBody(c, companyId){
+  if(!c||c.status==='terminated') return false;
+  const party=transportContractPartyForCompany(c, companyId);
+  if(!party) return false;
+  const creator=c.creatorParty||party;
+  if(party!==creator) return false;
+  const other=transportContractOtherParty(party);
+  if(other && isTransportContractPartySigned(c, other)) return false;
+  return true;
+}
+function canProposeTransportContractEdits(c, companyId){
+  if(!c||c.status==='terminated'||isTransportContractFullySigned(c)) return false;
+  const party=transportContractPartyForCompany(c, companyId);
+  if(!party||!c.creatorParty) return false;
+  return party!==c.creatorParty;
+}
+function addTransportContractProposal(c, party, text, adminId){
+  if(!c||!party||!String(text||'').trim()) return null;
+  const p=normalizeEditProposal({party, text, createdByAdminId:adminId||currentAdmin?.id});
+  if(!p) return null;
+  c.editProposals=(c.editProposals||[]).filter(x=>x&&x.status==='open');
+  c.editProposals.push(p);
+  return upsertTransportContract(c);
+}
+function acceptTransportContractProposal(c, proposalId){
+  if(!c||!proposalId) return null;
+  const p=(c.editProposals||[]).find(x=>x.id===proposalId&&x.status==='open');
+  if(!p) return null;
+  const body=resolveTransportContractBodyText(c);
+  c.bodyText=(body+'\n\n'+p.text).trim();
+  p.status='accepted';
+  return upsertTransportContract(c);
+}
+function rejectTransportContractProposal(c, proposalId){
+  if(!c||!proposalId) return null;
+  const p=(c.editProposals||[]).find(x=>x.id===proposalId&&x.status==='open');
+  if(!p) return null;
+  p.status='rejected';
+  return upsertTransportContract(c);
+}
 function normalizeTransportContract(raw){
   if(!raw||typeof raw!=='object') return null;
   const customerCompanyId=raw.customerCompanyId||raw.ownCompanyId||null;
@@ -404,6 +488,9 @@ function normalizeTransportContract(raw){
     customerSignedByAdminId:raw.customerSignedByAdminId||null,
     carrierSignedAt:raw.carrierSignedAt||null,
     carrierSignedByAdminId:raw.carrierSignedByAdminId||null,
+    bodyText:String(raw.bodyText||'').trim(),
+    creatorParty:raw.creatorParty==='carrier'?'carrier':raw.creatorParty==='customer'?'customer':null,
+    editProposals:Array.isArray(raw.editProposals)?raw.editProposals.map(normalizeEditProposal).filter(Boolean):[],
     createdAt:raw.createdAt||new Date().toISOString(),
     updatedAt:raw.updatedAt||raw.createdAt||new Date().toISOString(),
     createdByAdminId:raw.createdByAdminId||null
@@ -445,10 +532,11 @@ function migrateContractSignaturesLegacy(){
   try{ if(localStorage.getItem(key)) return; }catch(_){ return; }
   (state.transportContracts||[]).forEach(c=>{
     if(!c||c.status==='terminated') return;
-    if(c.customerSignedAt||c.carrierSignedAt) return;
-    const stamp=c.signedAt?`${c.signedAt}T12:00:00.000Z`:new Date().toISOString();
-    c.customerSignedAt=stamp;
-    c.carrierSignedAt=stamp;
+  if(c.customerSignedAt||c.carrierSignedAt) return;
+  const stamp=c.signedAt?`${c.signedAt}T12:00:00.000Z`:new Date().toISOString();
+  c.customerSignedAt=stamp;
+  c.carrierSignedAt=stamp;
+  if(!c.bodyText) c.bodyText=defaultTransportContractBodyText();
   });
   try{ localStorage.setItem(key,'1'); }catch(_){}
 }
@@ -600,6 +688,12 @@ function upsertTransportContract(raw){
   );
   if(dup && c.status!=='terminated') c.id=dup.id;
   const i=(state.transportContracts||[]).findIndex(x=>x.id===c.id);
+  if(i>=0){
+    const prev=state.transportContracts[i];
+    if(!c.bodyText && prev.bodyText) c.bodyText=prev.bodyText;
+    if(!c.creatorParty && prev.creatorParty) c.creatorParty=prev.creatorParty;
+    if(!c.editProposals?.length && prev.editProposals?.length) c.editProposals=prev.editProposals;
+  }
   c.updatedAt=new Date().toISOString();
   if(i>=0) state.transportContracts[i]=c;
   else state.transportContracts.push(c);

@@ -372,9 +372,22 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-13-contract-sign-print"></script>
-<script src="driver.js?v=2026-08-13-contract-sign-print"></script>
-<script src="admin.js?v=2026-08-13-contract-sign-print"></script>
-<script src="app.js?v=2026-08-13-contract-sign-print"></script>
+<div id="print-preview-modal" class="print-preview-modal" hidden>
+  <div class="print-preview-dialog">
+    <header class="print-preview-head">
+      <h2 id="print-preview-title">Документ</h2>
+      <div class="row" style="gap:6px">
+        <button type="button" class="primary" id="print-preview-go">Печать / PDF</button>
+        <button type="button" class="secondary" id="print-preview-close">Закрыть</button>
+      </div>
+    </header>
+    <p class="hint" style="margin:0 8px 8px">В диалоге печати выберите принтер или «Сохранить как PDF».</p>
+    <div id="print-preview-body" class="print-preview-body"></div>
+  </div>
+</div>
+  <script src="store.js?v=2026-08-13-contract-body-print"></script>
+<script src="driver.js?v=2026-08-13-contract-body-print"></script>
+<script src="admin.js?v=2026-08-13-contract-body-print"></script>
+<script src="app.js?v=2026-08-13-contract-body-print"></script>
 </body>
 </html>
