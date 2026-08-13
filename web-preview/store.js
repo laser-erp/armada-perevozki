@@ -1078,8 +1078,8 @@ async function lookupBankByBikDaData(bik, token){
 }
 function parseCbrBicXml(text){
   const t=String(text||'');
-  const nameM=t.match(/NameP="([^"]+)"/i);
-  const accM=t.match(/Account="(\d{20})"/i);
+  const nameM=t.match(/NameP="([^"]+)"/i)||t.match(/<ShortName>([^<]+)<\/ShortName>/i);
+  const accM=t.match(/Account="(\d{20})"/i)||t.match(/<Account>(\d{20})<\/Account>/i);
   return {
     bankName:nameM?nameM[1].trim():'',
     bankCorrAccount:accM?accM[1]:''
@@ -1090,7 +1090,10 @@ async function lookupBankByBikCbr(bik){
   const url=`${cbrBicBase()}/scripts/XML_bic.asp?bic=${encodeURIComponent(clean)}`;
   const res=await fetch(url);
   if(!res.ok) throw new Error('ЦБ РФ: ошибка '+res.status);
-  const text=await res.text();
+  const buf=await res.arrayBuffer();
+  let text;
+  try{ text=new TextDecoder('windows-1251').decode(buf); }
+  catch(_){ text=new TextDecoder().decode(buf); }
   const parsed=parseCbrBicXml(text);
   if(!parsed.bankName) throw new Error('Банк не найден (ЦБ РФ)');
   return { bankName:parsed.bankName, bankBik:clean, bankCorrAccount:parsed.bankCorrAccount };
