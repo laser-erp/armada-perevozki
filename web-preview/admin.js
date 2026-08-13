@@ -1872,63 +1872,12 @@ function buildTransportContractDocBody(c){
     ${signBlock('customer', customer, 'Заказчик')}
     ${signBlock('carrier', carrier, 'Перевозчик')}
   </div>
-  <p class="muted" style="margin-top:12px">Подпишите уполномоченными лицами. В диалоге печати выберите принтер или «Сохранить как PDF».</p>`;
-}
-function printTransportContract(id){
-  const c=findTransportContractById(id);
-  if(!c){ alert('Договор не найден'); return; }
-  showPrintPreview(`Договор ТЭУ № ${c.contractNumber}`, buildTransportContractDocBody(c), true);
-}
-function ensureHtml2pdfLoaded(){
-  if(typeof html2pdf!=='undefined') return Promise.resolve();
-  return new Promise((resolve,reject)=>{
-    const existing=document.querySelector('script[data-html2pdf]');
-    if(existing){
-      existing.addEventListener('load',()=>resolve(),{once:true});
-      existing.addEventListener('error',()=>reject(),{once:true});
-      return;
-    }
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    s.dataset.html2pdf='1';
-    s.onload=()=>resolve();
-    s.onerror=()=>reject(new Error('html2pdf load failed'));
-    document.head.appendChild(s);
-  });
+  <p class="muted" style="margin-top:12px">Подпишите уполномоченными лицами.</p>`;
 }
 function openTransportContractPdf(id){
   const c=findTransportContractById(id);
   if(!c){ alert('Договор не найден'); return; }
-  const bodyHtml=buildTransportContractDocBody(c);
-  const title=`Договор ТЭУ № ${c.contractNumber}`;
-  const fileName=`Договор_ТЭУ_${String(c.contractNumber||'без_номера').replace(/[^\w\-]+/g,'_')}.pdf`;
-  ensureHtml2pdfLoaded().then(()=>{
-    const wrap=document.createElement('div');
-    wrap.className='pdf-export-sheet';
-    wrap.style.cssText='position:fixed;left:0;top:0;z-index:99999;width:794px;padding:32px;background:#fff;color:#111;font-family:Inter,-apple-system,sans-serif;font-size:12.5px;line-height:1.45;opacity:0;pointer-events:none';
-    wrap.innerHTML=bodyHtml;
-    document.body.appendChild(wrap);
-    const opt={
-      margin:[8,8,8,8],
-      filename:fileName,
-      image:{type:'jpeg',quality:0.96},
-      html2canvas:{scale:2,useCORS:true,logging:false,windowWidth:794},
-      jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
-    };
-    return html2pdf().set(opt).from(wrap).toPdf().get('pdf').then(pdf=>{
-      const blob=pdf.output('blob');
-      const url=URL.createObjectURL(blob);
-      const w=window.open(url,'_blank');
-      if(!w){
-        pdf.save(fileName);
-        alert('PDF сохранён на устройство. Если окно не открылось — разрешите всплывающие окна.');
-      }
-      setTimeout(()=>URL.revokeObjectURL(url),120000);
-    }).finally(()=>{ try{ wrap.remove(); }catch(_){} });
-  }).catch(()=>{
-    showPrintPreview(title, bodyHtml, false);
-    alert('Не удалось создать PDF. Открыт предпросмотр — нажмите «Печать / PDF» и выберите «Сохранить как PDF».');
-  });
+  showPrintPreview(`Договор ТЭУ № ${c.contractNumber}`, buildTransportContractDocBody(c), false);
 }
 function paintContractSignBanners(){
   const list=pendingTransportContractsForViewer();
@@ -1939,8 +1888,7 @@ function paintContractSignBanners(){
       <p>${esc(proposerName||'Контрагент')} предложил договор — подпишите со своей стороны (от ${esc(formatIsoDateRu(c.signedAt))})</p>
       <div class="banner-actions">
         <button type="button" class="primary tc-banner-sign" data-id="${esc(c.id)}">Подписать</button>
-        <button type="button" class="secondary tc-banner-print" data-id="${esc(c.id)}">Печать / PDF</button>
-        <button type="button" class="secondary tc-banner-open" data-id="${esc(c.id)}">Открыть PDF</button>
+        <button type="button" class="secondary tc-banner-open" data-id="${esc(c.id)}">Открыть</button>
       </div>
     </div>`;
   }).join('');
@@ -1958,7 +1906,6 @@ function paintContractSignBanners(){
       renderAdmin();
     }
   });
-  document.querySelectorAll('.tc-banner-print').forEach(b=>b.onclick=()=>printTransportContract(b.dataset.id));
   document.querySelectorAll('.tc-banner-open').forEach(b=>b.onclick=()=>openTransportContractPdf(b.dataset.id));
 }
 function buildPrintShellHtml(title, bodyInnerHtml){
@@ -2003,7 +1950,7 @@ function runPrintPreviewDialog(){
   doc.write(html);
   doc.close();
   setTimeout(()=>{
-    try{ win.focus(); win.print(); }catch(_){ alert('Не удалось открыть диалог печати. Нажмите «Печать / PDF» в предпросмотре.'); }
+    try{ win.focus(); win.print(); }catch(_){ alert('Не удалось открыть диалог печати.'); }
     setTimeout(()=>{ try{ iframe.remove(); }catch(_){} }, 1000);
   }, 250);
 }
@@ -2896,8 +2843,7 @@ function openCatalogs(){
       ${!terminated?`<label>Причина расторжения (при заявлении)</label><input id="tc-term-reason" value="${esc(intent.reason||'')}" placeholder="Необязательно" />`:''}
       <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
         ${!terminated?`<button type="button" class="primary" id="tc-save">Сохранить</button>`:''}
-        ${contract?`<button type="button" class="secondary" id="tc-open-pdf">Открыть PDF</button>`:''}
-        ${contract?`<button type="button" class="secondary" id="tc-print">Печать / PDF</button>`:''}
+        ${contract?`<button type="button" class="secondary" id="tc-open-pdf">Открыть</button>`:''}
         ${contract&&viewerParty&&!viewerSigned?`<button type="button" class="primary" id="tc-sign">Подписать со своей стороны</button>`:''}
         ${contract&&!terminated&&!intent.intentBy&&viewerIntent?`<button type="button" class="secondary" id="tc-intent">Заявить расторжение</button>`:''}
         ${contract&&!terminated&&intent.intentBy&&viewerIntent===intent.intentBy?`<button type="button" class="secondary" id="tc-withdraw">Отозвать заявление</button>`:''}
@@ -2952,7 +2898,6 @@ function openCatalogs(){
       openCatalogs();
     });
     $('tc-open-pdf')&&($('tc-open-pdf').onclick=()=>openTransportContractPdf(tc.id));
-    $('tc-print')&&($('tc-print').onclick=()=>printTransportContract(tc.id));
     $('tc-proposal-send')&&($('tc-proposal-send').onclick=()=>{
       const text=(($('tc-proposal')||{}).value||'').trim();
       if(!text){ alert('Введите текст предложения'); return; }

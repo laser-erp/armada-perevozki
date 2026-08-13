@@ -372,6 +372,7 @@
       padding:10px 12px;border-bottom:1px solid var(--border);background:var(--bg0)
     }
     .print-preview-head h2{margin:0;font-size:.95rem;flex:1;min-width:0}
+    .print-preview-head .icon-btn{min-width:28px;min-height:28px;width:28px;font-size:.78rem}
     .print-preview-body{
       padding:12px 14px;overflow:auto;flex:1;font-size:12.5px;line-height:1.45;color:#111;background:#fff
     }
