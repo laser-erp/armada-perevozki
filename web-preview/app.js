@@ -455,12 +455,28 @@ function findActiveTransportContract(customerCompanyId, carrierCompanyId){
     c.customerCompanyId===customerCompanyId && c.carrierCompanyId===carrierCompanyId && isTransportContractActive(c)
   )||null;
 }
+function transportContractPartyForCompany(c, companyId){
+  if(!c||!companyId) return null;
+  if(c.customerCompanyId===companyId) return 'customer';
+  if(c.carrierCompanyId===companyId) return 'carrier';
+  return null;
+}
+function terminationIntentByForParty(party){
+  if(party==='customer') return 'own';
+  if(party==='carrier') return 'carrier';
+  return null;
+}
+function terminationPartyLabel(c, intentBy){
+  if(intentBy==='own') return c.customerCompanyName||'заказчик';
+  if(intentBy==='carrier') return c.carrierCompanyName||'перевозчик';
+  return '—';
+}
 function transportContractStatusInfo(c){
   if(!c) return {level:'none', label:'—'};
   if(c.status==='terminated') return {level:'terminated', label:'Расторгнут'};
   const today=isoDateOnly(new Date());
   if(c.termination&&c.termination.intentBy){
-    const who=c.termination.intentBy==='own'?'наша фирма':'перевозчик';
+    const who=terminationPartyLabel(c, c.termination.intentBy);
     return {level:'termination', label:`Расторжение (${who}) до ${formatIsoDateRu(c.expiresAt)}`};
   }
   if(c.expiresAt){

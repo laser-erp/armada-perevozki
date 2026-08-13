@@ -2677,6 +2677,9 @@ function openCatalogs(){
     const expPreview=addMonthsIso(tc.effectiveFrom||tc.signedAt, termM);
     const terminated=tc.status==='terminated';
     const intent=tc.termination||{};
+    const viewerParty=transportContractPartyForCompany(tc, myCo&&myCo.id);
+    const viewerIntent=terminationIntentByForParty(viewerParty);
+    const intentPartyLabel=intent.intentBy?terminationPartyLabel(tc, intent.intentBy):'';
     box.innerHTML=`
       <div class="row" style="align-items:center;margin-bottom:4px">
         <h3 style="margin:0;flex:1;font-size:.95rem">${contract?'Договор ТЭУ':'Новый договор ТЭУ'}</h3>
@@ -2694,12 +2697,12 @@ function openCatalogs(){
       </div>
       <p class="hint" id="tc-expires-hint">Срок действия до: ${esc(formatIsoDateRu(expPreview))}</p>
       <label class="check"><input type="checkbox" id="tc-autorenew" ${tc.autoRenew?'checked':''}/> Автоматическое продление (если нет заявления о расторжении)</label>
-      <p class="hint">Статус: <strong>${esc(stInfo.label)}</strong>${intent.intentBy?` · заявление: ${intent.intentBy==='own'?'наша фирма':'перевозчик'}`:''}</p>
+      <p class="hint">Статус: <strong>${esc(stInfo.label)}</strong>${intentPartyLabel?` · заявление: ${esc(intentPartyLabel)}`:''}</p>
       ${!terminated?`<label>Причина расторжения (при заявлении)</label><input id="tc-term-reason" value="${esc(intent.reason||'')}" placeholder="Необязательно" />`:''}
       <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
         ${!terminated?`<button type="button" class="primary" id="tc-save">Сохранить</button>`:''}
-        ${!terminated&&!intent.intentBy?`<button type="button" class="secondary" id="tc-intent-own">Расторгнуть (наша фирма)</button><button type="button" class="secondary" id="tc-intent-carrier">Расторгнуть (перевозчик)</button>`:''}
-        ${!terminated&&intent.intentBy?`<button type="button" class="secondary" id="tc-withdraw">Отозвать заявление</button>`:''}
+        ${contract&&!terminated&&!intent.intentBy&&viewerIntent?`<button type="button" class="secondary" id="tc-intent">Заявить расторжение</button>`:''}
+        ${contract&&!terminated&&intent.intentBy&&viewerIntent===intent.intentBy?`<button type="button" class="secondary" id="tc-withdraw">Отозвать заявление</button>`:''}
       </div>
     `;
     const refreshExpiryHint=()=>{
@@ -2740,19 +2743,13 @@ function openCatalogs(){
       flashCatOk('Договор сохранён');
       openCatalogs();
     });
-    $('tc-intent-own')&&($('tc-intent-own').onclick=()=>{
-      tc.termination={intentBy:'own', intentAt:new Date().toISOString(), intentByAdminId:currentAdmin.id, reason:(($('tc-term-reason')||{}).value||'').trim()};
+    $('tc-intent')&&($('tc-intent').onclick=()=>{
+      if(!viewerIntent) return;
+      if(!confirm('Заявить расторжение договора со своей стороны? Договор действует до конца срока.')) return;
+      tc.termination={intentBy:viewerIntent, intentAt:new Date().toISOString(), intentByAdminId:currentAdmin.id, reason:(($('tc-term-reason')||{}).value||'').trim()};
       tc.autoRenew=false;
       upsertTransportContract(tc);
-      bumpDataEpoch('contract-termination-own');
-      persist();
-      openCatalogs();
-    });
-    $('tc-intent-carrier')&&($('tc-intent-carrier').onclick=()=>{
-      tc.termination={intentBy:'carrier', intentAt:new Date().toISOString(), intentByAdminId:currentAdmin.id, reason:(($('tc-term-reason')||{}).value||'').trim()};
-      tc.autoRenew=false;
-      upsertTransportContract(tc);
-      bumpDataEpoch('contract-termination-carrier');
+      bumpDataEpoch('contract-termination');
       persist();
       openCatalogs();
     });
