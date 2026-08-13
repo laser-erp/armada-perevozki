@@ -232,7 +232,7 @@ function renderAdminActivity(){
     </section>
     <section class="form-section">
       <h2 class="form-section-title">Пространства / администраторы</h2>
-      <p class="cat-panel-hint">Каждый админ — своё пространство фирмы. ИНН опционально, «Загрузить» подтянет реквизиты (DaData).</p>
+      <p class="cat-panel-hint">Каждый админ — своё пространство фирмы. ИНН → «Загрузить» подтянет реквизиты из ЕГРЮЛ (ФНС).</p>
     <div class="cat-compact">
       <div class="row">
         <input id="new-adm-name" placeholder="Имя администратора" style="flex:1.3" />
@@ -253,8 +253,14 @@ function renderAdminActivity(){
       <label class="check"><input type="checkbox" id="new-adm-super"/> Супер админ</label>
       <button type="button" class="primary cat-add-btn" id="new-adm-add">+ администратор и фирма</button>
     </div>
-      <h2 class="form-section-title" style="margin-top:8px">Токен DaData</h2>
-      <p class="cat-panel-hint">Бесплатный ключ: dadata.ru → API. Хранится в общей базе.</p>
+      <h2 class="form-section-title" style="margin-top:8px">Реквизиты по ИНН (ФНС)</h2>
+      <p class="cat-panel-hint">По умолчанию — официальный ЕГРЮЛ (egrul.nalog.ru). Для полного адреса: ключ API-ФНС (api-fns.ru). DaData — резервный источник.</p>
+      <label>Ключ API-ФНС (опционально)</label>
+      <div class="row">
+        <input id="fns-api-key" type="password" placeholder="Ключ api-fns.ru" value="${esc((state.settings&&state.settings.fnsApiKey)||'')}" style="flex:1" />
+        <button type="button" class="primary" id="fns-api-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
+      </div>
+      <label style="margin-top:8px">Токен DaData (резерв)</label>
       <div class="row">
         <input id="dadata-token" type="password" placeholder="Token DaData" value="${esc((state.settings&&state.settings.dadataToken)||'')}" style="flex:1" />
         <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
@@ -283,8 +289,14 @@ function renderAdminActivity(){
     </section>
   `;
   $('act-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  $('fns-api-save')&&($('fns-api-save').onclick=()=>{
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+    state.settings.fnsApiKey=(($('fns-api-key')||{}).value||'').trim();
+    persist();
+    alert(state.settings.fnsApiKey?'Ключ API-ФНС сохранён':'Ключ API-ФНС очищен');
+  });
   $('dadata-save')&&($('dadata-save').onclick=()=>{
-    state.settings=Object.assign({dadataToken:''}, state.settings||{});
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
     state.settings.dadataToken=(($('dadata-token')||{}).value||'').trim();
     persist();
     alert(state.settings.dadataToken?'Токен DaData сохранён':'Токен очищен');

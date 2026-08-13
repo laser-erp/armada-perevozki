@@ -172,7 +172,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-ru-vehicle-date";
+const APP_BUILD="2026-08-13-fns-inn-lookup";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -240,7 +240,7 @@ const state={
   adminLogins:Array.isArray(saved.adminLogins)?saved.adminLogins:[],
   adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
   spaces:Array.isArray(saved.spaces)?saved.spaces:[],
-  settings:Object.assign({dadataToken:''}, saved.settings||{}),
+  settings:Object.assign({fnsApiKey:'',dadataToken:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
@@ -453,7 +453,7 @@ function applyPayload(p, opts){
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
-  state.settings=Object.assign({dadataToken:''}, state.settings||{}, p.settings||{});
+  state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{}, p.settings||{});
   state.dataEpoch=Number(p.dataEpoch)||0;
   mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
@@ -813,7 +813,7 @@ function createSpaceForAdmin(admin, firm){
 }
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
 function migrateSpaces(){
-  state.settings=Object.assign({dadataToken:''}, state.settings||{});
+  state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
   let changed=false;
   (state.admins||[]).forEach(a=>{
@@ -878,11 +878,8 @@ function isValidInn(inn){
   }
   return false;
 }
-async function lookupPartyByInn(inn){
+async function lookupPartyByInnDaData(inn, token){
   const clean=String(inn||'').replace(/\D/g,'');
-  if(!isValidInn(clean)) throw new Error('Некорректный ИНН');
-  const token=String((state.settings&&state.settings.dadataToken)||'').trim();
-  if(!token) throw new Error('Нужен токен DaData: супер → Активность → токен (бесплатно на dadata.ru)');
   const res=await fetch('https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party',{
     method:'POST',
     headers:{
@@ -895,7 +892,7 @@ async function lookupPartyByInn(inn){
   if(!res.ok) throw new Error('DaData: ошибка '+res.status);
   const data=await res.json();
   const s=(data.suggestions&&data.suggestions[0])||null;
-  if(!s||!s.data) throw new Error('По ИНН ничего не найдено');
+  if(!s||!s.data) throw new Error('По ИНН ничего не найдено (DaData)');
   const d=s.data;
   return {
     name:s.value||d.name?.short_with_opf||d.name?.full_with_opf||'',
@@ -905,6 +902,126 @@ async function lookupPartyByInn(inn){
     address:(d.address&& (d.address.value||d.address.unrestricted_value))||'',
     director:(d.management&&d.management.name)|| (d.fio? [d.fio.surname,d.fio.name,d.fio.patronymic].filter(Boolean).join(' '):'')
   };
+}
+function egrulNalogBase(){
+  const h=(location.hostname||'').toLowerCase();
+  if(h==='aptown1.fvds.ru'||h==='176.12.67.35'||h==='localhost'||h==='127.0.0.1')
+    return location.origin.replace(/\/$/,'')+'/egrul-api';
+  return 'https://egrul.nalog.ru';
+}
+function parseEgrulDirectorField(g){
+  const s=String(g||'').trim();
+  if(!s) return '';
+  const m=s.match(/:\s*(.+)$/);
+  return m?m[1].trim():s;
+}
+async function lookupPartyByInnEgrul(inn){
+  const clean=String(inn||'').replace(/\D/g,'');
+  const base=egrulNalogBase();
+  const body=new URLSearchParams({
+    vyp3CaptchaToken:'', page:'', query:clean, region:'', PreventChromeAutocomplete:''
+  });
+  const postRes=await fetch(`${base}/`, {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:body.toString()
+  });
+  if(!postRes.ok) throw new Error('ФНС ЕГРЮЛ: ошибка '+postRes.status);
+  const postData=await postRes.json();
+  if(postData.captchaRequired) throw new Error('ФНС: нужна капча на egrul.nalog.ru — попробуйте позже');
+  if(!postData.t) throw new Error('ФНС ЕГРЮЛ: пустой ответ');
+  await new Promise(r=>setTimeout(r, 2500));
+  const res=await fetch(`${base}/search-result/${encodeURIComponent(postData.t)}`);
+  if(!res.ok) throw new Error('ФНС ЕГРЮЛ: ошибка '+res.status);
+  const data=await res.json();
+  const row=(data.rows&&data.rows[0])||null;
+  if(!row) throw new Error('По ИНН ничего не найдено в ЕГРЮЛ');
+  const isIp=row.k==='ip';
+  const director=isIp?(row.n||row.c||''):parseEgrulDirectorField(row.g);
+  const name=row.c||row.n||'';
+  return {
+    name:isIp && name && !/^ИП\s/i.test(name)?'ИП '+name:name,
+    inn:row.i||clean,
+    ogrn:row.o||'',
+    kpp:row.p||'',
+    address:row.rn?String(row.rn).replace(/^Г\.\s*/,''):'',
+    director
+  };
+}
+function pickApiFnsAddress(addr){
+  if(!addr) return '';
+  if(typeof addr==='string') return addr.trim();
+  if(addr.АдресПолн && typeof addr.АдресПолн==='string') return addr.АдресПолн.trim();
+  const parts=[];
+  const push=v=>{ if(v&&String(v).trim()) parts.push(String(v).trim()); };
+  if(addr.АдресПолнФИАС && typeof addr.АдресПолнФИАС==='object'){
+    Object.values(addr.АдресПолнФИАС).forEach(push);
+  }
+  if(addr.АдресДетали && typeof addr.АдресДетали==='object'){
+    ['Регион','Город','Район','НаселПункт','Улица'].forEach(k=>{
+      const x=addr.АдресДетали[k];
+      if(x&&typeof x==='object'&&x.Наим) push(x.Наим);
+      else push(x);
+    });
+    push(addr.АдресДетали.Дом);
+    push(addr.АдресДетали.Корпус);
+    push(addr.АдресДетали.Кварт);
+  }
+  return parts.join(', ');
+}
+async function lookupPartyByInnApiFns(inn, key){
+  const clean=String(inn||'').replace(/\D/g,'');
+  const url=`https://api-fns.ru/api/egr?req=${encodeURIComponent(clean)}&key=${encodeURIComponent(key)}`;
+  const res=await fetch(url);
+  const text=await res.text();
+  if(!res.ok) throw new Error('API-ФНС: '+text.slice(0,160));
+  let data;
+  try{ data=JSON.parse(text); }catch(_){ throw new Error('API-ФНС: неверный ответ'); }
+  if(data.error) throw new Error(String(data.error));
+  const item=(data.items&&data.items[0])||null;
+  if(!item) throw new Error('По ИНН ничего не найдено (API-ФНС)');
+  if(item.ЮЛ){
+    const ul=item.ЮЛ;
+    return {
+      name:ul.НаимСокрЮЛ||ul.НаимПолнЮЛ||'',
+      inn:ul.ИНН||clean,
+      ogrn:ul.ОГРН||'',
+      kpp:ul.КПП||'',
+      address:pickApiFnsAddress(ul.Адрес),
+      director:(ul.Руководитель&&ul.Руководитель.ФИОПолн)||''
+    };
+  }
+  if(item.ИП){
+    const ip=item.ИП;
+    const fio=ip.ФИОПолн||ip.ФИОПолнЗАГС||'';
+    return {
+      name:fio?('ИП '+fio):'ИП',
+      inn:ip.ИННФЛ||clean,
+      ogrn:ip.ОГРНИП||'',
+      kpp:'',
+      address:pickApiFnsAddress(ip.Адрес),
+      director:fio
+    };
+  }
+  throw new Error('API-ФНС: неизвестный формат ответа');
+}
+async function lookupPartyByInn(inn){
+  const clean=String(inn||'').replace(/\D/g,'');
+  if(!isValidInn(clean)) throw new Error('Некорректный ИНН');
+  const fnsKey=String((state.settings&&state.settings.fnsApiKey)||'').trim();
+  const dadataToken=String((state.settings&&state.settings.dadataToken)||'').trim();
+  if(fnsKey){
+    try{ return await lookupPartyByInnApiFns(clean, fnsKey); }
+    catch(err){ console.warn('API-ФНС', err); }
+  }
+  try{ return await lookupPartyByInnEgrul(clean); }
+  catch(egrulErr){
+    if(dadataToken){
+      try{ return await lookupPartyByInnDaData(clean, dadataToken); }
+      catch(_){ throw egrulErr; }
+    }
+    throw egrulErr;
+  }
 }
 async function fetchServerState(){
   const filter=encodeURIComponent("key='main'");

@@ -1,0 +1,28 @@
+{
+	auto_https off
+}
+
+:80 {
+	encode gzip
+
+	# Прокси ЕГРЮЛ ФНС для поиска по ИНН из браузера (без CORS)
+	handle /egrul-api/* {
+		uri strip_prefix /egrul-api
+		reverse_proxy https://egrul.nalog.ru {
+			header_up Host egrul.nalog.ru
+		}
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle /_/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle {
+		root * /var/www/armada
+		header Cache-Control "no-store, no-cache, must-revalidate"
+		try_files {path} /index.html
+		file_server
+	}
+}
