@@ -579,6 +579,22 @@ function transportContractUnsignedParty(c){
   if(carr && !cust) return 'customer';
   return null;
 }
+/** Сторона, которая создала/подписала договор первой (предложила контрагенту). */
+function transportContractProposerParty(c){
+  if(!c) return null;
+  const cust=isTransportContractPartySigned(c,'customer');
+  const carr=isTransportContractPartySigned(c,'carrier');
+  if(cust && !carr) return 'customer';
+  if(carr && !cust) return 'carrier';
+  if(c.creatorParty==='customer'||c.creatorParty==='carrier') return c.creatorParty;
+  return null;
+}
+function transportContractProposerName(c){
+  const party=transportContractProposerParty(c);
+  if(party==='customer') return c.customerCompanyName||'Заказчик';
+  if(party==='carrier') return c.carrierCompanyName||'Перевозчик';
+  return 'Контрагент';
+}
 function pendingTransportContractsForViewer(){
   const myCo=currentOwnCompany();
   if(!myCo) return [];

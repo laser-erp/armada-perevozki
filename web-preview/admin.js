@@ -1933,8 +1933,7 @@ function openTransportContractPdf(id){
 function paintContractSignBanners(){
   const list=pendingTransportContractsForViewer();
   const html=list.map(c=>{
-    const proposer=transportContractUnsignedParty(c);
-    const proposerName=proposer==='customer'?c.customerCompanyName:proposer==='carrier'?c.carrierCompanyName:'Контрагент';
+    const proposerName=transportContractProposerName(c);
     return `<div class="admin-banner" data-tc-banner="${esc(c.id)}">
       <strong>Договор ТЭУ № ${esc(c.contractNumber)}</strong>
       <p>${esc(proposerName||'Контрагент')} предложил договор — подпишите со своей стороны (от ${esc(formatIsoDateRu(c.signedAt))})</p>
