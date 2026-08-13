@@ -212,9 +212,18 @@ function normalizeCompany(c){
   const contacts=(Array.isArray(c.contacts)?c.contacts:[]).map(normalizeContact).filter(Boolean);
   const vehicles=(Array.isArray(c.vehicles)?c.vehicles:[]).map(normalizeCarrierVehicle).filter(Boolean);
   const drivers=(Array.isArray(c.drivers)?c.drivers:[]).map(normalizeCarrierDriver).filter(Boolean);
+  const hiddenContactNames=[];
+  const seenHidden=new Set();
+  (Array.isArray(c.hiddenContactNames)?c.hiddenContactNames:[]).forEach(n=>{
+    const key=String(n||'').trim().toLowerCase();
+    if(!key||seenHidden.has(key)) return;
+    seenHidden.add(key);
+    hiddenContactNames.push(key);
+  });
   const out={
     id:c.id||uuid(), name, roles, note:String(c.note||'').trim(),
     phones, contacts,
+    hiddenContactNames,
     loadingAddresses:uniqAddrs(c.loadingAddresses||[]),
     unloadingAddresses:uniqAddrs(c.unloadingAddresses||[]),
     vehicles, drivers,
@@ -299,10 +308,10 @@ function upsertCompany(raw){
     const prev=state.companies[i];
     c.loadingAddresses=uniqAddrs([...(c.loadingAddresses||[]),...(prev.loadingAddresses||[])]);
     c.unloadingAddresses=uniqAddrs([...(c.unloadingAddresses||[]),...(prev.unloadingAddresses||[])]);
-    if(!c.contacts.length && prev.contacts) c.contacts=prev.contacts;
-    if(!c.phones.length && prev.phones) c.phones=prev.phones;
-    if(!c.vehicles.length && prev.vehicles) c.vehicles=prev.vehicles;
-    if(!c.drivers.length && prev.drivers) c.drivers=prev.drivers;
+    if(!contactsProvided && !c.contacts.length && prev.contacts) c.contacts=prev.contacts;
+    if(!phonesProvided && !c.phones.length && prev.phones) c.phones=prev.phones;
+    if(!vehiclesProvided && !c.vehicles.length && prev.vehicles) c.vehicles=prev.vehicles;
+    if(!driversProvided && !c.drivers.length && prev.drivers) c.drivers=prev.drivers;
     if(!c.roles.includes('customer') && companyHasRole(prev,'customer')) c.roles.push('customer');
     if(!c.roles.includes('carrier') && companyHasRole(prev,'carrier')) c.roles.push('carrier');
     if(!c.roles.includes('own') && companyHasRole(prev,'own')) c.roles.push('own');
@@ -318,6 +327,7 @@ function upsertCompany(raw){
     c.bankAccount=c.bankAccount||prev.bankAccount||'';
     c.bankCorrAccount=c.bankCorrAccount||prev.bankCorrAccount||'';
     if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
+    if(!c.hiddenContactNames?.length && prev.hiddenContactNames?.length) c.hiddenContactNames=prev.hiddenContactNames;
     state.companies[i]=c;
   } else {
     if(companyHasRole(c,'own') && !c.finance) c.finance=normalizeFinance(state.finance);

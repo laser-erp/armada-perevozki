@@ -3091,22 +3091,30 @@ function openCatalogs(){
       <button class="primary cat-add-btn" id="co-save" style="margin-top:8px">Сохранить</button>
     `;
     let contacts=(c.contacts||[]).map(x=>({...x, phones:(x.phones||[]).map(p=>({...p}))}));
-    // Если у «нашей фирмы» есть водители с телефоном, а контактов нет — показать их как контакты
+    const hiddenContactNames=new Set((c.hiddenContactNames||[]).map(x=>String(x).trim().toLowerCase()).filter(Boolean));
+    // Водители парка — только подсказка телефона для уже сохранённых контактов; не добавляем удалённые
     if(isOwn && c.id){
-      fleetDriversForCompany(c.id).forEach(d=>{
-        if(!(d.name||'').trim()) return;
-        const exists=contacts.some(p=>samePersonName(p.name, d.name));
-        if(!exists){
+      if(!contacts.length){
+        fleetDriversForCompany(c.id).forEach(d=>{
+          if(!(d.name||'').trim()) return;
+          const key=String(d.name).trim().toLowerCase();
+          if(hiddenContactNames.has(key)) return;
           contacts.push({
             id:uuid(), name:d.name, title:'Водитель',
             phones:d.phone?[{id:uuid(), number:d.phone, label:''}]:[],
             isPrimary:!contacts.length
           });
-        } else if(d.phone){
+        });
+      } else {
+        fleetDriversForCompany(c.id).forEach(d=>{
+          if(!(d.name||'').trim()) return;
           const p=contacts.find(x=>samePersonName(x.name, d.name));
-          if(p && !contactPhone(p)){ const fp=formatPhone(d.phone); if(fp) p.phones=[{id:uuid(), number:fp, label:''}]; }
-        }
-      });
+          if(p && d.phone && !contactPhone(p)){
+            const fp=formatPhone(d.phone);
+            if(fp) p.phones=[{id:uuid(), number:fp, label:''}];
+          }
+        });
+      }
     }
     let vehicles=(c.vehicles||[]).map(x=>({...x}));
     let drivers=(c.drivers||[]).map(x=>({...x}));
@@ -3119,7 +3127,15 @@ function openCatalogs(){
           <label class="check"><input type="checkbox" data-cprim="${i}" ${p.isPrimary?'checked':''}/> Основной</label>
           <button type="button" class="secondary" data-cdel="${i}">Удалить контакт</button>
         </div>`).join('')||`<div class="hint">Нет контактов</div>`;
-      document.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{ contacts.splice(+b.dataset.cdel,1); paintContacts(); });
+      document.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{
+        const i=+b.dataset.cdel;
+        const removed=contacts[i];
+        if(isOwn && removed&&(removed.name||'').trim()){
+          hiddenContactNames.add(String(removed.name).trim().toLowerCase());
+        }
+        contacts.splice(i,1);
+        paintContacts();
+      });
     };
     const paintOwnDrivers=()=>{
       const box=$('co-own-drivers'); if(!box) return;
@@ -3268,6 +3284,7 @@ function openCatalogs(){
         bankAccount:String((($('co-bank-account')||{}).value||'')).replace(/\D/g,'').slice(0,20),
         bankCorrAccount:String((($('co-bank-corr')||{}).value||'')).replace(/\D/g,'').slice(0,20),
         contacts, vehicles, drivers,
+        hiddenContactNames:[...hiddenContactNames],
         loadingAddresses:roles.includes('customer')?loads:[],
         unloadingAddresses:roles.includes('customer')?unloads:[],
         phones:c.phones||[],
