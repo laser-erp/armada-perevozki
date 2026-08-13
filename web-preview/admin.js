@@ -1467,9 +1467,9 @@ let createDay=1;
 function bindAdminCreate(){
   $('admin-new').onclick=()=>{
     if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-at')) $('create-vehicle-at').value=''; if($('create-exec-mode')) $('create-exec-mode').value='own';
+    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-date')) $('create-vehicle-date').value=''; if($('create-vehicle-time')) $('create-vehicle-time').value=''; ['create-loading-contact-name','create-loading-contact-phone','create-unloading-contact-name','create-unloading-contact-phone'].forEach(id=>{ if($(id)) $(id).value=''; }); if($('create-exec-mode')) $('create-exec-mode').value='own';
     ['create-req-pay','create-req-l','create-req-w','create-req-h'].forEach(id=>{ if($(id)) $(id).value=''; });
-    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); if($('create-vehicle-at')) $('create-vehicle-at').oninput=updateCreateFreeHint; show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
     const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
@@ -1489,8 +1489,12 @@ function saveDispatcherOrder(){
   const customer=($('create-customer').value||'').trim();
   const contactName=($('create-contact-name').value||'').trim();
   const contactPhone=formatPhone(($('create-contact-phone').value||'').trim());
+  const loadingContactName=(($('create-loading-contact-name')||{}).value||'').trim();
+  const loadingContactPhone=formatPhone((($('create-loading-contact-phone')||{}).value||'').trim());
+  const unloadingContactName=(($('create-unloading-contact-name')||{}).value||'').trim();
+  const unloadingContactPhone=formatPhone((($('create-unloading-contact-phone')||{}).value||'').trim());
   const mode=($('create-exec-mode').value||'own');
-  const vehicleAt=fromDatetimeLocalValue(($('create-vehicle-at')||{}).value);
+  const vehicleAt=readVehicleAtFromDom('create');
   if(!load||!unload){ $('create-error').textContent='Заполните оба адреса'; return; }
   if(!customer){ $('create-error').textContent='Укажите заказчика'; return; }
   if(!vehicleAt){ $('create-error').textContent='Укажите дату и время подачи ТС'; return; }
@@ -1569,6 +1573,8 @@ function saveDispatcherOrder(){
     ownCompanyId:ownCo.id,
     ownCompanyName:ownCo.name,
     contactName, contactPhone, contactPersonId:(($('create-contact-pick')||{}).value)||null,
+    loadingContactName, loadingContactPhone,
+    unloadingContactName, unloadingContactPhone,
     vehicleAt,
     loadingAddress:load, unloadingAddress:unload,
     routePoints:defaultRoutePoints(load,unload), startOdometer:null,
@@ -2021,8 +2027,10 @@ function openDetail(id){
             <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
           </div>
         </div>
-        <label for="d-vehicle-at">Подача ТС</label>
-        <input id="d-vehicle-at" type="datetime-local" value="${esc(toDatetimeLocalValue(o.vehicleAt))}" />
+        <label for="d-vehicle-date">Подача ТС — дата</label>
+        <input id="d-vehicle-date" placeholder="ДД/ММ/ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
+        <label for="d-vehicle-time">Подача ТС — время</label>
+        <input id="d-vehicle-time" type="time" step="60" value="${esc(toTimeHmValue(o.vehicleAt))}" />
         <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
       </div>
     </section>
@@ -2030,6 +2038,20 @@ function openDetail(id){
       <h2 class="form-section-title">Маршрут</h2>
       <div class="form-fields">
         <div id="route-editor"></div>
+        <div class="form-pair">
+          <div>
+            <label for="d-loading-contact-name">Контакт на загрузке</label>
+            <input id="d-loading-contact-name" value="${esc(o.loadingContactName||'')}" placeholder="ФИО" />
+            <label for="d-loading-contact-phone">Телефон на загрузке</label>
+            <input id="d-loading-contact-phone" inputmode="tel" value="${esc(formatPhone(o.loadingContactPhone||''))}" placeholder="+79650730002" />
+          </div>
+          <div>
+            <label for="d-unloading-contact-name">Контакт на выгрузке</label>
+            <input id="d-unloading-contact-name" value="${esc(o.unloadingContactName||'')}" placeholder="ФИО" />
+            <label for="d-unloading-contact-phone">Телефон на выгрузке</label>
+            <input id="d-unloading-contact-phone" inputmode="tel" value="${esc(formatPhone(o.unloadingContactPhone||''))}" placeholder="+79650730002" />
+          </div>
+        </div>
         <label for="d-empty-after">Пробег до стоянки, км</label>
         <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
       </div>
@@ -2167,7 +2189,7 @@ function openDetail(id){
   $('d-customer')&&($('d-customer').oninput=()=>renderRouteEditor());
   const refreshFreeHint=()=>{
     const hint=$('d-free-hint'); if(!hint) return;
-    const at=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
+    const at=readVehicleAtFromDom('d');
     if(!at){ hint.textContent='Ориентир освобождения: укажите подачу ТС'; return; }
     const draft={
       estimateWorkHours:numTemp('d-estimate-hours'),
@@ -2181,7 +2203,7 @@ function openDetail(id){
     if(v==='') return null;
     const n=Number(v); return n>0?n:null;
   }
-  $('d-vehicle-at')&&($('d-vehicle-at').oninput=refreshFreeHint);
+  wireVehicleAtHint('d', refreshFreeHint);
   $('d-estimate-hours')&&($('d-estimate-hours').oninput=refreshFreeHint);
   $('d-work-hours')&&($('d-work-hours').oninput=refreshFreeHint);
   $('detail-back').onclick=()=>{ if(detailActions) detailActions.style.display='none'; show('admin'); renderAdmin(); };
@@ -2214,7 +2236,11 @@ function openDetail(id){
     else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
     order.contactName=(($('d-contact-name')||{}).value||'').trim();
     order.contactPhone=formatPhone((($('d-contact-phone')||{}).value||'').trim());
-    order.vehicleAt=fromDatetimeLocalValue(($('d-vehicle-at')||{}).value);
+    order.loadingContactName=(($('d-loading-contact-name')||{}).value||'').trim();
+    order.loadingContactPhone=formatPhone((($('d-loading-contact-phone')||{}).value||'').trim());
+    order.unloadingContactName=(($('d-unloading-contact-name')||{}).value||'').trim();
+    order.unloadingContactPhone=formatPhone((($('d-unloading-contact-phone')||{}).value||'').trim());
+    order.vehicleAt=readVehicleAtFromDom('d');
     order.routePoints=cleaned;
     ensureRoutePoints(order);
     const after=($('d-empty-after').value||'').replace(/\D/g,'');

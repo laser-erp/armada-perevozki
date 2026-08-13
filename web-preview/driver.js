@@ -1466,6 +1466,8 @@ function driverOrderCardHtml(o, opts){
     <div class="meta">${esc(o.vehiclePlate||'—')}${o.vehicleAt?` · подача ${esc(formatRuDateTimeAt(o.vehicleAt))}`:''}</div>
     ${o.freeAt||o.vehicleAt?`<div class="meta">${o.freeAt?`Освобождение: ${esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))}`:''}</div>`:''}
     ${contact?`<div class="contact">${esc(contact)}</div>`:''}
+    ${driverMaySeeContact(o)&&o.loadingContactName?`<div class="contact">Загрузка: ${esc(o.loadingContactName)}${o.loadingContactPhone?` · ${esc(formatPhone(o.loadingContactPhone))}`:''}</div>`:''}
+    ${driverMaySeeContact(o)&&o.unloadingContactName?`<div class="contact">Выгрузка: ${esc(o.unloadingContactName)}${o.unloadingContactPhone?` · ${esc(formatPhone(o.unloadingContactPhone))}`:''}</div>`:''}
     ${canArrive?`<div class="meta" style="color:var(--accent);font-weight:600">Выезд отмечен — подтвердите прибытие</div>`:''}
     ${closed?`<div class="meta">${esc(driverPayText(o))}</div>`:''}
     ${acts.length?`<div class="acts">${acts.join('')}</div>`:''}
