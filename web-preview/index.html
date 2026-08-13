@@ -137,17 +137,19 @@
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Заказчик</h2>
-          <p class="form-section-hint">Компания и контакт — новые ФИО сохранятся в карточке</p>
+          <p class="form-section-hint">ИНН → загрузка из DaData или справочника. Токен DaData: супер → Активность.</p>
           <div class="form-fields">
-            <label for="create-customer">Заказчик (компания)</label>
-            <input id="create-customer" list="customer-list" placeholder="Название компании" />
-            <select id="create-customer-pick"><option value="">или выбрать сохранённого</option></select>
-            <datalist id="customer-list"></datalist>
-            <label for="create-contact-pick">Контактное лицо</label>
-            <select id="create-contact-pick"><option value="">— контакт из карточки —</option></select>
+            <label for="create-customer-inn">ИНН заказчика</label>
+            <div class="row" style="gap:8px;align-items:center">
+              <input id="create-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" />
+              <button type="button" class="secondary" id="create-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
+            </div>
+            <div class="hint" id="create-customer-inn-status"></div>
+            <label for="create-customer">Заказчик (наименование)</label>
+            <input id="create-customer" placeholder="Название компании" />
             <div class="form-pair">
               <div>
-                <label for="create-contact-name">ФИО</label>
+                <label for="create-contact-name">Контактное лицо</label>
                 <input id="create-contact-name" placeholder="ФИО контакта" />
               </div>
               <div>
@@ -176,7 +178,6 @@
               <div>
                 <label for="create-load">Адрес загрузки</label>
                 <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
-                <select id="create-load-pick"><option value="">или из сохранённых</option></select>
                 <label for="create-loading-contact-name">Контакт на загрузке</label>
                 <input id="create-loading-contact-name" placeholder="ФИО" />
                 <label for="create-loading-contact-phone">Телефон на загрузке</label>
@@ -185,11 +186,25 @@
               <div>
                 <label for="create-unload">Адрес выгрузки</label>
                 <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
-                <select id="create-unload-pick"><option value="">или из сохранённых</option></select>
                 <label for="create-unloading-contact-name">Контакт на выгрузке</label>
                 <input id="create-unloading-contact-name" placeholder="ФИО" />
                 <label for="create-unloading-contact-phone">Телефон на выгрузке</label>
                 <input id="create-unloading-contact-phone" inputmode="tel" placeholder="+79650730002" />
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Цены</h2>
+          <div class="form-fields">
+            <div class="form-pair">
+              <div>
+                <label for="create-price-client">Цена для заказчика, ₽</label>
+                <input id="create-price-client" inputmode="decimal" placeholder="сумма" />
+              </div>
+              <div>
+                <label for="create-price-carrier">Цена для перевозчика, ₽</label>
+                <input id="create-price-carrier" inputmode="decimal" placeholder="сумма" />
               </div>
             </div>
           </div>
@@ -353,9 +368,9 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-13-admin-route-contacts"></script>
-<script src="driver.js?v=2026-08-13-admin-route-contacts"></script>
-<script src="admin.js?v=2026-08-13-admin-route-contacts"></script>
-<script src="app.js?v=2026-08-13-admin-route-contacts"></script>
+  <script src="store.js?v=2026-08-13-admin-customer-inn-prices"></script>
+<script src="driver.js?v=2026-08-13-admin-customer-inn-prices"></script>
+<script src="admin.js?v=2026-08-13-admin-customer-inn-prices"></script>
+<script src="app.js?v=2026-08-13-admin-customer-inn-prices"></script>
 </body>
 </html>

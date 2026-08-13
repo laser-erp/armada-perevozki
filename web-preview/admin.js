@@ -1468,8 +1468,9 @@ function bindAdminCreate(){
   $('admin-new').onclick=()=>{
     if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
     createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-date')) $('create-vehicle-date').value=''; if($('create-vehicle-time')) $('create-vehicle-time').value=''; ['create-loading-contact-name','create-loading-contact-phone','create-unloading-contact-name','create-unloading-contact-phone'].forEach(id=>{ if($(id)) $(id).value=''; }); if($('create-exec-mode')) $('create-exec-mode').value='own';
-    ['create-req-pay','create-req-l','create-req-w','create-req-h'].forEach(id=>{ if($(id)) $(id).value=''; });
-    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+    ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
+    if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
+    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
     const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
@@ -1560,7 +1561,10 @@ function saveDispatcherOrder(){
   if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
   const orderSpaceId=ownCo.spaceId || currentAdmin.spaceId || null;
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId && a.spaceId===orderSpaceId) || currentAdmin;
-  const company=upsertCompany({name:customer, roles:['customer'], spaceId:orderSpaceId});
+  const customerInn=String((($('create-customer-inn')||{}).value||'')).replace(/\D/g,'');
+  const priceForClient=numOrNull(($('create-price-client')||{}).value);
+  const priceForCarrier=numOrNull(($('create-price-carrier')||{}).value);
+  const company=upsertCompany({name:customer, inn:customerInn, roles:['customer'], spaceId:orderSpaceId});
   const order={
     id:uuid(), sequentialNumber:seqNo, dayNumber:createDay,
     createdAt:new Date().toISOString(), source:'dispatcher',
@@ -1569,10 +1573,13 @@ function saveDispatcherOrder(){
     spaceId:orderSpaceId,
     vehiclePlate:plate, driverName:driver, driverPhone:driverPhoneVal||'',
     customer,
+    customerInn:customerInn||(company&&company.inn)||'',
     customerId:company?company.id:null,
+    priceForClient:priceForClient!=null&&priceForClient>0?priceForClient:null,
+    priceForCarrier:priceForCarrier!=null&&priceForCarrier>0?priceForCarrier:null,
     ownCompanyId:ownCo.id,
     ownCompanyName:ownCo.name,
-    contactName, contactPhone, contactPersonId:(($('create-contact-pick')||{}).value)||null,
+    contactName, contactPhone, contactPersonId:null,
     loadingContactName, loadingContactPhone,
     unloadingContactName, unloadingContactPhone,
     vehicleAt,
@@ -2011,10 +2018,14 @@ function openDetail(id){
           <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
         </div>
-        <label for="d-customer">Заказчик</label>
-        <input id="d-customer" list="detail-customer-list" value="${esc(o.customer||'')}" placeholder="Введите имя заказчика" />
-        <datalist id="detail-customer-list">${customerNames().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist>
-        <select id="d-customer-pick"><option value="">или выбрать сохранённого</option>${customerNames().map(n=>`<option value="${esc(n)}" ${n===o.customer?'selected':''}>${esc(n)}</option>`).join('')}</select>
+        <label for="d-customer-inn">ИНН заказчика</label>
+        <div class="row" style="gap:8px;align-items:center">
+          <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" value="${esc(o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'')}" />
+          <button type="button" class="secondary" id="d-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
+        </div>
+        <div class="hint" id="d-customer-inn-status"></div>
+        <label for="d-customer">Заказчик (наименование)</label>
+        <input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название компании" />
         <label for="d-carrier-company">Перевозчик</label>
         <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
         <div class="form-pair">
@@ -2032,6 +2043,17 @@ function openDetail(id){
         <label for="d-vehicle-time">Подача ТС — время</label>
         <input id="d-vehicle-time" type="time" step="60" value="${esc(toTimeHmValue(o.vehicleAt))}" />
         <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
+        <h3 style="margin:12px 0 4px;font-size:.85rem">Цены</h3>
+        <div class="form-pair">
+          <div>
+            <label for="d-price-client">Цена для заказчика, ₽</label>
+            <input id="d-price-client" inputmode="decimal" value="${o.priceForClient??''}" placeholder="сумма" />
+          </div>
+          <div>
+            <label for="d-price-carrier">Цена для перевозчика, ₽</label>
+            <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
+          </div>
+        </div>
       </div>
     </section>
     <section class="form-section">
@@ -2180,13 +2202,15 @@ function openDetail(id){
   wirePerKmInputs(o);
   wireRateAutoFill(o);
   wireOrderDocs(id);
-  $('d-customer-pick')&&($('d-customer-pick').onchange=()=>{
-    if($('d-customer-pick').value){
-      $('d-customer').value=$('d-customer-pick').value;
-      renderRouteEditor();
-    }
+  $('d-customer-inn-lookup')&&($('d-customer-inn-lookup').onclick=()=>{
+    applyCustomerFromInn((($('d-customer-inn')||{}).value||'').trim(), $('d-customer-inn-status'), 'd');
   });
-  $('d-customer')&&($('d-customer').oninput=()=>renderRouteEditor());
+  $('d-customer')&&($('d-customer').oninput=()=>{
+    const name=($('d-customer').value||'').trim();
+    const co=findCompanyByName(name);
+    if(co && co.inn && $('d-customer-inn')) $('d-customer-inn').value=co.inn;
+    renderRouteEditor();
+  });
   const refreshFreeHint=()=>{
     const hint=$('d-free-hint'); if(!hint) return;
     const at=readVehicleAtFromDom('d');
@@ -2217,6 +2241,12 @@ function openDetail(id){
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
+    const custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
+    order.customerInn=custInn;
+    order.priceForClient=numOrNull(($('d-price-client')||{}).value);
+    order.priceForCarrier=numOrNull(($('d-price-carrier')||{}).value);
+    if(order.priceForClient!=null&&order.priceForClient<=0) order.priceForClient=null;
+    if(order.priceForCarrier!=null&&order.priceForCarrier<=0) order.priceForCarrier=null;
     const drvName=(($('d-driver-name')||{}).value||'').trim();
     if(drvName) order.driverName=drvName;
     order.driverPhone=formatPhone((($('d-driver-phone')||{}).value||'').trim());
@@ -2240,6 +2270,10 @@ function openDetail(id){
     order.loadingContactPhone=formatPhone((($('d-loading-contact-phone')||{}).value||'').trim());
     order.unloadingContactName=(($('d-unloading-contact-name')||{}).value||'').trim();
     order.unloadingContactPhone=formatPhone((($('d-unloading-contact-phone')||{}).value||'').trim());
+    if(order.customer){
+      const co=upsertCompany({name:order.customer, inn:custInn, roles:['customer'], spaceId:order.spaceId||currentSpaceId()});
+      if(co){ order.customerId=co.id; order.customerInn=custInn||(co.inn||''); }
+    }
     order.vehicleAt=readVehicleAtFromDom('d');
     order.routePoints=cleaned;
     ensureRoutePoints(order);
@@ -2331,6 +2365,7 @@ function openCatalogs(){
     return `<div class="dense-row" data-co-row="${esc(c.id)}">
       <button type="button" class="grow" data-edit-co="${esc(c.id)}">
         <div class="name">${esc(c.name)}</div>
+        <div class="meta inn">${c.inn?`ИНН ${esc(c.inn)}`:''}</div>
         <div class="meta">${chips}${metaBits?` · ${esc(metaBits)}`:''}${!chips&&!metaBits?esc(roles||'—'):''}</div>
       </button>
       <button type="button" class="icon-btn danger" data-del-co="${esc(c.id)}" title="Удалить">×</button>
@@ -2395,7 +2430,7 @@ function openCatalogs(){
   $('catalogs-form').innerHTML=`
     <div class="cat-panel ${tab==='companies'?'on':''}" data-cat-panel="companies">
       <div class="row" style="gap:6px">
-        <input class="cat-search" id="co-search" placeholder="Поиск компании…" style="flex:1;margin:0" />
+        <input class="cat-search" id="co-search" placeholder="Поиск: название или ИНН…" style="flex:1;margin:0" />
         <button type="button" class="primary cat-add-btn" id="co-new" style="width:auto;flex:0 0 auto;padding:8px 12px!important">+</button>
       </div>
       <div id="co-editor" class="co-editor-box"></div>
@@ -2470,7 +2505,8 @@ function openCatalogs(){
       const q=(search.value||'').trim().toLowerCase();
       document.querySelectorAll('#co-list [data-co-row]').forEach(row=>{
         const name=(row.querySelector('.name')?.textContent||'').toLowerCase();
-        row.style.display=!q || name.includes(q)?'':'none';
+        const inn=(row.querySelector('.inn')?.textContent||'').toLowerCase();
+        row.style.display=!q || name.includes(q) || inn.includes(q)?'':'none';
       });
     };
   }
@@ -2490,7 +2526,18 @@ function openCatalogs(){
         <h3 style="margin:0;flex:1;font-size:.95rem">${company?'Карточка':'Новая компания'}</h3>
         <button type="button" class="icon-btn" id="co-cancel" title="Закрыть">×</button>
       </div>
+      <label>ИНН</label>
+      <div class="row" style="gap:8px;align-items:center">
+        <input id="co-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" value="${esc(c.inn||'')}" style="flex:1" />
+        <button type="button" class="secondary" id="co-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
+      </div>
+      <div class="hint" id="co-inn-status"></div>
       <label>Название</label><input id="co-name" value="${esc(c.name)}" />
+      <div class="form-pair">
+        <div><label>ОГРН</label><input id="co-ogrn" value="${esc(c.ogrn||'')}" /></div>
+        <div><label>КПП</label><input id="co-kpp" value="${esc(c.kpp||'')}" /></div>
+      </div>
+      <label>Юр. адрес</label><input id="co-address" value="${esc(c.address||'')}" />
       <div class="role-toggles">
         <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/> Наша фирма</label>
         <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
@@ -2607,6 +2654,27 @@ function openCatalogs(){
     $('co-add-veh').onclick=()=>{ vehicles.push({id:uuid(),plate:'',makeModel:'',payloadTons:null,bodyLengthM:null,bodyWidthM:null,bodyHeightM:null}); paintVehicles(); };
     $('co-add-drv').onclick=()=>{ drivers.push({id:uuid(),name:'',phone:'',vehicleId:null}); paintDrivers(); };
     $('co-cancel').onclick=()=>{ box.classList.remove('show'); box.innerHTML=''; };
+    $('co-inn-lookup')&&($('co-inn-lookup').onclick=async()=>{
+      const st=$('co-inn-status');
+      const inn=(($('co-inn')||{}).value||'').trim();
+      if(st) st.textContent='Загрузка…';
+      try{
+        const existing=findCompanyByInn(inn);
+        if(existing && existing.id!==c.id){
+          if(st) st.textContent='ИНН уже в справочнике: '+existing.name;
+          return;
+        }
+        const party=await lookupPartyByInn(inn);
+        if($('co-name')) $('co-name').value=party.name||($('co-name').value||'');
+        if($('co-inn')) $('co-inn').value=party.inn||inn;
+        if($('co-ogrn')) $('co-ogrn').value=party.ogrn||'';
+        if($('co-kpp')) $('co-kpp').value=party.kpp||'';
+        if($('co-address')) $('co-address').value=party.address||'';
+        if(st) st.textContent='Реквизиты загружены';
+      }catch(err){
+        if(st) st.textContent=String(err.message||err);
+      }
+    });
     $('co-save').onclick=()=>{
       const name=($('co-name').value||'').trim();
       if(!name){ alert('Укажите название'); return; }
@@ -2653,8 +2721,12 @@ function openCatalogs(){
       }
       const loads=uniqAddrs((($('co-loads')||{}).value||'').split(/\n/));
       const unloads=uniqAddrs((($('co-unloads')||{}).value||'').split(/\n/));
+      const innRaw=String((($('co-inn')||{}).value||'')).replace(/\D/g,'');
       upsertCompany({
         id:c.id, name, roles, note:($('co-note').value||'').trim(),
+        inn:innRaw, ogrn:(($('co-ogrn')||{}).value||'').trim(),
+        kpp:(($('co-kpp')||{}).value||'').trim(),
+        address:(($('co-address')||{}).value||'').trim(),
         contacts, vehicles, drivers,
         loadingAddresses:roles.includes('customer')?loads:[],
         unloadingAddresses:roles.includes('customer')?unloads:[],
