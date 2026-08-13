@@ -19,7 +19,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-    <link rel="stylesheet" href="styles.css?v=2026-08-13-admin-route-contacts" />
+    <link rel="stylesheet" href="styles.css?v=2026-08-13-veh-dim-fields" />
 
 </head>
 <body>
@@ -257,11 +257,11 @@
           <h2 class="form-section-title">Требования к ТС</h2>
           <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
           <div class="form-fields">
-            <div class="row">
-              <input id="create-req-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" style="flex:0 0 64px;text-align:center" />
-              <input id="create-req-l" inputmode="decimal" placeholder="Д, м" title="Длина кузова, м" style="flex:1;text-align:center" />
-              <input id="create-req-w" inputmode="decimal" placeholder="Ш, м" title="Ширина, м" style="flex:1;text-align:center" />
-              <input id="create-req-h" inputmode="decimal" placeholder="В, м" title="Высота, м" style="flex:1;text-align:center" />
+            <div class="row veh-dim-row">
+              <input id="create-req-pay" class="veh-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" />
+              <input id="create-req-l" class="veh-dim" inputmode="decimal" placeholder="Д" title="Длина, м" />
+              <input id="create-req-w" class="veh-dim" inputmode="decimal" placeholder="Ш" title="Ширина, м" />
+              <input id="create-req-h" class="veh-dim" inputmode="decimal" placeholder="В" title="Высота, м" />
             </div>
           </div>
         </section>
@@ -385,9 +385,9 @@
     <div id="print-preview-body" class="print-preview-body"></div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-13-fix-contact-delete"></script>
-<script src="driver.js?v=2026-08-13-fix-contact-delete"></script>
-<script src="admin.js?v=2026-08-13-fix-contact-delete"></script>
-<script src="app.js?v=2026-08-13-fix-contact-delete"></script>
+  <script src="store.js?v=2026-08-13-veh-dim-fields"></script>
+<script src="driver.js?v=2026-08-13-veh-dim-fields"></script>
+<script src="admin.js?v=2026-08-13-veh-dim-fields"></script>
+<script src="app.js?v=2026-08-13-veh-dim-fields"></script>
 </body>
 </html>

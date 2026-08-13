@@ -2261,11 +2261,11 @@ function openDetail(id){
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
         <label>Требования к ТС (т / Д×Ш×В)</label>
-        <div class="row">
-          <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" style="flex:0 0 64px;text-align:center" />
-          <input id="d-req-l" inputmode="decimal" placeholder="Д, м" value="${o.reqLengthM??''}" style="flex:1;text-align:center" />
-          <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
-          <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
+        <div class="row veh-dim-row">
+          <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" class="veh-pay" />
+          <input id="d-req-l" class="veh-dim" inputmode="decimal" placeholder="Д" value="${o.reqLengthM??''}" title="Длина, м" />
+          <input id="d-req-w" class="veh-dim" inputmode="decimal" placeholder="Ш" value="${o.reqWidthM??''}" title="Ширина, м" />
+          <input id="d-req-h" class="veh-dim" inputmode="decimal" placeholder="В" value="${o.reqHeightM??''}" title="Высота, м" />
         </div>
         <label for="d-customer-inn">${hideClient?'':`ИНН заказчика`}</label>
         ${hideClient?`<p class="hint">Клиент администратора скрыт: виден только фирме, выложившей заказ на биржу</p>`:`
@@ -2678,9 +2678,9 @@ function openCatalogs(){
       <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
       <div class="veh-specs">
         <input id="veh-pay-${i}" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" value="${v.payloadTons??''}" />
-        <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
-        <input id="veh-w-${i}" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
-        <input id="veh-h-${i}" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
+        <input id="veh-l-${i}" class="veh-dim" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
+        <input id="veh-w-${i}" class="veh-dim" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
+        <input id="veh-h-${i}" class="veh-dim" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
         <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km}" />
         <span class="hint" style="margin:0">л/100</span>
       </div>
@@ -2756,11 +2756,11 @@ function openCatalogs(){
           <input id="own-veh-cons" inputmode="decimal" value="20" placeholder="л/100" title="л/100 км" style="flex:0 0 56px;text-align:center" />
           <button type="button" class="icon-btn ok" id="own-veh-add" title="Добавить">+</button>
         </div>
-        <div class="row" style="margin-top:4px">
-          <input id="own-veh-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность" style="flex:0 0 56px;text-align:center" />
-          <input id="own-veh-l" inputmode="decimal" placeholder="Д, м" style="flex:1;text-align:center" />
-          <input id="own-veh-w" inputmode="decimal" placeholder="Ш, м" style="flex:1;text-align:center" />
-          <input id="own-veh-h" inputmode="decimal" placeholder="В, м" style="flex:1;text-align:center" />
+        <div class="row veh-dim-row" style="margin-top:4px">
+          <input id="own-veh-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность" class="veh-pay" />
+          <input id="own-veh-l" class="veh-dim" inputmode="decimal" placeholder="Д" title="Длина, м" />
+          <input id="own-veh-w" class="veh-dim" inputmode="decimal" placeholder="Ш" title="Ширина, м" />
+          <input id="own-veh-h" class="veh-dim" inputmode="decimal" placeholder="В" title="Высота, м" />
         </div>
       </div>
       <div class="cat-list">${vehicleCards}</div>
@@ -3157,11 +3157,11 @@ function openCatalogs(){
         <div class="card" style="margin:6px 0">
           <input data-vp="${i}" placeholder="Госномер" value="${esc(v.plate)}" />
           <input data-vm="${i}" placeholder="Марка/модель" value="${esc(v.makeModel||'')}" />
-          <input data-vpay="${i}" inputmode="decimal" placeholder="Грузоподъёмность, т" value="${v.payloadTons??''}" />
-          <div class="row">
-            <input data-vl="${i}" inputmode="decimal" placeholder="Длина, м" value="${v.bodyLengthM??''}" />
-            <input data-vw="${i}" inputmode="decimal" placeholder="Ширина, м" value="${v.bodyWidthM??''}" />
-            <input data-vh="${i}" inputmode="decimal" placeholder="Высота, м" value="${v.bodyHeightM??''}" />
+          <input data-vpay="${i}" inputmode="decimal" placeholder="т" value="${v.payloadTons??''}" class="veh-pay" style="flex:0 0 52px;width:52px;text-align:center" />
+          <div class="co-veh-dims">
+            <input data-vl="${i}" class="veh-dim" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
+            <input data-vw="${i}" class="veh-dim" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
+            <input data-vh="${i}" class="veh-dim" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
           </div>
           <button type="button" class="secondary" data-vdel="${i}">Удалить ТС</button>
         </div>`).join('')||`<div class="hint">Нет ТС</div>`;
