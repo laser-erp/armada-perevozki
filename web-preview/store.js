@@ -172,7 +172,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-merge-nechaev";
+const APP_BUILD="2026-08-13-security-phase0";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -207,13 +207,68 @@ function uuid(){
     return v.toString(16);
   });
 }
-/** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
-const PB_BASE=(function(){
+/** Общая база на VPS; клиент — только через /armada-api (JWT). */
+const API_BASE=(function(){
   const h=location.hostname;
   if(h==='aptown1.fvds.ru'||h==='176.12.67.35') return location.origin;
   return 'http://aptown1.fvds.ru';
 })();
-console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
+const PB_BASE=API_BASE;
+const API_TOKEN_KEY='armada_api_token_v1';
+let armadaApiToken=null;
+function loadApiToken(){
+  try{ armadaApiToken=localStorage.getItem(API_TOKEN_KEY)||null; }catch(_){ armadaApiToken=null; }
+}
+function saveApiToken(t){
+  armadaApiToken=t||null;
+  try{
+    if(armadaApiToken) localStorage.setItem(API_TOKEN_KEY, armadaApiToken);
+    else localStorage.removeItem(API_TOKEN_KEY);
+  }catch(_){}
+}
+function clearApiToken(){ saveApiToken(null); }
+loadApiToken();
+async function apiRequest(path, opts={}){
+  const headers=Object.assign({}, opts.headers||{});
+  if(armadaApiToken) headers.Authorization='Bearer '+armadaApiToken;
+  let body=opts.body;
+  if(opts.json!==undefined){
+    headers['Content-Type']='application/json';
+    body=JSON.stringify(opts.json);
+  }
+  const res=await fetch(API_BASE+path, { method:opts.method||'GET', headers, body, credentials:'same-origin' });
+  return res;
+}
+async function apiAuthAdmin(adminId, pin){
+  const res=await apiRequest('/armada-api/auth/admin', { method:'POST', json:{ adminId, pin } });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) return { ok:false, error:data.error||'auth_failed', status:res.status };
+  saveApiToken(data.token);
+  return { ok:true, admin:data.admin, token:data.token };
+}
+async function apiAuthDriver(phone, pin){
+  const res=await apiRequest('/armada-api/auth/driver', { method:'POST', json:{ phone, pin } });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) return { ok:false, error:data.error||'auth_failed', status:res.status };
+  saveApiToken(data.token);
+  return { ok:true, driver:data.driver, token:data.token };
+}
+async function fetchBootstrapAdmins(){
+  try{
+    const res=await fetch(API_BASE+'/armada-api/bootstrap');
+    if(!res.ok) return [];
+    const data=await res.json();
+    return Array.isArray(data.admins)?data.admins:[];
+  }catch(_){ return []; }
+}
+async function verifyApiToken(){
+  if(!armadaApiToken) return false;
+  try{
+    const res=await apiRequest('/armada-api/auth/me');
+    return res.ok;
+  }catch(_){ return false; }
+}
+console.info('АРМАДА build', APP_BUILD, 'API', API_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
 const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
 function normalizeFinance(f){
@@ -1113,14 +1168,17 @@ async function lookupBankByBik(bik){
   return await lookupBankByBikCbr(clean);
 }
 async function fetchServerState(){
-  const filter=encodeURIComponent("key='main'");
-  const res=await fetch(`${PB_BASE}/api/collections/app_state/records?filter=${filter}&perPage=1`);
+  if(!armadaApiToken) throw new Error('Требуется вход');
+  const res=await apiRequest('/armada-api/state');
+  if(res.status===401){ clearApiToken(); throw new Error('Требуется вход'); }
   if(!res.ok) throw new Error('Не удалось загрузить базу ('+res.status+')');
   const data=await res.json();
-  return (data.items&&data.items[0])||null;
+  const rec=data.record;
+  if(!rec) return null;
+  return { id:rec.id, payload:rec.payload||{} };
 }
 async function pushServerState(){
-  // Перед записью сверяем эпоху: старая вкладка не должна затирать более новую базу.
+  if(!armadaApiToken) return { aborted:true, reason:'no_token' };
   try{
     const rec=await fetchServerState();
     if(rec){
@@ -1149,49 +1207,40 @@ async function pushServerState(){
           localStorage.setItem(KEY, JSON.stringify(snapshot()));
           // сразу догоняем сервер своей сменой/ЕТО/заказами
           try{
-            const body={key:'main', payload:snapshot()};
-            await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-              method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-            });
-            console.warn('PB push merged local into remote epoch', remoteEpoch);
-            return {aborted:false, merged:true};
-          }catch(e){ console.warn('PB merge push', e); }
+            const putRes=await apiRequest('/armada-api/state', { method:'PUT', json:{ payload:snapshot() } });
+            if(putRes.ok){
+              console.warn('API push merged local into remote epoch', remoteEpoch);
+              return { aborted:false, merged:true };
+            }
+          }catch(e){ console.warn('API merge push', e); }
         } else {
           localStorage.setItem(KEY, JSON.stringify(snapshot()));
         }
-        console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
+        console.warn('API push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
         return {aborted:true, reason:'remote_ahead'};
       }
     }
   }catch(err){
-    console.warn('PB preflight', err);
+    if(String(err.message||'').includes('Требуется вход')) return { aborted:true, reason:'no_token' };
+    console.warn('API preflight', err);
   }
   const payload=snapshot();
   localStorage.setItem(KEY, JSON.stringify(payload));
-  const body={key:'main', payload};
-  if(pbRecordId){
-    const res=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-    });
-    if(!res.ok) throw new Error('Не удалось сохранить ('+res.status+')');
-    return {aborted:false};
+  const putRes=await apiRequest('/armada-api/state', { method:'PUT', json:{ payload } });
+  if(putRes.status===401){ clearApiToken(); throw new Error('Требуется вход'); }
+  if(putRes.status===409){
+    const data=await putRes.json().catch(()=>({}));
+    if(data.record){
+      pbRecordId=data.record.id;
+      applyPayload(data.record.payload||{}, {remoteSeq:true});
+      localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    }
+    return { aborted:true, reason:'remote_ahead' };
   }
-  const res=await fetch(`${PB_BASE}/api/collections/app_state/records`,{
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-  });
-  if(res.ok){
-    const rec=await res.json();
-    pbRecordId=rec.id;
-    return {aborted:false};
-  }
-  const existing=await fetchServerState();
-  if(!existing) throw new Error('Не удалось создать запись базы');
-  pbRecordId=existing.id;
-  const res2=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-  });
-  if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
-  return {aborted:false};
+  if(!putRes.ok) throw new Error('Не удалось сохранить ('+putRes.status+')');
+  const data=await putRes.json().catch(()=>({}));
+  if(data.id) pbRecordId=data.id;
+  return { aborted:false };
 }
 function persist(){
   localStorage.setItem(KEY, JSON.stringify(snapshot()));
@@ -1212,6 +1261,10 @@ function persist(){
 }
 async function initCloudSync(){
   syncStatus='syncing';
+  if(!armadaApiToken){
+    syncStatus='ok';
+    return;
+  }
   try{
     const rec=await fetchServerState();
     if(rec){
@@ -1244,6 +1297,7 @@ async function initCloudSync(){
 /** Подтянуть новую эпоху с сервера без перезагрузки и без повторного PIN. */
 async function pullRemoteUpdates(reason){
   if(autoSyncBusy) return false;
+  if(!armadaApiToken) return false;
   // Не мешаем активному вводу закрытия/создания — только если шаг idle или просмотр
   const busyStep=state.orderStep&&state.orderStep!=='idle'&&state.orderStep!=='postCloseWhere';
   if(busyStep && reason==='poll') return false;

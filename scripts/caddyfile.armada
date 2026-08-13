@@ -1,11 +1,20 @@
 {
+	# Let's Encrypt для *.fvds.ru может быть ограничен — пока HTTP.
+	# Когда TLS доступен: заменить на блок aptown1.fvds.ru { ... } без auto_https off
 	auto_https off
 }
 
 :80 {
 	encode gzip
 
-	# Прокси ЕГРЮЛ ФНС для поиска по ИНН из браузера (без CORS)
+	handle /armada-api/* {
+		reverse_proxy 127.0.0.1:8091
+	}
+
+	# PocketBase закрыт снаружи — только через armada-api с JWT
+	# handle /api/* { respond "Forbidden" 403 }
+	# handle /_/* { respond "Forbidden" 403 }
+
 	handle /cbr-api/* {
 		uri strip_prefix /cbr-api
 		reverse_proxy https://www.cbr.ru {
@@ -20,12 +29,6 @@
 		}
 	}
 
-	handle /api/* {
-		reverse_proxy 127.0.0.1:8090
-	}
-	handle /_/* {
-		reverse_proxy 127.0.0.1:8090
-	}
 	handle {
 		root * /var/www/armada
 		header Cache-Control "no-store, no-cache, must-revalidate"
@@ -33,3 +36,12 @@
 		file_server
 	}
 }
+
+# HTTPS (когда DNS/TLS готов):
+# aptown1.fvds.ru {
+# 	encode gzip
+# 	handle /armada-api/* { reverse_proxy 127.0.0.1:8091 }
+# 	handle /cbr-api/* { uri strip_prefix /cbr-api; reverse_proxy https://www.cbr.ru { header_up Host www.cbr.ru } }
+# 	handle /egrul-api/* { uri strip_prefix /egrul-api; reverse_proxy https://egrul.nalog.ru { header_up Host egrul.nalog.ru } }
+# 	handle { root * /var/www/armada; header Cache-Control "no-store"; try_files {path} /index.html; file_server }
+# }

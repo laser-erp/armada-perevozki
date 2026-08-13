@@ -28,6 +28,16 @@ function fillAdminLoginSelect(){
   migrateAdmins();
   const sel=$('admin-name-select'); if(!sel) return;
   const list=state.admins.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  if(!list.length){
+    fetchBootstrapAdmins().then(boot=>{
+      if(boot.length){
+        boot.forEach(b=>{
+          if(!state.admins.some(a=>a.id===b.id)) state.admins.push({ id:b.id, name:b.name, pin:'', isSuper:!!b.isSuper, spaceId:null });
+        });
+        fillAdminLoginSelect();
+      }
+    });
+  }
   sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
 }
 function pushAdminLogin(action){
@@ -151,14 +161,24 @@ function restoreAdminSession(){
   let raw=null;
   try{ raw=JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY)||'null'); }catch(_){ raw=null; }
   if(!raw||(!raw.id && !raw.name)) return false;
+  if(!armadaApiToken) return false;
   let adm=(state.admins||[]).find(a=>raw.id && a.id===raw.id);
   if(!adm && raw.name) adm=(state.admins||[]).find(a=>samePersonName(a.name, raw.name));
-  if(!adm){ clearAdminSession(); return false; }
+  if(!adm){ clearAdminSession(); clearApiToken(); return false; }
   currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
   saveAdminSession();
   try{ touchAdminPresence('admin'); }catch(_){}
   try{ startPresenceHeartbeat(); }catch(_){}
   updateAdminChrome();
+  verifyApiToken().then(ok=>{
+    if(!ok){
+      stopPresenceHeartbeat();
+      currentAdmin=null;
+      clearAdminSession();
+      clearApiToken();
+      updateAdminChrome();
+    }
+  }).catch(()=>{});
   return true;
 }
 function loginAdmin(){
@@ -167,16 +187,26 @@ function loginAdmin(){
   const pin=(($('pin-input')||{}).value||'').trim();
   const adm=state.admins.find(a=>a.id===id);
   if(!adm){ $('pin-error').textContent='Выберите администратора'; return; }
-  if(pin!==String(adm.pin)){ $('pin-error').textContent='Неверный PIN'; return; }
-  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
-  saveAdminSession();
-  pushAdminLogin('login');
-  touchAdminPresence('admin');
-  startPresenceHeartbeat();
-  persist();
-  updateAdminChrome();
-  show('admin');
-  renderAdmin();
+  if(pin.length<4){ $('pin-error').textContent='PIN от 4 цифр'; return; }
+  $('pin-error').textContent='Проверка…';
+  apiAuthAdmin(id, pin).then(r=>{
+    if(!r.ok){
+      $('pin-error').textContent=r.status===429?'Слишком много попыток':'Неверный PIN';
+      return;
+    }
+    currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
+    saveAdminSession();
+    pushAdminLogin('login');
+    touchAdminPresence('admin');
+    startPresenceHeartbeat();
+    $('pin-error').textContent='';
+    return initCloudSync().then(()=>{
+      persist();
+      updateAdminChrome();
+      show('admin');
+      renderAdmin();
+    });
+  }).catch(()=>{ $('pin-error').textContent='Ошибка входа'; });
 }
 function logoutAdmin(){
   if(currentAdmin){
@@ -187,6 +217,7 @@ function logoutAdmin(){
   stopPresenceHeartbeat();
   currentAdmin=null;
   clearAdminSession();
+  clearApiToken();
   updateAdminChrome();
   show('roles');
 }

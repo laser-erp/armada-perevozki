@@ -93,8 +93,10 @@ function clearDriverSession(){
   try{ localStorage.removeItem(DRIVER_SESSION_KEY); }catch(_){}
   DRIVER="";
   DRIVER_COMPANY_ID=null;
+  clearApiToken();
 }
 function restoreDriverSession(){
+  if(!armadaApiToken) return false;
   let raw=null;
   try{ raw=JSON.parse(localStorage.getItem(DRIVER_SESSION_KEY)||'null'); }catch(_){ raw=null; }
   if(!raw||!raw.name) return false;
@@ -287,25 +289,23 @@ function loginDriver(){
   const pin=(($('drv-login-pin')||{}).value||'').trim();
   if(!phone){ showErr('Введите телефон'); return; }
   if(!pin||pin.length<4){ showErr('Введите PIN (от 4 цифр)'); return; }
-  const byPhone=findDriversByPhone(phone);
-  if(!byPhone.length){
-    showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
-    return;
-  }
-  const matched=byPhone.filter(d=>resolveDriverPin(d)===pin);
-  if(!matched.length){ showErr('Неверный PIN'); return; }
-  // Одно ФИО в нескольких фирмах с тем же телефоном — берём «домашнюю» (где водитель = админ фирмы)
-  const rec=pickDriverHomeRecord(matched);
-  if(!rec){ showErr('Профиль водителя не найден'); return; }
-  // закрепить pin в записи, если был только из админа/телефона
-  if(String(rec.pin||'').trim()!==pin){
-    rec.pin=pin;
-    // синхронизировать pin на все копии с тем же телефоном и ФИО
-    byPhone.forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
-    bumpDataEpoch('driver-pin-bind');
-    persist();
-  }
-  enterAsDriver(rec);
+  showErr('Проверка…');
+  apiAuthDriver(phone, pin).then(r=>{
+    if(!r.ok){
+      showErr(r.status===429?'Слишком много попыток':'Неверный PIN или телефон');
+      return;
+    }
+    const drv=r.driver||{};
+    let rec=findDriverRecord(drv.name, drv.companyId)||findDriversByPhone(phone)[0];
+    if(!rec){ showErr('Профиль водителя не найден'); return; }
+    if(String(rec.pin||'').trim()!==pin){
+      rec.pin=pin;
+      findDriversByPhone(phone).forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
+      bumpDataEpoch('driver-pin-bind');
+    }
+    showErr('');
+    enterAsDriver(rec);
+  }).catch(()=>showErr('Ошибка входа'));
 }
 async function enterAsDriver(rec){
   if(!rec||!rec.name) return;
