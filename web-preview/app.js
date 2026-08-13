@@ -777,6 +777,16 @@ function isPartnerOnOrder(o){
   if(o.executorAdminId && o.executorAdminId===currentAdmin.id) return true;
   return false;
 }
+/** Перевозчик (партнёр / внешний) — не видит клиента администратора-заказчика. */
+function isCarrierViewerOnOrder(o){
+  if(!o || !currentAdmin || isSuperAdmin()) return false;
+  if(isMyFirmOrder(o)) return false;
+  const myCo=currentOwnCompany();
+  if(!myCo) return false;
+  if(o.executorType==='partner' && o.carrierCompanyId===myCo.id) return true;
+  if(o.carrierCompanyId===myCo.id) return true;
+  return isPartnerOnOrder(o);
+}
 /** Доступ: супер — любой; биржа — всем админам; иначе только свои (owner/space фирмы) / партнёр. */
 function canAdminSeeOrder(o){
   if(!o || !currentAdmin) return false;
@@ -971,7 +981,7 @@ function exchangeEnabledDrivers(){
   return (state.drivers||[]).filter(d=>d.exchangeEnabled);
 }
 function orderContactLine(o){
-  // Админ: компания + контакт
+  if(isCarrierViewerOnOrder(o)) return '—';
   const parts=[];
   if(o.customer) parts.push(o.customer);
   if(o.contactName) parts.push(o.contactName);
@@ -979,16 +989,11 @@ function orderContactLine(o){
   if(ph) parts.push(ph);
   return parts.join(' · ')||'—';
 }
-/** Водителю название заказчика не показываем никогда */
+/** Водителю название заказчика и контакт клиента не показываем никогда */
 function driverContactLine(o){
-  if(!driverMaySeeContact(o)) return '';
-  const parts=[];
-  if(o.contactName) parts.push(o.contactName);
-  const ph=formatPhone(o.contactPhone||'');
-  if(ph) parts.push(ph);
-  return parts.join(' · ');
+  return '';
 }
-/** Контакт — только после выезда/взятия в работу; на бирже и до «Выехал» — скрыт. Компанию не показываем. */
+/** Контакт — только на точках маршрута после выезда; клиент заказчика скрыт. */
 function driverMaySeeContact(o){
   if(!o || o.onExchange) return false;
   if(o.driverName!==DRIVER) return false;

@@ -30,6 +30,11 @@ run_ssh() {
 
 echo "→ $USER@$HOST:$DEST"
 tar czf - -C "$SRC" . | run_ssh "find $DEST -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} + 2>/dev/null; tar xzf - -C $DEST"
+CADDY_SRC="$ROOT/scripts/caddyfile.armada"
+if [ -f "$CADDY_SRC" ]; then
+  echo "→ Caddy: /etc/caddy/Caddyfile (прокси /egrul-api)"
+  tar czf - -C "$(dirname "$CADDY_SRC")" "$(basename "$CADDY_SRC")" | run_ssh "tar xzf - -C /tmp && mv /tmp/caddyfile.armada /etc/caddy/Caddyfile && systemctl reload caddy"
+fi
 BUILD="$(grep -m1 'APP_BUILD=' "$SRC/store.js" | sed 's/.*"\(.*\)".*/\1/')"
 echo "Готово. Проверка APP_BUILD на сервере:"
 run_ssh "grep -m1 APP_BUILD $DEST/store.js || true"

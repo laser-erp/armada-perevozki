@@ -803,6 +803,7 @@ function adminOrderCardHtml(o){
     ? `<p>Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
     : '';
   const phone=(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })();
+  const hideClient=isCarrierViewerOnOrder(o);
   const sideBtns=[
     onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:'',
     !onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)
@@ -816,17 +817,21 @@ function adminOrderCardHtml(o){
     <p>${esc(dateTime(o.createdAt))}</p>
     ${ownerLine}
     ${o.ownCompanyName?`<p style="color:var(--text);font-weight:600">От: ${esc(o.ownCompanyName)}</p>`:''}
-    <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
+    ${hideClient
+      ?`<p class="hint">Клиент заказчика скрыт (перевозчик)</p>${o.carrierCompanyName?`<p>Перевозчик: ${esc(o.carrierCompanyName)}</p>`:''}`
+      :`<p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>`}
     ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
     <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${phone}</p>
-    <p>${esc(orderContactLine(o))}</p>
+    ${hideClient?'':`<p>${esc(orderContactLine(o))}</p>`}
     <p class="order-route">${esc(routeText(o))}</p>
     ${orderTimesLines(ensureOrderTimeStamps(o))}
     ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
     ${orderScheduleLines(o, false)}
     <p class="order-km">Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
     ${hasRate
-      ? `<p class="order-money">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
+      ? (hideClient
+        ? `<p class="order-money">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
+        : `<p class="order-money">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`)
       : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
     <div class="order-actions">
       <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
@@ -1068,13 +1073,19 @@ function unpublishFromExchange(id){
 function publishToExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || o.closedAt || o.startOdometer!=null){ alert('Нельзя выставить на биржу'); return; }
+  if(o.departOdometer!=null){ alert('Водитель уже выехал — снимите с биржи нельзя, закройте или отмените заказ'); return; }
   if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
   if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
-  if(!confirm('Выставить заказ на биржу для других фирм?')) return;
+  if(!confirm('Не успеваете своим парком? Заказ увидят другие фирмы на бирже. Назначенный водитель и перевозчик будут сняты.')) return;
   o.onExchange=true;
   o.executorType='exchange';
   o.driverName='Биржа';
   o.vehiclePlate='—';
+  o.driverPhone='';
+  o.carrierCompanyId=null;
+  o.carrierCompanyName='';
+  o.carrierDriverId=null;
+  o.carrierVehicleId=null;
   o.transportApp=null;
   o.partnerSpaceId=null;
   o.executorAdminId=null;
@@ -1132,7 +1143,6 @@ function openClaimExchange(id){
       <div class="claim-box">
         <p><strong>Заказчик (выложил на биржу):</strong> ${esc(o.ownCompanyName||'—')}</p>
         <p><strong>Перевозчик:</strong> ${esc(myCo.name)} <span class="hint">(ваша фирма, свой парк)</span></p>
-        ${o.customer?`<p><strong>Клиент / груз:</strong> ${esc(o.customer)}</p>`:''}
         <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
         <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
         <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
@@ -1269,7 +1279,7 @@ function renderAdminExchangeBoard(orders){
     return `<div class="ex-card">
       <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <p>${esc(dateTime(o.createdAt))}</p>
-      <p>Заказчик (выложил): <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong>${o.customer?` · клиент: ${esc(o.customer)}`:''}</p>
+      <p>Заказчик (выложил): <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong>${mine && o.customer?` · клиент: ${esc(o.customer)}`:''}</p>
       <span class="ex-badge ${mine?'':'other'}">${mine?'ваш заказ':'чужой заказ'}</span>
       <p class="ex-route">${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
@@ -1725,6 +1735,7 @@ function orderDocRouteRows(o){
   return pts.map((p,i)=>`<tr><td>${i+1}. ${esc(kindTitle(p.kind))}</td><td>${esc(p.address||'—')}</td></tr>`).join('');
 }
 function buildOrderDocBody(kind, o){
+  const hideClient=isCarrierViewerOnOrder(o);
   const own=resolveParty(o.ownCompanyId, o.ownCompanyName, o.spaceId);
   const customer=resolveParty(null, o.customer, null);
   const carrierName=o.carrierCompanyName||(o.executorType==='partner'?'':own.name);
@@ -1750,22 +1761,23 @@ function buildOrderDocBody(kind, o){
     </div>`;
   if(kind==='application'){
     return `${commonHead}
+      ${hideClient?`<p class="hint">Данные коммерческого заказчика скрыты для перевозчика</p>`:`
       <h2>1. Заказчик</h2>
       ${partyLinesHtml(customer)}
-      <p>Контакт: ${esc(contact)}</p>
-      <h2>2. Исполнитель (наша фирма)</h2>
+      <p>Контакт: ${esc(contact)}</p>`}
+      <h2>${hideClient?'1':'2'}. Исполнитель (наша фирма)</h2>
       ${partyLinesHtml(own)}
-      <h2>3. Подача и маршрут</h2>
+      <h2>${hideClient?'2':'3'}. Подача и маршрут</h2>
       <p>Подача ТС: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
       <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <h2>4. Транспорт и водитель</h2>
+      <h2>${hideClient?'3':'4'}. Транспорт и водитель</h2>
       <p>Водитель: <strong>${esc(driver)}</strong>${phone?` · ☎ ${esc(phone)}`:''}<br>
       Авто: <strong>${esc(plate)}</strong>
       ${orderReqText(o)?`<br>Требования к ТС: ${esc(orderReqText(o))}`:''}</p>
-      <h2>5. Стоимость</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
+      ${hideClient?'':`<h2>5. Стоимость</h2>
+      <p>${esc(orderDocMoneyLine(o))}</p>`}
       <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
+        ${hideClient?'':`<div>Заказчик _______________ / _______________</div>`}
         <div>Исполнитель _______________ / _______________</div>
       </div>`;
   }
@@ -1784,7 +1796,7 @@ function buildOrderDocBody(kind, o){
     return `${commonHead}
       <p class="muted">${app&&app.signedAt?`Договор‑заявка подписана: ${esc(dateTime(app.signedAt))}`:'Черновик договор‑заявки по данным заказа'}</p>
       ${svcContract}
-      ${app&&app.commercialCustomer?`<p>Клиент / грузоотправитель: <strong>${esc(app.commercialCustomer)}</strong></p>`:''}
+      ${!hideClient && app&&app.commercialCustomer?`<p>Клиент / грузоотправитель: <strong>${esc(app.commercialCustomer)}</strong></p>`:''}
       <h2>1. Заказчик перевозки</h2>
       ${partyLinesHtml(left)}
       <h2>2. Перевозчик</h2>
@@ -1947,6 +1959,7 @@ function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
   if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
+  const hideClient=isCarrierViewerOnOrder(o);
   recomputeOrderTimes(ensureOrderTimeStamps(o));
   const m=metrics(o);
   let editPoints=ensureRoutePoints(o).map(p=>({...p}));
@@ -2057,7 +2070,8 @@ function openDetail(id){
       ${o.transportApp?`<div class="claim-box">
         <h3>Договор‑заявка подписана</h3>
         <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
-        ${o.transportApp.commercialCustomer?`<p>Клиент: ${esc(o.transportApp.commercialCustomer)}</p>`:''}
+        ${!hideClient && o.transportApp.commercialCustomer?`<p>Клиент: ${esc(o.transportApp.commercialCustomer)}</p>`:''}
+        ${hideClient?`<p class="hint">Клиент заказчика не отображается для перевозчика</p>`:''}
         <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</p>
         <p class="muted">${transportAppDriverPassportHtml(o.transportApp)}</p>
         <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
@@ -2087,7 +2101,8 @@ function openDetail(id){
           <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
         </div>
-        <label for="d-customer-inn">ИНН заказчика</label>
+        <label for="d-customer-inn">${hideClient?'':`ИНН заказчика`}</label>
+        ${hideClient?`<p class="hint">Клиент администратора скрыт: виден только фирме, выложившей заказ на биржу</p>`:`
         <div class="row" style="gap:8px;align-items:center">
           <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" value="${esc(o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'')}" />
           <button type="button" class="secondary" id="d-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
@@ -2095,8 +2110,6 @@ function openDetail(id){
         <div class="hint" id="d-customer-inn-status"></div>
         <label for="d-customer">Заказчик (наименование)</label>
         <input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название компании" />
-        <label for="d-carrier-company">Перевозчик</label>
-        <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
         <div class="form-pair">
           <div>
             <label for="d-contact-name">Контакт</label>
@@ -2106,7 +2119,9 @@ function openDetail(id){
             <label for="d-contact-phone">Телефон контакта</label>
             <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
           </div>
-        </div>
+        </div>`}
+        <label for="d-carrier-company">Перевозчик</label>
+        <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
         <label for="d-vehicle-date">Подача ТС — дата</label>
         <input id="d-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
         <label for="d-vehicle-time">Подача ТС — время</label>
@@ -2114,10 +2129,10 @@ function openDetail(id){
         <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
         <h3 style="margin:12px 0 4px;font-size:.85rem">Цены</h3>
         <div class="form-pair">
-          <div>
+          ${hideClient?'':`<div>
             <label for="d-price-client">Цена для заказчика, ₽</label>
             <input id="d-price-client" inputmode="decimal" value="${o.priceForClient??''}" placeholder="сумма" />
-          </div>
+          </div>`}
           <div>
             <label for="d-price-carrier">Цена для перевозчика, ₽</label>
             <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
@@ -2147,7 +2162,7 @@ function openDetail(id){
         <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
       </div>
     </section>
-    <section class="form-section">
+    ${hideClient?'':`<section class="form-section">
       <h2 class="form-section-title">Тариф клиенту</h2>
       <p class="form-section-hint">${(()=>{ const f=financeForOrder(o); return `Пакет: мин ${f.minWorkHours} ч + ${f.podachaHours} ч подачи; в пакете ${f.cityKmThreshold} км. Нулевой до ≤${f.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — 1 ч; иначе 2 ч. Сверх — ₽/км.`; })()}</p>
       <div class="form-fields">
@@ -2188,12 +2203,12 @@ function openDetail(id){
         </div>
         <div class="calc" id="perkm-preview"></div>
       </div>
-    </section>
+    </section>`}
     <section class="form-section">
       <h2 class="form-section-title">Ставки и ЗП</h2>
-      <p class="form-section-hint">ЗП, подушка и прибыль — от ставки «наличные». С НДС = без НДС +22%.</p>
+      <p class="form-section-hint">${hideClient?'ЗП, подушка и прибыль — от ставки «наличные».':`ЗП, подушка и прибыль — от ставки «наличные». С НДС = без НДС +22%.`}</p>
       <div class="form-fields">
-        <label for="d-form">Форма для клиента (документы)</label>
+        ${hideClient?'':`<label for="d-form">Форма для клиента (документы)</label>
         <select id="d-form">
           <option value="cash" ${o.paymentForm==='cash'||o.ratePerKmCash||!o.paymentForm?'selected':''}>Наличные</option>
           <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
@@ -2210,7 +2225,7 @@ function openDetail(id){
           </div>
         </div>
         <label for="d-cash">Ставка наличные, руб</label>
-        <input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="руб/км × км" />
+        <input id="d-cash" inputmode="decimal" value="${o.rateCash??''}" placeholder="руб/км × км" />`}
         <div class="form-pair">
           <div>
             <label for="d-bonus">Доплата к ЗП, руб</label>
@@ -2268,8 +2283,10 @@ function openDetail(id){
     };
   }
   renderRouteEditor();
-  wirePerKmInputs(o);
-  wireRateAutoFill(o);
+  if(!hideClient){
+    wirePerKmInputs(o);
+    wireRateAutoFill(o);
+  }
   wireOrderDocs(id);
   $('d-customer-inn-lookup')&&($('d-customer-inn-lookup').onclick=()=>{
     applyCustomerFromInn((($('d-customer-inn')||{}).value||'').trim(), $('d-customer-inn-status'), 'd');
@@ -2309,12 +2326,20 @@ function openDetail(id){
     if(!cleaned.some(p=>p.kind==='loading')){ showErr('Добавьте хотя бы одну точку «Загрузка»'); return; }
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
-    order.customer=($('d-customer').value||'').trim();
-    const custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
-    order.customerInn=custInn;
-    order.priceForClient=numOrNull(($('d-price-client')||{}).value);
+    if(!hideClient){
+      order.customer=(($('d-customer')||{}).value||'').trim();
+      const custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
+      order.customerInn=custInn;
+      order.priceForClient=numOrNull(($('d-price-client')||{}).value);
+      if(order.priceForClient!=null&&order.priceForClient<=0) order.priceForClient=null;
+      order.contactName=(($('d-contact-name')||{}).value||'').trim();
+      order.contactPhone=formatPhone((($('d-contact-phone')||{}).value||'').trim());
+      if(order.customer){
+        const co=upsertCompany({name:order.customer, inn:custInn, roles:['customer'], spaceId:order.spaceId||currentSpaceId()});
+        if(co){ order.customerId=co.id; order.customerInn=custInn||(co.inn||''); }
+      }
+    }
     order.priceForCarrier=numOrNull(($('d-price-carrier')||{}).value);
-    if(order.priceForClient!=null&&order.priceForClient<=0) order.priceForClient=null;
     if(order.priceForCarrier!=null&&order.priceForCarrier<=0) order.priceForCarrier=null;
     const drvName=(($('d-driver-name')||{}).value||'').trim();
     if(drvName) order.driverName=drvName;
@@ -2342,42 +2367,38 @@ function openDetail(id){
       if(ownId) linkOrderServiceContract(order, ownId, carrSel.id);
     }
     else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
-    order.contactName=(($('d-contact-name')||{}).value||'').trim();
-    order.contactPhone=formatPhone((($('d-contact-phone')||{}).value||'').trim());
     order.loadingContactName=(($('d-loading-contact-name')||{}).value||'').trim();
     order.loadingContactPhone=formatPhone((($('d-loading-contact-phone')||{}).value||'').trim());
     order.unloadingContactName=(($('d-unloading-contact-name')||{}).value||'').trim();
     order.unloadingContactPhone=formatPhone((($('d-unloading-contact-phone')||{}).value||'').trim());
-    if(order.customer){
-      const co=upsertCompany({name:order.customer, inn:custInn, roles:['customer'], spaceId:order.spaceId||currentSpaceId()});
-      if(co){ order.customerId=co.id; order.customerInn=custInn||(co.inn||''); }
-    }
     order.vehicleAt=readVehicleAtFromDom('d');
     order.routePoints=cleaned;
     ensureRoutePoints(order);
     const after=($('d-empty-after').value||'').replace(/\D/g,'');
     order.emptyKmAfter=after?+after:null;
-    const per=num('d-perkm');
-    order.ratePerKmCash=(per!=null && per>0)?per:null;
-    const hour=num('d-perhour');
-    order.ratePerHourWork=(hour!=null && hour>0)?hour:null;
-    const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
-    order.estimateKm=estRaw?+estRaw:null;
-    const eh=num('d-estimate-hours'); order.estimateWorkHours=(eh!=null&&eh>0)?eh:null;
-    const wh=num('d-work-hours'); order.workHours=(wh!=null&&wh>0)?wh:null;
-    applyOrderSchedule(order);
-    const stor=num('d-overnight-rate'); order.overnightStorageRateCash=(stor!=null&&stor>0)?stor:null;
-    const nightsRaw=(($('d-overnight-nights')||{}).value||'').replace(/\D/g,'');
-    order.overnightNights=nightsRaw?+nightsRaw:null;
-    order.paymentForm=$('d-form').value;
-    if(!applyClientTariff(order)){
-      const form=order.paymentForm;
-      const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
-      if(seed!=null && seed>0){
-        const t=fillRatesFrom(form, seed);
-        order.rateWithVat=t.withVat; order.rateWithoutVat=t.withoutVat; order.rateCash=t.cash;
-      } else {
-        order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+    if(!hideClient){
+      const per=num('d-perkm');
+      order.ratePerKmCash=(per!=null && per>0)?per:null;
+      const hour=num('d-perhour');
+      order.ratePerHourWork=(hour!=null && hour>0)?hour:null;
+      const estRaw=(($('d-estimate-km')||{}).value||'').replace(/\D/g,'');
+      order.estimateKm=estRaw?+estRaw:null;
+      const eh=num('d-estimate-hours'); order.estimateWorkHours=(eh!=null&&eh>0)?eh:null;
+      const wh=num('d-work-hours'); order.workHours=(wh!=null&&wh>0)?wh:null;
+      applyOrderSchedule(order);
+      const stor=num('d-overnight-rate'); order.overnightStorageRateCash=(stor!=null&&stor>0)?stor:null;
+      const nightsRaw=(($('d-overnight-nights')||{}).value||'').replace(/\D/g,'');
+      order.overnightNights=nightsRaw?+nightsRaw:null;
+      order.paymentForm=($('d-form')||{}).value;
+      if(!applyClientTariff(order)){
+        const form=order.paymentForm;
+        const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');
+        if(seed!=null && seed>0){
+          const t=fillRatesFrom(form, seed);
+          order.rateWithVat=t.withVat; order.rateWithoutVat=t.withoutVat; order.rateCash=t.cash;
+        } else {
+          order.rateWithVat=num('d-vat'); order.rateWithoutVat=num('d-novat'); order.rateCash=num('d-cash');
+        }
       }
     }
     order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
