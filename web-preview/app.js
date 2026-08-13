@@ -296,6 +296,10 @@ function findCustomer(name){
   return state.customers.find(x=>String(x.name||'').trim().toLowerCase()===key)||null;
 }
 function upsertCompany(raw){
+  const contactsProvided=Array.isArray(raw&&raw.contacts);
+  const phonesProvided=Array.isArray(raw&&raw.phones);
+  const vehiclesProvided=Array.isArray(raw&&raw.vehicles);
+  const driversProvided=Array.isArray(raw&&raw.drivers);
   const c=normalizeCompany(raw); if(!c) return null;
   const innKey=String(c.inn||'').replace(/\D/g,'');
   const i=(state.companies||[]).findIndex(x=>{
