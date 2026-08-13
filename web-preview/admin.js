@@ -1175,6 +1175,8 @@ function confirmClaimExchange(){
   const veh=fleetVehiclesForCompany(myCo.id).find(v=>v.plate===plate);
   if(!veh){ $('claim-error').textContent='Авто не из вашего парка'; return; }
   if(!vehicleFitsOrder(veh, o)){ $('claim-error').textContent='Авто не подходит по требованиям заявки'; return; }
+  const contractErr=requireActiveTransportContract(o.ownCompanyId, myCo.id);
+  if(contractErr){ $('claim-error').textContent=contractErr; return; }
   const customerCo=findCompanyById(o.ownCompanyId);
   o.transportApp={
     id:uuid(),
@@ -1198,6 +1200,7 @@ function confirmClaimExchange(){
     route:routeText(o),
     orderSequentialNumber:o.sequentialNumber
   };
+  stampServiceContractOnApp(o.transportApp, o.ownCompanyId, myCo.id);
   o.onExchange=false;
   o.executorType='partner';
   o.carrierCompanyId=myCo.id;
@@ -1546,6 +1549,8 @@ function saveDispatcherOrder(){
     driverPhoneVal=driverPhone(driver, ownCo.id);
   } else if(mode==='carrier'){
     if(!carrierCo){ $('create-error').textContent='Выберите перевозчика'; return; }
+    const contractErr=requireActiveTransportContract(ownCo.id, carrierCo.id);
+    if(contractErr){ $('create-error').textContent=contractErr; return; }
     const drv=(carrierCo.drivers||[]).find(d=>d.id===carrierDriverId);
     const veh=(carrierCo.vehicles||[]).find(v=>v.id===carrierVehicleId);
     if(!drv){ $('create-error').textContent='Выберите водителя перевозчика'; return; }
@@ -1612,6 +1617,7 @@ function saveDispatcherOrder(){
   stampOrderDriverPhone(order);
   ensureRoutePoints(order);
   applyOrderSchedule(order);
+  if(mode==='carrier'&&carrierCompanyId) linkOrderServiceContract(order, ownCo.id, carrierCompanyId);
   upsertOrder(order);
   show('admin'); renderAdmin();
 }
@@ -1744,8 +1750,12 @@ function buildOrderDocBody(kind, o){
   if(kind==='transportApp'){
     const left=app?resolveParty(app.customerCompanyId, app.customerCompanyName, null):own;
     const right=app?resolveParty(app.carrierCompanyId, app.carrierCompanyName, null):carrier;
+    const svcContract=app&&app.serviceContractNumber
+      ?`<p>Договор транспортных услуг № <strong>${esc(app.serviceContractNumber)}</strong> от ${esc(formatIsoDateRu(app.serviceContractSignedAt))} (срок до ${esc(formatIsoDateRu(app.serviceContractExpiresAt))}${app.serviceContractAutoRenew?' · автопродление':''})</p>`
+      :'';
     return `${commonHead}
       <p class="muted">${app&&app.signedAt?`Подписан в системе: ${esc(dateTime(app.signedAt))}`:'Черновик договора‑заявки по данным заказа'}</p>
+      ${svcContract}
       <h2>1. Заказчик перевозки</h2>
       ${partyLinesHtml(left)}
       <h2>2. Перевозчик</h2>
@@ -2287,7 +2297,16 @@ function openDetail(id){
     order.reqWidthM=numOrNull(($('d-req-w')||{}).value);
     order.reqHeightM=numOrNull(($('d-req-h')||{}).value);
     const carrSel=findCompanyById((($('d-carrier-company')||{}).value)||'');
-    if(carrSel){ order.carrierCompanyId=carrSel.id; order.carrierCompanyName=carrSel.name; }
+    if(carrSel){
+      const ownId=order.ownCompanyId||(ownSel&&ownSel.id);
+      if(ownId){
+        const contractErr=requireActiveTransportContract(ownId, carrSel.id);
+        if(contractErr){ alert(contractErr); return; }
+      }
+      order.carrierCompanyId=carrSel.id;
+      order.carrierCompanyName=carrSel.name;
+      if(ownId) linkOrderServiceContract(order, ownId, carrSel.id);
+    }
     else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
     order.contactName=(($('d-contact-name')||{}).value||'').trim();
     order.contactPhone=formatPhone((($('d-contact-phone')||{}).value||'').trim());
@@ -2442,6 +2461,19 @@ function openCatalogs(){
     </div>`;
   }).join('') || `<div class="hint">Нет авто — добавьте ниже</div>`;
 
+  const contracts=(state.transportContracts||[]).filter(contractInMySpace);
+  processContractRenewals();
+  const contractsActive=contracts.filter(c=>c.status!=='terminated').length;
+  const contractCards=contracts.map(tc=>{
+    const st=transportContractStatusInfo(tc);
+    return `<div class="dense-row" data-tc-row="${esc(tc.id)}">
+      <button type="button" class="grow" data-edit-tc="${esc(tc.id)}">
+        <div class="name">№ ${esc(tc.contractNumber)} · ${esc(tc.ownCompanyName||'—')} → ${esc(tc.carrierCompanyName||'—')}</div>
+        <div class="meta">от ${esc(formatIsoDateRu(tc.signedAt))} · ${esc(st.label)}${tc.autoRenew?' · автопродление':''}</div>
+      </button>
+    </div>`;
+  }).join('') || `<div class="hint">Нет договоров — нажмите «+»</div>`;
+
   const tab=catalogTab||'companies';
   const tabs=$('cat-tabs');
   if(tabs){
@@ -2449,6 +2481,7 @@ function openCatalogs(){
       <button type="button" data-cat-tab="companies" class="${tab==='companies'?'on':''}">Компании<span class="n">${companies.length}</span></button>
       <button type="button" data-cat-tab="drivers" class="${tab==='drivers'?'on':''}">Водители<span class="n">${drivers.length}</span></button>
       <button type="button" data-cat-tab="vehicles" class="${tab==='vehicles'?'on':''}">Авто<span class="n">${vehicles.length}</span></button>
+      <button type="button" data-cat-tab="contracts" class="${tab==='contracts'?'on':''}">Договоры<span class="n">${contractsActive}</span></button>
       <button type="button" data-cat-tab="finance" class="${tab==='finance'?'on':''}">Тариф<span class="n">₽</span></button>
     `;
   }
@@ -2460,6 +2493,16 @@ function openCatalogs(){
       </div>
       <div id="co-editor" class="co-editor-box"></div>
       <div class="cat-list" id="co-list">${companyCards}</div>
+    </div>
+
+    <div class="cat-panel ${tab==='contracts'?'on':''}" data-cat-panel="contracts">
+      <p class="cat-panel-hint">Договор транспортных услуг (ТЭУ) между вашей фирмой и перевозчиком. Обязателен при заказе с внешним перевозчиком и при «Забрать» с биржи. Автопродление — если ни одна сторона не заявила расторжение.</p>
+      <div class="row" style="gap:6px">
+        <input class="cat-search" id="tc-search" placeholder="Поиск: номер, фирма…" style="flex:1;margin:0" />
+        <button type="button" class="primary cat-add-btn" id="tc-new" style="width:auto;flex:0 0 auto;padding:8px 12px!important">+</button>
+      </div>
+      <div id="tc-editor" class="co-editor-box"></div>
+      <div class="cat-list" id="tc-list">${contractCards}</div>
     </div>
 
     <div class="cat-panel ${tab==='drivers'?'on':''}" data-cat-panel="drivers">
@@ -2535,7 +2578,132 @@ function openCatalogs(){
       });
     };
   }
+  const tcSearch=$('tc-search');
+  if(tcSearch){
+    tcSearch.oninput=()=>{
+      const q=(tcSearch.value||'').trim().toLowerCase();
+      document.querySelectorAll('#tc-list [data-tc-row]').forEach(row=>{
+        const text=(row.textContent||'').toLowerCase();
+        row.style.display=!q || text.includes(q)?'':'none';
+      });
+    };
+  }
   $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
+
+  const openContractEditor=(contract)=>{
+    showCatalogTab('contracts');
+    const owns=ownCompanies();
+    const carriers=companiesByRole('carrier');
+    const defOwn=myCo||owns[0]||null;
+    const tc=contract?(normalizeTransportContract(contract)||contract):{
+      id:uuid(),
+      contractNumber:defOwn?nextContractNumber(defOwn.id):'',
+      ownCompanyId:defOwn?defOwn.id:'',
+      carrierCompanyId:'',
+      signedAt:isoDateOnly(new Date()),
+      effectiveFrom:isoDateOnly(new Date()),
+      termMonths:12,
+      autoRenew:true,
+      status:'active',
+      termination:{intentBy:null, intentAt:null, intentByAdminId:null, reason:''}
+    };
+    const box=$('tc-editor');
+    box.classList.add('show');
+    try{ box.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){}
+    const stInfo=transportContractStatusInfo(tc);
+    const termM=tc.termMonths||12;
+    const expPreview=addMonthsIso(tc.effectiveFrom||tc.signedAt, termM);
+    const terminated=tc.status==='terminated';
+    const intent=tc.termination||{};
+    box.innerHTML=`
+      <div class="row" style="align-items:center;margin-bottom:4px">
+        <h3 style="margin:0;flex:1;font-size:.95rem">${contract?'Договор ТЭУ':'Новый договор ТЭУ'}</h3>
+        <button type="button" class="icon-btn" id="tc-cancel" title="Закрыть">×</button>
+      </div>
+      <label>Наша фирма (заказчик услуг)</label>
+      <select id="tc-own" ${owns.length<=1?'disabled':''}>${owns.map(c=>`<option value="${esc(c.id)}" ${c.id===tc.ownCompanyId?'selected':''}>${esc(c.name)}</option>`).join('')||'<option value="">— нет фирмы —</option>'}</select>
+      <label>Перевозчик</label>
+      <select id="tc-carrier">${carriers.length?carriers.map(c=>`<option value="${esc(c.id)}" ${c.id===tc.carrierCompanyId?'selected':''}>${esc(c.name)}</option>`).join(''):'<option value="">— добавьте перевозчика —</option>'}</select>
+      <label>Номер договора</label>
+      <input id="tc-number" value="${esc(tc.contractNumber||'')}" />
+      <div class="form-pair">
+        <div><label>Дата составления</label><input id="tc-signed" type="date" value="${esc(isoDateOnly(tc.signedAt))}" /></div>
+        <div><label>Срок, месяцев</label><input id="tc-term" inputmode="numeric" value="${termM}" /></div>
+      </div>
+      <p class="hint" id="tc-expires-hint">Срок действия до: ${esc(formatIsoDateRu(expPreview))}</p>
+      <label class="check"><input type="checkbox" id="tc-autorenew" ${tc.autoRenew?'checked':''}/> Автоматическое продление (если нет заявления о расторжении)</label>
+      <p class="hint">Статус: <strong>${esc(stInfo.label)}</strong>${intent.intentBy?` · заявление: ${intent.intentBy==='own'?'наша фирма':'перевозчик'}`:''}</p>
+      ${!terminated?`<label>Причина расторжения (при заявлении)</label><input id="tc-term-reason" value="${esc(intent.reason||'')}" placeholder="Необязательно" />`:''}
+      <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+        ${!terminated?`<button type="button" class="primary" id="tc-save">Сохранить</button>`:''}
+        ${!terminated&&!intent.intentBy?`<button type="button" class="secondary" id="tc-intent-own">Расторгнуть (наша фирма)</button><button type="button" class="secondary" id="tc-intent-carrier">Расторгнуть (перевозчик)</button>`:''}
+        ${!terminated&&intent.intentBy?`<button type="button" class="secondary" id="tc-withdraw">Отозвать заявление</button>`:''}
+      </div>
+    `;
+    const refreshExpiryHint=()=>{
+      const from=isoDateOnly(($('tc-signed')||{}).value)||isoDateOnly(new Date());
+      const months=Math.max(1, Math.min(120, +(($('tc-term')||{}).value||12)||12));
+      const el=$('tc-expires-hint');
+      if(el) el.textContent='Срок действия до: '+formatIsoDateRu(addMonthsIso(from, months));
+    };
+    $('tc-signed')&&($('tc-signed').onchange=refreshExpiryHint);
+    $('tc-term')&&($('tc-term').oninput=refreshExpiryHint);
+    $('tc-own')&&($('tc-own').onchange=()=>{
+      const ownId=($('tc-own').value||'');
+      if(!contract && ownId && $('tc-number') && !$('tc-number').value.trim())
+        $('tc-number').value=nextContractNumber(ownId);
+    });
+    $('tc-cancel').onclick=()=>{ box.classList.remove('show'); box.innerHTML=''; };
+    $('tc-save')&&($('tc-save').onclick=()=>{
+      const ownId=($('tc-own')||{}).value||'';
+      const carrierId=($('tc-carrier')||{}).value||'';
+      const number=(($('tc-number')||{}).value||'').trim();
+      if(!ownId||!carrierId){ alert('Выберите фирму и перевозчика'); return; }
+      if(!number){ alert('Укажите номер договора'); return; }
+      const signedAt=isoDateOnly(($('tc-signed')||{}).value)||isoDateOnly(new Date());
+      const termMonths=Math.max(1, Math.min(120, +(($('tc-term')||{}).value||12)||12));
+      upsertTransportContract({
+        id:tc.id, contractNumber:number,
+        ownCompanyId:ownId, carrierCompanyId:carrierId,
+        signedAt, effectiveFrom:signedAt, termMonths,
+        expiresAt:addMonthsIso(signedAt, termMonths),
+        autoRenew:!!($('tc-autorenew')&&$('tc-autorenew').checked),
+        status:'active',
+        termination:tc.termination||{intentBy:null, intentAt:null, intentByAdminId:null, reason:''},
+        createdAt:tc.createdAt, createdByAdminId:tc.createdByAdminId||currentAdmin.id
+      });
+      bumpDataEpoch('save-transport-contract');
+      persist();
+      flashCatOk('Договор сохранён');
+      openCatalogs();
+    });
+    $('tc-intent-own')&&($('tc-intent-own').onclick=()=>{
+      tc.termination={intentBy:'own', intentAt:new Date().toISOString(), intentByAdminId:currentAdmin.id, reason:(($('tc-term-reason')||{}).value||'').trim()};
+      tc.autoRenew=false;
+      upsertTransportContract(tc);
+      bumpDataEpoch('contract-termination-own');
+      persist();
+      openCatalogs();
+    });
+    $('tc-intent-carrier')&&($('tc-intent-carrier').onclick=()=>{
+      tc.termination={intentBy:'carrier', intentAt:new Date().toISOString(), intentByAdminId:currentAdmin.id, reason:(($('tc-term-reason')||{}).value||'').trim()};
+      tc.autoRenew=false;
+      upsertTransportContract(tc);
+      bumpDataEpoch('contract-termination-carrier');
+      persist();
+      openCatalogs();
+    });
+    $('tc-withdraw')&&($('tc-withdraw').onclick=()=>{
+      tc.termination={intentBy:null, intentAt:null, intentByAdminId:null, reason:''};
+      upsertTransportContract(tc);
+      bumpDataEpoch('contract-withdraw');
+      persist();
+      openCatalogs();
+    });
+  };
+
+  $('tc-new')&&($('tc-new').onclick=()=>openContractEditor(null));
+  document.querySelectorAll('[data-edit-tc]').forEach(b=>b.onclick=()=>openContractEditor(findTransportContractById(b.dataset.editTc)));
 
     const openEditor=(company)=>{
     showCatalogTab('companies');

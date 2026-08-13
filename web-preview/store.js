@@ -172,7 +172,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-create-customer-pick";
+const APP_BUILD="2026-08-13-transport-contracts";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -241,6 +241,7 @@ const state={
   adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
   spaces:Array.isArray(saved.spaces)?saved.spaces:[],
   settings:Object.assign({fnsApiKey:'',dadataToken:''}, saved.settings||{}),
+  transportContracts:Array.isArray(saved.transportContracts)?saved.transportContracts:[],
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
@@ -253,7 +254,7 @@ let autoSyncBusy=false;
 let syncStatus='local'; // local | syncing | ok | error
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
-let catalogTab='companies'; // companies | drivers | vehicles | finance
+let catalogTab='companies'; // companies | drivers | vehicles | finance | contracts
 let catalogFinanceCompanyId=null; // какая «наша фирма» правится во вкладке Тариф
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
@@ -422,6 +423,7 @@ function snapshot(){
     adminPresence:state.adminPresence,
     spaces:state.spaces,
     settings:state.settings,
+    transportContracts:state.transportContracts||[],
     deletedOrderIds:Array.from(deletedOrderIdSet()),
     dataEpoch:Number(state.dataEpoch)||0,
     savedAt:new Date().toISOString(),
@@ -451,6 +453,7 @@ function applyPayload(p, opts){
   state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
   state.customers=Array.isArray(p.customers)?p.customers:[];
   state.companies=Array.isArray(p.companies)?p.companies:[];
+  state.transportContracts=Array.isArray(p.transportContracts)?p.transportContracts:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{}, p.settings||{});
@@ -484,6 +487,7 @@ function applyPayload(p, opts){
   migrateShiftOwners();
   migrateDriverPins();
   migrateCompanyFinance();
+  migrateTransportContracts();
   healVehicleOdometersFromShifts();
   ensureManufacturerServiceIntervals();
   migrateEtoFromMessages();

@@ -240,6 +240,201 @@ function syncCustomersFromCompanies(){
     unloadingAddresses:c.unloadingAddresses||[]
   }));
 }
+function isoDateOnly(v){
+  if(!v) return '';
+  const s=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  const d=new Date(s);
+  if(Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0,10);
+}
+function formatIsoDateRu(iso){
+  const s=isoDateOnly(iso);
+  if(!s) return '—';
+  const [y,m,d]=s.split('-');
+  return `${d}.${m}.${y}`;
+}
+function addMonthsIso(dateStr, months){
+  const s=isoDateOnly(dateStr);
+  if(!s) return '';
+  const [y,m,d]=s.split('-').map(Number);
+  const dt=new Date(y, m-1+months, d);
+  if(Number.isNaN(dt.getTime())) return '';
+  return dt.toISOString().slice(0,10);
+}
+function normalizeTermination(t){
+  if(!t||typeof t!=='object') return {intentBy:null, intentAt:null, intentByAdminId:null, reason:''};
+  const party=t.intentBy==='own'||t.intentBy==='carrier'?t.intentBy:null;
+  return {
+    intentBy:party,
+    intentAt:t.intentAt||null,
+    intentByAdminId:t.intentByAdminId||null,
+    reason:String(t.reason||'').trim()
+  };
+}
+function normalizeTransportContract(raw){
+  if(!raw||typeof raw!=='object') return null;
+  const ownCompanyId=raw.ownCompanyId||null;
+  const carrierCompanyId=raw.carrierCompanyId||null;
+  if(!ownCompanyId||!carrierCompanyId) return null;
+  const contractNumber=String(raw.contractNumber||'').trim();
+  if(!contractNumber) return null;
+  let termMonths=+raw.termMonths;
+  if(!termMonths||termMonths<1) termMonths=12;
+  if(termMonths>120) termMonths=120;
+  const signedAt=isoDateOnly(raw.signedAt||raw.contractDate)||isoDateOnly(new Date());
+  const effectiveFrom=isoDateOnly(raw.effectiveFrom)||signedAt;
+  let expiresAt=isoDateOnly(raw.expiresAt);
+  if(!expiresAt) expiresAt=addMonthsIso(effectiveFrom, termMonths);
+  const autoRenew=raw.autoRenew!==false;
+  const status=raw.status==='terminated'?'terminated':'active';
+  return {
+    id:raw.id||uuid(),
+    contractNumber,
+    ownCompanyId,
+    carrierCompanyId,
+    ownCompanyName:String(raw.ownCompanyName||'').trim(),
+    carrierCompanyName:String(raw.carrierCompanyName||'').trim(),
+    spaceId:raw.spaceId||null,
+    signedAt,
+    effectiveFrom,
+    expiresAt,
+    termMonths,
+    autoRenew,
+    status,
+    termination:normalizeTermination(raw.termination),
+    createdAt:raw.createdAt||new Date().toISOString(),
+    updatedAt:raw.updatedAt||raw.createdAt||new Date().toISOString(),
+    createdByAdminId:raw.createdByAdminId||null
+  };
+}
+function contractInMySpace(c){
+  if(!c) return false;
+  if(isSuperAdmin()) return true;
+  const sid=currentSpaceId();
+  if(!sid) return !c.spaceId;
+  return !c.spaceId||c.spaceId===sid;
+}
+function processContractRenewals(){
+  const today=isoDateOnly(new Date());
+  (state.transportContracts||[]).forEach(c=>{
+    if(!c||c.status==='terminated') return;
+    if(!c.expiresAt||c.expiresAt>=today) return;
+    if(c.termination&&c.termination.intentBy){
+      c.status='terminated';
+      c.updatedAt=new Date().toISOString();
+      return;
+    }
+    if(c.autoRenew){
+      let exp=c.expiresAt;
+      while(exp<today) exp=addMonthsIso(exp, c.termMonths||12);
+      c.expiresAt=exp;
+      c.updatedAt=new Date().toISOString();
+    } else {
+      c.status='terminated';
+      c.updatedAt=new Date().toISOString();
+    }
+  });
+}
+function migrateTransportContracts(){
+  state.transportContracts=(state.transportContracts||[]).map(normalizeTransportContract).filter(Boolean);
+  processContractRenewals();
+}
+function findTransportContractById(id){
+  return (state.transportContracts||[]).find(c=>c.id===id)||null;
+}
+function isTransportContractActive(c){
+  if(!c||c.status==='terminated') return false;
+  const today=isoDateOnly(new Date());
+  if(c.effectiveFrom&&c.effectiveFrom>today) return false;
+  if(c.expiresAt&&c.expiresAt<today) return false;
+  return true;
+}
+function findActiveTransportContract(ownCompanyId, carrierCompanyId){
+  processContractRenewals();
+  return (state.transportContracts||[]).find(c=>
+    c.ownCompanyId===ownCompanyId && c.carrierCompanyId===carrierCompanyId && isTransportContractActive(c)
+  )||null;
+}
+function transportContractStatusInfo(c){
+  if(!c) return {level:'none', label:'—'};
+  if(c.status==='terminated') return {level:'terminated', label:'Расторгнут'};
+  const today=isoDateOnly(new Date());
+  if(c.termination&&c.termination.intentBy){
+    const who=c.termination.intentBy==='own'?'наша фирма':'перевозчик';
+    return {level:'termination', label:`Расторжение (${who}) до ${formatIsoDateRu(c.expiresAt)}`};
+  }
+  if(c.expiresAt){
+    if(c.expiresAt<today) return {level:'expired', label:'Срок истёк'};
+    const days=Math.round((new Date(c.expiresAt)-new Date(today))/(86400*1000));
+    if(days<=30) return {level:'soon', label:`до ${formatIsoDateRu(c.expiresAt)} (${days} дн.)`};
+    return {level:'active', label:`до ${formatIsoDateRu(c.expiresAt)}`};
+  }
+  return {level:'active', label:'бессрочно'};
+}
+function requireActiveTransportContract(ownCompanyId, carrierCompanyId){
+  const c=findActiveTransportContract(ownCompanyId, carrierCompanyId);
+  if(!c) return 'Нет действующего договора транспортных услуг. Создайте в Справочники → Договоры.';
+  if(c.termination&&c.termination.intentBy){
+    return `Договор ТЭУ № ${c.contractNumber} — заявлено расторжение, действует до ${formatIsoDateRu(c.expiresAt)}.`;
+  }
+  return null;
+}
+function nextContractNumber(ownCompanyId){
+  const year=new Date().getFullYear();
+  const prefix=`ТЭУ-${year}-`;
+  const n=(state.transportContracts||[]).filter(c=>c.ownCompanyId===ownCompanyId&&(c.contractNumber||'').startsWith(prefix)).length+1;
+  return prefix+String(n).padStart(3,'0');
+}
+function upsertTransportContract(raw){
+  const c=normalizeTransportContract(raw);
+  if(!c) return null;
+  const own=findCompanyById(c.ownCompanyId);
+  const carr=findCompanyById(c.carrierCompanyId);
+  if(own) c.ownCompanyName=own.name;
+  if(carr) c.carrierCompanyName=carr.name;
+  if(!c.spaceId){
+    c.spaceId=(own&&own.spaceId)||currentSpaceId()||null;
+  }
+  const dup=(state.transportContracts||[]).find(x=>
+    x.id!==c.id && x.ownCompanyId===c.ownCompanyId && x.carrierCompanyId===c.carrierCompanyId && x.status!=='terminated'
+  );
+  if(dup && c.status!=='terminated'){
+    c.id=dup.id;
+  }
+  const i=(state.transportContracts||[]).findIndex(x=>x.id===c.id);
+  c.updatedAt=new Date().toISOString();
+  if(i>=0) state.transportContracts[i]=c;
+  else state.transportContracts.push(c);
+  state.transportContracts.sort((a,b)=>(b.signedAt||'').localeCompare(a.signedAt||'','ru'));
+  return c;
+}
+function stampServiceContractOnApp(app, ownCompanyId, carrierCompanyId){
+  if(!app) return;
+  const tc=findActiveTransportContract(ownCompanyId, carrierCompanyId);
+  if(tc){
+    app.serviceContractId=tc.id;
+    app.serviceContractNumber=tc.contractNumber;
+    app.serviceContractSignedAt=tc.signedAt;
+    app.serviceContractExpiresAt=tc.expiresAt;
+    app.serviceContractAutoRenew=tc.autoRenew;
+  }
+}
+function linkOrderServiceContract(order, ownCompanyId, carrierCompanyId){
+  if(!order) return;
+  const tc=findActiveTransportContract(ownCompanyId, carrierCompanyId);
+  if(tc){
+    order.serviceContractId=tc.id;
+    order.serviceContractNumber=tc.contractNumber;
+    order.serviceContractSignedAt=tc.signedAt;
+    order.serviceContractExpiresAt=tc.expiresAt;
+  } else {
+    order.serviceContractId=null;
+    order.serviceContractNumber='';
+    order.serviceContractSignedAt=null;
+    order.serviceContractExpiresAt=null;
+  }
+}
 function rememberCustomer(order){
   const name=String(order.customer||'').trim(); if(!name) return;
   const innKey=String(order.customerInn||'').replace(/\D/g,'');
@@ -851,6 +1046,7 @@ function updateCreateFreeHint(){
   el.textContent=`Ориентир освобождения: ${formatRuDateTimeAt(free)} (подача + ${minW} ч работы)`;
 }
 migrateCompanies();
+migrateTransportContracts();
 migrateAdmins();
 migrateDriverOwners();
 function applyCustomerFromCompany(co, prefix='create'){
