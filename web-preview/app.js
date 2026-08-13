@@ -688,7 +688,7 @@ function fromDatetimeLocalValue(v){
   if(Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
-/** Дата ДД/ММ/ГГГГ (или с точками) + время ЧЧ:ММ → ISO. */
+/** Дата ДД.ММ.ГГГГ (слэши тоже) + время ЧЧ:ММ → ISO. */
 function parseRuDate(s){
   const t=String(s||'').trim();
   const m=t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
@@ -701,16 +701,22 @@ function parseRuDate(s){
 }
 function formatRuDateInput(v){
   const d=parseRuDate(v);
-  if(!d) return String(v||'').trim();
+  if(!d) return String(v||'').trim().replace(/\//g,'.');
   const pad=n=>String(n).padStart(2,'0');
-  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+}
+function maskRuDateInput(raw){
+  const v=String(raw||'').replace(/\D/g,'').slice(0,8);
+  if(v.length<=2) return v;
+  if(v.length<=4) return `${v.slice(0,2)}.${v.slice(2)}`;
+  return `${v.slice(0,2)}.${v.slice(2,4)}.${v.slice(4)}`;
 }
 function toRuDateValue(iso){
   if(!iso) return '';
   const d=new Date(iso);
   if(Number.isNaN(d.getTime())) return '';
   const pad=n=>String(n).padStart(2,'0');
-  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
 }
 function toTimeHmValue(iso){
   if(!iso) return '';
@@ -718,6 +724,19 @@ function toTimeHmValue(iso){
   if(Number.isNaN(d.getTime())) return '';
   const pad=n=>String(n).padStart(2,'0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function formatTimeHmInput(v){
+  const t=String(v||'').trim();
+  const m=t.match(/^(\d{1,2}):?(\d{2})$/);
+  if(!m) return t;
+  const h=+m[1], mi=+m[2];
+  if(h<0||h>23||mi<0||mi>59) return t;
+  return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+}
+function maskTimeHmInput(raw){
+  const v=String(raw||'').replace(/\D/g,'').slice(0,4);
+  if(v.length<=2) return v;
+  return `${v.slice(0,2)}:${v.slice(2)}`;
 }
 function fromRuDateTimeParts(dateStr, timeStr){
   const d=parseRuDate(dateStr);
@@ -744,10 +763,16 @@ function wireVehicleAtHint(prefix, onChange){
   const dateEl=$(`${prefix}-vehicle-date`);
   const timeEl=$(`${prefix}-vehicle-time`);
   if(dateEl){
-    dateEl.oninput=upd;
+    dateEl.setAttribute('lang','ru');
+    dateEl.oninput=()=>{ dateEl.value=maskRuDateInput(dateEl.value); upd(); };
     dateEl.onblur=()=>{ const f=formatRuDateInput(dateEl.value); if(f) dateEl.value=f; upd(); };
   }
-  if(timeEl) timeEl.oninput=upd;
+  if(timeEl){
+    timeEl.setAttribute('lang','ru');
+    if(timeEl.type==='time') timeEl.type='text';
+    timeEl.oninput=()=>{ timeEl.value=maskTimeHmInput(timeEl.value); upd(); };
+    timeEl.onblur=()=>{ const f=formatTimeHmInput(timeEl.value); if(f) timeEl.value=f; upd(); };
+  }
 }
 /** Освобождение = подача + max(мин. часы работы, ориентир/факт часов). Час подачи в сумму не входит. */
 function computeFreeAt(vehicleAt, order, fin){
