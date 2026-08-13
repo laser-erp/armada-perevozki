@@ -91,7 +91,9 @@ function normalizeAllPhones(){
     });
   });
   (state.orders||[]).forEach(o=>{
-    if(o.contactPhone!=null){ const n=fix(o.contactPhone); if(n!==o.contactPhone){ o.contactPhone=n; changed=true; } }
+  if(o.contactPhone!=null){ const n=fix(o.contactPhone); if(n!==o.contactPhone){ o.contactPhone=n; changed=true; } }
+    if(o.loadingContactPhone!=null){ const n=fix(o.loadingContactPhone); if(n!==o.loadingContactPhone){ o.loadingContactPhone=n; changed=true; } }
+    if(o.unloadingContactPhone!=null){ const n=fix(o.unloadingContactPhone); if(n!==o.unloadingContactPhone){ o.unloadingContactPhone=n; changed=true; } }
     if(o.driverPhone!=null){ const n=fix(o.driverPhone); if(n!==o.driverPhone){ o.driverPhone=n; changed=true; } }
     if(o.transportApp && o.transportApp.driverPhone!=null){
       const n=fix(o.transportApp.driverPhone);
@@ -673,6 +675,67 @@ function fromDatetimeLocalValue(v){
   if(Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
+/** Дата ДД/ММ/ГГГГ (или с точками) + время ЧЧ:ММ → ISO. */
+function parseRuDate(s){
+  const t=String(s||'').trim();
+  const m=t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if(!m) return null;
+  const day=+m[1], month=+m[2], year=+m[3];
+  if(month<1||month>12||day<1||day>31) return null;
+  const d=new Date(year, month-1, day);
+  if(d.getFullYear()!==year||d.getMonth()!==month-1||d.getDate()!==day) return null;
+  return d;
+}
+function formatRuDateInput(v){
+  const d=parseRuDate(v);
+  if(!d) return String(v||'').trim();
+  const pad=n=>String(n).padStart(2,'0');
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+function toRuDateValue(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  const pad=n=>String(n).padStart(2,'0');
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+function toTimeHmValue(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  const pad=n=>String(n).padStart(2,'0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromRuDateTimeParts(dateStr, timeStr){
+  const d=parseRuDate(dateStr);
+  if(!d) return null;
+  const tm=String(timeStr||'').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if(!tm) return null;
+  const h=+tm[1], mi=+tm[2];
+  if(h<0||h>23||mi<0||mi>59) return null;
+  d.setHours(h, mi, 0, 0);
+  return d.toISOString();
+}
+function readVehicleAtFromDom(prefix){
+  const dateEl=$(`${prefix}-vehicle-date`);
+  const timeEl=$(`${prefix}-vehicle-time`);
+  if(dateEl||timeEl){
+    return fromRuDateTimeParts((dateEl||{}).value, (timeEl||{}).value);
+  }
+  const legacy=$(`${prefix}-vehicle-at`);
+  if(legacy) return fromDatetimeLocalValue(legacy.value);
+  return null;
+}
+function wireVehicleAtHint(prefix, onChange){
+  const upd=()=>{ if(onChange) onChange(); else if(prefix==='create') updateCreateFreeHint(); };
+  const dateEl=$(`${prefix}-vehicle-date`);
+  const timeEl=$(`${prefix}-vehicle-time`);
+  if(dateEl){
+    dateEl.oninput=upd;
+    dateEl.onblur=()=>{ const f=formatRuDateInput(dateEl.value); if(f) dateEl.value=f; upd(); };
+  }
+  if(timeEl) timeEl.oninput=upd;
+}
 /** Освобождение = подача + max(мин. часы работы, ориентир/факт часов). Час подачи в сумму не входит. */
 function computeFreeAt(vehicleAt, order, fin){
   if(!vehicleAt) return null;
@@ -702,7 +765,7 @@ function orderScheduleLines(o, forDriver){
 }
 function updateCreateFreeHint(){
   const el=$('create-free-hint'); if(!el) return;
-  const at=fromDatetimeLocalValue(($('create-vehicle-at')||{}).value);
+  const at=readVehicleAtFromDom('create');
   if(!at){ el.textContent='Ориентир освобождения: укажите подачу ТС'; return; }
   const ownId=(($('create-own-company')||{}).value)|| (currentOwnCompany()||{}).id;
   const fin=financeForCompanyId(ownId);
