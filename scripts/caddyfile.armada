@@ -12,8 +12,12 @@
 	}
 
 	# PocketBase закрыт снаружи — только через armada-api с JWT
-	# handle /api/* { respond "Forbidden" 403 }
-	# handle /_/* { respond "Forbidden" 403 }
+	handle /api/* {
+		respond "Forbidden" 403
+	}
+	handle /_/* {
+		respond "Forbidden" 403
+	}
 
 	handle /cbr-api/* {
 		uri strip_prefix /cbr-api

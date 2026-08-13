@@ -35,7 +35,7 @@ if [ -d "$API_SRC" ]; then
   echo "→ $USER@$HOST:/opt/armada-api"
   tar czf - -C "$API_SRC" . | run_ssh "mkdir -p /opt/armada-api && tar xzf - -C /opt/armada-api"
   tar czf - -C "$ROOT/scripts" armada-api.service api.env.example | run_ssh "mkdir -p /etc/armada && tar xzf - -C /tmp && mv /tmp/armada-api.service /etc/systemd/system/armada-api.service"
-  run_ssh "bash -s" <<'REMOTE'
+  run_ssh "FVDS_PB_PASSWORD='${FVDS_PB_PASSWORD:-}' bash -s" <<'REMOTE'
 set -euo pipefail
 if ! command -v node >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
