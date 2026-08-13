@@ -2526,7 +2526,15 @@ function openCatalogs(){
 
     const openEditor=(company)=>{
     showCatalogTab('companies');
-    const c=company?normalizeCompany(company):{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId()};
+    const c=company?(()=>{
+      const n=normalizeCompany(company);
+      if(n) return n;
+      return Object.assign({
+        id:uuid(), name:'', roles:['customer'], note:'', phones:[], contacts:[],
+        loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
+        spaceId:currentSpaceId(), inn:'', ogrn:'', kpp:'', address:''
+      }, company, { name:String(company.name||'').trim() });
+    })():{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId(),inn:'',ogrn:'',kpp:'',address:''};
     const box=$('co-editor');
     box.classList.add('show');
     try{ box.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){}

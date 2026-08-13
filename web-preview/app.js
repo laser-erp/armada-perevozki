@@ -938,7 +938,7 @@ function timeNow(){ return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit'
 function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 /** Подпись номера за смену: «за день-3», не «день 3». */
 function orderDayLabel(n){ return `за день-${n}`; }
-function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
 function add(a,t){ state.messages.push({author:a,text:t,at:new Date().toISOString()}); renderChat(); }
 function plates(){
   // Авто фирмы активного водителя
