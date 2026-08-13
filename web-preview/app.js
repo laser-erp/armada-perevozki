@@ -1124,6 +1124,136 @@ function resolveAdminOwner(adminId){
   }
   return {ownerAdminId:null, ownerAdminName:null, spaceId:null, companyId:null, companyName:null};
 }
+function mergeCompanyRecordsInto(target, source){
+  if(!target||!source||target.id===source.id) return target;
+  const fill=(k)=>{
+    if(!String(target[k]||'').trim() && String(source[k]||'').trim()) target[k]=source[k];
+  };
+  ['inn','ogrn','kpp','address','director','bankName','bankBik','bankAccount','bankCorrAccount','note'].forEach(fill);
+  target.loadingAddresses=uniqAddrs([...(target.loadingAddresses||[]),...(source.loadingAddresses||[])]);
+  target.unloadingAddresses=uniqAddrs([...(target.unloadingAddresses||[]),...(source.unloadingAddresses||[])]);
+  (source.contacts||[]).forEach(sc=>{
+    const hit=(target.contacts||[]).find(tc=>samePersonName(tc.name, sc.name));
+    if(hit){
+      if(!contactPhone(hit) && contactPhone(sc)) hit.phones=sc.phones;
+      if(!hit.title && sc.title) hit.title=sc.title;
+    } else {
+      if(!target.contacts) target.contacts=[];
+      target.contacts.push(sc);
+    }
+  });
+  (source.phones||[]).forEach(ph=>{
+    if(!target.phones) target.phones=[];
+    const n=formatPhone(ph&&ph.number||ph||'');
+    if(n && !target.phones.some(p=>formatPhone(p&&p.number||p||'')===n)) target.phones.push(ph);
+  });
+  ['customer','carrier','own'].forEach(r=>{
+    if(companyHasRole(source,r) && !companyHasRole(target,r)) target.roles.push(r);
+  });
+  (source.vehicles||[]).forEach(sv=>{
+    const plate=String(sv.plate||'').trim().toLowerCase();
+    if(!plate) return;
+    if(!(target.vehicles||[]).some(tv=>String(tv.plate||'').trim().toLowerCase()===plate)){
+      if(!target.vehicles) target.vehicles=[];
+      target.vehicles.push(sv);
+    }
+  });
+  (source.drivers||[]).forEach(sd=>{
+    if(!(target.drivers||[]).some(td=>samePersonName(td.name, sd.name))){
+      if(!target.drivers) target.drivers=[];
+      target.drivers.push(sd);
+    }
+  });
+  if(source.finance && !target.finance) target.finance=normalizeFinance(source.finance);
+  const hidden=new Set([...(target.hiddenContactNames||[]), ...(source.hiddenContactNames||[])]);
+  target.hiddenContactNames=[...hidden];
+  target.spaceId=target.spaceId||source.spaceId||null;
+  return target;
+}
+function repointCompanyReferences(fromId, toId, toName){
+  if(!fromId || !toId || fromId===toId) return;
+  const nm=String(toName||'').trim();
+  const touch=(obj, idKey, nameKey)=>{
+    if(!obj || obj[idKey]!==fromId) return;
+    obj[idKey]=toId;
+    if(nameKey && nm) obj[nameKey]=nm;
+  };
+  (state.orders||[]).forEach(o=>{
+    touch(o,'ownCompanyId','ownCompanyName');
+    touch(o,'carrierCompanyId','carrierCompanyName');
+    touch(o,'customerCompanyId','customerCompanyName');
+    if(o.transportApp){
+      touch(o.transportApp,'customerCompanyId','customerCompanyName');
+      touch(o.transportApp,'carrierCompanyId','carrierCompanyName');
+    }
+  });
+  (state.shifts||[]).forEach(s=>touch(s,'ownCompanyId','ownCompanyName'));
+  if(state.shift) touch(state.shift,'ownCompanyId','ownCompanyName');
+  (state.drivers||[]).forEach(d=>{
+    if(d.companyId===fromId){ d.companyId=toId; if(nm) d.companyName=nm; }
+  });
+  (state.vehicles||[]).forEach(v=>{
+    if(v.companyId===fromId){ v.companyId=toId; if(nm) v.companyName=nm; }
+  });
+  (state.transportContracts||[]).forEach(tc=>{
+    touch(tc,'customerCompanyId','customerCompanyName');
+    touch(tc,'carrierCompanyId','carrierCompanyName');
+  });
+  (state.spaces||[]).forEach(sp=>{
+    if(sp.ownCompanyId===fromId) sp.ownCompanyId=toId;
+  });
+  if(typeof catalogFinanceCompanyId!=='undefined' && catalogFinanceCompanyId===fromId) catalogFinanceCompanyId=toId;
+}
+function syncCompanyNameReferences(companyId, name){
+  const nm=String(name||'').trim();
+  if(!companyId || !nm) return;
+  (state.drivers||[]).forEach(d=>{ if(d.companyId===companyId) d.companyName=nm; });
+  (state.vehicles||[]).forEach(v=>{ if(v.companyId===companyId) v.companyName=nm; });
+  (state.orders||[]).forEach(o=>{
+    if(o.ownCompanyId===companyId) o.ownCompanyName=nm;
+    if(o.carrierCompanyId===companyId) o.carrierCompanyName=nm;
+    if(o.customerCompanyId===companyId) o.customerCompanyName=nm;
+    if(o.transportApp){
+      if(o.transportApp.customerCompanyId===companyId) o.transportApp.customerCompanyName=nm;
+      if(o.transportApp.carrierCompanyId===companyId) o.transportApp.carrierCompanyName=nm;
+    }
+  });
+  (state.transportContracts||[]).forEach(tc=>{
+    if(tc.customerCompanyId===companyId) tc.customerCompanyName=nm;
+    if(tc.carrierCompanyId===companyId) tc.carrierCompanyName=nm;
+  });
+}
+/** Одна «наша фирма» на пространство — сливает дубли (ИП Нечаев + ФИО из ЕГРЮЛ). */
+function dedupeOwnCompaniesForSpaces(){
+  let changed=false;
+  (state.spaces||[]).forEach(sp=>{
+    const owns=(state.companies||[]).filter(c=>companyHasRole(c,'own') && c.spaceId===sp.id);
+    if(owns.length<=1) return;
+    let canonical=null;
+    if(sp.ownCompanyId) canonical=findCompanyById(sp.ownCompanyId);
+    if(!canonical || !companyHasRole(canonical,'own') || canonical.spaceId!==sp.id){
+      canonical=owns.find(c=>String(c.inn||'').replace(/\D/g,''))
+        || owns.find(c=>(c.name||'').trim().toLowerCase()===(sp.name||'').trim().toLowerCase())
+        || owns[0];
+    }
+    owns.forEach(dup=>{
+      if(dup.id===canonical.id) return;
+      mergeCompanyRecordsInto(canonical, dup);
+      repointCompanyReferences(dup.id, canonical.id, canonical.name);
+      state.companies=state.companies.filter(c=>c.id!==dup.id);
+      changed=true;
+    });
+    const displayName=(sp.name||'').trim();
+    if(displayName) canonical.name=displayName;
+    canonical.spaceId=sp.id;
+    if(!companyHasRole(canonical,'own')) canonical.roles.push('own');
+    upsertCompany(canonical);
+    sp.ownCompanyId=canonical.id;
+    syncCompanyNameReferences(canonical.id, canonical.name);
+    changed=true;
+  });
+  return changed;
+}
 function migrateCompanies(){
   // customers → companies
   (state.customers||[]).forEach(c=>{
@@ -1166,17 +1296,25 @@ function migrateCompanies(){
     if(!(hit.bodyWidthM>0) && def.bodyWidthM) hit.bodyWidthM=def.bodyWidthM;
     if(!(hit.bodyHeightM>0) && def.bodyHeightM) hit.bodyHeightM=def.bodyHeightM;
   });
-  // наши фирмы (ООО «Армада», ИП Нечаев А.С.)
+  // наши фирмы (ООО «Армада», ИП Нечаев А.С.) — не дублировать, если пространство уже имеет «нашу фирму»
   DEFAULT_OWN_COMPANIES.forEach(def=>{
+    const defKey=(def.name||'').trim().toLowerCase();
+    const space=(state.spaces||[]).find(s=>(s.name||'').trim().toLowerCase()===defKey);
+    if(space && space.ownCompanyId){
+      const co=findCompanyById(space.ownCompanyId);
+      if(co && companyHasRole(co,'own')) return;
+    }
     const existing=findCompanyByName(def.name);
     if(!existing){
-      upsertCompany({...def, contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[]});
+      upsertCompany({...def, contacts:[], phones:[], loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[], spaceId:space?space.id:null});
     } else if(!companyHasRole(existing,'own')){
       existing.roles.push('own');
+      if(space && !existing.spaceId) existing.spaceId=space.id;
       upsertCompany(existing);
     }
   });
   syncCustomersFromCompanies();
+  dedupeOwnCompaniesForSpaces();
   // if still empty companies, mine from orders
   if(!state.companies.length){
     state.orders.forEach(rememberCustomer);
@@ -3767,6 +3905,7 @@ try{
   migrateAdmins();
   let dirty=migrateDriverOwners();
   if(migrateSpaces()) dirty=true;
+  if(dedupeOwnCompaniesForSpaces()) dirty=true;
   if(migrateDriverOrderOwners()) dirty=true;
   if(migrateShiftOwners()) dirty=true;
   if(migrateDriverPins()) dirty=true;

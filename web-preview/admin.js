@@ -3140,12 +3140,23 @@ function openCatalogs(){
       if(st) st.textContent='Загрузка…';
       try{
         const existing=findCompanyByInn(inn);
+        const sid=c.spaceId||currentSpaceId();
+        const isOwnCard=$('co-role-o')&&$('co-role-o').checked;
         if(existing && existing.id!==c.id){
-          if(st) st.textContent='ИНН уже в справочнике: '+existing.name;
-          return;
+          if(isOwnCard && existing.spaceId===sid){
+            c.id=existing.id;
+            if(st) st.textContent='ИНН уже в карточке этой фирмы — объединяем';
+          } else {
+            if(st) st.textContent='ИНН уже в справочнике: '+existing.name;
+            return;
+          }
         }
         const party=await lookupPartyByInn(inn);
-        if($('co-name')) $('co-name').value=party.name||($('co-name').value||'');
+        const spName=(findSpaceById(sid)||{}).name||'';
+        if($('co-name')){
+          if(isOwnCard && spName) $('co-name').value=spName;
+          else $('co-name').value=party.name||($('co-name').value||'');
+        }
         if($('co-inn')) $('co-inn').value=party.inn||inn;
         if($('co-ogrn')) $('co-ogrn').value=party.ogrn||'';
         if($('co-kpp')) $('co-kpp').value=party.kpp||'';
