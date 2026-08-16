@@ -172,7 +172,7 @@ let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
 const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-security-phase0";
+const APP_BUILD="2026-08-16-security-phase1.3";
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -299,6 +299,7 @@ const state={
   transportContracts:Array.isArray(saved.transportContracts)?saved.transportContracts:[],
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
+  tenantScope:saved.tenantScope||null,
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
   adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{}
 };
@@ -423,6 +424,7 @@ function purgeDeadOrdersEverywhere(){
  */
 function compactSequentialNumbers(){
   purgeDeadOrdersEverywhere();
+  if(state.tenantScope) return false;
   const list=(state.orders||[]).slice().sort((a,b)=>{
     const ta=new Date(a.createdAt||0).getTime();
     const tb=new Date(b.createdAt||0).getTime();
@@ -464,7 +466,7 @@ function snapshot(){
     if(Array.isArray(copy.orders)) copy.orders=stripCancelledFromOrders(copy.orders);
     return copy;
   });
-  return {
+  const snap={
     shifts,
     orders,
     seq:state.seq,
@@ -484,6 +486,8 @@ function snapshot(){
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
   };
+  if(state.tenantScope) snap.tenantScope=state.tenantScope;
+  return snap;
 }
 function scorePayload(p){
   if(!p||typeof p!=='object') return 0;
@@ -494,6 +498,8 @@ function applyPayload(p, opts){
   if(!p||typeof p!=='object') return;
   const keepShifts=opts&&opts.keepShifts;
   const keepOrders=opts&&opts.keepOrders;
+  state.tenantScope=p.tenantScope||null;
+  const scoped=!!state.tenantScope;
   // Сначала tombstone (+ RETIRED), потом фильтр заказов — иначе дубль снова попадает в список
   unionDeletedOrderIds(p.deletedOrderIds||[]);
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
@@ -504,8 +510,20 @@ function applyPayload(p, opts){
   // Иначе Math.max не даёт seq уменьшиться со старой вкладки.
   if(opts&&opts.remoteSeq) state.seq=Number(p.seq)||0;
   else state.seq=Math.max(Number(p.seq)||0, Number(state.seq)||0);
-  state.vehicles=(p.vehicles&&p.vehicles.length)?p.vehicles.map(normalizeFleetVehicle).filter(Boolean):DEFAULT_VEHICLES.map(v=>normalizeFleetVehicle(v)).filter(Boolean);
-  state.drivers=(p.drivers&&p.drivers.length)?p.drivers:DEFAULT_DRIVERS.map(d=>({...d}));
+  if(Array.isArray(p.vehicles)&&p.vehicles.length){
+    state.vehicles=p.vehicles.map(normalizeFleetVehicle).filter(Boolean);
+  } else if(scoped){
+    state.vehicles=Array.isArray(p.vehicles)?p.vehicles.map(normalizeFleetVehicle).filter(Boolean):[];
+  } else {
+    state.vehicles=DEFAULT_VEHICLES.map(v=>normalizeFleetVehicle(v)).filter(Boolean);
+  }
+  if(Array.isArray(p.drivers)&&p.drivers.length){
+    state.drivers=p.drivers;
+  } else if(scoped){
+    state.drivers=Array.isArray(p.drivers)?p.drivers:[];
+  } else {
+    state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
+  }
   state.customers=Array.isArray(p.customers)?p.customers:[];
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.transportContracts=Array.isArray(p.transportContracts)?p.transportContracts:[];
@@ -877,6 +895,7 @@ function migrateSpaces(){
   let changed=false;
   (state.admins||[]).forEach(a=>{
     if(a.spaceId && findSpaceById(a.spaceId)) return;
+    if(state.tenantScope) return;
     const byAdmin=state.spaces.find(s=>s.adminId===a.id);
     if(byAdmin){ a.spaceId=byAdmin.id; changed=true; return; }
     createSpaceForAdmin(a, {name:defaultFirmNameForAdmin(a.name)});

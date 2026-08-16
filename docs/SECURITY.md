@@ -35,4 +35,4 @@ curl -sS -o /dev/null -w '%{http_code}\n' http://aptown1.fvds.ru/armada-api/stat
 - `PUT /armada-api/state` — только админ с JWT
 - `GET /armada-api/bootstrap` — список админов без PIN (для формы входа)
 
-Дальше: фильтрация payload по `spaceId`, PIN-hash, HTTPS, ключи DaData только на сервере.
+Фаза 1.3 сделана: фильтрация payload по `spaceId` + merge при PUT (`armada-api/tenant.mjs`). Дальше: PIN-hash, HTTPS, ключи DaData только на сервере.

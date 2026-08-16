@@ -4,6 +4,7 @@
  */
 import http from 'node:http';
 import crypto from 'node:crypto';
+import { filterPayloadForUser, mergePayloadForUser, isSuperUser, stripTenantMeta } from './tenant.mjs';
 
 const PORT = Number(process.env.ARMADA_API_PORT || 8091);
 const PB_URL = (process.env.PB_URL || 'http://127.0.0.1:8090').replace(/\/$/, '');
@@ -299,13 +300,17 @@ const server = http.createServer(async (req, res) => {
   if (path === '/armada-api/state') {
     const user = verifyJwt(getBearer(req));
     if (!user) return json(res, 401, { error: 'unauthorized' });
+    if (user.role === 'admin' && !isSuperUser(user) && !user.spaceId) {
+      return json(res, 403, { error: 'no_space' });
+    }
 
     if (req.method === 'GET') {
       try {
         const rec = await pbGetMainRecord();
         if (!rec) return json(res, 200, { record: null });
-        // Скелет: полный payload для авторизованных; фильтрация по spaceId — фаза 1.3
-        return json(res, 200, { record: { id: rec.id, payload: rec.payload || {} } });
+        const full = rec.payload || {};
+        const payload = filterPayloadForUser(full, user);
+        return json(res, 200, { record: { id: rec.id, payload } });
       } catch (err) {
         console.error('state GET', err);
         return json(res, 500, { error: 'read_failed' });
@@ -313,7 +318,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'PUT' || req.method === 'PATCH') {
-      if (user.role !== 'admin') return json(res, 403, { error: 'forbidden' });
+      if (user.role !== 'admin' && user.role !== 'driver') return json(res, 403, { error: 'forbidden' });
       try {
         const body = await readBody(req);
         const newPayload = body.payload;
@@ -327,13 +332,17 @@ const server = http.createServer(async (req, res) => {
           if (remoteEpoch > localEpoch) {
             return json(res, 409, {
               error: 'remote_ahead',
-              record: { id: rec.id, payload: remote },
+              record: { id: rec.id, payload: filterPayloadForUser(remote, user) },
             });
           }
-          await pbWriteMainRecord(rec.id, newPayload, false);
+          const stored = isSuperUser(user)
+            ? stripTenantMeta(newPayload)
+            : mergePayloadForUser(remote, newPayload, user);
+          await pbWriteMainRecord(rec.id, stored, false);
           return json(res, 200, { ok: true, id: rec.id });
         }
-        const created = await pbWriteMainRecord(null, newPayload, true);
+        if (!isSuperUser(user)) return json(res, 403, { error: 'forbidden' });
+        const created = await pbWriteMainRecord(null, stripTenantMeta(newPayload), true);
         return json(res, 200, { ok: true, id: created.id });
       } catch (err) {
         console.error('state PUT', err);

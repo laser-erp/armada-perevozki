@@ -2,19 +2,20 @@
 
 > Обновляй секцию **СТАТУС** после каждой завершённой задачи (ветка, сборка, что сделано, что дальше).
 
-## СТАТУС (2026-08-13)
+## СТАТУС (2026-08-16)
 
 | | |
 |---|---|
 | **Live** | http://aptown1.fvds.ru/ |
 | **Репо** | https://github.com/laser-erp/armada-perevozki |
 | **Активная ветка** | `cursor/security-phase0-api-4317` (безопасность + API) |
-| **Сборка** | `2026-08-13-security-phase0` (`web-preview/store.js` → `APP_BUILD`) |
+| **Сборка** | `2026-08-16-security-phase1.3` (`web-preview/store.js` → `APP_BUILD`) |
 | **Код приложения** | `DriverReport/web-preview/` |
 | **Деплой** | `scripts/deploy-fvds.sh` |
 | **Бэкапы** | `docs/BACKUP.md` · cron 03:15 · `/var/backups/armada/` |
 
 ### Недавно сделано
+- **Фаза 1.3:** фильтрация `state` по `spaceId` на сервере (`armada-api/tenant.mjs`). Супер видит всё; остальные — своё пространство + биржа. PUT — merge, чужие данные не затираются. Водитель может писать свои заказы/смены.
 - **Автобэкапы:** `scripts/backup-armada.sh`, cron, JSON + SQLite + tar pb_data.
 - Фаза 0 безопасности: PocketBase закрыт (403 на `/api`, `/_`), клиент через `/armada-api` + JWT.
 - Сервис `armada-api` (`armada-api/server.mjs`), systemd `armada-api.service`, env `/etc/armada/api.env`.
@@ -23,10 +24,10 @@
 - Биржа: перевозчик не видит клиента администратора.
 
 ### Следующие задачи (приоритет)
-1. **Безопасность фаза 1:** фильтрация `state` по `spaceId` на сервере (`armada-api/server.mjs`).
-2. PIN-hash (не хранить в payload), ключи DaData/ФНС только на сервере.
-3. HTTPS (когда LE для fvds.ru доступен — `scripts/caddyfile.armada`).
-4. Пользователям: сменить PIN после открытой базы.
+1. PIN-hash (не хранить в payload), ключи DaData/ФНС только на сервере.
+2. HTTPS (когда LE для fvds.ru доступен — `scripts/caddyfile.armada`).
+3. Пользователям: сменить PIN после открытой базы.
+4. Деплой фазы 1.3 на live (`scripts/deploy-fvds.sh`).
 
 Подробности: `docs/SECURITY.md`.
 

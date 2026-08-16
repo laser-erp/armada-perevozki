@@ -809,6 +809,9 @@ function migrateAdmins(){
     const nm=(a.name||'').trim().toLowerCase();
     return !RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has(nm);
   });
+  state.adminLogins=Array.isArray(state.adminLogins)?state.adminLogins:[];
+  state.adminPresence=Array.isArray(state.adminPresence)?state.adminPresence:[];
+  if(state.tenantScope) return;
   // Сид только если админов ещё нет.
   if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
   // Переименование старого «Супер админ» → Наволоцкий Е.Н. + актуальный PIN
