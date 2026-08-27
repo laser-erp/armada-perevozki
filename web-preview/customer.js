@@ -62,12 +62,23 @@ function openCustomerLogin(){
   setTimeout(()=>{ try{ (phoneEl||pinEl)?.focus(); }catch(_){} }, 120);
 }
 
-function loginCustomer(){
+async function loginCustomer(){
   const err=$('cust-login-error');
   const phone=formatPhone((($('cust-login-phone')||{}).value||'').trim());
   const pin=(($('cust-login-pin')||{}).value||'').trim();
   if(!phone){ if(err) err.textContent='Укажите телефон'; return; }
   if(pin.length<4){ if(err) err.textContent='PIN от 4 цифр'; return; }
+  if(!(state.companies||[]).length && typeof initCloudSync==='function'){
+    if(err) err.textContent='Загрузка данных…';
+    try{ await initCloudSync(); }catch(_){}
+    if(typeof initPortalScopeFromPage==='function') initPortalScopeFromPage();
+    const scopeHint=$('cust-login-scope');
+    if(scopeHint){
+      const label=portalScopeCarrierLabel();
+      scopeHint.textContent=label?`Портал перевозчика: ${label}`:'';
+      scopeHint.style.display=label?'block':'none';
+    }
+  }
   const co=findCustomerPortalCompany(phone, pin);
   if(!co){
     if(err) err.textContent='Нет доступа. Попросите перевозчика включить портал в карточке заказчика.';

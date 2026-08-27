@@ -3470,13 +3470,15 @@ try{
     return true;
   };
   const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
-  if(urlEntry==='driver'){
+  if(urlEntry==='customer'){
+    try{ await initCloudSync(); }catch(_){}
+    initPortalScopeFromPage();
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(typeof openCustomerLogin==='function') openCustomerLogin();
+  } else if(urlEntry==='driver'){
     if(lastRole==='driver' && (await tryDriver())){ /* ok */ }
     else if(restoreDriverSession() && (await tryDriver())){ /* ok */ }
     else openDriverLogin(false);
-  } else if(urlEntry==='customer'){
-    if(typeof showCustomerPortal==='function') showCustomerPortal();
-    else if(typeof openCustomerLogin==='function') openCustomerLogin();
   } else if(urlEntry==='admin'){
     openAdminLogin();
   } else if(lastRole==='driver'){
@@ -3495,10 +3497,15 @@ try{
     }
   }
   startAutoSync();
-  initCloudSync().then(()=>{
+  if(urlEntry!=='customer'){
+    initCloudSync().then(()=>{
+      updateSyncHint();
+      setTimeout(()=>pullRemoteUpdates('post-init'), 800);
+    }).catch(()=>updateSyncHint());
+  } else {
     updateSyncHint();
     setTimeout(()=>pullRemoteUpdates('post-init'), 800);
-  }).catch(()=>updateSyncHint());
+  }
   setTimeout(updateSyncHint, 700);
 })();
 $('role-driver').onclick=()=>{ setEntryMode('driver'); openDriverLogin(false); };
