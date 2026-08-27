@@ -27,9 +27,17 @@ push_ssh() {
   printf '%s\n' "$DEPLOY_KEY" >"$KEY_FILE"
   chmod 600 "$KEY_FILE"
   export GIT_SSH_COMMAND="ssh -i $KEY_FILE -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes"
-  local attempt=1 delay=4
+  local attempt=1 delay=4 err=""
   while [ "$attempt" -le 4 ]; do
-    if git push -u "git@github.com:${REPO}.git" "$BRANCH"; then return 0; fi
+    err="$(git push -u "git@github.com:${REPO}.git" "$BRANCH" 2>&1)" && return 0
+    if echo "$err" | grep -qi 'permission denied (publickey)'; then
+      local pub="$(ssh-keygen -y -f "$KEY_FILE" 2>/dev/null || true)"
+      echo "$err"
+      echo "Добавьте публичный ключ в laser-erp/armada-perevozki → Settings → Deploy keys (Allow write):"
+      [ -n "$pub" ] && echo "$pub"
+      return 1
+    fi
+    echo "$err"
     if [ "$attempt" -eq 4 ]; then return 1; fi
     echo "Retry $attempt/4 in ${delay}s…"
     sleep "$delay"
