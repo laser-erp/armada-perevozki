@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>АРМАДА — учёт перевозок для микро-парка</title>
+  <meta name="description" content="Заказы, водитель в дороге, внутренняя биржа, портал заказчика. Для парка 1–15 машин." />
+  <meta name="theme-color" content="#1e5aa8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{--accent:#1e5aa8;--accent2:#EF4444;--bg:#f0f4f8;--text:#1a2332;--muted:#5c6578}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+    .wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+    header{text-align:center;padding:24px 0 8px}
+    header img{width:72px;height:auto}
+    h1{font-size:1.45rem;margin:12px 0 6px;font-weight:700}
+    .lead{color:var(--muted);font-size:1.05rem;margin:0 0 24px}
+    .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    h2{font-size:1.1rem;margin:0 0 12px}
+    ul{margin:0;padding-left:1.2rem}
+    li{margin:6px 0}
+    .tariffs{display:grid;gap:12px}
+    @media(min-width:560px){.tariffs{grid-template-columns:1fr 1fr}}
+    .tariff{border:1px solid #e2e8f0;border-radius:12px;padding:16px}
+    .tariff strong{display:block;font-size:1.15rem;color:var(--accent)}
+    .tariff .price{font-size:1.35rem;font-weight:700;margin:8px 0}
+    .tariff .muted{font-size:.85rem;color:var(--muted)}
+    .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+    .btn{display:block;text-align:center;padding:14px 18px;border-radius:10px;font-weight:700;text-decoration:none;font-size:1rem}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-secondary{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+    .pilot{background:linear-gradient(135deg,#1e5aa8 0%,#2563b8 100%);color:#fff;border:none}
+    .pilot h2{color:#fff}
+    .reviews{display:grid;gap:12px}
+    .review{border:1px solid #e8ecf2;border-radius:12px;padding:14px 16px;background:#fafbfc}
+    .review p{margin:0 0 8px;font-size:.95rem}
+    .review .who{font-size:.82rem;color:var(--muted);margin:0}
+    .review .who strong{color:var(--text)}
+    footer{margin-top:28px;text-align:center;font-size:.8rem;color:var(--muted)}
+    footer a{color:var(--accent)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img src="logo.png" alt="АРМАДА" />
+      <h1>АРМАДА</h1>
+      <p class="lead">Учёт перевозок для микро-парка и экспедитора с своим парком — заказы, водитель, биржа между перевозчиками.</p>
+    </header>
+
+    <div class="card">
+      <h2>Для кого</h2>
+      <ul>
+        <li>Малый парк: <strong>1–15 машин</strong></li>
+        <li>Региональные перевозчики и экспедиторы</li>
+        <li>Не замена ATI и не огромная TMS — пакетный сервис «всё в одном»</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Что внутри</h2>
+      <ul>
+        <li>Заявки и заказы, смены, ЕТО водителя</li>
+        <li>Кабинет водителя на телефоне</li>
+        <li><strong>Внутренняя биржа</strong> — обмен заявками между кабинетами АРМАДА</li>
+        <li>Портал заказчика (заявка и расчёт с телефона)</li>
+        <li>Электронные накладные ЭТрН — в тарифах «Бизнес» и выше (пилот 2026)</li>
+        <li>Тарифы, пробный период, учёт лимитов</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Тарифы (ориентир)</h2>
+      <div class="tariffs">
+        <div class="tariff">
+          <strong>Старт</strong>
+          <div class="price">2 990 ₽/мес</div>
+          <div class="muted">Малый парк, без биржи и ЭТрН</div>
+        </div>
+        <div class="tariff">
+          <strong>Бизнес</strong>
+          <div class="price">7 990 ₽/мес</div>
+          <div class="muted">Биржа, ЭТрН, больше водителей и машин</div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:12px;font-size:.85rem">Точные лимиты — в программе и оферте. Оператор ЭТрН — отдельно по тарифам оператора.</p>
+    </div>
+
+    <div class="card">
+      <h2>Отзывы</h2>
+      <p class="muted" style="font-size:.85rem;margin:0 0 14px">Участники пилота и первые пользователи</p>
+      <div class="reviews">
+        <blockquote class="review">
+          <p>Раньше заявки в Excel и в WhatsApp — постоянно терялись детали. Сейчас всё в одном месте: водитель видит заказ в дороге, я закрываю смену без звонков вечером.</p>
+          <p class="who"><strong>Андрей К.</strong> · перевозчик, 6 машин · Тверская область</p>
+        </blockquote>
+        <blockquote class="review">
+          <p>Биржа между кабинетами — главная фишка. Сдали заявку коллеге из соседнего города, не в ATI и не по телефону в неизвестность. Комиссия прозрачная, в программе видно.</p>
+          <p class="who"><strong>Ирина В.</strong> · экспедитор со своим парком · 4 ТС</p>
+        </blockquote>
+        <blockquote class="review">
+          <p>Заказчик сам кидает заявку с телефона — меньше «перезвоните, сколько будет». Минимальная цена считается, споров меньше.</p>
+          <p class="who"><strong>Михаил Н.</strong> · ООО «СеверЛогистик» · 8 машин</p>
+        </blockquote>
+        <blockquote class="review">
+          <p>Водители быстро разобрались: смена, ЕТО, заказы. Ссылка для входа — без установки отдельного приложения, для нас это важно.</p>
+          <p class="who"><strong>Олег С.</strong> · собственник · ИП, 3 машины грузовые</p>
+        </blockquote>
+        <blockquote class="review">
+          <p>Смотрели Cargo.run — для нас дорого и тяжело. АРМАДА по деньгам и по простоте подошла: пилот без страха, что сразу подписка на год.</p>
+          <p class="who"><strong>Дмитрий Л.</strong> · перевозчик · Ярославль, 5 ТС</p>
+        </blockquote>
+      </div>
+      <p class="muted" style="font-size:.78rem;margin:12px 0 0">Шаблоны для пилота. Перед публичной рекламой замените на реальные отзывы с разрешением клиентов.</p>
+    </div>
+
+    <div class="card pilot">
+      <h2>Пилот 30 дней</h2>
+      <p>Для 2–3 партнёров: подключаем кабинет, пробный период, помощь с запуском. Вы тестируете на реальных заявках.</p>
+      <p><strong>Связь:</strong> aptown1@gmail.com</p>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="index.html">Войти в программу</a>
+      <a class="btn btn-secondary" href="mailto:aptown1@gmail.com?subject=Пилот%20АРМАДА">Запросить пилот</a>
+    </div>
+
+    <footer>
+      <p><a href="legal.html">Оферта и документы</a> · <a href="index.html">Приложение</a></p>
+      <p>АРМАДА · aptown1.fvds.ru</p>
+    </footer>
+  </div>
+</body>
+</html>

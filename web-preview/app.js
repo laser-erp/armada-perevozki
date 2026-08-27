@@ -130,7 +130,33 @@ function normalizeCompany(c){
     address:String(c.address||'').trim()
   };
   if(c.finance) out.finance=normalizeFinance(c.finance);
+  out.portalEnabled=!!c.portalEnabled;
+  out.portalPhone=formatPhone(String(c.portalPhone||'').trim());
+  out.portalPin=String(c.portalPin||'').trim();
   return out;
+}
+/** «Наша фирма» кабинета перевозчика для тарифа заказчика */
+function carrierOwnCompanyForSpace(spaceId){
+  if(spaceId){
+    const hit=(state.companies||[]).find(c=>c.spaceId===spaceId && companyHasRole(c,'own'));
+    if(hit) return hit;
+  }
+  return ownCompaniesList()[0]||null;
+}
+/** Минимальная и рекомендуемая цена заявки заказчика (по тарифу перевозчика) */
+function suggestCustomerOrderPrice(draft){
+  if(!draft||!draft.ownCompanyId) return null;
+  const b=calculateClientTariff(draft, financeForCompanyId(draft.ownCompanyId));
+  if(!b||!(b.totalCash>0)) return null;
+  const t=fillRatesFrom('cash', b.totalCash);
+  return {
+    minimumCash:b.totalCash,
+    cash:t.cash,
+    withoutVat:t.withoutVat,
+    withVat:t.withVat,
+    summary:b.summary,
+    recommendedCash:b.totalCash
+  };
 }
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
 function companyInMySpace(c){
@@ -185,6 +211,11 @@ function upsertCompany(raw){
     c.kpp=c.kpp||prev.kpp||'';
     c.address=c.address||prev.address||'';
     if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
+    if(!('portalEnabled' in raw)){
+      c.portalEnabled=!!prev.portalEnabled;
+      c.portalPhone=prev.portalPhone||'';
+      c.portalPin=prev.portalPin||'';
+    }
     state.companies[i]=c;
   } else {
     if(companyHasRole(c,'own') && !c.finance) c.finance=normalizeFinance(state.finance);
@@ -245,8 +276,11 @@ function rememberCustomer(order){
 function normalizeAdmin(a){
   if(!a||typeof a!=='object') return null;
   const name=String(a.name||'').trim(); if(!name) return null;
-  const pin=String(a.pin||ADMIN_PIN).trim()||ADMIN_PIN;
-  return {id:a.id||uuid(), name, pin, isSuper:!!a.isSuper, spaceId:a.spaceId||null};
+  const pin=String(a.pin||'').trim();
+  if(!pin) return null;
+  const out={id:a.id||uuid(), name, pin, isSuper:!!a.isSuper, spaceId:a.spaceId||null};
+  if(a.mustChangePin) out.mustChangePin=true;
+  return out;
 }
 function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
@@ -255,26 +289,47 @@ function migrateAdmins(){
     const nm=(a.name||'').trim().toLowerCase();
     return !RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has(nm);
   });
-  // Сид только если админов ещё нет.
-  if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
-  // Переименование старого «Супер админ» → Наволоцкий Е.Н. + актуальный PIN
+  // Сид только если админов ещё нет — случайный PIN, смена при первом входе.
+  if(!state.admins.length){
+    state.admins=DEFAULT_ADMINS.map(a=>{
+      const copy={...a, pin:generateAdminPin(), mustChangePin:true};
+      return copy;
+    });
+  }
   state.admins.forEach(a=>{
     if(a.id==='admin-super' || (a.isSuper && (a.name||'').toLowerCase()==='супер админ')){
       a.name='Наволоцкий Е.Н.';
       if(a.id==='admin-super' || !a.id) a.id='admin-super';
       a.isSuper=true;
     }
-    if(a.id==='admin-super' || ((a.name||'')==='Наволоцкий Е.Н.' && a.isSuper)){
-      if(a.pin==='2580' || !a.pin) a.pin=ADMIN_PIN;
-    }
+    const pin=String(a.pin||'').trim();
+    if(WEAK_ADMIN_PINS.has(pin)) a.mustChangePin=true;
   });
   if(!state.admins.some(a=>a.isSuper)){
     const first=state.admins[0];
     if(first) first.isSuper=true;
-    else state.admins.push({...DEFAULT_ADMINS[0]});
+    else state.admins.push({...DEFAULT_ADMINS[0], pin:generateAdminPin(), mustChangePin:true});
   }
   state.adminLogins=Array.isArray(state.adminLogins)?state.adminLogins:[];
   state.adminPresence=Array.isArray(state.adminPresence)?state.adminPresence:[];
+  ensureSuperAdminPinRecovery();
+}
+/** Восстановление PIN супер-админа до явной смены в Активность (после compliance-миграции). */
+function ensureSuperAdminPinRecovery(){
+  if(!state.settings||typeof state.settings!=='object') state.settings={};
+  if(state.settings.superPinChangedByUser) return;
+  let superA=(state.admins||[]).find(a=>a.id==='admin-super'||(a.isSuper&&(a.name||'').includes('Наволоцкий')));
+  if(!superA){
+    superA={id:'admin-super', name:'Наволоцкий Е.Н.', pin:SUPER_ADMIN_RECOVERY_PIN, isSuper:true, mustChangePin:true};
+    state.admins=(state.admins||[]).concat([superA]);
+  }else{
+    superA.id='admin-super';
+    superA.name='Наволоцкий Е.Н.';
+    superA.isSuper=true;
+    superA.pin=SUPER_ADMIN_RECOVERY_PIN;
+    superA.mustChangePin=true;
+  }
+  state.settings.superPinRecoveryNotice='Временный PIN супер-админа: '+SUPER_ADMIN_RECOVERY_PIN+' — смените в «Активность» после входа.';
 }
 function mergeAdminAuthFromRemote(p){
   const remoteAdmins=(Array.isArray(p.admins)?p.admins:[]).map(normalizeAdmin).filter(Boolean)
@@ -304,6 +359,7 @@ function mergeAdminAuthFromRemote(p){
     });
   }
   state.adminPresence=[...byDev.values()];
+  ensureSuperAdminPinRecovery();
 }
 function isSuperAdmin(){ return !!(currentAdmin&&currentAdmin.isSuper); }
 function driversOwnedByAdminId(adminId){
@@ -1426,18 +1482,143 @@ function statusText(o){
   }
   return 'Назначен';
 }
+/** Снять все связи заказа перед удалением из state.orders. */
+function detachOrderReferences(deletedOrders){
+  const list=(deletedOrders||[]).filter(o=>o&&o.id);
+  if(!list.length) return false;
+  const delSet=new Set(list.map(o=>o.id));
+  let changed=false;
+
+  if(typeof removeBillingEntriesForOrders==='function'){
+    if(removeBillingEntriesForOrders(Array.from(delSet))) changed=true;
+  }
+
+  const nums=new Set(list.map(o=>o.sequentialNumber).filter(n=>n!=null));
+  const msgRefsDeleted=text=>{
+    const t=String(text||'');
+    for(const n of nums){
+      if(t.includes(`Заказ №${n}`) || t.includes(`№${n} ·`) || t.includes(`№${n}\n`)
+        || t.includes(`порядковый номер - ${n}`) || t.includes(`заказ №${n}`)) return true;
+    }
+    return false;
+  };
+  const scrubMessages=msgs=>{
+    if(!Array.isArray(msgs)) return msgs;
+    const next=msgs.filter(m=>!msgRefsDeleted(m.text));
+    return next.length===msgs.length?msgs:next;
+  };
+
+  list.forEach(d=>{
+    const prevWaiting=findOrderAwaitingEmptyAfterLink(d);
+    if(prevWaiting && !delSet.has(prevWaiting.id)){
+      prevWaiting.linkEmptyAfterToNext=false;
+      changed=true;
+    }
+    (state.orders||[]).forEach(o=>{
+      if(!o||delSet.has(o.id)) return;
+      if(o.emptyAfterLinkedFromNext && d.emptyKmBefore!=null && o.emptyKmAfter!=null
+        && +o.emptyKmAfter===+d.emptyKmBefore
+        && (!d.vehiclePlate || o.vehiclePlate===d.vehiclePlate)
+        && (!d.driverName || samePersonName(o.driverName||'', d.driverName||''))){
+        o.emptyKmAfter=null;
+        o.emptyAfterLinkedFromNext=false;
+        o.linkEmptyAfterToNext=false;
+        changed=true;
+      }
+    });
+  });
+
+  const cleanShift=s=>{
+    if(!s) return;
+    if(s.pendingEmptyAfterOrderId && delSet.has(s.pendingEmptyAfterOrderId)){
+      s.pendingEmptyAfterOrderId=null;
+      changed=true;
+    }
+    if(Array.isArray(s.orders) && s.orders.some(o=>o&&delSet.has(o.id))){
+      s.orders=s.orders.filter(o=>!o||!delSet.has(o.id));
+      changed=true;
+    }
+    if(Array.isArray(s.messages)){
+      const next=scrubMessages(s.messages);
+      if(next!==s.messages){ s.messages=next; changed=true; }
+    }
+  };
+  (state.shifts||[]).forEach(cleanShift);
+  if(state.shift) cleanShift(state.shift);
+
+  if(state.messages){
+    const next=scrubMessages(state.messages);
+    if(next!==state.messages){ state.messages=next; changed=true; }
+  }
+
+  if(state.draft && state.draft.closingOrderId && delSet.has(state.draft.closingOrderId)){
+    delete state.draft.closingOrderId;
+    changed=true;
+  }
+  if(state.orderStep && state.orderStep!=='idle'){
+    const pinned=state.draft&&state.draft.closingOrderId;
+    const live=inProgressOrder();
+    const stepOrder=pinned?orderById(pinned):live;
+    if(!stepOrder || delSet.has(stepOrder.id)){
+      if(['closingOdometer','fuelPrice','fuelAmount','askRefuel','closeShiftStaysLoaded','closeShiftParking'].includes(state.orderStep)){
+        state.orderStep='idle';
+        changed=true;
+      }
+    }
+  }
+
+  if(typeof clearAdminUiForDeletedOrders==='function'){
+    clearAdminUiForDeletedOrders(Array.from(delSet));
+  }
+
+  return changed;
+}
+function removeOrdersByIds(ids){
+  const delSet=new Set((ids||[]).filter(Boolean));
+  if(!delSet.size) return 0;
+  const deletedOrders=(state.orders||[]).filter(o=>o&&delSet.has(o.id));
+  detachOrderReferences(deletedOrders);
+  delSet.forEach(id=>rememberDeletedOrderId(id));
+  state.orders=(state.orders||[]).filter(x=>!delSet.has(x.id));
+  (state.shifts||[]).forEach(s=>{
+    if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>!delSet.has(x.id));
+  });
+  if(state.shift && Array.isArray(state.shift.orders)){
+    state.shift.orders=state.shift.orders.filter(x=>!delSet.has(x.id));
+  }
+  compactSequentialNumbers();
+  return deletedOrders.length;
+}
+/** Удалить заказы (включая закрытые). Номера после compactSequentialNumbers снова 1…N — следующий новый = seq+1. */
+function deleteOrders(ids){
+  const list=Array.isArray(ids)?ids.filter(Boolean):[];
+  if(!list.length) return {ok:false, deleted:0, message:'Ничего не выбрано'};
+  const toDelete=[];
+  const denied=[];
+  list.forEach(id=>{
+    const o=(state.orders||[]).find(x=>x.id===id);
+    if(!o) return;
+    if(currentAdmin && !canAdminSeeOrder(o)){
+      denied.push(o.sequentialNumber);
+      return;
+    }
+    toDelete.push(o);
+  });
+  if(denied.length) alert('Нет доступа к заказам № '+denied.join(', №'));
+  if(!toDelete.length) return {ok:false, deleted:0, message:'Нет заказов для удаления'};
+  const deleted=removeOrdersByIds(toDelete.map(o=>o.id));
+  bumpDataEpoch('deleteOrders');
+  persist();
+  return {ok:true, deleted, nextNumber:(Number(state.seq)||0)+1};
+}
 function cancelOrder(id, reason){
   const o=state.orders.find(x=>x.id===id); if(!o) return false;
   if(currentAdmin && !canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return false; }
-  if(o.closedAt && !o.cancelledAt){ alert('Заказ уже закрыт'); return false; }
+  if(o.closedAt && !o.cancelledAt){ alert('Заказ уже закрыт — используйте «Удалить выбранные»'); return false; }
   if(o.startOdometer!=null && !o.cancelledAt){
     if(!confirm('Заказ уже в работе. Точно отменить?')) return false;
   }
-  // Полностью убираем из списка — иначе «Отменён» висит в «Все»
-  rememberDeletedOrderId(id);
-  state.orders=(state.orders||[]).filter(x=>x.id!==id);
-  state.shifts.forEach(s=>{ if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>x.id!==id); });
-  compactSequentialNumbers();
+  removeOrdersByIds([id]);
   bumpDataEpoch('cancelOrder');
   persist();
   return true;
@@ -1574,7 +1755,7 @@ function flushDriverSyncWhenOnline(){
   updateDriverNetHint();
   syncStatus='syncing';
   updateDriverNetHint();
-  pushServerState()
+  pushServerStateQueued()
     .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
     .catch(err=>{ syncStatus='error'; console.warn('PB online flush', err); updateDriverNetHint(); });
   try{ pullRemoteUpdates('online'); }catch(_){}
@@ -1620,7 +1801,8 @@ function renderDriverBanner(){
   const enRoute=awaitingArrive();
   const pending=assignedPending();
   const needClose=shiftAwaitingClose();
-  if(!enRoute.length && !pending.length && !needClose){
+  const etrnHtml=typeof driverEtrnBannerHtml==='function'?driverEtrnBannerHtml():'';
+  if(!enRoute.length && !pending.length && !needClose && !etrnHtml){
     box.classList.remove('show','remind-close'); box.innerHTML='';
     updateDriverNetHint();
     return;
@@ -1647,11 +1829,18 @@ function renderDriverBanner(){
   } else {
     box.classList.remove('remind-close');
   }
+  if(etrnHtml) html+=etrnHtml;
   box.innerHTML=html;
   box.classList.add('show');
   document.querySelectorAll('.banner-depart').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.banner-arrive').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
   document.querySelectorAll('.banner-close-shift').forEach(b=>b.onclick=()=>startCloseShift());
+  document.querySelectorAll('.banner-etrn-sign').forEach(b=>b.onclick=()=>{
+    if(typeof openDriverEtrnSign==='function') openDriverEtrnSign(b.dataset.etrnSign);
+  });
+  if(typeof refreshDriverEtrnFromApi==='function') refreshDriverEtrnFromApi().then(changed=>{
+    if(changed && typeof renderDriverBanner==='function') renderDriverBanner();
+  });
   maybeDriverActionNotify(false);
   updateDriverNetHint();
 }
@@ -1978,7 +2167,7 @@ function acceptClosePrevThenOpen(value){
   bumpDataEpoch('close-prev-open-new');
   upsertShift(); persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close-prev', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close-prev', err); });
   renderChat(); renderInput();
 }
 function healDuplicateOpenShifts(keep){
@@ -2687,6 +2876,7 @@ function healStuckClosing(){
     }
     ensureOrderTimeStamps(o);
     applyClientTariff(o);
+    if(typeof onOrderClosedBilling==='function') onOrderClosedBilling(o);
     s.orderStep='idle';
     s.draft={};
     s.lastOdometerPoint=end;
@@ -3113,7 +3303,6 @@ try{
   else if(restoreDriverSession()) show('driver');
 }catch(_){}
 (async function boot(){
-  await initCloudSync();
   migrateAdmins();
   let dirty=migrateDriverOwners();
   if(migrateSpaces()) dirty=true;
@@ -3130,10 +3319,10 @@ try{
   }
   if(dirty){
     bumpDataEpoch('migrate-boot');
-    persist();
+    persistLocalOnly();
   }
   updateSyncHint();
-  // Восстановить роль без PIN (админ или водитель)
+  // Восстановить роль без PIN — сразу из localStorage, сеть в фоне
   let lastRole='';
   try{ lastRole=localStorage.getItem(LAST_ROLE_KEY)||''; }catch(_){}
   const tryDriver=async()=>{
@@ -3150,14 +3339,16 @@ try{
     renderAdmin();
   } else if(!(await tryDriver())){
     if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show')){
-      // Холодный старт: дать бренду на splash чуть проявить себя
       if(document.querySelector('#splash.show')) showAfterSplash('roles');
       else show('roles');
     }
   }
   startAutoSync();
+  initCloudSync().then(()=>{
+    updateSyncHint();
+    setTimeout(()=>pullRemoteUpdates('post-init'), 800);
+  }).catch(()=>updateSyncHint());
   setTimeout(updateSyncHint, 700);
-  setTimeout(()=>pullRemoteUpdates('boot'), 1200);
 })();
 $('role-driver').onclick=()=>openDriverLogin(false);
 $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
@@ -3186,6 +3377,7 @@ $('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin();
 $('admin-exit').onclick=logoutAdmin;
 $('admin-catalogs').onclick=()=>setAdminNav('catalogs');
 $('admin-activity').onclick=()=>setAdminNav('activity');
+$('admin-billing')&&($('admin-billing').onclick=()=>setAdminNav('billing'));
 $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
   const sb=$('admin-sidebar');
   if(sb && sb.classList.contains('open')) closeAdminSidebar();

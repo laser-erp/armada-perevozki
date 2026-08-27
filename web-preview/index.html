@@ -19,7 +19,30 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-    <link rel="stylesheet" href="styles.css?v=2026-08-13-admin-route-contacts" />
+  <script>
+  (function(){
+    try{
+      if(!sessionStorage.getItem('armada-sw-v25')){
+        sessionStorage.setItem('armada-sw-v25','1');
+        if(navigator.serviceWorker){
+          navigator.serviceWorker.getRegistrations().then(function(regs){
+            regs.forEach(function(r){ r.unregister(); });
+          });
+        }
+      }
+    }catch(_){}
+    setTimeout(function(){
+      if(typeof show==='function'){ show('roles'); return; }
+      var sp=document.getElementById('splash');
+      if(sp&&sp.classList.contains('show')){
+        document.querySelectorAll('.phone > .screen').forEach(function(s){ s.classList.remove('show'); });
+        var roles=document.getElementById('roles');
+        if(roles) roles.classList.add('show');
+      }
+    }, 2500);
+  })();
+  </script>
+    <link rel="stylesheet" href="styles.css?v=2026-08-24-bootfix5" />
 
 </head>
 <body>
@@ -45,7 +68,17 @@
         <span class="role-btn-title">Администратор</span>
         <span class="role-btn-desc">Заявки, биржа и справочники</span>
       </button>
+      <button type="button" class="secondary role-btn" id="role-customer">
+        <span class="role-btn-title">Заказчик</span>
+        <span class="role-btn-desc">Своя заявка и расчёт цены</span>
+      </button>
     </div>
+    <p class="hint" style="margin-top:8px;font-size:.8rem"><a href="kp.html">О сервисе и пилоте</a></p>
+    <p class="hint legal-notice" style="margin-top:14px;font-size:.72rem;line-height:1.4;max-width:320px">
+      Использование сервиса — по <a href="legal.html#offer">оферте</a>.
+      ПДн — по <a href="legal.html#privacy">политике</a>.
+      Данные в браузере: <a href="legal.html#tech">localStorage</a>.
+    </p>
   </div></div>
 
   <div id="driver-login" class="screen"><div class="center">
@@ -75,9 +108,70 @@
       <label for="pin-input">PIN</label>
       <input id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
       <div class="error" id="pin-error"></div>
+      <div class="hint" id="pin-recovery-hint" style="display:none;margin-bottom:8px;padding:8px;background:rgba(245,158,11,.12);border-radius:8px;font-size:.78rem"></div>
       <button class="primary" id="pin-ok">Войти</button>
     </div>
   </div></div>
+
+  <div id="customer-login" class="screen"><div class="center">
+    <div class="auth-panel">
+      <button type="button" class="auth-back" id="cust-login-back">← Назад</button>
+      <img class="logo" src="logo.png" alt="АРМАДА" />
+      <h2>Вход заказчика</h2>
+      <div class="sub">Телефон и PIN из карточки заказчика</div>
+      <label for="cust-login-phone">Телефон</label>
+      <input id="cust-login-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+      <label for="cust-login-pin">PIN</label>
+      <input id="cust-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      <div class="error" id="cust-login-error"></div>
+      <button class="primary" id="cust-login-ok">Войти</button>
+      <div class="hint">Перевозчик включает портал в «Справочники → компания → Заказчик».</div>
+    </div>
+  </div></div>
+
+  <div id="customer-portal" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="cust-portal-back">← Выход</button>
+        <h1 id="cust-portal-head">Заказчик</h1>
+      </header>
+      <div class="admin-form-scroll">
+        <p class="cat-panel-hint" id="cust-portal-sub"></p>
+        <section class="form-section">
+          <h2 class="form-section-title">Новая заявка</h2>
+          <label for="cust-load">Адрес загрузки</label>
+          <input id="cust-load" placeholder="Адрес загрузки" />
+          <label for="cust-unload">Адрес выгрузки</label>
+          <input id="cust-unload" placeholder="Адрес выгрузки" />
+          <div class="form-pair">
+            <div><label for="cust-vehicle-date">Дата подачи ТС</label><input id="cust-vehicle-date" type="date" /></div>
+            <div><label for="cust-vehicle-time">Время</label><input id="cust-vehicle-time" type="time" /></div>
+          </div>
+          <label for="cust-req-pay">Грузоподъёмность, т</label>
+          <input id="cust-req-pay" inputmode="decimal" placeholder="например 5" />
+          <div class="form-pair">
+            <div><label for="cust-est-km">Ориентир км (груз + после)</label><input id="cust-est-km" inputmode="numeric" placeholder="80" /></div>
+            <div><label for="cust-est-hours">Ориентир часов работы</label><input id="cust-est-hours" inputmode="decimal" placeholder="4" /></div>
+          </div>
+          <label for="cust-empty-before">Нулевой пробег до загрузки, км</label>
+          <input id="cust-empty-before" inputmode="numeric" placeholder="0" value="0" />
+          <label for="cust-contact-name">Контакт на загрузке</label>
+          <input id="cust-contact-name" placeholder="ФИО" />
+          <label for="cust-contact-phone">Телефон контакта</label>
+          <input id="cust-contact-phone" inputmode="tel" placeholder="+7…" />
+          <div id="cust-price-preview" class="schedule-box"></div>
+          <label for="cust-price">Ваша цена, ₽ (не ниже минимума)</label>
+          <input id="cust-price" inputmode="decimal" placeholder="авто из расчёта" />
+          <div class="error" id="cust-form-error"></div>
+          <button type="button" class="primary" id="cust-submit">Отправить на биржу</button>
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Мои заявки</h2>
+          <div id="cust-orders-list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <div id="admin" class="screen">
     <div class="admin-layout">
@@ -93,6 +187,7 @@
           <button type="button" class="admin-nav-item" data-nav="exchange">Биржа</button>
           <button type="button" class="admin-nav-item" data-nav="catalogs" id="admin-catalogs">Справочники</button>
           <button type="button" class="admin-nav-item" data-nav="activity" id="admin-activity" style="display:none">Активность</button>
+          <button type="button" class="admin-nav-item" data-nav="billing" id="admin-billing" style="display:none">Тарифы</button>
         </nav>
         <div class="admin-sidebar-foot">
           <button type="button" class="admin-nav-item ghost" id="admin-as-driver" title="Войти как водитель">Водитель</button>
@@ -113,6 +208,7 @@
           <button data-filter="closed">Закрыт</button>
         </div>
         <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
+        <div class="hint" id="admin-billing-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);font-size:.78rem"></div>
         <div class="table-wrap admin-content" id="admin-list"></div>
       </div>
     </div>
@@ -321,6 +417,16 @@
     </div>
   </div>
 
+  <div id="admin-billing-screen" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="billing-back">← Назад</button>
+        <h1>Тарифы и оплата</h1>
+      </header>
+      <div class="admin-form-scroll" id="billing-form"></div>
+    </div>
+  </div>
+
   <div id="admin-vehicle-card" class="screen">
     <div class="admin-form-shell">
       <header class="form-topbar">
@@ -368,9 +474,12 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="driver.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="admin.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="app.js?v=2026-08-13-fix-company-name-esc"></script>
+  <script src="store.js?v=2026-08-24-bootfix5"></script>
+<script src="billing.js?v=2026-08-24-bootfix5"></script>
+<script src="driver.js?v=2026-08-24-bootfix5"></script>
+<script src="etrn.js?v=2026-08-24-bootfix5"></script>
+<script src="admin.js?v=2026-08-24-bootfix5"></script>
+<script src="app.js?v=2026-08-24-bootfix5"></script>
+<script src="customer.js?v=2026-08-24-bootfix5"></script>
 </body>
 </html>

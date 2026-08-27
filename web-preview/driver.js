@@ -327,28 +327,36 @@ async function enterAsDriver(rec){
   updateDriverChrome();
   show('driver');
   setDriverNav('btn-home');
-  // Сервер — источник правды по открытой смене водителя (локальный кэш не должен откатить ЕТО)
-  try{
-    const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-    const recState=await fetchServerState();
-    if(recState){
-      pbRecordId=recState.id;
-      applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
-      migrateEtoFromMessages();
-      // Подтянуть только локальные заказы «в пути/в работе», смены — строго с сервера
-      localStorage.setItem(KEY, JSON.stringify(snapshot()));
-    }
-  }catch(err){ console.warn('enterAsDriver sync', err); }
-  state.shift=null; // сброс живой ссылки — resume возьмёт серверную смену
+  state.shift=null;
   resetChat();
-  // Явно показать, под кем вошли (не дублируем, если уже есть в перенесённом чате)
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
   if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
     state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}.`});
   }
   renderChat();
-  renderDriverBanner();
   renderInput();
+  renderDriverBanner();
+  // Сервер — в фоне, не блокируем UI
+  (async()=>{
+    try{
+      const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+      const recState=await fetchServerState(FETCH_PREFLIGHT_MS);
+      if(recState){
+        pbRecordId=recState.id;
+        applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
+        migrateEtoFromMessages();
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        state.shift=null;
+        resetChat();
+        if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
+          state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}.`});
+        }
+        renderChat();
+        renderInput();
+        renderDriverBanner();
+      }
+    }catch(err){ console.warn('enterAsDriver sync', err); }
+  })();
 }
 function leaveDriverMode(){
   clearDriverSession();
@@ -886,7 +894,7 @@ function selectFluid(level){
     persist();
     // Сразу на сервер — иначе remote_ahead с другой вкладки может затереть ЕТО
     clearTimeout(persistTimer);
-    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
+    pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
     renderInput();
     return;
   }
@@ -1174,6 +1182,7 @@ function finalizeClose(refueled,price,liters){
   }
   applyFuelRemainingOnClose(order, state.shift, refueled?liters:null);
   applyClientTariff(order);
+  if(typeof onOrderClosedBilling==='function') onOrderClosedBilling(order);
   bumpDataEpoch('finalize-close');
   upsertOrder(order);
   // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
@@ -1190,7 +1199,7 @@ function finalizeClose(refueled,price,liters){
   upsertShift();
   persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
   renderInput();
 }
 /** После закрытия: следующий заказ / стоянка / уже на стоянке — без повторного одометра. */
@@ -1240,7 +1249,7 @@ function finishPostCloseWhere(where){
       state.draft={};
       upsertShift(); persist();
       clearTimeout(persistTimer);
-      pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+      pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
       acceptCloseShiftParking(+end);
       return;
     }
@@ -1251,7 +1260,7 @@ function finishPostCloseWhere(where){
       : 'Укажите одометр на стоянке — смена закроется.');
     upsertShift(); persist();
     clearTimeout(persistTimer);
-    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+    pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
     renderInput();
     return;
   }
@@ -1260,7 +1269,7 @@ function finishPostCloseWhere(where){
   state.orderStep='idle'; state.draft={}; state.error='';
   upsertShift(); persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
   renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ ${orderDayLabel(n)}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
@@ -1319,7 +1328,7 @@ function finishOrder(unloading){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
   persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
   renderInput();
   renderDriverHome();
 }

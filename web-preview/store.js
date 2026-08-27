@@ -171,28 +171,50 @@ const FLUIDS=["Максимум","Середина","Минимум"];
 let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
-const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-fix-company-name-esc";
+/** Слабые PIN из истории репо — при входе требуем смену (P0.1 compliance). */
+const WEAK_ADMIN_PINS=new Set(["2580","45680","1234","0000"]);
+const SUPER_ADMIN_RECOVERY_PIN='45680';
+function generateAdminPin(){
+  let s="";
+  for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
+  return s;
+}
+const APP_BUILD="2026-08-24-bootfix5";
+/** Backend API (S0). Локально → armada-api; на aptown1 → Caddy prefix. */
+const API_BASE=(()=>{
+  if(typeof location==='undefined') return '';
+  const h=location.hostname;
+  if(h==='localhost'||h==='127.0.0.1') return 'http://127.0.0.1:8787';
+  if(h==='aptown1.fvds.ru') return `${location.origin}/armada-api`;
+  return '';
+})();
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
 ];
 const DEFAULT_ADMINS=[
-  {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"45680", isSuper:true}
+  {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"", isSuper:true}
 ];
 /** Старые тестовые учётки — вычищаем при каждой миграции, даже если старый браузер вернул их с кэша */
 const RETIRED_ADMIN_IDS=new Set(["admin-dispatcher"]);
 const RETIRED_ADMIN_NAMES=new Set(["диспетчер"]);
 /** Дубликат заказа Наволоцкого на ИП Нечаев — не воскрешать из кэша вкладок */
 const RETIRED_ORDER_IDS=new Set(["2b08ea51-8d08-4377-8f0d-80aa3b417dda"]);
+const DRIVER_INVITE_TTL_MS=7*24*60*60*1000;
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
 const ADMIN_SESSION_KEY="armada_admin_session_v1";
+const ARMADA_API_TOKEN_KEY="armada_api_token_v1";
 const LAST_ROLE_KEY="armada_last_role_v1";
 const PRESENCE_ONLINE_MS=90*1000;
 const PRESENCE_TICK_MS=25*1000;
-const AUTO_SYNC_MS=8*1000;
+const AUTO_SYNC_MS=28*1000;
+const AUTO_SYNC_SLOW_MS=50*1000;
+const FETCH_TIMEOUT_MS=10000;
+const FETCH_PREFLIGHT_MS=6000;
+const PERSIST_DEBOUNCE_MS=1400;
+const SYNC_BACKOFF_MAX_MS=90000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
 function uuid(){
   try{
@@ -243,13 +265,19 @@ const state={
   settings:Object.assign({fnsApiKey:'',dadataToken:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
+  driverInvites:Array.isArray(saved.driverInvites)?saved.driverInvites:[],
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
-  adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{}
+  adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{},
+  billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}}
 };
 let pbRecordId=null;
 let persistTimer=null;
 let autoSyncTimer=null;
 let autoSyncBusy=false;
+let syncPushInFlight=null;
+let syncPushQueued=false;
+let pullBackoffUntil=0;
+let pullFailCount=0;
 let syncStatus='local'; // local | syncing | ok | error
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
@@ -311,7 +339,7 @@ const $ = id => document.getElementById(id);
 function show(id){
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-vehicle-card';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-vehicle-card'||id==='customer-portal';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
@@ -400,6 +428,18 @@ function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
   console.info('dataEpoch →', state.dataEpoch, reason||'');
 }
+/** S3-2.6: журнал ops для супер-админа (ЭТрН, API). */
+function logOpsEvent(kind, detail, meta){
+  if(!state.opsLog) state.opsLog=[];
+  state.opsLog.unshift({
+    id:uuid(),
+    at:new Date().toISOString(),
+    kind:String(kind||'info'),
+    detail:String(detail||''),
+    meta:meta&&typeof meta==='object'?meta:null
+  });
+  if(state.opsLog.length>60) state.opsLog.length=60;
+}
 function snapshot(){
   // Отменённые никогда не уезжают на сервер — иначе старая вкладка воскрешает их.
   const orders=stripCancelledFromOrders(state.orders);
@@ -423,7 +463,10 @@ function snapshot(){
     spaces:state.spaces,
     settings:state.settings,
     deletedOrderIds:Array.from(deletedOrderIdSet()),
+    driverInvites:Array.isArray(state.driverInvites)?state.driverInvites:[],
     dataEpoch:Number(state.dataEpoch)||0,
+    billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
+    opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
   };
@@ -453,7 +496,11 @@ function applyPayload(p, opts){
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
+  if(typeof applyBillingPayload==='function') applyBillingPayload(p.billing);
+  else if(p.billing&&typeof p.billing==='object') state.billing=p.billing;
   state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{}, p.settings||{});
+  state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
+  state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
   state.dataEpoch=Number(p.dataEpoch)||0;
   mergeAdminAuthFromRemote(p);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
@@ -480,6 +527,7 @@ function applyPayload(p, opts){
   migrateAdmins();
   migrateDriverOwners();
   migrateSpaces();
+  if(typeof migrateBilling==='function') migrateBilling();
   migrateDriverOrderOwners();
   migrateShiftOwners();
   migrateDriverPins();
@@ -633,6 +681,67 @@ function findDriversByPhone(phone){
   const p=formatPhone(phone);
   if(!p) return [];
   return (state.drivers||[]).filter(d=>formatPhone(d.phone||'')===p);
+}
+function driverInviteKey(d){
+  if(!d) return '';
+  return `${String(d.name||'').trim()}|${d.companyId||''}`;
+}
+function findValidDriverInvite(token){
+  if(!token) return null;
+  const inv=(state.driverInvites||[]).find(x=>x&&x.token===token && !x.usedAt && !x.revokedAt);
+  if(!inv) return null;
+  if(inv.expiresAt && new Date(inv.expiresAt).getTime()<Date.now()) return null;
+  return inv;
+}
+function driverInvitePageUrl(token){
+  const dir=location.pathname.replace(/[^/]*$/,'');
+  return `${location.origin}${dir}invite.html?token=${encodeURIComponent(token)}`;
+}
+async function createDriverInvite(driverIndex){
+  const d=(state.drivers||[])[driverIndex];
+  if(!d) return {ok:false, message:'Водитель не найден'};
+  const phone=formatPhone(d.phone||'');
+  if(!phone) return {ok:false, message:'Укажите телефон водителя'};
+  if(currentAdmin && typeof billingGuardCurrentAdminWithServer==='function'){
+    const g=await billingGuardCurrentAdminWithServer('add_driver');
+    if(!g.ok) return {ok:false, message:g.message};
+  }
+  if(!state.driverInvites) state.driverInvites=[];
+  const key=driverInviteKey(d);
+  state.driverInvites.forEach(inv=>{
+    if(inv && inv.driverKey===key && !inv.usedAt && !inv.revokedAt) inv.revokedAt=new Date().toISOString();
+  });
+  const token=uuid();
+  const inv={
+    id:uuid(), token, driverKey:key,
+    driverName:String(d.name||'').trim(),
+    companyId:d.companyId||null,
+    spaceId:d.spaceId||null,
+    phone,
+    createdAt:new Date().toISOString(),
+    expiresAt:new Date(Date.now()+DRIVER_INVITE_TTL_MS).toISOString(),
+    createdByAdminId:currentAdmin&&currentAdmin.id,
+    createdByAdminName:currentAdmin&&currentAdmin.name,
+    usedAt:null, revokedAt:null
+  };
+  state.driverInvites.push(inv);
+  bumpDataEpoch('driver-invite');
+  persist();
+  return {ok:true, invite:inv, url:driverInvitePageUrl(token)};
+}
+function consumeDriverInvite(token, pin){
+  const inv=findValidDriverInvite(token);
+  if(!inv) return {ok:false, message:'Ссылка недействительна, истекла или уже использована'};
+  const pinStr=String(pin||'').trim();
+  if(pinStr.length<4) return {ok:false, message:'PIN — минимум 4 цифры'};
+  const rec=findDriverRecord(inv.driverName, inv.companyId);
+  if(!rec) return {ok:false, message:'Водитель не найден — обратитесь к администратору'};
+  if(formatPhone(rec.phone||'')!==inv.phone) return {ok:false, message:'Телефон водителя изменился — запросите новую ссылку'};
+  rec.pin=pinStr;
+  inv.usedAt=new Date().toISOString();
+  bumpDataEpoch('driver-invite-used');
+  persist();
+  return {ok:true, driver:rec};
 }
 function pickDriverHomeRecord(list){
   if(!list||!list.length) return null;
@@ -801,6 +910,7 @@ function createSpaceForAdmin(admin, firm){
     createdAt:new Date().toISOString()
   });
   state.spaces=(state.spaces||[]).concat([space]);
+  if(typeof getBillingForSpace==='function') getBillingForSpace(space.id);
   admin.spaceId=space.id;
   const co=ensureOwnCompanyForSpace(space);
   if(co){
@@ -1024,17 +1134,143 @@ async function lookupPartyByInn(inn){
     throw egrulErr;
   }
 }
-async function fetchServerState(){
+function networkSlow(){
+  try{
+    const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(!c) return false;
+    if(c.saveData) return true;
+    const t=c.effectiveType;
+    return t==='slow-2g'||t==='2g'||t==='3g';
+  }catch(_){ return false; }
+}
+function autoSyncIntervalMs(){
+  return networkSlow()?AUTO_SYNC_SLOW_MS:AUTO_SYNC_MS;
+}
+async function fetchWithTimeout(url, options, timeoutMs){
+  const ms=timeoutMs||FETCH_TIMEOUT_MS;
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(), ms);
+  try{
+    return await fetch(url, {...(options||{}), signal:ctrl.signal});
+  }finally{ clearTimeout(timer); }
+}
+function persistLocalOnly(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    if(currentAdmin) saveAdminSession();
+  }catch(err){ console.warn('local persist', err); }
+}
+function pushServerStateQueued(){
+  if(syncPushInFlight){
+    syncPushQueued=true;
+    return syncPushInFlight;
+  }
+  syncPushInFlight=pushServerState()
+    .catch(err=>{ throw err; })
+    .finally(()=>{
+      syncPushInFlight=null;
+      if(syncPushQueued){
+        syncPushQueued=false;
+        pushServerStateQueued();
+      }
+    });
+  return syncPushInFlight;
+}
+function armadaApiToken(){
+  try{ return localStorage.getItem(ARMADA_API_TOKEN_KEY)||''; }catch(_){ return ''; }
+}
+function setArmadaApiToken(token){
+  try{
+    if(token) localStorage.setItem(ARMADA_API_TOKEN_KEY, token);
+    else localStorage.removeItem(ARMADA_API_TOKEN_KEY);
+  }catch(_){}
+}
+function armadaApiJsonHeaders(){
+  const h={ Accept:'application/json', 'Content-Type':'application/json' };
+  const t=armadaApiToken();
+  if(t) h.Authorization='Bearer '+t;
+  return h;
+}
+async function armadaApiLogin(pin, meta){
+  if(!API_BASE || !pin) return null;
+  try{
+    const res=await fetchWithTimeout(`${API_BASE}/auth/login`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Accept:'application/json' },
+      body:JSON.stringify({ pin, role:'admin', adminId:meta&&meta.id, spaceId:meta&&meta.spaceId })
+    }, 8000);
+    const data=await res.json().catch(()=>({}));
+    if(res.ok && data.token){ setArmadaApiToken(data.token); return data.token; }
+  }catch(err){ console.warn('armada-api login', err); }
+  return null;
+}
+async function fetchServerStateFromApi(timeoutMs){
+  const res=await fetchWithTimeout(`${API_BASE}/state`, { headers:armadaApiJsonHeaders() }, timeoutMs);
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error||'API state '+res.status);
+  if(!data.payload) return null;
+  return { id:data.recordId, payload:data.payload, viaApi:true };
+}
+async function fetchServerStateFromPb(timeoutMs){
   const filter=encodeURIComponent("key='main'");
-  const res=await fetch(`${PB_BASE}/api/collections/app_state/records?filter=${filter}&perPage=1`);
+  const res=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records?filter=${filter}&perPage=1`, {}, timeoutMs);
   if(!res.ok) throw new Error('Не удалось загрузить базу ('+res.status+')');
   const data=await res.json();
   return (data.items&&data.items[0])||null;
 }
+async function fetchServerState(timeoutMs){
+  if(API_BASE){
+    try{ return await fetchServerStateFromApi(timeoutMs); }
+    catch(err){ console.warn('API state fetch, fallback PB', err); }
+  }
+  return await fetchServerStateFromPb(timeoutMs);
+}
+async function patchServerStatePayload(payload){
+  if(API_BASE){
+    try{
+      const res=await fetchWithTimeout(`${API_BASE}/state`, {
+        method:'PATCH',
+        headers:armadaApiJsonHeaders(),
+        body:JSON.stringify({ payload })
+      });
+      const data=await res.json().catch(()=>({}));
+      if(res.status===409){
+        return { ok:false, aborted:true, remotePayload:data.payload, remoteEpoch:data.remoteEpoch, viaApi:true };
+      }
+      if(!res.ok) throw new Error(data.error||'API patch '+res.status);
+      if(data.recordId) pbRecordId=data.recordId;
+      return { ok:true, aborted:false, viaApi:true };
+    }catch(err){ console.warn('API patch fallback PB', err); }
+  }
+  const body={ key:'main', payload };
+  if(pbRecordId){
+    const res=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    if(!res.ok) throw new Error('Не удалось сохранить ('+res.status+')');
+    return { ok:true, aborted:false };
+  }
+  const res=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records`,{
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  if(res.ok){
+    const rec=await res.json();
+    pbRecordId=rec.id;
+    return { ok:true, aborted:false };
+  }
+  const existing=await fetchServerStateFromPb();
+  if(!existing) throw new Error('Не удалось создать запись базы');
+  pbRecordId=existing.id;
+  const res2=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
+  return { ok:true, aborted:false };
+}
 async function pushServerState(){
-  // Перед записью сверяем эпоху: старая вкладка не должна затирать более новую базу.
+  // Перед записью сверяем эпоху (с таймаутом — при плохой сети не блокируемся).
   try{
-    const rec=await fetchServerState();
+    const rec=await fetchServerState(FETCH_PREFLIGHT_MS);
     if(rec){
       pbRecordId=rec.id;
       const remote=rec.payload||{};
@@ -1059,15 +1295,11 @@ async function pushServerState(){
         if(merged){
           bumpDataEpoch('merge-local-remote-ahead');
           localStorage.setItem(KEY, JSON.stringify(snapshot()));
-          // сразу догоняем сервер своей сменой/ЕТО/заказами
           try{
-            const body={key:'main', payload:snapshot()};
-            await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-              method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-            });
-            console.warn('PB push merged local into remote epoch', remoteEpoch);
+            await patchServerStatePayload(snapshot());
+            console.warn('push merged local into remote epoch', remoteEpoch);
             return {aborted:false, merged:true};
-          }catch(e){ console.warn('PB merge push', e); }
+          }catch(e){ console.warn('merge push', e); }
         } else {
           localStorage.setItem(KEY, JSON.stringify(snapshot()));
         }
@@ -1080,47 +1312,28 @@ async function pushServerState(){
   }
   const payload=snapshot();
   localStorage.setItem(KEY, JSON.stringify(payload));
-  const body={key:'main', payload};
-  if(pbRecordId){
-    const res=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-    });
-    if(!res.ok) throw new Error('Не удалось сохранить ('+res.status+')');
-    return {aborted:false};
-  }
-  const res=await fetch(`${PB_BASE}/api/collections/app_state/records`,{
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-  });
-  if(res.ok){
-    const rec=await res.json();
-    pbRecordId=rec.id;
-    return {aborted:false};
-  }
-  const existing=await fetchServerState();
-  if(!existing) throw new Error('Не удалось создать запись базы');
-  pbRecordId=existing.id;
-  const res2=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-    method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-  });
-  if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
-  return {aborted:false};
+  const pushed=await patchServerStatePayload(payload);
+  if(pushed.ok) return {aborted:false};
+  if(pushed.aborted) return {aborted:true, reason:'remote_ahead'};
+  throw new Error('Не удалось сохранить');
 }
 function persist(){
-  localStorage.setItem(KEY, JSON.stringify(snapshot()));
-  if(currentAdmin) saveAdminSession();
+  persistLocalOnly();
   if(navigator.onLine===false){
     syncStatus='error';
     updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
     return;
   }
-  syncStatus='syncing';
-  updateDriverNetHint();
   clearTimeout(persistTimer);
   persistTimer=setTimeout(()=>{
-    pushServerState()
-      .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
-      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); });
-  }, 350);
+    syncStatus='syncing';
+    updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
+    pushServerStateQueued()
+      .then(()=>{ syncStatus='ok'; pullFailCount=0; updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); })
+      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); });
+  }, PERSIST_DEBOUNCE_MS);
 }
 async function initCloudSync(){
   syncStatus='syncing';
@@ -1156,6 +1369,8 @@ async function initCloudSync(){
 /** Подтянуть новую эпоху с сервера без перезагрузки и без повторного PIN. */
 async function pullRemoteUpdates(reason){
   if(autoSyncBusy) return false;
+  if(!navigator.onLine) return false;
+  if(Date.now()<pullBackoffUntil) return false;
   // Не мешаем активному вводу закрытия/создания — только если шаг idle или просмотр
   const busyStep=state.orderStep&&state.orderStep!=='idle'&&state.orderStep!=='postCloseWhere';
   if(busyStep && reason==='poll') return false;
@@ -1219,11 +1434,15 @@ async function pullRemoteUpdates(reason){
       else if(document.querySelector('#admin.show')) renderAdmin();
     }
     syncStatus='ok';
+    pullFailCount=0;
+    pullBackoffUntil=0;
     updateSyncHint();
     console.info('auto-sync', reason, 'epoch', remoteEpoch);
     return true;
   }catch(err){
     syncStatus='error';
+    pullFailCount=Math.min(pullFailCount+1, 12);
+    pullBackoffUntil=Date.now()+Math.min(SYNC_BACKOFF_MAX_MS, 4000*pullFailCount);
     updateSyncHint();
     console.warn('auto-sync', reason, err);
     return false;
@@ -1232,9 +1451,19 @@ async function pullRemoteUpdates(reason){
   }
 }
 function stopAutoSync(){
-  if(autoSyncTimer){ clearInterval(autoSyncTimer); autoSyncTimer=null; }
+  if(autoSyncTimer){ clearTimeout(autoSyncTimer); autoSyncTimer=null; }
 }
 function startAutoSync(){
   stopAutoSync();
-  autoSyncTimer=setInterval(()=>{ pullRemoteUpdates('poll'); }, AUTO_SYNC_MS);
+  const tick=()=>{
+    if(!document.hidden) pullRemoteUpdates('poll');
+    autoSyncTimer=setTimeout(tick, autoSyncIntervalMs());
+  };
+  autoSyncTimer=setTimeout(tick, autoSyncIntervalMs());
+}
+if(typeof document!=='undefined'){
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden) stopAutoSync();
+    else startAutoSync();
+  });
 }
