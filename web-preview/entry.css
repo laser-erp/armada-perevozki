@@ -161,10 +161,9 @@ body.entry-customer .entry-aside-carrier-wrap{
   }
   .entry-aside{max-width:none;text-align:center}
   .entry-aside-list li{text-align:left}
-  body.entry-page .auth-panel{max-width:none;order:-1}
+  body.entry-page .auth-panel{max-width:none}
   body.entry-driver .entry-aside{
-    order:1;
-    margin-top:8px;
+    margin-bottom:8px;
     padding:14px 16px;
     border-radius:12px;
     background:rgba(15,23,42,.55);
