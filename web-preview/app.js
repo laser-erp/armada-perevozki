@@ -130,12 +130,22 @@ function normalizeCompany(c){
     address:String(c.address||'').trim()
   };
   if(c.finance) out.finance=normalizeFinance(c.finance);
+  out.logistKind=(c.logistKind==='staff'||c.logistKind==='broker')?c.logistKind:null;
   out.portalEnabled=!!c.portalEnabled;
   out.portalPhone=formatPhone(String(c.portalPhone||'').trim());
   out.portalPin=String(c.portalPin||'').trim();
   return out;
 }
 /** «Наша фирма» кабинета перевозчика для тарифа заказчика */
+function companyLogistKind(co){
+  if(!co) return 'broker';
+  if(co.logistKind==='staff'||co.logistKind==='broker') return co.logistKind;
+  const n=typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(co.id).length:0;
+  return n>0?'staff':'broker';
+}
+function isStaffLogistCompany(co){ return companyLogistKind(co)==='staff'; }
+function isBrokerDispatcherCompany(co){ return companyLogistKind(co)==='broker'; }
+function currentLogistKind(){ return companyLogistKind(typeof currentOwnCompany==='function'?currentOwnCompany():null); }
 function carrierOwnCompanyForSpace(spaceId){
   if(spaceId){
     const hit=(state.companies||[]).find(c=>c.spaceId===spaceId && companyHasRole(c,'own'));
@@ -259,6 +269,7 @@ function upsertCompany(raw){
     c.kpp=c.kpp||prev.kpp||'';
     c.address=c.address||prev.address||'';
     if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
+    if(!('logistKind' in (raw||{})) && prev.logistKind) c.logistKind=prev.logistKind;
     if(!('portalEnabled' in raw)){
       c.portalEnabled=!!prev.portalEnabled;
       c.portalPhone=prev.portalPhone||'';
@@ -1032,13 +1043,33 @@ function fillAddressPickers(name){
   if(unloadEl && !unloadEl.value.trim() && (c.unloadingAddresses||[])[0]) unloadEl.value=c.unloadingAddresses[0];
 }
 function fillExecutorUI(){
-  const mode=(($('create-exec-mode')||{}).value)||'own';
+  const broker=typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(typeof currentOwnCompany==='function'?currentOwnCompany():null);
+  const sel=$('create-exec-mode');
+  if(sel){
+    const ownOpt=sel.querySelector('option[value="own"]');
+    if(ownOpt) ownOpt.disabled=!!broker;
+    if(broker && (sel.value==='own'||!sel.value)) sel.value='exchange';
+  }
+  const mode=(($('create-exec-mode')||{}).value)|| (broker?'exchange':'own');
   const ownBox=$('create-own-box');
   const carrierPeople=$('create-carrier-people');
   const exchangeHint=$('create-exchange-hint');
-  if(ownBox) ownBox.style.display=mode==='own'?'block':'none';
+  const execHint=$('create-exec-hint');
+  if(ownBox) ownBox.style.display=(!broker && mode==='own')?'block':'none';
   if(carrierPeople) carrierPeople.style.display=(mode==='carrier' || !!(($('create-carrier-company')||{}).value))?'block':'none';
-  if(exchangeHint) exchangeHint.style.display=mode==='exchange'?'block':'none';
+  if(exchangeHint){
+    exchangeHint.style.display=mode==='exchange'?'block':'none';
+    if(mode==='exchange'){
+      exchangeHint.textContent=broker
+        ?'Диспетчер-посредник: своего транспорта нет. Заявка на биржу — вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.'
+        :'Штатный логист сначала закрывает свои машины. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.';
+    }
+  }
+  if(execHint){
+    execHint.textContent=broker
+      ?'Своего парка нет — вы посредник: перевозчик с биржи или из справочника'
+      :'Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки';
+  }
   const saveBtn=$('create-save');
   if(saveBtn){
     saveBtn.textContent=mode==='exchange'?'Выставить на биржу':(mode==='carrier'?'Назначить перевозчику':'Назначить водителю');

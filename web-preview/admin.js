@@ -143,7 +143,11 @@ function updateAdminChrome(){
       : state.adminFilter==='exchange'?'Биржа'
       : 'Заявки';
     if(title) title.textContent=section;
-    if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}`;
+    const kind=typeof currentLogistKind==='function'?currentLogistKind():'';
+    const kindLabel=kind==='broker'?'диспетчер-посредник':kind==='staff'?'штатный логист':'';
+    if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}${kindLabel?' · '+kindLabel:''}`;
+    const etoNav=document.querySelector('.admin-nav-item[data-nav="eto"]');
+    if(etoNav) etoNav.style.display=kind==='broker'?'none':'';
   }
   syncAdminNav();
   paintAdminOwnerFilters();
@@ -1465,12 +1469,16 @@ function publishToExchange(id){
   billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
     if(!g.ok){ alert(g.message); return; }
     if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
-    const free=typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):[];
+    const free=typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(findCompanyById(o.ownCompanyId)||currentOwnCompany())
+      ? []
+      : (typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):[]);
     if(free.length){
       const plates=free.slice(0,6).map(v=>v.plate).join(', ')+(free.length>6?'…':'');
       if(!confirm(`Свободных своих машин под заявку: ${free.length} (${plates}).\n\nШтатный логист сначала закрывает свой парк. Остаток можно отдать на биржу — там вы заказчик перевозки.\n\nВсё равно выставить на биржу?`)) return;
     } else if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
-      ? 'Своих свободных машин нет. Выставить на биржу? Там вы заказчик перевозки, партнёр везёт, для грузоотправителя исполнителем остаётесь вы.'
+      ? ((typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(findCompanyById(o.ownCompanyId)||currentOwnCompany()))
+        ? 'Своего парка нет — вы диспетчер-посредник. Выставить на биржу? Там вы заказчик перевозки, партнёр везёт, для грузоотправителя исполнителем остаётесь вы.'
+        : 'Своих свободных машин нет. Выставить на биржу? Там вы заказчик перевозки, партнёр везёт, для грузоотправителя исполнителем остаётесь вы.')
       : 'Выставить заказ на биржу для других фирм? Там вы заказчик этой перевозки.')) return;
     o.onExchange=true;
     o.exchangeListedAt=new Date().toISOString();
@@ -1714,8 +1722,11 @@ function renderAdminInboxBoard(orders){
     const k=typeof confirmedBookingDayKey==='function'?confirmedBookingDayKey(o):'';
     if(k) calMarks.push({dayKey:k});
   });
+  const broker=typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(currentOwnCompany());
   const head=`<div class="board-head">
-    <p class="cat-panel-hint">Штатный логист сначала закрывает свои машины. Что не влезает в парк — на биржу: там вы заказчик перевозки. Бронь подтвердите кнопкой — точка в календаре у вас и у грузоотправителя.</p>
+    <p class="cat-panel-hint">${broker
+      ? 'Диспетчер-посредник: своего транспорта нет. Заявки заказчика выставляйте на биржу — там вы заказчик перевозки, партнёр везёт.'
+      : 'Штатный логист сначала закрывает свои машины. Что не влезает в парк — на биржу: там вы заказчик перевозки. Бронь подтвердите кнопкой — точка в календаре у вас и у грузоотправителя.'}</p>
     ${adminOrdersCalHtml(calMarks)}
     ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
@@ -1726,7 +1737,7 @@ function renderAdminInboxBoard(orders){
     </div>
   </div>`;
   if(!orders.length){
-    return `${head}<div class="admin-cards"><div class="empty">Входящих нет. Заявки с портала заказчика «логисту» появляются здесь.</div></div>`;
+    return `${head}<div class="admin-cards"><div class="empty">${broker?'Входящих нет. Заявки заказчика выставляйте на биржу — вы посредник без своего парка.':'Входящих нет. Заявки с портала заказчика «логисту» появляются здесь.'}</div></div>`;
   }
   const myCo=currentOwnCompany();
   const cards=orders.map(o=>{
@@ -1760,6 +1771,13 @@ function renderAdminInboxBoard(orders){
       <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · ${esc(bookedPlate)}`:''}</p>
       ${bookLine}
       ${margin?`<p class="order-money">${esc(margin)}</p>`:''}
+      ${broker?`
+      <p class="hint">Своего парка нет — вы посредник. На бирже вы заказчик перевозки.</p>
+      <div class="ex-actions">
+        <button type="button" class="primary pub-exchange" data-id="${o.id}">На биржу — вы заказчик</button>
+        <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+      </div>
+      `:`
       <p class="hint">${freeList.length
         ?`Свободно своих под заявку: ${freeList.length}. Сначала свой парк, остаток — на биржу (там вы заказчик).`
         :'Свободных своих нет. Остаток на биржу — там вы заказчик перевозки.'}</p>
@@ -1779,7 +1797,7 @@ function renderAdminInboxBoard(orders){
             <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
           </div>
         </div>
-      </div>
+      </div>`}
     </div>`;
   }).join('');
   return `${head}<div class="admin-cards">${cards}</div>`;
@@ -2036,7 +2054,7 @@ function bindAdminCreate(){
     if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
     const g=await billingGuardCurrentAdminWithServer('create_order');
     if(!g.ok){ alert(g.message); return; }
-    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-date')) $('create-vehicle-date').value=''; if($('create-vehicle-time')) $('create-vehicle-time').value=''; ['create-loading-contact-name','create-loading-contact-phone','create-unloading-contact-name','create-unloading-contact-phone'].forEach(id=>{ if($(id)) $(id).value=''; }); if($('create-exec-mode')) $('create-exec-mode').value='own';
+    if($('create-exec-mode')) $('create-exec-mode').value=(typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(currentOwnCompany()))?'exchange':'own';
     ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
     if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
     fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
@@ -2967,6 +2985,7 @@ function openCatalogs(){
     const roles=roleLabels(c);
     const chips=[
       companyHasRole(c,'own')?'<span class="chip hot">наша</span>':'',
+      companyHasRole(c,'own')?(typeof companyLogistKind==='function' && companyLogistKind(c)==='broker'?'<span class="chip">диспетчер</span>':'<span class="chip">штатный логист</span>'):'',
       companyHasRole(c,'customer')?'<span class="chip">заказчик</span>':'',
       companyHasRole(c,'carrier')?'<span class="chip">перевозчик</span>':''
     ].join('');
@@ -3185,6 +3204,14 @@ function openCatalogs(){
       <div class="hint" style="margin:0 0 4px">Телефон контакта — в карточке компании; у водителя с тем же ФИО подтянется сам</div>
       <div id="co-contacts"></div>
       <button type="button" class="secondary" id="co-add-contact">+ Контакт</button>
+      <div id="co-own-kind" style="display:${isOwn?'block':'none'}">
+        <label for="co-logist-kind">Как работает кабинет</label>
+        <select id="co-logist-kind">
+          <option value="staff" ${(typeof companyLogistKind==='function'?companyLogistKind(c):c.logistKind)!=='broker'?'selected':''}>Штатный логист — есть свой парк, сначала грузим свои машины</option>
+          <option value="broker" ${(typeof companyLogistKind==='function'?companyLogistKind(c):c.logistKind)==='broker'?'selected':''}>Диспетчер-посредник — своего транспорта нет, сводим заказчика и перевозчика</option>
+        </select>
+        <p class="hint">Штатный логист управляет загрузкой машин компании. Диспетчер без парка только посредник: заявка на биржу, вы заказчик перевозки.</p>
+      </div>
       <div id="co-own-fleet" style="display:${isOwn?'block':'none'}">
         <h4>Водители фирмы (телефоны)</h4>
         <div class="hint" style="margin:0 0 4px">Парк «нашей фирмы» — ФИО и телефон. Правки сохраняются в справочник водителей.</div>
@@ -3290,7 +3317,10 @@ function openCatalogs(){
       $('co-customer-fields').style.display=$('co-role-c').checked?'block':'none';
       $('co-carrier-fields').style.display=$('co-role-r').checked?'block':'none';
       const ownBox=$('co-own-fleet');
-      if(ownBox) ownBox.style.display=$('co-role-o')&&$('co-role-o').checked?'block':'none';
+      const ownKind=$('co-own-kind');
+      const on=!!($('co-role-o')&&$('co-role-o').checked);
+      if(ownBox) ownBox.style.display=on?'block':'none';
+      if(ownKind) ownKind.style.display=on?'block':'none';
     };
     $('co-role-c').onchange=syncRoleVisibility;
     $('co-role-r').onchange=syncRoleVisibility;
@@ -3377,6 +3407,7 @@ function openCatalogs(){
         unloadingAddresses:roles.includes('customer')?unloads:[],
         phones:c.phones||[],
         spaceId:c.spaceId||currentSpaceId(),
+        logistKind:roles.includes('own')?(((($('co-logist-kind')||{}).value)||'staff')==='broker'?'broker':'staff'):null,
         portalEnabled:roles.includes('customer')&&!!($('co-portal-enabled')&&$('co-portal-enabled').checked),
         portalPhone:formatPhone((($('co-portal-phone')||{}).value||'').trim()),
         portalPin:(($('co-portal-pin')||{}).value||'').trim()

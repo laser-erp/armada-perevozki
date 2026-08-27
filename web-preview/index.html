@@ -44,8 +44,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc17" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc17" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc18" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc18" />
 
 </head>
 <body>
@@ -188,7 +188,7 @@
           <p class="hint" id="cust-route-km-hint">Километраж посчитаем по адресам — вписывать «груз + после» не нужно.</p>
           <label for="cust-fulfillment">Как закрыть рейс</label>
           <select id="cust-fulfillment">
-            <option value="logist">Логисту — как можно скорее (ставка логиста в цене)</option>
+            <option value="logist">Логисту / диспетчеру — как можно скорее (ставка в цене)</option>
             <option value="direct">Свой парк перевозчика — заранее, без срочного подбора</option>
           </select>
           <p class="hint" id="cust-fulfill-hint">Вы говорите диспетчеру: закройте заказ как можно быстрее и готовы оплатить его работу по ставке. Свободную машину можно запросить — бронь подтвердит перевозчик.</p>
@@ -209,7 +209,7 @@
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Календарь броней</h2>
-          <p class="hint">Точка на дате подачи появляется, когда перевозчик подтвердит бронь. Запрос без точки, пока ждёте.</p>
+          <p class="hint">Точка на дате подачи — когда штатный логист подтвердил бронь своей машины или диспетчер нашёл перевозчика.</p>
           <div id="cust-book-cal"></div>
         </section>
         <section class="form-section">
@@ -357,7 +357,7 @@
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Исполнение</h2>
-          <p class="form-section-hint">Свой водитель, партнёр-перевозчик или биржа (если нет свободной машины)</p>
+          <p class="form-section-hint" id="create-exec-hint">Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки</p>
           <div class="form-fields">
             <label for="create-exec-mode">Кто везёт</label>
             <select id="create-exec-mode">
@@ -535,15 +535,15 @@
     </div>
   </div>
 </div>
-  <script src="/store.js?v=2026-08-27-entrybc17"></script>
-<script src="/billing.js?v=2026-08-27-entrybc17"></script>
-<script src="/qrcode.min.js?v=2026-08-27-entrybc17"></script>
-<script src="/entry-share.js?v=2026-08-27-entrybc17"></script>
-<script src="/driver.js?v=2026-08-27-entrybc17"></script>
-<script src="/etrn.js?v=2026-08-27-entrybc17"></script>
-  <script src="/admin.js?v=2026-08-27-entrybc17"></script>
-  <script src="/customer.js?v=2026-08-27-entrybc17"></script>
-  <script src="/app.js?v=2026-08-27-entrybc17"></script>
-<script src="/onboarding.js?v=2026-08-27-entrybc17"></script>
+  <script src="/store.js?v=2026-08-27-entrybc18"></script>
+<script src="/billing.js?v=2026-08-27-entrybc18"></script>
+<script src="/qrcode.min.js?v=2026-08-27-entrybc18"></script>
+<script src="/entry-share.js?v=2026-08-27-entrybc18"></script>
+<script src="/driver.js?v=2026-08-27-entrybc18"></script>
+<script src="/etrn.js?v=2026-08-27-entrybc18"></script>
+  <script src="/admin.js?v=2026-08-27-entrybc18"></script>
+  <script src="/customer.js?v=2026-08-27-entrybc18"></script>
+  <script src="/app.js?v=2026-08-27-entrybc18"></script>
+<script src="/onboarding.js?v=2026-08-27-entrybc18"></script>
 </body>
 </html>
