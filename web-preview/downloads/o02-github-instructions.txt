@@ -1,0 +1,23 @@
+ARMADA O-02 — push ветки cursor/compliance-p0-4317 на GitHub
+============================================================
+
+Статус: блокер — Deploy key не добавлен в репозиторий (или без Allow write).
+
+1. Откройте: https://github.com/laser-erp/armada-perevozki/settings/keys
+2. Add deploy key
+   Title: armada-o02-20260827
+3. Key (скопируйте целиком одну строку):
+   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILSyvSZRK4RizqeFuS9KLzHa02nDPoZEyuwomCwrvFQM armada-o02-20260827
+4. Включите Allow write access → Add key
+
+Fingerprint: SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI
+
+Альтернатива: секрет GITHUB_TOKEN в Cursor Environment (право repo).
+
+Ручной push с ПК:
+  curl -fsSLO https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle
+  git fetch ./armada-compliance-4317.bundle cursor/compliance-p0-4317:cursor/compliance-p0-4317
+  git push -u origin cursor/compliance-p0-4317
+
+Bundle: https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle
+Документация: docs/PUSH_COMPLIANCE_BRANCH.md в ветке compliance
