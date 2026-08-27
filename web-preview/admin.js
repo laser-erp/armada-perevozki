@@ -114,6 +114,7 @@ function setAdminNav(nav){
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
+  if(nav==='links'){ openAdminLinks(); return; }
   if(nav==='eto') state.adminFilter='eto';
   else if(nav==='exchange') state.adminFilter='exchange';
   else {
@@ -219,6 +220,40 @@ function openAdminBilling(){
   if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
   renderAdminBilling();
   show('admin-billing-screen');
+}
+function openAdminLinks(){
+  renderAdminLinks();
+  show('admin-links-screen');
+}
+function adminLinkCard(title, desc, url, share){
+  const s=share&&typeof share==='object'?share:{};
+  return `<section class="admin-link-card">
+    <h3>${esc(title)}</h3>
+    <p class="meta">${esc(desc)}</p>
+    <p class="admin-link-url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>
+    <div class="share-row">
+      <a class="secondary" href="${esc(url)}" target="_blank" rel="noopener">Открыть</a>
+      ${entryShareBlockHtml({kind:s.kind||'customerPortal',url,title:'QR + SMS',carrier:s.carrier||'',phone:s.phone||'',expires:s.expires||''})}
+    </div>
+  </section>`;
+}
+function renderAdminLinks(){
+  const form=$('links-form');
+  if(!form) return;
+  const sid=currentSpaceId();
+  const sp=sid?findSpaceById(sid):null;
+  const co=currentOwnCompany();
+  const carrier=(co&&co.name)||(sp&&sp.name)||'АРМАДА';
+  const portalUrl=sid?customerPortalPageUrl({spaceId:sid}):`${location.origin}/z`;
+  const drvUrl=driverEntryPageUrl();
+  const admUrl=adminEntryPageUrl();
+  form.innerHTML=`<p class="cat-panel-hint">У каждой роли — своя страница входа. Сохраните в закладки или отправьте водителю/заказчику через QR и SMS.</p>
+    ${adminLinkCard('Водитель', 'Смена, ЕТО и заказы в дороге — отдельный вход /v', drvUrl, {kind:'driverEntry',carrier})}
+    ${adminLinkCard('Заказчик', 'Портал вашей фирмы — заявки и статус', portalUrl, {kind:'customerPortal',carrier})}
+    ${adminLinkCard('Администратор', 'Кабинет диспетчера — заявки и справочники', admUrl, {kind:'adminEntry'})}
+    <p class="meta" style="margin-top:12px">Короткий адрес заказчика (/z/…) настраивается в «Тарифы» (супер-админ) или у супер-админа в биллинге space.</p>`;
+  $('links-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireEntryShareButtons(form);
 }
 function renderAdminBilling(){
   migrateBilling();
@@ -355,26 +390,6 @@ function renderAdminBilling(){
     };
   });
   wireEntryShareButtons(form);
-}
-function renderAdminSharePanel(){
-  const el=$('admin-share-panel');
-  if(!el) return;
-  const sid=currentSpaceId();
-  if(!sid){ el.style.display='none'; el.innerHTML=''; return; }
-  const sp=findSpaceById(sid);
-  const co=currentOwnCompany();
-  const carrier=(co&&co.name)||(sp&&sp.name)||'АРМАДА';
-  const portalUrl=customerPortalPageUrl({spaceId:sid});
-  const drvUrl=driverEntryPageUrl();
-  el.innerHTML=`<h4>Ссылки, QR и SMS</h4>
-    <p class="meta" style="margin:0 0 8px">Готовые тексты для заказчиков и водителей — с QR-кодом.</p>
-    <div class="share-row">
-      ${entryShareBlockHtml({kind:'customerPortal',url:portalUrl,title:'Заказчик',carrier})}
-      ${entryShareBlockHtml({kind:'driverEntry',url:drvUrl,title:'Водители',carrier})}
-      ${entryShareBlockHtml({kind:'adminEntry',url:adminEntryPageUrl(),title:'Диспетчер'})}
-    </div>`;
-  el.style.display='block';
-  wireEntryShareButtons(el);
 }
 function renderAdminActivity(){
   migrateAdmins();
@@ -1628,23 +1643,6 @@ function renderAdmin(){
     billBanner.textContent=txt||'';
     billBanner.style.display=txt?'block':'none';
   }
-  const portalBanner=$('admin-portal-banner');
-  if(portalBanner){
-    const sid=currentSpaceId();
-    if(sid){
-      const sp=findSpaceById(sid);
-      const carrier=(currentOwnCompany()||{}).name||(sp&&sp.name)||'';
-      const url=customerPortalPageUrl({spaceId:sid});
-      portalBanner.innerHTML=`Ссылка для заказчиков: <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>
-        ${entryShareBlockHtml({kind:'customerPortal',url,title:'QR + SMS',carrier})}`;
-      portalBanner.style.display='block';
-      wireEntryShareButtons(portalBanner);
-    } else {
-      portalBanner.textContent='';
-      portalBanner.style.display='none';
-    }
-  }
-  renderAdminSharePanel();
   updateAdminChrome();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();

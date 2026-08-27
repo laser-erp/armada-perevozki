@@ -131,8 +131,18 @@ body.entry-customer .entry-aside-carrier-wrap{
   margin:0 12px 10px;padding:12px 14px;border-radius:10px;
   background:rgba(30,90,168,.06);border:1px solid rgba(30,90,168,.18);font-size:.82rem;
 }
-.admin-share-links h4{margin:0 0 8px;font-size:.88rem}
-.admin-share-links .share-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.admin-link-card{
+  background:#fff;border:1px solid var(--border,#e2e8f0);border-radius:12px;
+  padding:14px 16px;margin-bottom:12px;
+}
+.admin-link-card h3{margin:0 0 6px;font-size:1rem}
+.admin-link-url{margin:8px 0;font-size:.85rem;word-break:break-all}
+.admin-link-card .share-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.admin-link-card .share-row a.secondary,.admin-link-card .entry-share-btn{
+  display:inline-flex;align-items:center;justify-content:center;padding:8px 14px;
+  border-radius:8px;font-size:.85rem;font-weight:600;text-decoration:none;
+}
+.admin-link-card .share-row a.secondary{border:1px solid var(--border,#e2e8f0);color:var(--accent,#1e5aa8);background:#fff}
 @media (max-width:768px){
   body.entry-page #driver-login.show .center,
   body.entry-page #admin-pin.show .center,
