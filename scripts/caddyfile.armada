@@ -5,6 +5,10 @@
 :80 {
 	encode gzip
 
+	redir /v /driver.html permanent
+	redir /a /admin.html permanent
+	redir /z /zakaz.html permanent
+
 	# Прокси ЕГРЮЛ ФНС для поиска по ИНН из браузера (без CORS)
 	handle /egrul-api/* {
 		uri strip_prefix /egrul-api
@@ -18,12 +22,6 @@
 	}
 	handle /_/* {
 		reverse_proxy 127.0.0.1:8090
-	}
-	handle /v {
-		redir /driver.html permanent
-	}
-	handle /a {
-		redir /admin.html permanent
 	}
 	handle /z {
 		redir /zakaz.html permanent
