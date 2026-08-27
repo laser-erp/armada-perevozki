@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-backlog1";
+const APP_BUILD="2026-08-27-entryui1";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -194,7 +194,7 @@ function readEntryFromUrl(){
     const path=(location.pathname||'').toLowerCase();
     if(/driver\.html$/i.test(path)||/\/v\/?$/.test(path)) return 'driver';
     if(/admin\.html$/i.test(path)||/\/a\/?$/.test(path)) return 'admin';
-    if(/zakaz\.html$/i.test(path)||/\/z\/?$/.test(path)) return 'customer';
+    if(/zakaz\.html$/i.test(path)||/\/z(\/|$)/.test(path)) return 'customer';
   }catch(_){}
   return null;
 }
@@ -220,7 +220,8 @@ function initEntryFromPage(){
   if(fromUrl) setEntryMode(fromUrl);
   else if(!getEntryMode()){
     const path=(location.pathname||'').toLowerCase();
-    if(/index\.html$/.test(path)||path==='/'||path.endsWith('/')){
+    if((/index\.html$/.test(path)||path==='/'||path.endsWith('/'))
+      && !/\/[avz]\/?$/i.test(path)){
       setEntryMode('admin');
     }
   }
@@ -234,31 +235,42 @@ function entryLoginScreenId(){
 }
 function entryLandingPage(mode){
   const m=normalizeEntryMode(mode)||getEntryMode();
-  if(m==='driver') return 'driver.html';
-  if(m==='admin') return 'admin.html';
-  if(m==='customer') return 'zakaz.html';
-  return 'index.html';
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:'';
+  if(m==='driver') return `${origin}/v`;
+  if(m==='admin') return `${origin}/a`;
+  if(m==='customer'){
+    const sc=getPortalScope();
+    if(sc&&sc.portalSlug) return `${origin}/z/${sc.portalSlug}`;
+    if(sc&&sc.spaceId){
+      const sp=findSpaceById(sc.spaceId);
+      if(sp&&sp.portalSlug) return `${origin}/z/${sp.portalSlug}`;
+    }
+    return `${origin}/z`;
+  }
+  return `${origin}/a`;
 }
 function customerPortalPageUrl(opts){
   try{
-    const u=new URL('zakaz.html', location.href);
     const o=opts&&typeof opts==='object'?opts:{};
-    if(o.companyId) u.searchParams.set('c', o.companyId);
-    else if(o.spaceId) u.searchParams.set('s', o.spaceId);
-    else {
-      const sid=(typeof currentSpaceId==='function'?currentSpaceId():null)||null;
-      if(sid) u.searchParams.set('s', sid);
+    const origin=location.origin;
+    if(o.companyId) return `${origin}/z?c=${encodeURIComponent(o.companyId)}`;
+    let spaceId=o.spaceId;
+    if(!spaceId && typeof currentSpaceId==='function') spaceId=currentSpaceId();
+    if(spaceId){
+      const sp=findSpaceById(spaceId);
+      if(sp&&sp.portalSlug) return `${origin}/z/${encodeURIComponent(sp.portalSlug)}`;
     }
-    return u.href;
+    return `${origin}/z`;
   }catch(_){
-    const q=opts&&opts.companyId?`?c=${encodeURIComponent(opts.companyId)}`
-      :(opts&&opts.spaceId?`?s=${encodeURIComponent(opts.spaceId)}`:'');
-    return `${location.origin}/zakaz.html${q}`;
+    return `${location.origin}/z`;
   }
 }
 const PORTAL_SCOPE_KEY='armada_portal_scope_v1';
 function readPortalScopeFromUrl(){
   try{
+    const path=(location.pathname||'').toLowerCase();
+    const slugM=path.match(/\/z\/([a-z0-9][a-z0-9_-]{2,31})\/?$/i);
+    if(slugM) return {portalSlug:slugM[1].toLowerCase()};
     const q=new URLSearchParams(location.search||'');
     const companyId=String(q.get('c')||q.get('company')||'').trim();
     const spaceId=String(q.get('s')||q.get('space')||'').trim();
@@ -266,6 +278,16 @@ function readPortalScopeFromUrl(){
     if(spaceId) return {spaceId};
   }catch(_){}
   return null;
+}
+function resolvePortalScope(scope){
+  const sc=scope||getPortalScope();
+  if(!sc) return null;
+  if(sc.companyId||sc.spaceId) return sc;
+  if(sc.portalSlug){
+    const sp=findSpaceByPortalSlug(sc.portalSlug);
+    if(sp) return {spaceId:sp.id, portalSlug:sp.portalSlug};
+  }
+  return sc;
 }
 function initPortalScopeFromPage(){
   const scope=readPortalScopeFromUrl();
@@ -282,10 +304,10 @@ function getPortalScope(){
   }catch(_){ return null; }
 }
 function portalScopeCarrierLabel(scope){
-  const sc=scope||getPortalScope();
+  const sc=resolvePortalScope(scope);
   if(!sc) return '';
   if(sc.companyId){
-    const co=findCompanyById(sc.companyId);
+    const co=typeof findCompanyById==='function'?findCompanyById(sc.companyId):null;
     if(co){
       const sp=co.spaceId?findSpaceById(co.spaceId):null;
       return sp?sp.name:(co.name||'');
@@ -293,6 +315,10 @@ function portalScopeCarrierLabel(scope){
   }
   if(sc.spaceId){
     const sp=findSpaceById(sc.spaceId);
+    return sp?sp.name:'';
+  }
+  if(sc.portalSlug){
+    const sp=findSpaceByPortalSlug(sc.portalSlug);
     return sp?sp.name:'';
   }
   return '';
@@ -469,6 +495,9 @@ function routeText(o){
 }
 const $ = id => document.getElementById(id);
 function show(id){
+  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-vehicle-card'||id==='customer-portal'){
+    if(typeof clearEntrySkin==='function') clearEntrySkin();
+  }
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
   const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-vehicle-card'||id==='customer-portal';
@@ -704,12 +733,32 @@ function defaultFirmNameForAdmin(adminName){
   if(n.includes('наволоцк')) return 'ООО «Армада»';
   return adminName||'Фирма';
 }
+function slugifyPortalSlug(name, id){
+  let s=String(name||'').trim().toLowerCase()
+    .replace(/^(ооо|ип|ооо\s+|ип\s+)\s*/i,'')
+    .replace(/[«»"'„]/g,'')
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'')
+    .slice(0,24);
+  if(s.length>=3 && /^[a-z0-9][a-z0-9-]*$/.test(s)) return s;
+  const tail=String(id||'').replace(/-/g,'').slice(0,8);
+  return 'p'+(tail||'x');
+}
+function findSpaceByPortalSlug(slug){
+  const s=String(slug||'').trim().toLowerCase();
+  if(!s) return null;
+  return (state.spaces||[]).find(sp=>String(sp.portalSlug||'').toLowerCase()===s)||null;
+}
 function normalizeSpace(s){
   if(!s||typeof s!=='object') return null;
   const id=s.id||uuid();
   const name=String(s.name||'').trim(); if(!name) return null;
+  let portalSlug=String(s.portalSlug||'').trim().toLowerCase()
+    .replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'').slice(0,32);
+  if(!portalSlug) portalSlug=slugifyPortalSlug(name, id);
   return {
     id, name,
+    portalSlug,
     inn:String(s.inn||'').trim(),
     ogrn:String(s.ogrn||'').trim(),
     kpp:String(s.kpp||'').trim(),
@@ -1062,6 +1111,21 @@ function migrateSpaces(){
   state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
   let changed=false;
+  const slugUsed=new Set();
+  (state.spaces||[]).forEach(sp=>{
+    let slug=String(sp.portalSlug||'').toLowerCase();
+    if(!slug || slugUsed.has(slug)){
+      slug=slugifyPortalSlug(sp.name, sp.id);
+      let n=0;
+      while(slugUsed.has(slug)){
+        n++;
+        slug=slugifyPortalSlug(sp.name, sp.id)+'-'+n;
+      }
+      sp.portalSlug=slug;
+      changed=true;
+    }
+    slugUsed.add(slug);
+  });
   (state.admins||[]).forEach(a=>{
     if(a.spaceId && findSpaceById(a.spaceId)) return;
     const byAdmin=state.spaces.find(s=>s.adminId===a.id);

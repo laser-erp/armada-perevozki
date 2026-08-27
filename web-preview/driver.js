@@ -360,6 +360,7 @@ function openDriverLogin(fromAdmin){
     };
   }
   show('driver-login');
+  applyEntrySkin('driver-login');
   setTimeout(()=>{
     const focusEl=(phoneEl && phoneEl.value)?($('drv-login-pin')||phoneEl):($('drv-login-phone')||phoneEl);
     if(focusEl && focusEl.focus) focusEl.focus();

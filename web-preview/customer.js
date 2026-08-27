@@ -6,7 +6,7 @@ function findCustomerPortalCompany(phone, pin, scope){
   const ph=formatPhone(phone);
   const p=String(pin||'').trim();
   if(!ph||p.length<4) return null;
-  const sc=scope||getPortalScope();
+  const sc=resolvePortalScope(scope||getPortalScope());
   return (state.companies||[]).find(c=>{
     if(sc&&sc.companyId && c.id!==sc.companyId) return false;
     if(sc&&sc.spaceId && c.spaceId!==sc.spaceId) return false;
@@ -58,6 +58,7 @@ function openCustomerLogin(){
   }
   $('cust-login-back').onclick=()=>backFromEntryLogin();
   show('customer-login');
+  applyEntrySkin('customer-login');
   setTimeout(()=>{ try{ (phoneEl||pinEl)?.focus(); }catch(_){} }, 120);
 }
 

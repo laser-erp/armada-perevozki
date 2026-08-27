@@ -256,7 +256,14 @@ function renderAdminBilling(){
         <button type="button" class="primary" data-bill-pay="${esc(sp.id)}">Записать оплату</button>
       </div>
       <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.8rem">Журнал (последние)</summary>${ledger}</details>
-      <p class="meta" style="margin-top:10px">Портал заказчиков: <a href="${esc(customerPortalPageUrl({spaceId:sp.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({spaceId:sp.id}))}</a></p>
+      <p class="meta" style="margin-top:10px">Портал заказчиков:
+        <a href="${esc(customerPortalPageUrl({spaceId:sp.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({spaceId:sp.id}))}</a>
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
+        <label class="meta" for="bill-slug-${esc(sp.id)}">Короткий адрес /z/</label>
+        <input id="bill-slug-${esc(sp.id)}" placeholder="severlog" value="${esc(sp.portalSlug||'')}" style="width:120px" />
+        <button type="button" class="secondary" data-bill-slug="${esc(sp.id)}">Сохранить slug</button>
+      </div>
     </section>`;
   }).join('');
   const form=$('billing-form');
@@ -288,6 +295,22 @@ function renderAdminBilling(){
       const note=(($('bill-pay-note-'+sid)||{}).value||'').trim();
       if(!(amt>0)){ alert('Укажите сумму оплаты'); return; }
       recordManualPayment(sid, amt, note, currentAdmin&&currentAdmin.name);
+      persist();
+      renderAdminBilling();
+    };
+  });
+  form.querySelectorAll('[data-bill-slug]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sid=btn.dataset.billSlug;
+      const sp=findSpaceById(sid);
+      if(!sp) return;
+      let slug=String((($('bill-slug-'+sid)||{}).value||'')).trim().toLowerCase()
+        .replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'').slice(0,32);
+      if(slug.length<3){ alert('Slug от 3 символов: латиница, цифры, дефис'); return; }
+      const clash=(state.spaces||[]).find(s=>s.id!==sid && String(s.portalSlug||'').toLowerCase()===slug);
+      if(clash){ alert('Этот адрес уже у space «'+clash.name+'»'); return; }
+      sp.portalSlug=slug;
+      bumpDataEpoch('portal-slug');
       persist();
       renderAdminBilling();
     };

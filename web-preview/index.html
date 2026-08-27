@@ -22,8 +22,8 @@
   <script>
   (function(){
     try{
-      if(!sessionStorage.getItem('armada-sw-v28')){
-        sessionStorage.setItem('armada-sw-v28','1');
+      if(!sessionStorage.getItem('armada-sw-v29')){
+        sessionStorage.setItem('armada-sw-v29','1');
         if(navigator.serviceWorker){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             regs.forEach(function(r){ r.unregister(); });
@@ -43,7 +43,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="styles.css?v=2026-08-27-backlog1" />
+    <link rel="stylesheet" href="styles.css?v=2026-08-27-entryui1" />
+    <link rel="stylesheet" href="entry.css?v=2026-08-27-entryui1" />
 
 </head>
 <body>
@@ -491,13 +492,13 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-27-backlog1"></script>
-<script src="billing.js?v=2026-08-27-backlog1"></script>
-<script src="driver.js?v=2026-08-27-backlog1"></script>
-<script src="etrn.js?v=2026-08-27-backlog1"></script>
-<script src="admin.js?v=2026-08-27-backlog1"></script>
-<script src="app.js?v=2026-08-27-backlog1"></script>
-<script src="customer.js?v=2026-08-27-backlog1"></script>
-<script src="onboarding.js?v=2026-08-27-backlog1"></script>
+  <script src="store.js?v=2026-08-27-entryui1"></script>
+<script src="billing.js?v=2026-08-27-entryui1"></script>
+<script src="driver.js?v=2026-08-27-entryui1"></script>
+<script src="etrn.js?v=2026-08-27-entryui1"></script>
+<script src="admin.js?v=2026-08-27-entryui1"></script>
+<script src="app.js?v=2026-08-27-entryui1"></script>
+<script src="customer.js?v=2026-08-27-entryui1"></script>
+<script src="onboarding.js?v=2026-08-27-entryui1"></script>
 </body>
 </html>

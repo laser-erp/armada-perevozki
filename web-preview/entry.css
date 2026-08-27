@@ -1,0 +1,100 @@
+/* АРМАДА — оформление отдельных входов (/v /a /z) */
+body.entry-page{
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  background:var(--entry-bg, var(--bg0));
+}
+body.entry-page .phone{
+  max-width:none;width:100%;height:auto;min-height:100dvh;max-height:none;
+  margin:0;background:transparent;overflow:visible;
+}
+body.entry-page .screen{
+  position:relative;inset:auto;min-height:100dvh;
+}
+body.entry-page #driver-login.show,
+body.entry-page #admin-pin.show,
+body.entry-page #customer-login.show{
+  display:flex;align-items:stretch;justify-content:center;
+  padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0);
+}
+body.entry-page #driver-login.show .center,
+body.entry-page #admin-pin.show .center,
+body.entry-page #customer-login.show .center{
+  flex:1;flex-direction:row;align-items:center;justify-content:center;
+  gap:clamp(20px,4vw,48px);max-width:1040px;margin:0 auto;
+  padding:28px 20px 40px;text-align:left;width:100%;
+}
+.entry-aside{
+  flex:1 1 320px;max-width:440px;color:var(--entry-aside-text,#1f2937);
+}
+.entry-aside-inner{padding:8px 0}
+.entry-aside-badge{
+  display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--entry-accent);margin-bottom:12px;
+}
+.entry-aside h1{
+  margin:0 0 12px;font-size:clamp(1.45rem,3vw,2rem);font-weight:700;line-height:1.2;
+  color:var(--entry-aside-title,#111827);
+}
+.entry-aside-lead{
+  margin:0 0 16px;font-size:1rem;line-height:1.5;color:var(--entry-aside-muted,#4b5563);
+}
+.entry-aside-list{
+  margin:0;padding:0;list-style:none;font-size:.92rem;line-height:1.45;
+}
+.entry-aside-list li{
+  padding:8px 0;border-bottom:1px solid var(--entry-aside-border,rgba(0,0,0,.06));
+  color:var(--entry-aside-muted,#4b5563);
+}
+.entry-aside-list li::before{
+  content:"✓";color:var(--entry-accent);font-weight:700;margin-right:8px;
+}
+.entry-aside-foot{margin-top:20px;font-size:.8rem;color:var(--entry-aside-muted,#6b7280)}
+.entry-aside-foot a{color:var(--entry-accent);font-weight:600}
+.entry-aside-carrier{
+  font-size:1.1rem;font-weight:700;color:var(--entry-aside-title,#111827);
+  margin:0 0 4px;
+}
+body.entry-page .auth-panel{
+  flex:0 1 380px;width:100%;max-width:380px;
+  background:#fff;border-radius:16px;padding:24px 22px;
+  box-shadow:0 12px 40px rgba(15,23,42,.12),0 2px 8px rgba(15,23,42,.06);
+  border:1px solid rgba(0,0,0,.06);
+  border-top:4px solid var(--entry-accent,#ef4444);
+}
+body.entry-page .auth-panel .logo{width:56px;margin-bottom:4px}
+body.entry-page .auth-panel h2{font-size:1.2rem}
+body.entry-page .auth-back{
+  font-size:.85rem;color:var(--entry-accent);border:0;background:transparent;
+  cursor:pointer;padding:0;margin-bottom:8px;font-weight:600;
+}
+body.entry-driver{
+  --entry-accent:#EF4444;
+  --entry-bg:linear-gradient(145deg,#0f172a 0%,#1e293b 42%,#3f1d1d 100%);
+  --entry-aside-text:#f8fafc;
+  --entry-aside-title:#fff;
+  --entry-aside-muted:#cbd5e1;
+  --entry-aside-border:rgba(255,255,255,.12);
+}
+body.entry-admin{
+  --entry-accent:#1e5aa8;
+  --entry-bg:linear-gradient(160deg,#eef4fb 0%,#f9fafb 45%,#e8eef5 100%);
+}
+body.entry-customer{
+  --entry-accent:#1e5aa8;
+  --entry-bg:linear-gradient(160deg,#f8fafc 0%,#eef4fb 100%);
+}
+body.entry-customer .entry-aside-carrier-wrap{
+  background:rgba(30,90,168,.08);border:1px solid rgba(30,90,168,.15);
+  border-radius:12px;padding:14px 16px;margin-bottom:16px;
+}
+@media (max-width:768px){
+  body.entry-page #driver-login.show .center,
+  body.entry-page #admin-pin.show .center,
+  body.entry-page #customer-login.show .center{
+    flex-direction:column;align-items:stretch;text-align:center;
+  }
+  .entry-aside{max-width:none;text-align:center}
+  .entry-aside-list li{text-align:left}
+  body.entry-page .auth-panel{max-width:none}
+}

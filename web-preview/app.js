@@ -3335,6 +3335,7 @@ function updateSyncHint(){
 function openAdminLogin(){
   migrateAdmins();
   if(restoreAdminSession()){
+    clearEntrySkin();
     show('admin');
     renderAdmin();
     if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
@@ -3346,11 +3347,76 @@ function openAdminLogin(){
   const pinErr=$('pin-error');
   if(pinErr) pinErr.textContent='';
   show('admin-pin');
+  applyEntrySkin('admin-pin');
+}
+const ENTRY_ASIDE={
+  driver:{
+    badge:'Водитель',
+    title:'В дороге — всё в одном месте',
+    lead:'Смена, ЕТО и заказы на телефоне. Не нужно устанавливать приложение — откройте ссылку и добавьте на экран.',
+    items:['Открыть и закрыть смену','Пройти ЕТО перед выездом','Заявки, одометры, статусы'],
+    foot:'<a href="help.html#driver">Инструкция для водителя</a> · <a href="kp.html">О сервисе</a>'
+  },
+  admin:{
+    badge:'Администратор',
+    title:'Кабинет диспетчера',
+    lead:'Заявки, внутренняя биржа между перевозчиками, справочники и ЭТрН — для микро-парка.',
+    items:['Создание и контроль заявок','Биржа и назначение водителей','Водители, авто, тарифы'],
+    foot:'<a href="help.html#admin">Помощь</a> · <a href="kp.html">Пилот и тарифы</a>'
+  },
+  customer:{
+    badge:'Заказчик',
+    title:'Портал заказчика',
+    lead:'Отправьте заявку и смотрите расчёт минимальной цены. Статус заказа — в личном кабинете.',
+    items:['Новая заявка с телефона','Минимальная цена до отправки','Статус: биржа, назначен, в работе'],
+    foot:'<a href="help.html#customer">Как это работает</a>'
+  }
+};
+function clearEntrySkin(){
+  try{
+    document.body.classList.remove('entry-page','entry-driver','entry-admin','entry-customer');
+    document.querySelectorAll('.entry-aside').forEach(el=>el.remove());
+  }catch(_){}
+}
+function applyEntrySkin(screenId){
+  const mode=getEntryMode();
+  if(!mode || mode==='roles'){ clearEntrySkin(); return; }
+  const screen=$(screenId||entryLoginScreenId());
+  if(!screen||!screen.classList.contains('show')) return;
+  document.body.classList.add('entry-page','entry-'+mode);
+  if(screen.querySelector('.entry-aside')) return;
+  const cfg=ENTRY_ASIDE[mode];
+  if(!cfg) return;
+  const aside=document.createElement('div');
+  aside.className='entry-aside';
+  let carrierBlock='';
+  if(mode==='customer'){
+    const label=portalScopeCarrierLabel();
+    if(label){
+      carrierBlock=`<div class="entry-aside-carrier-wrap">
+        <p class="entry-aside-carrier">${esc(label)}</p>
+        <p class="entry-aside-lead" style="margin:0">Ваш перевозчик</p>
+      </div>`;
+    }
+  }
+  aside.innerHTML=`
+    <div class="entry-aside-inner">
+      ${carrierBlock}
+      <span class="entry-aside-badge">${esc(cfg.badge)}</span>
+      <h1>${esc(cfg.title)}</h1>
+      <p class="entry-aside-lead">${esc(cfg.lead)}</p>
+      <ul class="entry-aside-list">${(cfg.items||[]).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+      <p class="entry-aside-foot">${cfg.foot||''}</p>
+    </div>`;
+  const center=screen.querySelector('.center');
+  if(center) center.insertBefore(aside, center.firstChild);
 }
 function showDefaultAfterSplash(){
   initEntryFromPage();
+  initPortalScopeFromPage();
   const entryId=entryLoginScreenId();
   if(entryId==='roles'){
+    clearEntrySkin();
     show('roles');
     if(window.ArmadaOnboarding) ArmadaOnboarding.showRolesWelcome();
     return;

@@ -2,27 +2,14 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>АРМАДА — портал заказчика</title>
-  <meta name="theme-color" content="#1e5aa8" />
+  <meta http-equiv="refresh" content="0;url=/z" />
+  <title>АРМАДА — заказчик</title>
   <script>
   (function(){
-    try{ sessionStorage.setItem('armada_entry_mode_v1','customer'); }catch(_){}
-    var u=new URL('index.html', location.href);
-    u.searchParams.set('entry','customer');
-    var sq=new URLSearchParams(location.search||'');
-    ['s','space','c','company'].forEach(function(k){
-      var v=sq.get(k);
-      if(!v) return;
-      if(k==='space') u.searchParams.set('s', v);
-      else if(k==='company') u.searchParams.set('c', v);
-      else u.searchParams.set(k, v);
-    });
-    location.replace(u.href);
+    var q=location.search||'';
+    location.replace('/z'+(q&&q.charAt(0)==='?'?q:''));
   })();
   </script>
 </head>
-<body>
-  <p><a href="index.html?entry=customer">Портал заказчика АРМАДА</a></p>
-</body>
+<body><p><a href="/z">Портал заказчика</a></p></body>
 </html>
