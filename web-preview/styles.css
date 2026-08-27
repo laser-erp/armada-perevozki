@@ -774,6 +774,26 @@
       background:var(--surface);border-bottom:1px solid var(--border)
     }
     .admin-topbar h1{margin:0;flex:1;min-width:0;font-size:1rem;font-weight:700}
+    .admin-topbar h1.with-park-ex{
+      position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)
+    }
+    .park-ex-switch{
+      display:flex;flex:1;min-width:0;max-width:260px;gap:3px;padding:3px;
+      background:var(--field);border:1px solid var(--border);border-radius:var(--pill)
+    }
+    .park-ex-switch button{
+      flex:1;border:0;border-radius:calc(var(--pill) - 2px);padding:8px 10px;min-height:36px;
+      background:transparent;color:var(--text);font-weight:700;font-size:.85rem;cursor:pointer
+    }
+    .park-ex-switch button.on{background:var(--accent);color:#fff}
+    .park-ex-switch button:disabled{opacity:.4;cursor:not-allowed}
+    .create-exec-switch{max-width:none;width:100%;margin:0 0 6px}
+    .create-exec-label{display:block;font-size:.75rem;color:var(--muted);margin:0 0 4px}
+    button.text-link{
+      border:0;background:transparent;color:var(--accent);font-weight:600;font-size:.8rem;
+      padding:0;min-height:auto;width:auto;cursor:pointer;text-decoration:underline
+    }
+    button.text-link.on-link{color:var(--text);text-decoration:none}
     .admin-menu-toggle{
       display:none;border:1px solid var(--border);border-radius:var(--radius);background:var(--field);
       color:var(--text);width:40px;height:40px;padding:0;font-size:1.1rem;cursor:pointer;flex:0 0 auto
@@ -782,6 +802,8 @@
       width:auto!important;border:0;border-radius:var(--radius);padding:8px 14px;min-height:40px;
       background:var(--accent);color:#fff;font-weight:700;font-size:.85rem;cursor:pointer;flex:0 0 auto
     }
+    .park-ex-cta{display:flex;flex-direction:row;gap:6px;margin-top:10px}
+    .park-ex-cta button{flex:1;width:auto!important}
     .admin-content{flex:1;min-height:0;overflow:auto}
     .admin-sidebar-backdrop{display:none;border:0;padding:0;margin:0;width:auto;background:transparent}
     @media (max-width:799px){
@@ -791,6 +813,7 @@
       }
       .admin-sidebar.open{transform:translateX(0)}
       .admin-menu-toggle{display:inline-flex;align-items:center;justify-content:center}
+      .admin-topbar .park-ex-switch{max-width:none}
       .admin-sidebar-backdrop{
         display:none;position:absolute;inset:0;background:rgba(17,24,39,.35);z-index:11;cursor:pointer
       }
@@ -869,6 +892,8 @@
     @media (max-width:380px){
       .driver-who h1{font-size:.92rem}
       .admin-top-cta{padding:8px 10px;font-size:.78rem}
+      .park-ex-switch{max-width:none;font-size:.8rem}
+      .park-ex-switch button{padding:8px 8px;font-size:.8rem}
       .stat-row{grid-template-columns:1fr 1fr 1fr;gap:4px}
     }
     @media (prefers-reduced-motion:reduce){

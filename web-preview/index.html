@@ -23,8 +23,8 @@
   <script>
   (function(){
     try{
-      if(!sessionStorage.getItem('armada-sw-v32')){
-        sessionStorage.setItem('armada-sw-v32','1');
+      if(!sessionStorage.getItem('armada-sw-v33')){
+        sessionStorage.setItem('armada-sw-v33','1');
         if(navigator.serviceWorker){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             regs.forEach(function(r){ r.unregister(); });
@@ -44,8 +44,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc18" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc18" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc19" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc19" />
 
 </head>
 <body>
@@ -69,7 +69,7 @@
       </button>
       <button type="button" class="secondary role-btn" id="role-admin">
         <span class="role-btn-title">Администратор</span>
-        <span class="role-btn-desc">Заявки, биржа и справочники</span>
+        <span class="role-btn-desc">Парк, биржа и справочники</span>
       </button>
       <button type="button" class="secondary role-btn" id="role-customer">
         <span class="role-btn-title">Заказчик</span>
@@ -229,7 +229,7 @@
         </div>
         <div class="admin-sidebar-user" id="admin-sidebar-user"></div>
         <nav class="admin-sidebar-nav">
-          <button type="button" class="admin-nav-item on" data-nav="orders">Заявки</button>
+          <button type="button" class="admin-nav-item on" data-nav="orders">Парк</button>
           <button type="button" class="admin-nav-item" data-nav="eto">ЕТО</button>
           <button type="button" class="admin-nav-item" data-nav="exchange">Биржа</button>
           <button type="button" class="admin-nav-item" data-nav="catalogs" id="admin-catalogs">Справочники</button>
@@ -247,7 +247,11 @@
       <div class="admin-main">
         <header class="admin-topbar">
           <button type="button" class="admin-menu-toggle" id="admin-menu-toggle" aria-label="Меню">☰</button>
-          <h1 id="admin-title">Заявки</h1>
+          <h1 id="admin-title">Парк</h1>
+          <div class="park-ex-switch" id="admin-park-ex" role="tablist" aria-label="Парк или биржа">
+            <button type="button" class="on" data-park-ex="park" id="admin-goto-park">Парк</button>
+            <button type="button" data-park-ex="exchange" id="admin-goto-exchange">Биржа</button>
+          </div>
           <button type="button" class="admin-top-cta" id="admin-new">+ Заказ</button>
         </header>
         <div class="filters" id="admin-filters">
@@ -359,12 +363,17 @@
           <h2 class="form-section-title">Исполнение</h2>
           <p class="form-section-hint" id="create-exec-hint">Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки</p>
           <div class="form-fields">
-            <label for="create-exec-mode">Кто везёт</label>
-            <select id="create-exec-mode">
+            <span class="create-exec-label" id="create-exec-mode-label">Кто везёт</span>
+            <div class="park-ex-switch create-exec-switch" id="create-exec-switch" role="group" aria-labelledby="create-exec-mode-label">
+              <button type="button" data-exec="own" class="on">Парк</button>
+              <button type="button" data-exec="exchange">Биржа</button>
+            </div>
+            <select id="create-exec-mode" hidden aria-hidden="true">
               <option value="own">Наш водитель</option>
               <option value="carrier">Водитель перевозчика</option>
               <option value="exchange">На биржу</option>
             </select>
+            <p class="hint" id="create-exec-carrier-wrap"><button type="button" class="text-link" id="create-exec-carrier">Перевозчик из справочника</button></p>
             <div id="create-own-box">
               <div class="hint" id="create-fleet-hint" style="margin:0 0 6px">Авто и водитель — только парк выбранной фирмы</div>
               <div class="form-pair">
@@ -535,15 +544,15 @@
     </div>
   </div>
 </div>
-  <script src="/store.js?v=2026-08-27-entrybc18"></script>
-<script src="/billing.js?v=2026-08-27-entrybc18"></script>
-<script src="/qrcode.min.js?v=2026-08-27-entrybc18"></script>
-<script src="/entry-share.js?v=2026-08-27-entrybc18"></script>
-<script src="/driver.js?v=2026-08-27-entrybc18"></script>
-<script src="/etrn.js?v=2026-08-27-entrybc18"></script>
-  <script src="/admin.js?v=2026-08-27-entrybc18"></script>
-  <script src="/customer.js?v=2026-08-27-entrybc18"></script>
-  <script src="/app.js?v=2026-08-27-entrybc18"></script>
-<script src="/onboarding.js?v=2026-08-27-entrybc18"></script>
+  <script src="/store.js?v=2026-08-27-entrybc19"></script>
+<script src="/billing.js?v=2026-08-27-entrybc19"></script>
+<script src="/qrcode.min.js?v=2026-08-27-entrybc19"></script>
+<script src="/entry-share.js?v=2026-08-27-entrybc19"></script>
+<script src="/driver.js?v=2026-08-27-entrybc19"></script>
+<script src="/etrn.js?v=2026-08-27-entrybc19"></script>
+  <script src="/admin.js?v=2026-08-27-entrybc19"></script>
+  <script src="/customer.js?v=2026-08-27-entrybc19"></script>
+  <script src="/app.js?v=2026-08-27-entrybc19"></script>
+<script src="/onboarding.js?v=2026-08-27-entrybc19"></script>
 </body>
 </html>

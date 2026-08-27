@@ -106,7 +106,19 @@ function syncAdminNav(){
   const filters=$('admin-filters');
   if(filters) filters.style.display=(nav==='orders')?'flex':'none';
   const cta=$('admin-new');
-  if(cta) cta.style.display=(nav==='orders')?'':'none';
+  if(cta) cta.style.display=(nav==='orders'||nav==='exchange')?'':'none';
+  const sw=$('admin-park-ex');
+  const title=$('admin-title');
+  const showSwitch=nav==='orders'||nav==='exchange';
+  if(sw){
+    sw.hidden=!showSwitch;
+    sw.querySelectorAll('[data-park-ex]').forEach(b=>{
+      const on=(b.dataset.parkEx==='exchange' && nav==='exchange') || (b.dataset.parkEx==='park' && nav==='orders');
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', on?'true':'false');
+    });
+  }
+  if(title) title.classList.toggle('with-park-ex', showSwitch);
 }
 function setAdminNav(nav){
   if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
@@ -134,14 +146,14 @@ function updateAdminChrome(){
   const title=$('admin-title');
   const userEl=$('admin-sidebar-user');
   if(!currentAdmin){
-    if(title) title.textContent='Заявки';
+    if(title) title.textContent='Парк';
     if(userEl) userEl.textContent='';
   } else {
     const sp=findSpaceById(currentAdmin.spaceId);
     const firm=sp?sp.name:currentAdmin.name;
     const section=state.adminFilter==='eto'?'ЕТО'
       : state.adminFilter==='exchange'?'Биржа'
-      : 'Заявки';
+      : 'Парк';
     if(title) title.textContent=section;
     const kind=typeof currentLogistKind==='function'?currentLogistKind():'';
     const kindLabel=kind==='broker'?'диспетчер-посредник':kind==='staff'?'штатный логист':'';
@@ -1117,7 +1129,7 @@ function adminOrderCardHtml(o){
     typeof isBookingRequested==='function' && isBookingRequested(o) && isMyFirmOrder(o)
       ?`<button type="button" class="secondary in-book-no" data-id="${o.id}">Отклонить бронь</button>`:'',
     !onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)
-      ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:'',
+      ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">Биржа</button>`:'',
     canReturnOrderToExchange(o)
       ?`<button type="button" class="secondary ret-exchange" data-id="${o.id}">На биржу снова</button>`:'',
     !looksClosedOrder(o)&&!o.cancelledAt
@@ -1691,7 +1703,7 @@ function renderAdminExchangeBoard(orders){
           <label for="ex-plate-${o.id}">Авто под требования</label>
           <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
           <div class="ex-actions">
-            <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить свой парк</button>
+            <button type="button" class="primary ex-assign" data-id="${o.id}">Парк</button>
             <div class="row">
               <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
               <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
@@ -1774,13 +1786,13 @@ function renderAdminInboxBoard(orders){
       ${broker?`
       <p class="hint">Своего парка нет — вы посредник. На бирже вы заказчик перевозки.</p>
       <div class="ex-actions">
-        <button type="button" class="primary pub-exchange" data-id="${o.id}">На биржу — вы заказчик</button>
+        <button type="button" class="primary pub-exchange" data-id="${o.id}">Биржа</button>
         <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
       </div>
       `:`
       <p class="hint">${freeList.length
-        ?`Свободно своих под заявку: ${freeList.length}. Сначала свой парк, остаток — на биржу (там вы заказчик).`
-        :'Свободных своих нет. Остаток на биржу — там вы заказчик перевозки.'}</p>
+        ?`Свободно своих под заявку: ${freeList.length}. Сначала Парк, остаток — Биржа (там вы заказчик).`
+        :'Свободных своих нет. Остаток — Биржа, там вы заказчик перевозки.'}</p>
       <div class="ex-assign-box">
         ${reqBook?`<div class="ex-actions" style="margin-bottom:8px">
           <button type="button" class="primary in-book-ok" data-id="${o.id}">Подтвердить бронь</button>
@@ -1790,13 +1802,11 @@ function renderAdminInboxBoard(orders){
         <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
         <label for="ex-plate-${o.id}">Авто</label>
         <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
-        <div class="ex-actions">
-          <button type="button" class="${freeList.length?'primary':'secondary'} ex-assign" data-id="${o.id}">Назначить свой парк</button>
-          <div class="row">
-            <button type="button" class="${freeList.length?'secondary':'primary'} pub-exchange" data-id="${o.id}">${freeList.length?'Остаток на биржу':'На биржу — вы заказчик'}</button>
-            <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
-          </div>
+        <div class="park-ex-cta">
+          <button type="button" class="${freeList.length?'primary':'secondary'} ex-assign" data-id="${o.id}">Парк</button>
+          <button type="button" class="${freeList.length?'secondary':'primary'} pub-exchange" data-id="${o.id}">Биржа</button>
         </div>
+        <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
       </div>`}
     </div>`;
   }).join('');
@@ -2024,9 +2034,8 @@ function fillCreateSelects(){
   const preferred=(currentOwnCompany()||{}).id;
   fillOwnCompanySelect('create-own-company', preferred);
   const ownEl=$('create-own-company');
-  if(ownEl && !ownEl._fleetBound){
-    ownEl._fleetBound=true;
-    ownEl.onchange=()=>fillCreateFleetSelects();
+  if(ownEl){
+    ownEl.onchange=()=>{ fillCreateFleetSelects(); if(typeof fillExecutorUI==='function') fillExecutorUI(); };
   }
   fillCreateFleetSelects();
 }
@@ -2057,7 +2066,7 @@ function bindAdminCreate(){
     if($('create-exec-mode')) $('create-exec-mode').value=(typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(currentOwnCompany()))?'exchange':'own';
     ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
     if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
-    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay();
     const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };

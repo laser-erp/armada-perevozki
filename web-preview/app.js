@@ -1055,6 +1055,36 @@ function fillExecutorUI(){
   const carrierPeople=$('create-carrier-people');
   const exchangeHint=$('create-exchange-hint');
   const execHint=$('create-exec-hint');
+  const sw=$('create-exec-switch');
+  if(sw){
+    sw.style.display=broker?'none':'flex';
+    sw.querySelectorAll('[data-exec]').forEach(b=>{
+      const hide=broker && b.dataset.exec==='own';
+      b.hidden=hide;
+      b.disabled=hide;
+      b.classList.toggle('on', !hide && b.dataset.exec===mode);
+      if(!b._wired){
+        b._wired=true;
+        b.onclick=()=>{
+          const s=$('create-exec-mode');
+          if(s) s.value=b.dataset.exec;
+          fillExecutorUI();
+        };
+      }
+    });
+  }
+  const carBtn=$('create-exec-carrier');
+  const carWrap=$('create-exec-carrier-wrap');
+  if(carBtn && !carBtn._wired){
+    carBtn._wired=true;
+    carBtn.onclick=()=>{
+      const s=$('create-exec-mode');
+      if(s) s.value='carrier';
+      fillExecutorUI();
+    };
+  }
+  if(carBtn) carBtn.classList.toggle('on-link', mode==='carrier');
+  if(carWrap) carWrap.style.display=broker?'none':'block';
   if(ownBox) ownBox.style.display=(!broker && mode==='own')?'block':'none';
   if(carrierPeople) carrierPeople.style.display=(mode==='carrier' || !!(($('create-carrier-company')||{}).value))?'block':'none';
   if(exchangeHint){
@@ -3758,6 +3788,9 @@ $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
 $('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
 document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
   b.onclick=()=>setAdminNav(b.dataset.nav);
+});
+document.querySelectorAll('#admin-park-ex [data-park-ex]').forEach(b=>{
+  b.onclick=()=>setAdminNav(b.dataset.parkEx==='exchange'?'exchange':'orders');
 });
 updateAdminChrome();
 $('btn-cabinet').onclick=showCabinet;
