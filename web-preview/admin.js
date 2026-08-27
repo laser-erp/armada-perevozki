@@ -495,7 +495,7 @@ function renderAdminActivity(){
             </div>
             <div class="item-actions">
               <button type="button" class="primary" data-save-adm="${i}">Сохранить</button>
-              <button type="button" class="secondary" data-del-adm="${a.id}">Удал.</button>
+              ${a.isSuper?'<span class="hint">Супер админа нельзя удалить</span>':`<button type="button" class="secondary" data-del-adm="${a.id}">Удал.</button>`}
             </div>
           </div>`;
         }).join('')}
@@ -590,7 +590,7 @@ function renderAdminActivity(){
     const adm=state.admins.find(a=>a.id===id);
     if(!adm) return;
     if(adm.id===currentAdmin?.id){ alert('Нельзя удалить себя, пока вы в системе'); return; }
-    if(adm.isSuper && state.admins.filter(a=>a.isSuper).length<=1){ alert('Нельзя удалить последнего супер админа'); return; }
+    if(adm.isSuper){ alert('Супер админа нельзя удалить'); return; }
     if(!confirm(`Удалить администратора ${adm.name}?`)) return;
     state.admins=state.admins.filter(a=>a.id!==id);
     persist(); renderAdminActivity();
