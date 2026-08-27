@@ -22,8 +22,8 @@
   <script>
   (function(){
     try{
-      if(!sessionStorage.getItem('armada-sw-v27')){
-        sessionStorage.setItem('armada-sw-v27','1');
+      if(!sessionStorage.getItem('armada-sw-v28')){
+        sessionStorage.setItem('armada-sw-v28','1');
         if(navigator.serviceWorker){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             regs.forEach(function(r){ r.unregister(); });
@@ -43,7 +43,7 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="styles.css?v=2026-08-27-entries1" />
+    <link rel="stylesheet" href="styles.css?v=2026-08-27-backlog1" />
 
 </head>
 <body>
@@ -90,14 +90,21 @@
       <button type="button" class="auth-back" id="driver-login-back">← Назад</button>
       <img class="logo" src="logo.png" alt="АРМАДА" />
       <h2>Вход водителя</h2>
-      <div class="sub">Телефон и PIN из справочника</div>
+      <div class="sub">Сначала телефон — затем PIN</div>
       <label for="drv-login-phone">Телефон</label>
       <input id="drv-login-phone" inputmode="tel" placeholder="+79650730002" autocomplete="tel" />
-      <label for="drv-login-pin">PIN</label>
-      <input id="drv-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      <div id="driver-pick-panel" style="display:none">
+        <p class="hint">Несколько профилей на этот телефон — выберите фирму</p>
+        <div id="driver-pick-list"></div>
+      </div>
+      <div id="drv-login-pin-wrap" style="display:none">
+        <label for="drv-login-pin">PIN</label>
+        <input id="drv-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      </div>
       <div class="error" id="drv-login-error"></div>
-      <button class="primary" id="drv-login-ok">Войти</button>
-      <div class="hint">PIN задаёт админ в «Справочники → Водители». Если вы также админ — можно тот же PIN, что для входа в админку.</div>
+      <button class="primary" id="drv-login-phone-ok">Продолжить</button>
+      <button class="primary" id="drv-login-ok" style="display:none">Войти</button>
+      <div class="hint">PIN задаёт админ в «Справочники → Водители».</div>
     </div>
   </div></div>
 
@@ -123,6 +130,7 @@
       <img class="logo" src="logo.png" alt="АРМАДА" />
       <h2>Вход заказчика</h2>
       <div class="sub">Телефон и PIN из карточки заказчика</div>
+      <p class="hint" id="cust-login-scope" style="display:none"></p>
       <label for="cust-login-phone">Телефон</label>
       <input id="cust-login-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
       <label for="cust-login-pin">PIN</label>
@@ -138,7 +146,8 @@
       <header class="form-topbar">
         <button type="button" class="form-back" id="cust-portal-back">← Выход</button>
         <h1 id="cust-portal-head">Заказчик</h1>
-        <a href="help.html" class="hint" style="margin-left:auto;font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
+        <button type="button" class="hint" id="cust-notify-toggle" style="margin-left:auto;font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer">Уведомления</button>
+        <a href="help.html" class="hint" style="font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
       </header>
       <div class="admin-form-scroll">
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
@@ -215,6 +224,7 @@
         </div>
         <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
         <div class="hint" id="admin-billing-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);font-size:.78rem"></div>
+        <div class="hint" id="admin-portal-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(30,90,168,.08);border:1px solid rgba(30,90,168,.25);font-size:.78rem"></div>
         <div class="table-wrap admin-content" id="admin-list"></div>
       </div>
     </div>
@@ -397,6 +407,7 @@
       <div class="admin-form-actions" id="detail-actions" style="display:none">
         <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
         <button class="primary" id="detail-save">Сохранить</button>
+        <button class="secondary" id="detail-return-exchange" style="display:none">На биржу снова</button>
         <button class="secondary" id="detail-cancel-order" style="display:none">Отменить заказ</button>
       </div>
     </div>
@@ -480,13 +491,13 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-27-entries1"></script>
-<script src="billing.js?v=2026-08-27-entries1"></script>
-<script src="driver.js?v=2026-08-27-entries1"></script>
-<script src="etrn.js?v=2026-08-27-entries1"></script>
-<script src="admin.js?v=2026-08-27-entries1"></script>
-<script src="app.js?v=2026-08-27-entries1"></script>
-<script src="customer.js?v=2026-08-27-entries1"></script>
-<script src="onboarding.js?v=2026-08-27-entries1"></script>
+  <script src="store.js?v=2026-08-27-backlog1"></script>
+<script src="billing.js?v=2026-08-27-backlog1"></script>
+<script src="driver.js?v=2026-08-27-backlog1"></script>
+<script src="etrn.js?v=2026-08-27-backlog1"></script>
+<script src="admin.js?v=2026-08-27-backlog1"></script>
+<script src="app.js?v=2026-08-27-backlog1"></script>
+<script src="customer.js?v=2026-08-27-backlog1"></script>
+<script src="onboarding.js?v=2026-08-27-backlog1"></script>
 </body>
 </html>

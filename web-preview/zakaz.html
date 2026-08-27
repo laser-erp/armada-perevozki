@@ -5,10 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>АРМАДА — портал заказчика</title>
   <meta name="theme-color" content="#1e5aa8" />
-  <link rel="canonical" href="index.html?entry=customer" />
   <script>
-  try{ sessionStorage.setItem('armada_entry_mode_v1','customer'); }catch(_){}
-  location.replace('index.html?entry=customer');
+  (function(){
+    try{ sessionStorage.setItem('armada_entry_mode_v1','customer'); }catch(_){}
+    var u=new URL('index.html', location.href);
+    u.searchParams.set('entry','customer');
+    var sq=new URLSearchParams(location.search||'');
+    ['s','space','c','company'].forEach(function(k){
+      var v=sq.get(k);
+      if(!v) return;
+      if(k==='space') u.searchParams.set('s', v);
+      else if(k==='company') u.searchParams.set('c', v);
+      else u.searchParams.set(k, v);
+    });
+    location.replace(u.href);
+  })();
   </script>
 </head>
 <body>

@@ -239,6 +239,93 @@ function driverPickRows(preferName){
   });
   return rows;
 }
+let driverLoginStep='phone';
+let driverLoginCandidates=[];
+let driverLoginSelected=null;
+function driverLoginPhoneEl(){ return $('drv-login-phone'); }
+function driverLoginPinWrap(){ return $('drv-login-pin-wrap'); }
+function driverLoginPickPanel(){ return $('driver-pick-panel'); }
+function resetDriverLoginUi(){
+  driverLoginStep='phone';
+  driverLoginCandidates=[];
+  driverLoginSelected=null;
+  const pinWrap=driverLoginPinWrap();
+  const pick=driverLoginPickPanel();
+  const phoneOk=$('drv-login-phone-ok');
+  const loginOk=$('drv-login-ok');
+  if(pinWrap) pinWrap.style.display='none';
+  if(pick) pick.style.display='none';
+  if(phoneOk) phoneOk.style.display='';
+  if(loginOk) loginOk.style.display='none';
+}
+function showDriverPinStep(){
+  driverLoginStep='pin';
+  const pinWrap=driverLoginPinWrap();
+  const pick=driverLoginPickPanel();
+  const phoneOk=$('drv-login-phone-ok');
+  const loginOk=$('drv-login-ok');
+  if(pick) pick.style.display='none';
+  if(pinWrap) pinWrap.style.display='';
+  if(phoneOk) phoneOk.style.display='none';
+  if(loginOk) loginOk.style.display='';
+  const pinEl=$('drv-login-pin');
+  if(pinEl){ pinEl.value=''; setTimeout(()=>pinEl.focus(), 40); }
+}
+function showDriverPickStep(list){
+  driverLoginStep='pick';
+  driverLoginCandidates=list||[];
+  const pick=driverLoginPickPanel();
+  const listEl=$('driver-pick-list');
+  const pinWrap=driverLoginPinWrap();
+  const phoneOk=$('drv-login-phone-ok');
+  const loginOk=$('drv-login-ok');
+  if(pinWrap) pinWrap.style.display='none';
+  if(phoneOk) phoneOk.style.display='none';
+  if(loginOk) loginOk.style.display='none';
+  if(!pick||!listEl) return;
+  pick.style.display='block';
+  listEl.innerHTML=driverLoginCandidates.map((d,i)=>{
+    const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'';
+    return `<button type="button" class="secondary role-btn" data-drv-pick="${i}" style="margin-bottom:8px">
+      <span class="role-btn-title">${esc(d.name||'—')}</span>
+      <span class="role-btn-desc">${esc(firm||'фирма')}</span>
+    </button>`;
+  }).join('');
+  listEl.querySelectorAll('[data-drv-pick]').forEach(btn=>{
+    btn.onclick=()=>{
+      const idx=+btn.dataset.drvPick;
+      driverLoginSelected=driverLoginCandidates[idx];
+      if(!driverLoginSelected) return;
+      showDriverPinStep();
+    };
+  });
+}
+function continueDriverPhone(){
+  migrateDriverPins();
+  const err=$('drv-login-error');
+  const showErr=msg=>{ if(err) err.textContent=msg; };
+  showErr('');
+  const phone=formatPhone((driverLoginPhoneEl()&&driverLoginPhoneEl().value||'').trim());
+  if(!phone){ showErr('Введите телефон'); return; }
+  const byPhone=findDriversByPhone(phone);
+  if(!byPhone.length){
+    showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
+    return;
+  }
+  const uniqNames=new Set(byPhone.map(d=>String(d.name||'').trim().toLowerCase()).filter(Boolean));
+  if(byPhone.length===1 || uniqNames.size===1){
+    driverLoginSelected=byPhone[0];
+    showDriverPinStep();
+    return;
+  }
+  const sorted=byPhone.slice().sort((a,b)=>{
+    const fa=a.companyName||'', fb=b.companyName||'';
+    const c=fa.localeCompare(fb,'ru');
+    if(c) return c;
+    return String(a.name).localeCompare(String(b.name),'ru');
+  });
+  showDriverPickStep(sorted);
+}
 function openDriverLogin(fromAdmin){
   migrateSpaces();
   let dirty=ensureFleetPerSpaces();
@@ -246,8 +333,9 @@ function openDriverLogin(fromAdmin){
   if(dirty){ bumpDataEpoch('driver-login-prep'); persist(); }
   DRIVER='';
   DRIVER_COMPANY_ID=null;
+  resetDriverLoginUi();
   const err=$('drv-login-error'); if(err) err.textContent='';
-  const phoneEl=$('drv-login-phone');
+  const phoneEl=driverLoginPhoneEl();
   const pinEl=$('drv-login-pin');
   if(pinEl) pinEl.value='';
   // Если зашли из админки — подставить телефон своего водительского профиля
@@ -283,24 +371,35 @@ function loginDriver(){
   migrateDriverPins();
   const err=$('drv-login-error');
   const showErr=msg=>{ if(err) err.textContent=msg; };
-  const phone=formatPhone((($('drv-login-phone')||{}).value||'').trim());
+  if(driverLoginStep==='phone'){ continueDriverPhone(); return; }
+  const phone=formatPhone((driverLoginPhoneEl()&&driverLoginPhoneEl().value||'').trim());
   const pin=(($('drv-login-pin')||{}).value||'').trim();
   if(!phone){ showErr('Введите телефон'); return; }
   if(!pin||pin.length<4){ showErr('Введите PIN (от 4 цифр)'); return; }
-  const byPhone=findDriversByPhone(phone);
-  if(!byPhone.length){
-    showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
-    return;
+  let rec=driverLoginSelected;
+  if(rec){
+    if(formatPhone(rec.phone||'')!==phone){ showErr('Телефон не совпадает с выбранным профилем'); return; }
+    if(resolveDriverPin(rec)!==pin){ showErr('Неверный PIN'); return; }
+  } else {
+    const byPhone=findDriversByPhone(phone);
+    if(!byPhone.length){
+      showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
+      return;
+    }
+    const matched=byPhone.filter(d=>resolveDriverPin(d)===pin);
+    if(!matched.length){ showErr('Неверный PIN'); return; }
+    if(matched.length>1){
+      showDriverPickStep(matched);
+      showErr('Выберите профиль и введите PIN снова');
+      return;
+    }
+    rec=matched[0];
   }
-  const matched=byPhone.filter(d=>resolveDriverPin(d)===pin);
-  if(!matched.length){ showErr('Неверный PIN'); return; }
-  // Одно ФИО в нескольких фирмах с тем же телефоном — берём «домашнюю» (где водитель = админ фирмы)
-  const rec=pickDriverHomeRecord(matched);
   if(!rec){ showErr('Профиль водителя не найден'); return; }
   // закрепить pin в записи, если был только из админа/телефона
   if(String(rec.pin||'').trim()!==pin){
     rec.pin=pin;
-    // синхронизировать pin на все копии с тем же телефоном и ФИО
+    const byPhone=findDriversByPhone(phone);
     byPhone.forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
     bumpDataEpoch('driver-pin-bind');
     persist();

@@ -256,6 +256,7 @@ function renderAdminBilling(){
         <button type="button" class="primary" data-bill-pay="${esc(sp.id)}">Записать оплату</button>
       </div>
       <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.8rem">Журнал (последние)</summary>${ledger}</details>
+      <p class="meta" style="margin-top:10px">Портал заказчиков: <a href="${esc(customerPortalPageUrl({spaceId:sp.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({spaceId:sp.id}))}</a></p>
     </section>`;
   }).join('');
   const form=$('billing-form');
@@ -1006,6 +1007,8 @@ function adminOrderCardHtml(o){
     onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:'',
     !onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)
       ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:'',
+    canReturnOrderToExchange(o)
+      ?`<button type="button" class="secondary ret-exchange" data-id="${o.id}">На биржу снова</button>`:'',
     !looksClosedOrder(o)&&!o.cancelledAt
       ?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''
   ].filter(Boolean).join('');
@@ -1267,6 +1270,42 @@ function unpublishFromExchange(id){
   upsertOrder(o);
   renderAdmin();
 }
+function canReturnOrderToExchange(o){
+  if(!o || looksClosedOrder(o) || o.cancelledAt || o.startOdometer!=null || o.onExchange) return false;
+  const assigned=o.driverName && o.driverName!=='Биржа' && o.driverName!=='—';
+  if(!assigned) return false;
+  if(isMyFirmOrder(o) || isSuperAdmin()) return true;
+  return false;
+}
+function returnOrderToExchange(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o){ alert('Заказ не найден'); return; }
+  if(!canReturnOrderToExchange(o)){ alert('Вернуть на биржу можно только до выезда, если заказ уже назначен'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
+    if(!g.ok){ alert(g.message); return; }
+    if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа'); openDetail(id); return; }
+    if(!confirm('Вернуть заказ на биржу? Назначение водителя и договор‑заявка будут сброшены.')) return;
+    o.onExchange=true;
+    o.exchangeListedAt=new Date().toISOString();
+    o.wasOnExchange=true;
+    o.executorType='exchange';
+    o.driverName='Биржа';
+    o.vehiclePlate='—';
+    o.transportApp=null;
+    o.partnerSpaceId=null;
+    o.carrierCompanyId=null;
+    o.carrierCompanyName=null;
+    o.carrierDriverId=null;
+    o.carrierVehicleId=null;
+    o.executorAdminId=null;
+    o.driverPhone='';
+    bumpDataEpoch('return-exchange');
+    upsertOrder(o);
+    if(state.detailId===id && typeof openDetail==='function') openDetail(id);
+    else renderAdmin();
+  });
+}
 function publishToExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || o.closedAt || o.startOdometer!=null){ alert('Нельзя выставить на биржу'); return; }
@@ -1506,6 +1545,18 @@ function renderAdmin(){
     billBanner.textContent=txt||'';
     billBanner.style.display=txt?'block':'none';
   }
+  const portalBanner=$('admin-portal-banner');
+  if(portalBanner){
+    const sid=currentSpaceId();
+    if(sid){
+      const url=customerPortalPageUrl({spaceId:sid});
+      portalBanner.innerHTML=`Ссылка для заказчиков (ваш space): <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`;
+      portalBanner.style.display='block';
+    } else {
+      portalBanner.textContent='';
+      portalBanner.style.display='none';
+    }
+  }
   updateAdminChrome();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();
@@ -1653,6 +1704,10 @@ function renderAdmin(){
   document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
     publishToExchange(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .ret-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    returnOrderToExchange(b.dataset.id);
   });
   document.querySelectorAll('#admin-list .cancel-order').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
@@ -2451,6 +2506,12 @@ function openDetail(id){
   const detailActions=$('detail-actions'); if(detailActions) detailActions.style.display='flex';
   const detailOk=$('detail-ok'); if(detailOk) detailOk.style.display='none';
   const detailCancel=$('detail-cancel-order');
+  const detailReturn=$('detail-return-exchange');
+  if(detailReturn){
+    const showRet=canReturnOrderToExchange(o);
+    detailReturn.style.display=showRet?'':'none';
+    detailReturn.onclick=()=>returnOrderToExchange(id);
+  }
   if(detailCancel){
     detailCancel.style.display=(!o.closedAt && !o.cancelledAt)?'':'none';
     detailCancel.onclick=()=>{
@@ -2833,7 +2894,7 @@ function openCatalogs(){
         <input id="co-portal-phone" inputmode="tel" placeholder="+7…" value="${esc(c.portalPhone||contactPhone(c.contacts&&c.contacts[0])||'')}" />
         <label>PIN (от 4 цифр)</label>
         <input id="co-portal-pin" inputmode="numeric" maxlength="8" placeholder="PIN" value="${esc(c.portalPin||'')}" />
-        <p class="hint">Ссылка для заказчика: <a href="${esc(customerPortalPageUrl())}" target="_blank" rel="noopener">${esc(customerPortalPageUrl())}</a></p>
+        <p class="hint">Ссылка для этого заказчика: <a href="${esc(customerPortalPageUrl({companyId:c.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({companyId:c.id}))}</a></p>
         <p class="hint">Заявки идут на биржу с проверкой минимальной цены.</p>
         <h4>Адреса заказчика</h4>
         <label>Загрузки (каждый с новой строки)</label>

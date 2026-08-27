@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entries1";
+const APP_BUILD="2026-08-27-backlog1";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -239,13 +239,63 @@ function entryLandingPage(mode){
   if(m==='customer') return 'zakaz.html';
   return 'index.html';
 }
-function customerPortalPageUrl(){
+function customerPortalPageUrl(opts){
   try{
     const u=new URL('zakaz.html', location.href);
+    const o=opts&&typeof opts==='object'?opts:{};
+    if(o.companyId) u.searchParams.set('c', o.companyId);
+    else if(o.spaceId) u.searchParams.set('s', o.spaceId);
+    else {
+      const sid=(typeof currentSpaceId==='function'?currentSpaceId():null)||null;
+      if(sid) u.searchParams.set('s', sid);
+    }
     return u.href;
   }catch(_){
-    return `${location.origin}/zakaz.html`;
+    const q=opts&&opts.companyId?`?c=${encodeURIComponent(opts.companyId)}`
+      :(opts&&opts.spaceId?`?s=${encodeURIComponent(opts.spaceId)}`:'');
+    return `${location.origin}/zakaz.html${q}`;
   }
+}
+const PORTAL_SCOPE_KEY='armada_portal_scope_v1';
+function readPortalScopeFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    const companyId=String(q.get('c')||q.get('company')||'').trim();
+    const spaceId=String(q.get('s')||q.get('space')||'').trim();
+    if(companyId) return {companyId};
+    if(spaceId) return {spaceId};
+  }catch(_){}
+  return null;
+}
+function initPortalScopeFromPage(){
+  const scope=readPortalScopeFromUrl();
+  if(scope){
+    try{ sessionStorage.setItem(PORTAL_SCOPE_KEY, JSON.stringify(scope)); }catch(_){}
+  }
+}
+function getPortalScope(){
+  try{
+    const fromUrl=readPortalScopeFromUrl();
+    if(fromUrl) return fromUrl;
+    const raw=sessionStorage.getItem(PORTAL_SCOPE_KEY);
+    return raw?JSON.parse(raw):null;
+  }catch(_){ return null; }
+}
+function portalScopeCarrierLabel(scope){
+  const sc=scope||getPortalScope();
+  if(!sc) return '';
+  if(sc.companyId){
+    const co=findCompanyById(sc.companyId);
+    if(co){
+      const sp=co.spaceId?findSpaceById(co.spaceId):null;
+      return sp?sp.name:(co.name||'');
+    }
+  }
+  if(sc.spaceId){
+    const sp=findSpaceById(sc.spaceId);
+    return sp?sp.name:'';
+  }
+  return '';
 }
 function goEntryLanding(mode){
   const page=entryLandingPage(mode);
@@ -1244,6 +1294,7 @@ function persistLocalOnly(){
   try{
     localStorage.setItem(KEY, JSON.stringify(snapshot()));
     if(currentAdmin) saveAdminSession();
+    if(typeof armadaSyncBroadcast==='function') armadaSyncBroadcast('local_save');
   }catch(err){ console.warn('local persist', err); }
 }
 function pushServerStateQueued(){
@@ -1518,6 +1569,10 @@ async function pullRemoteUpdates(reason){
       else if(document.querySelector('#admin-vehicle-card.show') && state._vehicleCardId) openVehicleCard(state._vehicleCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
       else if(document.querySelector('#admin.show')) renderAdmin();
+    } else if(typeof currentCustomer!=='undefined' && currentCustomer || document.querySelector('#customer-portal.show')){
+      if(typeof restoreCustomerSession==='function') restoreCustomerSession();
+      if(typeof renderCustomerPortal==='function') renderCustomerPortal();
+      if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
     }
     syncStatus='ok';
     pullFailCount=0;
@@ -1552,4 +1607,53 @@ if(typeof document!=='undefined'){
     if(document.hidden) stopAutoSync();
     else startAutoSync();
   });
+  let syncStorageTimer=null;
+  window.addEventListener('storage', (e)=>{
+    if(e.key!==KEY || !e.newValue) return;
+    clearTimeout(syncStorageTimer);
+    syncStorageTimer=setTimeout(()=>{
+      try{
+        const parsed=JSON.parse(e.newValue);
+        const remoteEpoch=Number(parsed.dataEpoch)||0;
+        const localEpoch=Number(state.dataEpoch)||0;
+        if(remoteEpoch<=localEpoch) return;
+        unionDeletedOrderIds(parsed.deletedOrderIds||[]);
+        const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+        const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+        const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+        applyPayload(parsed, {remoteSeq:true});
+        if(typeof mergeLocalShifts==='function'){
+          mergeLocalShifts(localShifts);
+          if(liveShift) mergeLocalShifts([liveShift]);
+        }
+        if(typeof mergeLocalOrders==='function') mergeLocalOrders(localOrders);
+        if(typeof healOrphanOrdersIntoShifts==='function') healOrphanOrdersIntoShifts();
+        if(typeof migrateEtoFromMessages==='function') migrateEtoFromMessages();
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        syncStatus='ok';
+        if(typeof updateSyncHint==='function') updateSyncHint();
+        if(typeof updateDriverNetHint==='function') updateDriverNetHint();
+        if(currentAdmin && typeof renderAdmin==='function') renderAdmin();
+        if(DRIVER && typeof renderDriverBanner==='function') renderDriverBanner();
+        if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
+        if(typeof currentCustomer!=='undefined' && currentCustomer && typeof renderCustomerPortal==='function') renderCustomerPortal();
+      }catch(err){ console.warn('storage-tab sync', err); }
+    }, 120);
+  });
+}
+const ARMADA_SYNC_BC='armada_sync_v1';
+let armadaSyncChannel=null;
+function armadaSyncBroadcast(kind){
+  try{
+    if(!armadaSyncChannel && typeof BroadcastChannel!=='undefined'){
+      armadaSyncChannel=new BroadcastChannel(ARMADA_SYNC_BC);
+      armadaSyncChannel.onmessage=(ev)=>{
+        const d=ev&&ev.data;
+        if(!d || d.type!=='state_touch') return;
+        if(d.epoch && Number(d.epoch)<=Number(state.dataEpoch||0)) return;
+        pullRemoteUpdates('broadcast');
+      };
+    }
+    if(armadaSyncChannel) armadaSyncChannel.postMessage({type:'state_touch', epoch:state.dataEpoch, kind});
+  }catch(_){}
 }

@@ -57,6 +57,7 @@ BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
 
 ## Сборка на проде
 
-- `APP_BUILD`: `2026-08-27-onboard1`
-- Service Worker: `armada-shell-v26`, network-first для JS/CSS
-- Онбординг: welcome + туры по ролям, `help.html`
+- `APP_BUILD`: `2026-08-27-backlog1`
+- Service Worker: `armada-shell-v28`
+- Входы: `admin.html`, `driver.html`, `zakaz.html` (+ `?s=` space / `?c=` company)
+- Backlog §11: portal per space, sync tabs, return exchange, customer notify, phone login

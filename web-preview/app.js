@@ -1671,7 +1671,56 @@ function canArriveMessage(orderId){
   return null;
 }
 const DRIVER_NOTIFY_KEY='armada_driver_notify_v1';
+const CUSTOMER_NOTIFY_KEY_SHARED='armada_customer_notify_v1';
 const driverNotifyLastAt={};
+const armadaNotifyLastAt={};
+function notifyRoleWanted(role){
+  if(role==='customer'){
+    try{ return localStorage.getItem(CUSTOMER_NOTIFY_KEY_SHARED)==='1'; }catch(_){ return false; }
+  }
+  return driverNotifyWanted();
+}
+function setNotifyRoleWanted(role, on){
+  if(role==='customer') setCustomerNotifyWanted(on);
+  else setDriverNotifyWanted(on);
+}
+function armadaNotifySupported(){
+  return typeof Notification!=='undefined' && !!window.isSecureContext;
+}
+function armadaNotifyActive(role){
+  if(!armadaNotifySupported()) return false;
+  if(Notification.permission!=='granted') return false;
+  return notifyRoleWanted(role||'driver');
+}
+async function armadaRequestNotifyPermission(role){
+  if(!armadaNotifySupported()) return false;
+  let perm=Notification.permission;
+  if(perm!=='granted'){
+    try{ perm=await Notification.requestPermission(); }catch(_){ perm='denied'; }
+  }
+  const ok=perm==='granted';
+  setNotifyRoleWanted(role||'driver', ok);
+  return ok;
+}
+function armadaShowNotification(title, body, tag, role){
+  const r=role||'driver';
+  if(r==='driver' && !DRIVER) return;
+  if(r==='customer' && typeof currentCustomer!=='undefined' && !currentCustomer) return;
+  if(!armadaNotifyActive(r)) return;
+  const now=Date.now();
+  const key=tag||'armada';
+  const prev=armadaNotifyLastAt[key]||0;
+  if(now-prev<12*60*1000) return;
+  armadaNotifyLastAt[key]=now;
+  const opts={body:body||'', tag:key, renotify:true, icon:'./icons/icon-192.png', badge:'./icons/icon-192.png'};
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title, opts)).catch(()=>{
+      try{ new Notification(title, opts); }catch(_){}
+    });
+  } else {
+    try{ new Notification(title, opts); }catch(_){}
+  }
+}
 function driverNotifyWanted(){
   try{ return localStorage.getItem(DRIVER_NOTIFY_KEY)==='1'; }catch(_){ return false; }
 }
@@ -1697,19 +1746,7 @@ async function enableDriverNotifications(){
   return ok;
 }
 function driverNotify(title, body, tag){
-  if(!DRIVER || !driverNotifyActive()) return;
-  const now=Date.now();
-  const prev=driverNotifyLastAt[tag]||0;
-  if(now-prev<12*60*1000) return;
-  driverNotifyLastAt[tag]=now;
-  const opts={body:body||'', tag:tag||'armada', renotify:true, icon:'./icons/icon-192.png', badge:'./icons/icon-192.png'};
-  if(navigator.serviceWorker){
-    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title, opts)).catch(()=>{
-      try{ new Notification(title, opts); }catch(_){}
-    });
-  } else {
-    try{ new Notification(title, opts); }catch(_){}
-  }
+  armadaShowNotification(title, body, tag, 'driver');
 }
 /** Системные напоминания, когда экран свёрнут / вкладка в фоне. */
 function maybeDriverActionNotify(force){
@@ -3331,6 +3368,7 @@ try{
 }catch(_){}
 (async function boot(){
   initEntryFromPage();
+  initPortalScopeFromPage();
   migrateAdmins();
   let dirty=migrateDriverOwners();
   if(migrateSpaces()) dirty=true;
@@ -3385,8 +3423,8 @@ $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
   openDriverLogin(true);
 });
 $('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
-$('drv-login-pin')&&($('drv-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginDriver(); });
-$('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ($('drv-login-pin')||{}).focus?.(); } });
+$('drv-login-phone-ok')&&($('drv-login-phone-ok').onclick=continueDriverPhone);
+$('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); } });
 $('btn-home')&&($('btn-home').onclick=showDriverHome);
 $('role-admin').onclick=()=>openAdminLogin();
 $('pin-back').onclick=()=>backFromEntryLogin();

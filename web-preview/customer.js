@@ -2,14 +2,17 @@
 const CUSTOMER_SESSION_KEY='armada_customer_session_v1';
 let currentCustomer=null; // { companyId, name, phone, spaceId }
 
-function findCustomerPortalCompany(phone, pin){
+function findCustomerPortalCompany(phone, pin, scope){
   const ph=formatPhone(phone);
   const p=String(pin||'').trim();
   if(!ph||p.length<4) return null;
-  return (state.companies||[]).find(c=>
-    companyHasRole(c,'customer') && c.portalEnabled
-    && formatPhone(c.portalPhone)===ph && String(c.portalPin)===p
-  )||null;
+  const sc=scope||getPortalScope();
+  return (state.companies||[]).find(c=>{
+    if(sc&&sc.companyId && c.id!==sc.companyId) return false;
+    if(sc&&sc.spaceId && c.spaceId!==sc.spaceId) return false;
+    return companyHasRole(c,'customer') && c.portalEnabled
+      && formatPhone(c.portalPhone)===ph && String(c.portalPin)===p;
+  })||null;
 }
 
 function saveCustomerSession(){
@@ -40,12 +43,19 @@ function restoreCustomerSession(){
 }
 
 function openCustomerLogin(){
+  initPortalScopeFromPage();
   currentCustomer=null;
   clearCustomerSession();
   const err=$('cust-login-error'); if(err) err.textContent='';
   const phoneEl=$('cust-login-phone'); const pinEl=$('cust-login-pin');
   if(phoneEl) phoneEl.value='';
   if(pinEl) pinEl.value='';
+  const scopeHint=$('cust-login-scope');
+  if(scopeHint){
+    const label=portalScopeCarrierLabel();
+    scopeHint.textContent=label?`Портал перевозчика: ${label}`:'';
+    scopeHint.style.display=label?'block':'none';
+  }
   $('cust-login-back').onclick=()=>backFromEntryLogin();
   show('customer-login');
   setTimeout(()=>{ try{ (phoneEl||pinEl)?.focus(); }catch(_){} }, 120);
@@ -67,6 +77,9 @@ function loginCustomer(){
     spaceId:co.spaceId||null
   };
   saveCustomerSession();
+  const seen=loadCustomerOrderSeen();
+  customerOrders().forEach(o=>{ if(o&&o.id) seen[o.id]=customerOrderStatusTag(o); });
+  saveCustomerOrderSeen(seen);
   showCustomerPortal();
 }
 
@@ -77,6 +90,68 @@ function logoutCustomer(){
   else show('roles');
 }
 
+const CUSTOMER_NOTIFY_KEY='armada_customer_notify_v1';
+const CUSTOMER_ORDER_SEEN_KEY='armada_customer_order_seen_v1';
+
+function customerOrderStatusLabel(o){
+  if(!o) return '—';
+  if(o.cancelledAt) return 'Отменён';
+  if(looksClosedOrder(o)) return 'Закрыт';
+  if(o.onExchange) return 'На бирже';
+  if(o.startOdometer!=null || o.departOdometer!=null) return 'В работе';
+  if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—') return 'Назначен';
+  return 'Новая';
+}
+function customerOrderStatusTag(o){
+  if(!o||!o.id) return '';
+  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.closedAt||''}|${o.cancelledAt||''}`;
+}
+function loadCustomerOrderSeen(){
+  try{ return JSON.parse(localStorage.getItem(CUSTOMER_ORDER_SEEN_KEY)||'{}'); }catch(_){ return {}; }
+}
+function saveCustomerOrderSeen(map){
+  try{ localStorage.setItem(CUSTOMER_ORDER_SEEN_KEY, JSON.stringify(map||{})); }catch(_){}
+}
+function customerNotifyWanted(){
+  try{ return localStorage.getItem(CUSTOMER_NOTIFY_KEY)==='1'; }catch(_){ return false; }
+}
+function setCustomerNotifyWanted(on){
+  try{ localStorage.setItem(CUSTOMER_NOTIFY_KEY, on?'1':'0'); }catch(_){}
+}
+function customerNotifyActive(){
+  return typeof armadaNotifyActive==='function' && armadaNotifyActive('customer');
+}
+async function enableCustomerNotifications(){
+  if(typeof armadaRequestNotifyPermission!=='function'){
+    alert('Уведомления недоступны'); return false;
+  }
+  const ok=await armadaRequestNotifyPermission('customer');
+  if(!ok) alert('Разрешите уведомления в настройках браузера');
+  const btn=$('cust-notify-toggle');
+  if(btn) btn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
+  return ok;
+}
+function maybeNotifyCustomerOrderUpdates(){
+  if(!currentCustomer) return;
+  const orders=customerOrders().slice(0,30);
+  const seen=loadCustomerOrderSeen();
+  const msgs=[];
+  orders.forEach(o=>{
+    if(!o||!o.id) return;
+    const tag=customerOrderStatusTag(o);
+    const prev=seen[o.id];
+    if(prev && prev!==tag){
+      msgs.push(`№${o.sequentialNumber||'—'}: ${customerOrderStatusLabel(o)}`);
+    }
+    seen[o.id]=tag;
+  });
+  saveCustomerOrderSeen(seen);
+  if(!msgs.length) return;
+  const body=msgs.slice(0,3).join(' · ');
+  if(typeof armadaShowNotification==='function'){
+    armadaShowNotification('АРМАДА · статус заявки', body, 'cust-status', 'customer');
+  }
+}
 function customerOrders(){
   if(!currentCustomer) return [];
   return (state.orders||[]).filter(o=>o && o.customerId===currentCustomer.companyId)
@@ -156,15 +231,19 @@ function renderCustomerPortal(){
   if(list){
     const orders=customerOrders().slice(0,20);
     list.innerHTML=orders.length?orders.map(o=>{
-      const st=o.cancelledAt?'Отменён':looksClosedOrder(o)?'Закрыт':o.onExchange?'На бирже':o.driverName&&o.driverName!=='Биржа'?'Назначен':'В работе';
+      const st=customerOrderStatusLabel(o);
+      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.onExchange?'exchange':(o.startOdometer!=null?'progress':'');
       return `<div class="card" style="margin-bottom:8px">
-        <h3>№ ${esc(o.sequentialNumber||'—')} · ${esc(st)}</h3>
+        <h3>№ ${esc(o.sequentialNumber||'—')} · <span class="order-status ${stCls}">${esc(st)}</span></h3>
         <p class="meta">${esc(routeText(o))}</p>
-        <p class="meta">${o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽`:''} · ${esc(dateTime(o.createdAt))}</p>
+        <p class="meta">${o.driverName&&o.driverName!=='Биржа'?`Водитель: ${esc(o.driverName)} · `:''}${o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
       </div>`;
     }).join(''):'<div class="empty">Заявок ещё нет</div>';
   }
   updateCustomerPricePreview();
+  const notifyBtn=$('cust-notify-toggle');
+  if(notifyBtn) notifyBtn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
+  maybeNotifyCustomerOrderUpdates();
 }
 
 function readCustomerVehicleAt(){
@@ -265,6 +344,7 @@ function wireCustomerPortal(){
   $('cust-login-ok')&&($('cust-login-ok').onclick=loginCustomer);
   $('cust-login-pin')&&($('cust-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginCustomer(); });
   $('cust-portal-back')&&($('cust-portal-back').onclick=logoutCustomer);
+  $('cust-notify-toggle')&&($('cust-notify-toggle').onclick=()=>enableCustomerNotifications());
   $('cust-submit')&&($('cust-submit').onclick=submitCustomerOrder);
   ['cust-est-km','cust-est-hours','cust-empty-before','cust-req-pay'].forEach(id=>{
     const el=$(id); if(el) el.oninput=()=>updateCustomerPricePreview();
