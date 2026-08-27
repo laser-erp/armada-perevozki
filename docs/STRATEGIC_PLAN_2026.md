@@ -17,7 +17,7 @@
 | S3-1.2 письма операторам | ⏸ paused | после решения пользователя |
 | S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false` |
 | S4–S7 | ⏸ paused | только по явному «Делай» |
-| O-02 Push GitHub | ⏸ blocked | `scripts/git-push-branch.sh` + GITHUB_TOKEN |
+| O-02 Push GitHub | ⏸ blocked | `docs/PUSH_COMPLIANCE_BRANCH.md` |
 
 JSON-трекер: `.cursor/stores/self/strategic-plan-tracker.json`
 

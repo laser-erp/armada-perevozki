@@ -6,9 +6,23 @@ set -euo pipefail
 BASE="${BASE_URL:-https://aptown1.fvds.ru}"
 API="${BASE}/armada-api"
 FAIL=0
+STORE_TMP="$(mktemp)"
+trap 'rm -f "$STORE_TMP"' EXIT
 
 pass() { echo "  OK  $1"; }
 fail() { echo "  FAIL $1"; FAIL=1; }
+
+fetch_store() {
+  local i=0
+  while [ "$i" -lt 3 ]; do
+    if curl -fsS "$BASE/store.js" >"$STORE_TMP" && [ -s "$STORE_TMP" ]; then
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  return 1
+}
 
 echo "ARMADA strategic plan smoke — $BASE"
 echo "S0 HTTPS + armada-api"
@@ -20,10 +34,9 @@ if echo "$HEALTH" | grep -q 'armada-api'; then pass "API service name"; else fai
 
 echo "S1 driverInvites"
 if curl -fsS -o /dev/null "$BASE/invite.html"; then pass "invite.html"; else fail "invite.html"; fi
-STORE="$(curl -fsS "$BASE/store.js" 2>/dev/null || true)"
-if [ -n "$STORE" ]; then pass "store.js"; else fail "store.js"; fi
-if echo "$STORE" | grep -q 'const KEY="armada_app_v5"'; then pass "store.js KEY"; else fail "store.js KEY missing"; fi
-if echo "$STORE" | grep -q 'driverInvitePageUrl'; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
+if fetch_store; then pass "store.js"; else fail "store.js"; fi
+if grep -q 'armada_app_v5' "$STORE_TMP"; then pass "store.js KEY"; else fail "store.js KEY missing"; fi
+if grep -q 'driverInvitePageUrl' "$STORE_TMP"; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
 
 echo "S3 ETRN MVP"
 for f in etrn.js billing.js; do
@@ -38,7 +51,7 @@ else
   fail "POST /epd/webhook"
 fi
 
-BUILD="$(echo "$STORE" | grep -m1 'APP_BUILD=' | sed 's/.*"\(.*\)".*/\1/')"
+BUILD="$(grep -m1 'APP_BUILD=' "$STORE_TMP" | sed 's/.*"\(.*\)".*/\1/')"
 if [ -n "$BUILD" ]; then pass "APP_BUILD=$BUILD"; else fail "APP_BUILD"; fi
 
 echo ""
