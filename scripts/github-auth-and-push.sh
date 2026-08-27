@@ -43,5 +43,6 @@ if [ -n "${FVDS_SSH_PASSWORD:-${root:-}}" ]; then
   FVDS_SSH_PASSWORD="${FVDS_SSH_PASSWORD:-${root:-}}" "$ROOT/scripts/publish-compliance-bundle.sh"
 fi
 
+"$ROOT/scripts/sync-o02-github-status.sh" "$BRANCH"
+
 echo "O-02 done. HEAD=$HEAD"
-echo "Обновите strategic-plan-tracker.json: githubRemote.status=done, ops.O-02.status=done"

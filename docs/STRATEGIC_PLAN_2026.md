@@ -24,9 +24,9 @@ JSON-трекер: `.cursor/stores/self/strategic-plan-tracker.json`
 Проверка продакшена:
 
 ```bash
-chmod +x scripts/run-strategic-verification.sh scripts/check-github-remote-branch.sh scripts/ssh-verify-fvds.sh
+chmod +x scripts/run-strategic-verification.sh scripts/check-github-remote-branch.sh scripts/ssh-verify-fvds.sh scripts/sync-o02-github-status.sh
 BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
-./scripts/check-github-remote-branch.sh cursor/compliance-p0-4317
+./scripts/sync-o02-github-status.sh cursor/compliance-p0-4317
 ./scripts/ssh-verify-fvds.sh
 ```
 
