@@ -18,7 +18,7 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "1c152eb",
+      "headCommit": "ba54f8b",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
       "bundleHead": "b3d740a",
