@@ -33,4 +33,9 @@ tar czf - -C "$SRC" . | run_ssh "find $DEST -mindepth 1 -maxdepth 1 ! -name '.gi
 BUILD="$(grep -m1 'APP_BUILD=' "$SRC/store.js" | sed 's/.*"\(.*\)".*/\1/')"
 echo "Готово. Проверка APP_BUILD на сервере:"
 run_ssh "grep -m1 APP_BUILD $DEST/store.js || true"
-echo "Live: http://aptown1.fvds.ru/ (ожидаемая сборка: $BUILD)"
+echo "Live: https://aptown1.fvds.ru/ (ожидаемая сборка: $BUILD)"
+SMOKE="$ROOT/scripts/smoke-strategic-plan.sh"
+if [ -x "$SMOKE" ]; then
+  echo "Smoke S0–S3…"
+  BASE_URL="https://aptown1.fvds.ru" "$SMOKE" || echo "Smoke: есть ошибки (см. выше)"
+fi

@@ -1,30 +1,40 @@
 {
   "plan": "ARMADA_STRATEGIC_PLAN_2026",
   "branch": "cursor/compliance-p0-4317",
-  "updatedAt": "2026-08-27T08:35:00Z",
+  "updatedAt": "2026-08-27T08:40:00Z",
+  "lastSmoke": {
+    "at": "2026-08-27T08:40:00Z",
+    "script": "scripts/smoke-strategic-plan.sh",
+    "baseUrl": "https://aptown1.fvds.ru",
+    "result": "pass"
+  },
   "stages": {
     "S0": {
       "title": "HTTPS + armada-api",
       "status": "done",
-      "notes": "LE до ~2026-11-22, API v0.4.3-etrn-tariff, backup cron"
+      "verified": "smoke: HTTPS + /armada-api/health ok",
+      "notes": "LE до 2026-11-22, API v0.4.3-etrn-tariff"
     },
     "S1": {
       "title": "driverInvites",
       "status": "done",
-      "notes": "invite.html на проде, TTL 7 дней"
+      "verified": "smoke: invite.html, KEY, driverInvitePageUrl",
+      "notes": "TTL 7 дней"
     },
     "S2": {
       "title": "Пилот 2–3 space",
       "status": "in_progress",
-      "notes": "kp.html + reviews.txt на проде; ждут партнёров"
+      "notes": "kp.html + reviews.txt; ждут партнёров"
     },
     "S3": {
-      "title": "ETRN MVP (2 спринта)",
-      "status": "in_progress",
+      "title": "ETRN MVP (2 спринта код)",
+      "status": "done",
+      "verified": "smoke: etrn.js, POST etrn, epd/webhook; COMPETITIVE_ANALYSIS_2026",
       "subtasks": {
-        "S3-code": { "status": "done", "notes": "sandbox UI, webhook, driver/admin" },
-        "S3-1.2": { "status": "paused", "notes": "Письма операторам — отложено пользователем" },
-        "S3-2.7": { "status": "paused", "notes": "5 живых ЭТрН — после оператора" }
+        "S3-sprint1": { "status": "done", "notes": "admin create, billing guard" },
+        "S3-sprint2": { "status": "done", "notes": "driver sign, API refresh, webhook" },
+        "S3-1.2": { "status": "paused", "notes": "Письма операторам" },
+        "S3-2.7": { "status": "paused", "notes": "5 живых ЭТрН; epd.configured false" }
       }
     },
     "S4": { "title": "—", "status": "paused", "notes": "Не автозапускать без «Делай»" },
@@ -33,12 +43,17 @@
     "S7": { "title": "—", "status": "paused" }
   },
   "ops": {
-    "O-02": { "title": "Push GitHub", "status": "blocked", "notes": "Нет GITHUB_TOKEN" }
+    "O-02": {
+      "title": "Push GitHub",
+      "status": "blocked",
+      "notes": "scripts/git-push-branch.sh; нужен GITHUB_TOKEN"
+    }
   },
   "production": {
     "url": "https://aptown1.fvds.ru",
     "api": "https://aptown1.fvds.ru/armada-api",
     "build": "2026-08-24-bootfix5",
-    "sw": "armada-shell-v25"
+    "sw": "armada-shell-v25",
+    "epdConfigured": false
   }
 }

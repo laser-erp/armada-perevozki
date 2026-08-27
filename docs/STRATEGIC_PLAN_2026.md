@@ -4,20 +4,24 @@
 
 Продакшен: https://aptown1.fvds.ru · API: https://aptown1.fvds.ru/armada-api
 
+Контекст S3: `docs/COMPETITIVE_ANALYSIS_2026.md`
+
 ## §4 Статус этапов (трекер)
 
 | Этап | Статус | Примечание |
 |------|--------|------------|
-| S0 HTTPS + armada-api | ✅ done | LE, API v0.4.3-etrn-tariff |
-| S1 driverInvites | ✅ done | invite.html, 7 дней TTL |
+| S0 HTTPS + armada-api | ✅ done | LE до 2026-11-22, smoke OK |
+| S1 driverInvites | ✅ done | invite.html, KEY в store.js, smoke OK |
 | S2 пилот 2–3 space | 🔄 in_progress | kp.html, ждут партнёров |
-| S3 ETRN MVP | 🔄 in_progress | код на проде; оператор и 5 живых ЭТрН — пауза |
-| S3-1.2 письма операторам | ⏸ paused | docs/PISMO_OPERATORAM_ETRN.md |
-| S3-2.7 5 живых ЭТрН | ⏸ paused | после подключения оператора |
+| S3 ETRN MVP (код 2 спринта) | ✅ done | UI + API + webhook; smoke OK |
+| S3-1.2 письма операторам | ⏸ paused | после решения пользователя |
+| S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false` |
 | S4–S7 | ⏸ paused | только по явному «Делай» |
-| O-02 Push GitHub | ⏸ blocked | нужен GITHUB_TOKEN |
+| O-02 Push GitHub | ⏸ blocked | `scripts/git-push-branch.sh` + GITHUB_TOKEN |
 
 JSON-трекер: `.cursor/stores/self/strategic-plan-tracker.json`
+
+Проверка продакшена: `chmod +x scripts/smoke-strategic-plan.sh && BASE_URL=https://aptown1.fvds.ru ./scripts/smoke-strategic-plan.sh`
 
 ## Тарифы в программе (billing.js)
 
