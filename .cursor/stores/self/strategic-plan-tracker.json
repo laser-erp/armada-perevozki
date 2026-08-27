@@ -18,10 +18,10 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "4004c5a",
+      "headCommit": "c6a45f7",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "9ae17df",
+      "bundleHead": "c6a45f7",
       "notes": "GITHUB_TOKEN не задан; ./scripts/github-auth-and-push.sh"
     }
   },
@@ -102,7 +102,7 @@
     "O-02": {
       "title": "Push GitHub",
       "status": "blocked",
-      "notes": "9 коммитов ahead of main; ./scripts/github-auth-and-push.sh после GITHUB_TOKEN"
+      "notes": "10 коммитов ahead of main; bundle HEAD c6a45f7; ./scripts/github-auth-and-push.sh после GITHUB_TOKEN"
     }
   },
   "production": {
