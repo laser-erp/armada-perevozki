@@ -144,18 +144,60 @@ function carrierOwnCompanyForSpace(spaceId){
   return ownCompaniesList()[0]||null;
 }
 /** Минимальная и рекомендуемая цена заявки заказчика (по тарифу перевозчика) */
+function quoteBodyCargoMultiplier(draft, fin){
+  const s=normalizeFinance(fin||{});
+  let m=1;
+  const body=String(draft&&draft.reqBodyType||'');
+  const cargo=String(draft&&draft.cargoKind||'');
+  if(body==='reefer' || cargo==='food') m*=s.bodyMultReefer||1.25;
+  else if(body==='dump' || cargo==='bulk') m*=s.bodyMultDump||1.15;
+  if((+draft.reqPayloadTons||0) >= (s.heavyTonsFrom||20)) m*=s.heavyMult||1.15;
+  return Math.round(m*1000)/1000;
+}
+function inferTripMode(km, fin){
+  const s=normalizeFinance(fin||{});
+  if(!(km>0)) return 'city';
+  return km>(s.cityKmThreshold||100)?'intercity':'city';
+}
 function suggestCustomerOrderPrice(draft){
   if(!draft||!draft.ownCompanyId) return null;
-  const b=calculateClientTariff(draft, financeForCompanyId(draft.ownCompanyId));
-  if(!b||!(b.totalCash>0)) return null;
-  const t=fillRatesFrom('cash', b.totalCash);
+  const fin=financeForCompanyId(draft.ownCompanyId);
+  const km=+(draft.routeKm||draft.estimateKm||0);
+  const trip=draft.tripMode||inferTripMode(km, fin);
+  const mult=quoteBodyCargoMultiplier(draft, fin);
+  const perKm=(+fin.defaultRatePerKmCash)||80;
+  const perHour=(+fin.defaultRatePerHourWork)||0;
+  let base=null;
+  let summary='';
+  if(trip==='intercity'){
+    if(!(km>0) || !(perKm>0)) return null;
+    const kmCash=round2(km*perKm);
+    const hourFloor=perHour>0?round2(((+fin.minWorkHours||0)+(+fin.podachaHours||0))*perHour):0;
+    const raw=Math.max(kmCash, hourFloor);
+    base={totalCash:raw, summary:`межгород ${km} км × ${fmt(perKm)} ₽/км`+(hourFloor>kmCash?` (не ниже пакета часов)`:``)};
+  } else {
+    const cityDraft=Object.assign({}, draft, {
+      estimateKm:km>0?km:null,
+      emptyKmBefore:0,
+      estimateWorkHours:draft.estimateWorkHours||fin.minWorkHours||4
+    });
+    base=calculateClientTariff(cityDraft, fin);
+  }
+  if(!base||!(base.totalCash>0)) return null;
+  const total=round2(base.totalCash*mult);
+  const t=fillRatesFrom('cash', total);
+  const extras=[];
+  if(mult>1.001) extras.push(`надбавка кузов/груз/тоннаж ×${mult}`);
   return {
-    minimumCash:b.totalCash,
+    minimumCash:total,
     cash:t.cash,
     withoutVat:t.withoutVat,
     withVat:t.withVat,
-    summary:b.summary,
-    recommendedCash:b.totalCash
+    summary:[base.summary, extras.join(', ')].filter(Boolean).join(' · '),
+    recommendedCash:total,
+    tripMode:trip,
+    routeKm:km||null,
+    multiplier:mult
   };
 }
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
@@ -526,7 +568,11 @@ function vehicleSpecText(v){
 function orderReqText(o){
   if(!o) return '';
   const bits=[];
+  if(o.tripMode) bits.push(tripModeLabel(o.tripMode));
+  if(o.reqBodyType) bits.push(bodyTypeLabel(o.reqBodyType)||o.reqBodyType);
+  if(o.cargoKind) bits.push(cargoKindLabel(o.cargoKind)||o.cargoKind);
   if(o.reqPayloadTons>0) bits.push('от '+o.reqPayloadTons+'т');
+  if(o.routeKm>0) bits.push('~'+o.routeKm+' км');
   if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0))
     bits.push(`кузов ≥ ${o.reqLengthM}×${o.reqWidthM}×${o.reqHeightM}м`);
   else {
@@ -3397,6 +3443,10 @@ function applyEntrySkin(screenId){
       carrierBlock=carrierBrandHtml(label, sp);
     }
   }
+  let foot=cfg.foot||'';
+  if(mode==='customer' && typeof customerKpPageUrl==='function'){
+    foot=`<a href="/help.html#customer">Как это работает</a> · <a href="${esc(customerKpPageUrl())}">Коммерческое предложение</a>`;
+  }
   aside.innerHTML=`
     <div class="entry-aside-inner">
       ${carrierBlock}
@@ -3404,7 +3454,7 @@ function applyEntrySkin(screenId){
       <h1>${esc(cfg.title)}</h1>
       <p class="entry-aside-lead">${esc(cfg.lead)}</p>
       <ul class="entry-aside-list">${(cfg.items||[]).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
-      <p class="entry-aside-foot">${cfg.foot||''}</p>
+      <p class="entry-aside-foot">${foot}</p>
     </div>`;
   const center=screen.querySelector('.center');
   if(center) center.insertBefore(aside, center.firstChild);

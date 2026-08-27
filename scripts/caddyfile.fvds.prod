@@ -77,6 +77,21 @@ aptown1.fvds.ru {
 		}
 	}
 
+	handle /geo-nominatim/* {
+		uri strip_prefix /geo-nominatim
+		reverse_proxy https://nominatim.openstreetmap.org {
+			header_up Host nominatim.openstreetmap.org
+			header_up User-Agent "ARMADA/1.0 (aptown1@gmail.com)"
+			header_up Accept-Language "ru"
+		}
+	}
+	handle /osrm-route/* {
+		uri strip_prefix /osrm-route
+		reverse_proxy https://router.project-osrm.org {
+			header_up Host router.project-osrm.org
+		}
+	}
+
 	handle {
 		root * /var/www/armada
 		header Cache-Control "no-store, no-cache, must-revalidate"

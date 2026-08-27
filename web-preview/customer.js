@@ -170,19 +170,39 @@ function customerOrders(){
     .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
 }
 
+let customerRouteKm=null;
+let customerRouteBusy=false;
+
+function customerSelectedBodyType(){
+  return (($('cust-body-type')||{}).value||'tent');
+}
+function customerSelectedCargoKind(){
+  return (($('cust-cargo-kind')||{}).value||'general');
+}
+function customerSelectedTripMode(fin){
+  const raw=(($('cust-trip-mode')||{}).value||'auto');
+  if(raw==='city'||raw==='intercity') return raw;
+  return inferTripMode(customerRouteKm, fin);
+}
+
 function buildCustomerDraftFromForm(){
   const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
   const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
-  const estKmRaw=(($('cust-est-km')||{}).value||'').replace(/\D/g,'');
-  const estHrRaw=(($('cust-est-hours')||{}).value||'').replace(',','.');
-  const emptyRaw=(($('cust-empty-before')||{}).value||'').replace(/\D/g,'');
   const payRaw=(($('cust-price')||{}).value||'').replace(/\s/g,'').replace(',','.');
+  const payloadTons=+(($('cust-req-pay')||{}).value||'').replace(',','.');
   const fin=carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance);
+  const km=customerRouteKm>0?customerRouteKm:null;
+  const trip=customerSelectedTripMode(fin);
   return {
     ownCompanyId:carrier&&carrier.id||null,
-    estimateKm:estKmRaw?+estKmRaw:null,
-    estimateWorkHours:estHrRaw?+estHrRaw:null,
-    emptyKmBefore:emptyRaw?+emptyRaw:0,
+    estimateKm:km,
+    routeKm:km,
+    tripMode:trip,
+    reqBodyType:customerSelectedBodyType(),
+    cargoKind:customerSelectedCargoKind(),
+    reqPayloadTons:payloadTons>0?payloadTons:null,
+    estimateWorkHours:fin.minWorkHours||4,
+    emptyKmBefore:0,
     loadedKm:null,
     emptyKmAfter:null,
     ratePerKmCash:fin.defaultRatePerKmCash,
@@ -194,6 +214,35 @@ function buildCustomerDraftFromForm(){
   };
 }
 
+async function refreshCustomerRouteKm(){
+  const load=(($('cust-load')||{}).value||'').trim();
+  const unload=(($('cust-unload')||{}).value||'').trim();
+  const hint=$('cust-route-km-hint');
+  if(load.length<4 || unload.length<4){
+    customerRouteKm=null;
+    if(hint) hint.textContent='Укажите адреса — километраж посчитаем сами.';
+    updateCustomerPricePreview();
+    return;
+  }
+  if(customerRouteBusy) return;
+  customerRouteBusy=true;
+  if(hint) hint.textContent='Считаем расстояние по дороге…';
+  try{
+    const km=typeof estimateRouteKm==='function'?await estimateRouteKm(load, unload):null;
+    customerRouteKm=km;
+    if(hint){
+      hint.textContent=km
+        ?`По дороге ориентир ${km} км. «Груз + после» вписывать не нужно.`
+        :'Расстояние не определилось — заявку можно отправить, цену уточнит перевозчик.';
+    }
+  }catch(_){
+    customerRouteKm=null;
+    if(hint) hint.textContent='Расстояние не определилось — заявку можно отправить, цену уточнит перевозчик.';
+  }
+  customerRouteBusy=false;
+  updateCustomerPricePreview();
+}
+
 function updateCustomerPricePreview(){
   const box=$('cust-price-preview');
   if(!box) return;
@@ -202,18 +251,25 @@ function updateCustomerPricePreview(){
     box.innerHTML='<div class="hint">Тариф перевозчика не настроен — свяжитесь с диспетчером.</div>';
     return;
   }
+  const bits=[];
+  if(draft.tripMode) bits.push(tripModeLabel(draft.tripMode));
+  if(draft.reqBodyType) bits.push(bodyTypeLabel(draft.reqBodyType));
+  if(draft.cargoKind) bits.push(cargoKindLabel(draft.cargoKind));
+  if(draft.reqPayloadTons) bits.push(draft.reqPayloadTons+' т');
   const s=suggestCustomerOrderPrice(draft);
   if(!s){
-    box.innerHTML='<div class="hint">Укажите ориентир км и/или часов работы — появится минимальная цена. Тариф перевозчика: ₽/ч и ₽/км в «Справочники → Тариф».</div>';
+    box.innerHTML=`
+      <div class="hint">${esc(bits.join(' · '))}</div>
+      <div class="hint">Ориентир цены появится, когда по адресам посчитается км (или если в тарифе заданы ₽/час). Заявку можно отправить — цену уточнит перевозчик.</div>`;
     return;
   }
   const min=Math.round(s.minimumCash);
   box.innerHTML=`
-    <div class="calc-row"><span>Минимальная цена</span><span><b>${fmt(min)} ₽</b> (нал)</span></div>
+    <div class="calc-row"><span>Ориентир / минимум</span><span><b>${fmt(min)} ₽</b> (нал)</span></div>
     <div class="calc-row"><span>Без НДС</span><span>${fmt(s.withoutVat)} ₽</span></div>
     <div class="calc-row"><span>С НДС</span><span>${fmt(s.withVat)} ₽</span></div>
-    <div class="hint">${esc(s.summary||'')}</div>
-    <div class="hint">Ниже минимума заявку не принимаем. Рекомендуемая цена на старте = минимум.</div>`;
+    <div class="hint">${esc(bits.concat([s.summary||'']).filter(Boolean).join(' · '))}</div>
+    <div class="hint">Это ориентир по тарифу перевозчика. Ниже минимума — только если перевозчик потом согласится.</div>`;
   const priceEl=$('cust-price');
   if(priceEl && !priceEl.value) priceEl.value=String(min);
 }
@@ -239,6 +295,7 @@ function renderCustomerPortal(){
   const unloadEl=$('cust-unload');
   if(loadEl && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
   if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
+  if((loadEl&&loadEl.value) && (unloadEl&&unloadEl.value)) refreshCustomerRouteKm();
   const list=$('cust-orders-list');
   if(list){
     const orders=customerOrders().slice(0,20);
@@ -248,7 +305,8 @@ function renderCustomerPortal(){
       return `<div class="card" style="margin-bottom:8px">
         <h3>№ ${esc(o.sequentialNumber||'—')} · <span class="order-status ${stCls}">${esc(st)}</span></h3>
         <p class="meta">${esc(routeText(o))}</p>
-        <p class="meta">${o.driverName&&o.driverName!=='Биржа'?`Водитель: ${esc(o.driverName)} · `:''}${o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
+        <p class="meta">${o.driverName&&o.driverName!=='Биржа'?`Водитель: ${esc(o.driverName)} · `:''}${o.pricePending?'Цена: уточнит перевозчик · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
+        ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
       </div>`;
     }).join(''):'<div class="empty">Заявок ещё нет</div>';
   }
@@ -282,13 +340,17 @@ function submitCustomerOrder(){
   if(!load||!unload){ if(err) err.textContent='Укажите адреса загрузки и выгрузки'; return; }
   if(!vehicleAt){ if(err) err.textContent='Укажите дату и время подачи ТС'; return; }
   if(!(payloadTons>0)){ if(err) err.textContent='Укажите грузоподъёмность (т)'; return; }
+  const cargo=customerSelectedCargoKind();
+  const body=customerSelectedBodyType();
+  if(cargo==='food' && body!=='reefer'){
+    if(!confirm('Для продуктов обычно нужен рефрижератор. Отправить как есть?')) return;
+  }
   const draft=buildCustomerDraftFromForm();
   const quote=suggestCustomerOrderPrice(draft);
-  if(!quote){ if(err) err.textContent='Не удалось рассчитать минимальную цену — укажите км/часы'; return; }
-  const min=Math.round(quote.minimumCash);
-  const offered=draft.priceOffer!=null?Math.round(draft.priceOffer):min;
-  if(offered<min){
-    if(err) err.textContent=`Цена не может быть ниже минимума (${fmt(min)} ₽)`;
+  const min=quote?Math.round(quote.minimumCash):null;
+  let offered=draft.priceOffer!=null?Math.round(draft.priceOffer):min;
+  if(min!=null && offered!=null && offered<min){
+    if(err) err.textContent=`Цена не может быть ниже ориентира (${fmt(min)} ₽)`;
     updateCustomerPricePreview();
     return;
   }
@@ -296,10 +358,10 @@ function submitCustomerOrder(){
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
   Promise.resolve(guardFn(spaceId,'publish_exchange')).then(g=>{
     if(!g.ok){ if(err) err.textContent=g.message; return; }
-    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err);
+    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, !quote);
   });
 }
-function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err){
+function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, pricePending){
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
@@ -321,31 +383,41 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     exchangeListedAt:now, wasOnExchange:true,
     partnerSpaceId:null,
     reqPayloadTons:payloadTons,
+    reqBodyType:draft.reqBodyType||null,
+    cargoKind:draft.cargoKind||null,
+    tripMode:draft.tripMode||null,
+    routeKm:draft.routeKm||null,
     reqLengthM:numOrNull((($('cust-req-l')||{}).value)),
     reqWidthM:numOrNull((($('cust-req-w')||{}).value)),
     reqHeightM:numOrNull((($('cust-req-h')||{}).value)),
-    estimateKm:draft.estimateKm,
+    estimateKm:draft.routeKm||draft.estimateKm||null,
     estimateWorkHours:draft.estimateWorkHours,
-    emptyKmBefore:draft.emptyKmBefore||0,
-    priceForClient:offered,
-    rateCash:offered,
+    emptyKmBefore:0,
+    pricePending:!!pricePending || offered==null,
+    priceForClient:offered||null,
+    rateCash:offered||null,
     paymentForm:'cash',
     transportApp:null
   };
-  const t=fillRatesFrom('cash', offered);
-  order.rateWithoutVat=t.withoutVat;
-  order.rateWithVat=t.withVat;
-  order.freight=offered;
+  if(offered){
+    const t=fillRatesFrom('cash', offered);
+    order.rateWithoutVat=t.withoutVat;
+    order.rateWithVat=t.withVat;
+    order.freight=offered;
+  }
   ensureRoutePoints(order);
   applyOrderSchedule(order);
   bumpDataEpoch('customer-portal-order');
   upsertOrder(order);
   persist();
   if(err) err.textContent='';
-  alert(`Заявка №${seqNo} отправлена на биржу перевозчика. Минимальная цена: ${fmt(min)} ₽.`);
-  ['cust-load','cust-unload','cust-contact-name','cust-contact-phone','cust-est-km','cust-est-hours','cust-empty-before','cust-price','cust-req-pay','cust-req-l','cust-req-w','cust-req-h'].forEach(id=>{
+  alert(order.pricePending
+    ?`Заявка №${seqNo} отправлена. Цену уточнит перевозчик.`
+    :`Заявка №${seqNo} отправлена. Ориентир цены: ${fmt(min||offered)} ₽.`);
+  ['cust-load','cust-unload','cust-contact-name','cust-contact-phone','cust-price','cust-req-pay'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
+  customerRouteKm=null;
   if($('cust-vehicle-date')) $('cust-vehicle-date').value='';
   if($('cust-vehicle-time')) $('cust-vehicle-time').value='';
   renderCustomerPortal();
@@ -358,8 +430,32 @@ function wireCustomerPortal(){
   $('cust-portal-back')&&($('cust-portal-back').onclick=logoutCustomer);
   $('cust-notify-toggle')&&($('cust-notify-toggle').onclick=()=>enableCustomerNotifications());
   $('cust-submit')&&($('cust-submit').onclick=submitCustomerOrder);
-  ['cust-est-km','cust-est-hours','cust-empty-before','cust-req-pay'].forEach(id=>{
+  let routeTimer=null;
+  const bumpRoute=()=>{
+    clearTimeout(routeTimer);
+    routeTimer=setTimeout(()=>refreshCustomerRouteKm(), 700);
+  };
+  ['cust-load','cust-unload'].forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    el.oninput=bumpRoute;
+    el.onblur=()=>refreshCustomerRouteKm();
+  });
+  ['cust-req-pay','cust-price'].forEach(id=>{
     const el=$(id); if(el) el.oninput=()=>updateCustomerPricePreview();
+  });
+  ['cust-body-type','cust-cargo-kind','cust-trip-mode'].forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    el.onchange=()=>{
+      if(id==='cust-cargo-kind' && el.value==='food' && $('cust-body-type') && $('cust-body-type').value!=='reefer'){
+        $('cust-body-type').value='reefer';
+      }
+      if(id==='cust-cargo-kind' && el.value==='bulk' && $('cust-body-type') && $('cust-body-type').value==='tent'){
+        $('cust-body-type').value='dump';
+      }
+      updateCustomerPricePreview();
+    };
   });
 }
 

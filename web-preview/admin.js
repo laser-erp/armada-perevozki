@@ -1130,6 +1130,7 @@ function adminOrderCardHtml(o){
     <p class="order-route">${esc(routeText(o))}</p>
     ${orderTimesLines(ensureOrderTimeStamps(o))}
     ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
+    ${o.pricePending?`<p class="rate-missing">Цену уточнит перевозчик</p>`:''}
     ${orderScheduleLines(o, false)}
     <p class="order-km">Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
     ${hasRate
@@ -2426,6 +2427,35 @@ function openDetail(id){
           <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
         </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-body-type">Кузов</label>
+            <select id="d-body-type">
+              <option value="">— не указан —</option>
+              ${(BODY_TYPES||[]).map(t=>`<option value="${esc(t.id)}" ${o.reqBodyType===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label for="d-cargo-kind">Груз</label>
+            <select id="d-cargo-kind">
+              <option value="">— не указан —</option>
+              ${(CARGO_KINDS||[]).map(t=>`<option value="${esc(t.id)}" ${o.cargoKind===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-trip-mode">Рейс</label>
+            <select id="d-trip-mode">
+              <option value="city" ${o.tripMode!=='intercity'?'selected':''}>Город</option>
+              <option value="intercity" ${o.tripMode==='intercity'?'selected':''}>Межгород</option>
+            </select>
+          </div>
+          <div>
+            <label for="d-route-km">Км по дороге</label>
+            <input id="d-route-km" inputmode="numeric" value="${o.routeKm??''}" placeholder="авто" />
+          </div>
+        </div>
         <label for="d-customer-inn">ИНН заказчика</label>
         <div class="row" style="gap:8px;align-items:center">
           <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" value="${esc(o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'')}" />
@@ -2676,6 +2706,11 @@ function openDetail(id){
     order.reqLengthM=numOrNull(($('d-req-l')||{}).value);
     order.reqWidthM=numOrNull(($('d-req-w')||{}).value);
     order.reqHeightM=numOrNull(($('d-req-h')||{}).value);
+    order.reqBodyType=(($('d-body-type')||{}).value||'').trim()||null;
+    order.cargoKind=(($('d-cargo-kind')||{}).value||'').trim()||null;
+    order.tripMode=(($('d-trip-mode')||{}).value||'')==='intercity'?'intercity':'city';
+    order.routeKm=numOrNull(($('d-route-km')||{}).value);
+    if(order.priceForClient!=null) order.pricePending=false;
     const carrSel=findCompanyById((($('d-carrier-company')||{}).value)||'');
     if(carrSel){ order.carrierCompanyId=carrSel.id; order.carrierCompanyName=carrSel.name; }
     else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
@@ -2905,6 +2940,10 @@ function openCatalogs(){
         <label>Нулевой до, км<input id="fin-podacha-km" inputmode="numeric" value="${fin.podachaEmptyKmLimit??20}" title="Свыше — +1 ч подачи" /></label>
         <label>₽/час<input id="fin-perhour" inputmode="decimal" value="${fin.defaultRatePerHourWork||''}" /></label>
         <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${fin.defaultRatePerKmCash||80}" /></label>
+        <label>Реф ×<input id="fin-reefer" inputmode="decimal" value="${fin.bodyMultReefer??1.25}" title="Надбавка рефрижератор / продукты" /></label>
+        <label>Самосвал ×<input id="fin-dump" inputmode="decimal" value="${fin.bodyMultDump??1.15}" /></label>
+        <label>От т<input id="fin-heavy-t" inputmode="decimal" value="${fin.heavyTonsFrom??20}" /></label>
+        <label>Тяжёлые ×<input id="fin-heavy" inputmode="decimal" value="${fin.heavyMult??1.15}" /></label>
         <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф фирмы</button>
       </div>`;
       })()}
@@ -3346,7 +3385,11 @@ function openCatalogs(){
       podachaHours:+(($('fin-podacha').value||'').replace(',','.')),
       podachaEmptyKmLimit:+(($('fin-podacha-km').value||'').replace(/\D/g,'')),
       defaultRatePerHourWork:+(($('fin-perhour').value||'').replace(',','.')),
-      defaultRatePerKmCash:+(($('fin-perkm').value||'').replace(',','.'))
+      defaultRatePerKmCash:+(($('fin-perkm').value||'').replace(',','.')),
+      bodyMultReefer:+(($('fin-reefer')||{}).value||'').replace(',','.')||1.25,
+      bodyMultDump:+(($('fin-dump')||{}).value||'').replace(',','.')||1.15,
+      heavyTonsFrom:+(($('fin-heavy-t')||{}).value||'').replace(',','.')||20,
+      heavyMult:+(($('fin-heavy')||{}).value||'').replace(',','.')||1.15
     });
     co.finance=next;
     // глобальный state.finance — запасной для старых заказов без ownCompanyId

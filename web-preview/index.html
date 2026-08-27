@@ -44,8 +44,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc11" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc11" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc12" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc12" />
 
 </head>
 <body>
@@ -164,22 +164,37 @@
             <div><label for="cust-vehicle-time">Время</label><input id="cust-vehicle-time" type="time" /></div>
           </div>
           <label for="cust-req-pay">Грузоподъёмность, т</label>
-          <input id="cust-req-pay" inputmode="decimal" placeholder="например 5" />
-          <div class="form-pair">
-            <div><label for="cust-est-km">Ориентир км (груз + после)</label><input id="cust-est-km" inputmode="numeric" placeholder="80" /></div>
-            <div><label for="cust-est-hours">Ориентир часов работы</label><input id="cust-est-hours" inputmode="decimal" placeholder="4" /></div>
-          </div>
-          <label for="cust-empty-before">Нулевой пробег до загрузки, км</label>
-          <input id="cust-empty-before" inputmode="numeric" placeholder="0" value="0" />
+          <input id="cust-req-pay" inputmode="decimal" placeholder="например 5 или 20" />
+          <label for="cust-body-type">Тип кузова</label>
+          <select id="cust-body-type">
+            <option value="tent">Тент / фургон</option>
+            <option value="board">Бортовой</option>
+            <option value="reefer">Рефрижератор</option>
+            <option value="dump">Самосвал</option>
+          </select>
+          <label for="cust-cargo-kind">Что везём</label>
+          <select id="cust-cargo-kind">
+            <option value="general">Обычный груз</option>
+            <option value="food">Продукты</option>
+            <option value="bulk">Навалочный / сыпучий</option>
+            <option value="other">Другое</option>
+          </select>
+          <label for="cust-trip-mode">Тип рейса</label>
+          <select id="cust-trip-mode">
+            <option value="auto">Авто: город / межгород по расстоянию</option>
+            <option value="city">Город</option>
+            <option value="intercity">Межгород</option>
+          </select>
+          <p class="hint" id="cust-route-km-hint">Километраж посчитаем по адресам — вписывать «груз + после» не нужно.</p>
           <label for="cust-contact-name">Контакт на загрузке</label>
           <input id="cust-contact-name" placeholder="ФИО" />
           <label for="cust-contact-phone">Телефон контакта</label>
           <input id="cust-contact-phone" inputmode="tel" placeholder="+7…" />
           <div id="cust-price-preview" class="schedule-box"></div>
-          <label for="cust-price">Ваша цена, ₽ (не ниже минимума)</label>
-          <input id="cust-price" inputmode="decimal" placeholder="авто из расчёта" />
+          <label for="cust-price">Ваша цена, ₽ (не ниже минимума, если он есть)</label>
+          <input id="cust-price" inputmode="decimal" placeholder="из расчёта или уточнит перевозчик" />
           <div class="error" id="cust-form-error"></div>
-          <button type="button" class="primary" id="cust-submit">Отправить на биржу</button>
+          <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Мои заявки</h2>
@@ -503,15 +518,15 @@
     </div>
   </div>
 </div>
-  <script src="/store.js?v=2026-08-27-entrybc11"></script>
-<script src="/billing.js?v=2026-08-27-entrybc11"></script>
-<script src="/qrcode.min.js?v=2026-08-27-entrybc11"></script>
-<script src="/entry-share.js?v=2026-08-27-entrybc11"></script>
-<script src="/driver.js?v=2026-08-27-entrybc11"></script>
-<script src="/etrn.js?v=2026-08-27-entrybc11"></script>
-  <script src="/admin.js?v=2026-08-27-entrybc11"></script>
-  <script src="/customer.js?v=2026-08-27-entrybc11"></script>
-  <script src="/app.js?v=2026-08-27-entrybc11"></script>
-<script src="/onboarding.js?v=2026-08-27-entrybc11"></script>
+  <script src="/store.js?v=2026-08-27-entrybc12"></script>
+<script src="/billing.js?v=2026-08-27-entrybc12"></script>
+<script src="/qrcode.min.js?v=2026-08-27-entrybc12"></script>
+<script src="/entry-share.js?v=2026-08-27-entrybc12"></script>
+<script src="/driver.js?v=2026-08-27-entrybc12"></script>
+<script src="/etrn.js?v=2026-08-27-entrybc12"></script>
+  <script src="/admin.js?v=2026-08-27-entrybc12"></script>
+  <script src="/customer.js?v=2026-08-27-entrybc12"></script>
+  <script src="/app.js?v=2026-08-27-entrybc12"></script>
+<script src="/onboarding.js?v=2026-08-27-entrybc12"></script>
 </body>
 </html>

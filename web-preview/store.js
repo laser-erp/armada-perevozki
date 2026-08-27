@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entrybc11";
+const APP_BUILD="2026-08-27-entrybc12";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -390,6 +390,72 @@ const API_BASE=(()=>{
   if(h==='aptown1.fvds.ru') return `${location.origin}/armada-api`;
   return '';
 })();
+const BODY_TYPES=[
+  {id:'tent', label:'Тент / фургон'},
+  {id:'board', label:'Бортовой'},
+  {id:'reefer', label:'Рефрижератор'},
+  {id:'dump', label:'Самосвал'}
+];
+const CARGO_KINDS=[
+  {id:'general', label:'Обычный груз'},
+  {id:'food', label:'Продукты'},
+  {id:'bulk', label:'Навалочный / сыпучий'},
+  {id:'other', label:'Другое'}
+];
+function bodyTypeLabel(id){
+  return (BODY_TYPES.find(x=>x.id===id)||{}).label||'';
+}
+function cargoKindLabel(id){
+  return (CARGO_KINDS.find(x=>x.id===id)||{}).label||'';
+}
+function tripModeLabel(id){
+  return id==='intercity'?'Межгород':'Город';
+}
+const _geoCache=new Map();
+function haversineKm(a, b){
+  if(!a||!b) return null;
+  const R=6371;
+  const dLat=(b.lat-a.lat)*Math.PI/180;
+  const dLon=(b.lon-a.lon)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  const km=2*R*Math.asin(Math.min(1, Math.sqrt(x)));
+  return km>0?km:null;
+}
+async function geocodeAddress(q){
+  const query=String(q||'').trim();
+  if(query.length<4) return null;
+  const key=query.toLowerCase();
+  if(_geoCache.has(key)) return _geoCache.get(key);
+  try{
+    const url=`/geo-nominatim/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res=await fetch(url, {headers:{Accept:'application/json'}});
+    if(!res.ok) return null;
+    const arr=await res.json();
+    const hit=arr&&arr[0];
+    if(!hit) return null;
+    const pt={lat:+hit.lat, lon:+hit.lon};
+    if(!Number.isFinite(pt.lat) || !Number.isFinite(pt.lon)) return null;
+    _geoCache.set(key, pt);
+    return pt;
+  }catch(_){ return null; }
+}
+async function estimateRouteKm(fromAddr, toAddr){
+  const a=await geocodeAddress(fromAddr);
+  const b=await geocodeAddress(toAddr);
+  if(!a||!b) return null;
+  try{
+    const url=`/osrm-route/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
+    const res=await fetch(url, {headers:{Accept:'application/json'}});
+    if(res.ok){
+      const data=await res.json();
+      const m=data&&data.routes&&data.routes[0]&&data.routes[0].distance;
+      if(m>50) return Math.max(1, Math.round(m/1000));
+    }
+  }catch(_){}
+  const straight=haversineKm(a,b);
+  if(!(straight>0)) return null;
+  return Math.max(1, Math.round(straight*1.35));
+}
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
   {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
@@ -439,7 +505,12 @@ const PB_BASE=(function(){
 })();
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
-const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
+const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80,bodyMultReefer:1.25,bodyMultDump:1.15,heavyTonsFrom:20,heavyMult:1.15};
+function clampMult(v, fallback){
+  const n=+v;
+  if(!(n>0) || Number.isNaN(n)) return fallback;
+  return Math.min(2.5, Math.max(1, n));
+}
 function normalizeFinance(f){
   const s=Object.assign({}, DEFAULT_FINANCE, f||{});
   let markup=+s.markupPercent; if(Number.isNaN(markup)) markup=15;
@@ -450,6 +521,10 @@ function normalizeFinance(f){
   s.podachaEmptyKmLimit=(+s.podachaEmptyKmLimit>0)?+s.podachaEmptyKmLimit:20;
   s.defaultRatePerHourWork=(+s.defaultRatePerHourWork>0)?+s.defaultRatePerHourWork:0;
   s.defaultRatePerKmCash=(+s.defaultRatePerKmCash>0)?+s.defaultRatePerKmCash:80;
+  s.bodyMultReefer=clampMult(s.bodyMultReefer, 1.25);
+  s.bodyMultDump=clampMult(s.bodyMultDump, 1.15);
+  s.heavyTonsFrom=(+s.heavyTonsFrom>0)?+s.heavyTonsFrom:20;
+  s.heavyMult=clampMult(s.heavyMult, 1.15);
   return s;
 }
 const state={
@@ -498,6 +573,7 @@ if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
 if(!(state.finance.podachaEmptyKmLimit>0)) state.finance.podachaEmptyKmLimit=20;
 if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
 if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
+state.finance=normalizeFinance(state.finance);
 // Миграция только если в localStorage вообще не было массива orders
 if(!Array.isArray(saved.orders) && state.shifts.length){
   state.orders=state.shifts.flatMap(s=>s.orders||[]);
@@ -721,6 +797,7 @@ function applyPayload(p, opts){
   if(!(state.finance.podachaEmptyKmLimit>0)) state.finance.podachaEmptyKmLimit=20;
   if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
   if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
+  state.finance=normalizeFinance(state.finance);
   // Только если поле orders вообще отсутствовало в старых дампах.
   if(!('orders' in p) && state.shifts.length && !state.orders.length){
     state.orders=stripCancelledFromOrders(state.shifts.flatMap(s=>s.orders||[]));
