@@ -655,6 +655,15 @@ function availableFleetForCustomer(companyId, reqs, atIso){
     return !vehicleBusyAt(v.plate, atIso);
   });
 }
+function freeOwnFleetForOrder(o, exceptOrderId){
+  if(!o) return [];
+  const firmId=o.ownCompanyId || ((typeof currentOwnCompany==='function' && currentOwnCompany())||{}).id;
+  if(!firmId) return [];
+  return fleetVehiclesForCompany(firmId).filter(v=>{
+    if(!vehicleFitsOrder(v, o)) return false;
+    return !vehicleBusyAt(v.plate, o.vehicleAt, exceptOrderId||o.id);
+  });
+}
 function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
   if(!currentAdmin) return [];

@@ -1434,7 +1434,7 @@ function returnOrderToExchange(id){
     if(!g.ok){ alert(g.message); return; }
     if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа'); openDetail(id); return; }
     if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
-      ? 'Вернуть заказ на биржу партнёрам? Для заказчика исполнителем остаётесь вы. Назначение водителя и договор‑заявка будут сброшены.'
+      ? 'Вернуть на биржу? Там вы снова заказчик перевозки. Назначение водителя и договор‑заявка будут сброшены.'
       : 'Вернуть заказ на биржу? Назначение водителя и договор‑заявка будут сброшены.')) return;
     o.onExchange=true;
     o.exchangeListedAt=new Date().toISOString();
@@ -1465,9 +1465,13 @@ function publishToExchange(id){
   billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
     if(!g.ok){ alert(g.message); return; }
     if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
-    if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
-      ? 'Своей машины нет — выставить партнёрам на бирже? Для заказчика исполнителем остаётесь вы. Маржа = цена заказчику минус цена перевозчику.'
-      : 'Выставить заказ на биржу для других фирм?')) return;
+    const free=typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):[];
+    if(free.length){
+      const plates=free.slice(0,6).map(v=>v.plate).join(', ')+(free.length>6?'…':'');
+      if(!confirm(`Свободных своих машин под заявку: ${free.length} (${plates}).\n\nШтатный логист сначала закрывает свой парк. Остаток можно отдать на биржу — там вы заказчик перевозки.\n\nВсё равно выставить на биржу?`)) return;
+    } else if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
+      ? 'Своих свободных машин нет. Выставить на биржу? Там вы заказчик перевозки, партнёр везёт, для грузоотправителя исполнителем остаётесь вы.'
+      : 'Выставить заказ на биржу для других фирм? Там вы заказчик этой перевозки.')) return;
     o.onExchange=true;
     o.exchangeListedAt=new Date().toISOString();
     o.wasOnExchange=true;
@@ -1641,12 +1645,12 @@ function confirmClaimExchangeAfterGuard(o){
 function renderAdminExchangeBoard(orders){
   const mineCount=orders.filter(o=>isMyFirmOrder(o)).length;
   const head=`<div class="board-head">
-    <p class="cat-panel-hint">Чужой заказ логиста — «Забрать»: вам не нужно искать клиентов, если сами за рулём. Свой — назначить из парка или снять.</p>
+    <p class="cat-panel-hint">Свои заявки на бирже: вы заказчик перевозки (свой парк уже занят или не подходит). Чужие — «Забрать» как перевозчик.</p>
     ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
       <div class="m"><span>На бирже</span><b>${orders.length}</b></div>
-      <div class="m"><span>Ваши</span><b>${mineCount}</b></div>
-      <div class="m"><span>Чужие</span><b>${Math.max(0, orders.length-mineCount)}</b></div>
+      <div class="m"><span>Вы заказчик</span><b>${mineCount}</b></div>
+      <div class="m"><span>Забрать</span><b>${Math.max(0, orders.length-mineCount)}</b></div>
     </div>
   </div>`;
   if(!orders.length){
@@ -1667,8 +1671,8 @@ function renderAdminExchangeBoard(orders){
         <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       </div>
       <p>${esc(dateTime(o.createdAt))}</p>
-      <p>Заказчик: <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong></p>
-      <span class="ex-badge ${mine?'':'other'}">${mine?'ваш заказ':'чужой заказ'}</span>
+      <p>Заказчик: <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong>${mine?' (вы)':''}</p>
+      <span class="ex-badge ${mine?'':'other'}">${mine?'вы заказчик':'чужой · забрать как перевозчик'}</span>
       <p class="ex-route">${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
       <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(req||'не указано')}</strong></p>
@@ -1679,7 +1683,7 @@ function renderAdminExchangeBoard(orders){
           <label for="ex-plate-${o.id}">Авто под требования</label>
           <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
           <div class="ex-actions">
-            <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
+            <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить свой парк</button>
             <div class="row">
               <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
               <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
@@ -1688,7 +1692,7 @@ function renderAdminExchangeBoard(orders){
         </div>
       `:`
         <div class="ex-actions">
-          <button type="button" class="primary ex-claim" data-id="${o.id}">Забрать</button>
+          <button type="button" class="primary ex-claim" data-id="${o.id}">Забрать как перевозчик</button>
           <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
         </div>
       `}
@@ -1711,7 +1715,7 @@ function renderAdminInboxBoard(orders){
     if(k) calMarks.push({dayKey:k});
   });
   const head=`<div class="board-head">
-    <p class="cat-panel-hint">Запрос брони подтвердите кнопкой — после этого точка появится в календаре у вас и у заказчика на дату подачи. Свой парк — назначьте. Нет машины — отдайте перевозчику на бирже.</p>
+    <p class="cat-panel-hint">Штатный логист сначала закрывает свои машины. Что не влезает в парк — на биржу: там вы заказчик перевозки. Бронь подтвердите кнопкой — точка в календаре у вас и у грузоотправителя.</p>
     ${adminOrdersCalHtml(calMarks)}
     ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
@@ -1729,6 +1733,7 @@ function renderAdminInboxBoard(orders){
     const firmId=o.ownCompanyId||(myCo&&myCo.id);
     const drvList=firmId?fleetDriversForCompany(firmId):[];
     const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
+    const freeList=typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):vehList;
     const bookedPlate=String(o.bookedPlate||'').trim();
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
     const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}${bookedPlate&&v.plate===bookedPlate?' · бронь':''}</option>`).join('');
@@ -1755,6 +1760,9 @@ function renderAdminInboxBoard(orders){
       <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · ${esc(bookedPlate)}`:''}</p>
       ${bookLine}
       ${margin?`<p class="order-money">${esc(margin)}</p>`:''}
+      <p class="hint">${freeList.length
+        ?`Свободно своих под заявку: ${freeList.length}. Сначала свой парк, остаток — на биржу (там вы заказчик).`
+        :'Свободных своих нет. Остаток на биржу — там вы заказчик перевозки.'}</p>
       <div class="ex-assign-box">
         ${reqBook?`<div class="ex-actions" style="margin-bottom:8px">
           <button type="button" class="primary in-book-ok" data-id="${o.id}">Подтвердить бронь</button>
@@ -1765,9 +1773,9 @@ function renderAdminInboxBoard(orders){
         <label for="ex-plate-${o.id}">Авто</label>
         <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
         <div class="ex-actions">
-          <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить свой парк</button>
+          <button type="button" class="${freeList.length?'primary':'secondary'} ex-assign" data-id="${o.id}">Назначить свой парк</button>
           <div class="row">
-            <button type="button" class="secondary pub-exchange" data-id="${o.id}">Отдать перевозчику</button>
+            <button type="button" class="${freeList.length?'secondary':'primary'} pub-exchange" data-id="${o.id}">${freeList.length?'Остаток на биржу':'На биржу — вы заказчик'}</button>
             <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
           </div>
         </div>
