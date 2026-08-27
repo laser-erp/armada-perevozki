@@ -1,6 +1,6 @@
 # ARMADA — стратегический план 2026
 
-Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `052ff21`, 24 коммитов ahead of `main`)
+Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `fa68622`, ahead of `main`)
 
 Продакшен: https://aptown1.fvds.ru · API: https://aptown1.fvds.ru/armada-api
 
@@ -12,7 +12,7 @@
 |------|--------|------------|
 | S0 HTTPS + armada-api | ✅ done | LE до 2026-11-22, smoke + ssh-verify OK |
 | S1 driverInvites | ✅ done | invite.html, KEY в store.js, smoke OK |
-| S2 пилот 2–3 space | 🔄 in_progress | kp.html, **раздельные входы** (admin/driver/zakaz), онбординг + help |
+| S2 пилот 2–3 space | 🔄 in_progress | `/v` `/a` `/z/{slug}`, backlog §11, kp + help |
 | S3 ETRN MVP (код 2 спринта) | ✅ done | UI + API + webhook; smoke OK |
 | S3-1.2 письма операторам | 📤 ready_to_send | PDF на проде, `docs/PISMO_OPERATORAM_ETRN.md` |
 | S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false`, нужны ключи оператора |
@@ -39,7 +39,7 @@ BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
 | S0 HTTPS + armada-api | `run-strategic-verification.sh` PASS + ssh-verify | ✅ |
 | S1 driverInvites | smoke + verify-prod-web-sync | ✅ |
 | S3 ETRN MVP 2 спринта | `COMPETITIVE_ANALYSIS_2026.md` чеклист + smoke | ✅ |
-| Деплой ветки на aptown1 | verify-prod-web-sync 16 файлов MATCH | ✅ |
+| Деплой ветки на aptown1 | verify-prod-web-sync 15 файлов MATCH | ✅ |
 | Ветка `cursor/compliance-p0-4317` на GitHub | `check-github-remote-branch.sh` → HTTP 404 | ❌ |
 | Трекер §4 + JSON | этот файл + `.cursor/stores/self/` | ✅ |
 
@@ -57,7 +57,7 @@ BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
 
 ## Сборка на проде
 
-- `APP_BUILD`: `2026-08-27-backlog1`
-- Service Worker: `armada-shell-v28`
-- Входы: `admin.html`, `driver.html`, `zakaz.html` (+ `?s=` space / `?c=` company)
-- Backlog §11: portal per space, sync tabs, return exchange, customer notify, phone login
+- `APP_BUILD`: `2026-08-27-entryui1`
+- Service Worker: `armada-shell-v29`
+- Входы: `/a` `/v` `/z` и `/z/{portalSlug}` (Caddy → index.html)
+- Backlog §11 на проде: portal slug, sync tabs, return exchange, customer notify, phone login
