@@ -391,6 +391,11 @@ function renderAdminBilling(){
   });
   wireEntryShareButtons(form);
 }
+function activityLogWhen(at){
+  try{
+    return new Date(at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }catch(_){ return '—'; }
+}
 function renderAdminActivity(){
   migrateAdmins();
   const online=onlineAdmins();
@@ -426,20 +431,19 @@ function renderAdminActivity(){
         :`<div class="empty">Никого нет онлайн</div>`}
       </div>
     </section>
-    <section class="form-section">
-      <h2 class="form-section-title">Журнал входов</h2>
-      <div class="cat-list">
-        ${log.length?log.map(e=>`
-          <div class="item-card">
-            <div class="item-top">
-              <div class="item-name">${esc(e.adminName)}</div>
-              <span class="hint">${e.action==='login'?'вход':'выход'}</span>
-            </div>
-            <div class="hint">${esc(dateTime(e.at))}</div>
+    <details class="activity-log-fold">
+      <summary class="activity-log-summary">Журнал входов${log.length?` · ${log.length}`:''}</summary>
+      <div class="activity-log-compact">
+        ${log.length?log.slice(0,12).map(e=>`
+          <div class="activity-log-line">
+            <span class="activity-log-when">${esc(activityLogWhen(e.at))}</span>
+            <span class="activity-log-who">${esc(e.adminName)}</span>
+            <span class="activity-log-act ${e.action==='login'?'is-in':'is-out'}">${e.action==='login'?'вход':'выход'}</span>
           </div>`).join('')
         :`<div class="empty">Пока пусто</div>`}
+        ${log.length>12?`<p class="hint activity-log-more">Показаны последние 12 из ${log.length}</p>`:''}
       </div>
-    </section>
+    </details>
     <section class="form-section">
       <h2 class="form-section-title">Пространства / администраторы</h2>
       <p class="cat-panel-hint">Каждый админ — своё пространство фирмы. ИНН → «Загрузить» подтянет реквизиты из ЕГРЮЛ (ФНС).</p>

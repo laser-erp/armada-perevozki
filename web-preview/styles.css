@@ -568,6 +568,21 @@
     .cat-panel.on{display:flex}
     @keyframes catIn{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
     .cat-list{display:flex;flex-direction:column;gap:6px}
+    .activity-log-fold{margin:4px 0 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+    .activity-log-summary{
+      cursor:pointer;padding:8px 12px;font-size:.82rem;font-weight:700;color:var(--text);list-style:none
+    }
+    .activity-log-summary::-webkit-details-marker{display:none}
+    .activity-log-compact{padding:0 10px 8px;display:flex;flex-direction:column;gap:2px}
+    .activity-log-line{
+      display:grid;grid-template-columns:minmax(72px,auto) 1fr auto;gap:6px;align-items:center;
+      font-size:.72rem;line-height:1.35;color:var(--muted);padding:2px 0
+    }
+    .activity-log-who{color:var(--text);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .activity-log-act{font-size:.68rem;text-transform:uppercase;letter-spacing:.02em}
+    .activity-log-act.is-in{color:#059669}
+    .activity-log-act.is-out{color:var(--muted)}
+    .activity-log-more{margin:4px 0 0;font-size:.7rem}
     .cat-quick,.cat-compact{
       display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:var(--radius);
       background:var(--surface);border:1px solid var(--border)
