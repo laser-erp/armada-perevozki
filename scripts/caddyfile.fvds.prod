@@ -12,20 +12,29 @@ aptown1.fvds.ru {
 
 	encode gzip
 
-	# Входы /v /a /z — отдаём index.html с явным text/html (иначе мобильный браузер «скачивает»)
-	handle /v* {
+	@entry_driver path /v /v/
+	@entry_admin path /a /a/
+	@entry_customer_root path /z /z/
+	@entry_portal_slug path_regexp ^/z/[a-z0-9][a-z0-9_-]{2,31}/?$
+	handle @entry_driver {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
 		file_server
 	}
-	handle /a* {
+	handle @entry_admin {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
 		file_server
 	}
-	handle /z* {
+	handle @entry_customer_root {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	handle @entry_portal_slug {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
