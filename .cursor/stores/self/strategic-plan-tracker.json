@@ -7,7 +7,7 @@
     "result": "pass",
     "notes": "caddy + armada-api 8091 + onboarding + help"
   },
-  "updatedAt": "2026-08-27T10:18:00Z",
+  "updatedAt": "2026-08-27T11:04:00Z",
   "deploy": {
     "production": {
       "status": "done",
@@ -18,7 +18,7 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "b3d740a",
+      "headCommit": "1c152eb",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
       "bundleHead": "b3d740a",
@@ -27,14 +27,14 @@
     }
   },
   "lastSmoke": {
-    "at": "2026-08-27T10:18:00Z",
+    "at": "2026-08-27T11:04:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass",
-    "notes": "S0–S3 + onboarding; APP_BUILD 2026-08-27-onboard1"
+    "notes": "run-strategic-verification PASS; APP_BUILD 2026-08-27-onboard1"
   },
   "lastProdSync": {
-    "at": "2026-08-27T10:18:00Z",
+    "at": "2026-08-27T11:04:00Z",
     "script": "scripts/verify-prod-web-sync.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "match",
