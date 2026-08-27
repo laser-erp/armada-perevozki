@@ -184,10 +184,15 @@ function suggestCustomerOrderPrice(draft){
     base=calculateClientTariff(cityDraft, fin);
   }
   if(!base||!(base.totalCash>0)) return null;
-  const total=round2(base.totalCash*mult);
-  const t=fillRatesFrom('cash', total);
+  let total=round2(base.totalCash*mult);
   const extras=[];
   if(mult>1.001) extras.push(`надбавка кузов/груз/тоннаж ×${mult}`);
+  const feePct=draft.fulfillment==='direct'?0:(+fin.logistFeePercent||0);
+  if(feePct>0){
+    total=round2(total*(1+feePct/100));
+    extras.push(`ставка логиста ${feePct}%`);
+  }
+  const t=fillRatesFrom('cash', total);
   return {
     minimumCash:total,
     cash:t.cash,
@@ -197,7 +202,8 @@ function suggestCustomerOrderPrice(draft){
     recommendedCash:total,
     tripMode:trip,
     routeKm:km||null,
-    multiplier:mult
+    multiplier:mult,
+    logistFeePercent:feePct
   };
 }
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
@@ -621,6 +627,29 @@ function fleetDriversForCompany(companyId){
 function fleetVehiclesForCompany(companyId){
   if(!companyId) return [];
   return (state.vehicles||[]).filter(v=>v.companyId===companyId);
+}
+function vehicleBusyAt(plate, atIso){
+  const want=String(plate||'').trim();
+  if(!want) return false;
+  const at=atIso?Date.parse(atIso):Date.now();
+  return (state.orders||[]).some(o=>{
+    if(!o || o.cancelledAt || looksClosedOrder(o)) return false;
+    const used=String(o.vehiclePlate||'').trim();
+    const booked=String(o.bookedPlate||'').trim();
+    if(used!==want && booked!==want) return false;
+    if(o.startOdometer!=null) return true;
+    const start=Date.parse(o.vehicleAt||o.createdAt||0);
+    const free=Date.parse(o.freeAt||0);
+    if(Number.isFinite(free) && Number.isFinite(at) && at<free) return true;
+    if(Number.isFinite(start) && Number.isFinite(at) && Math.abs(at-start)<3*3600*1000) return true;
+    return false;
+  });
+}
+function availableFleetForCustomer(companyId, reqs, atIso){
+  return fleetVehiclesForCompany(companyId).filter(v=>{
+    if(reqs && (reqs.reqPayloadTons>0 || reqs.reqLengthM>0) && !vehicleFitsOrder(v, reqs)) return false;
+    return !vehicleBusyAt(v.plate, atIso);
+  });
 }
 function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
@@ -1513,17 +1542,46 @@ function orderBeingClosed(){
 /** Текущий заказ на закрытии (не путать с «зомби» незакрытым №1). */
 function openOrder(){ return orderBeingClosed(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
+function waitingLogistDriver(name){
+  const n=String(name||'').trim();
+  return !n || n==='—' || n==='-' || n==='Биржа' || n==='Диспетчер';
+}
+function orderKeepsLogist(o){
+  if(!o) return false;
+  return o.executorType==='logist' || o.customerSubmitted || o.fulfillment==='logist' || o.fulfillment==='direct';
+}
+function isLogistInboxOrder(o){
+  if(!o || looksClosedOrder(o) || o.cancelledAt || o.onExchange || o.startOdometer!=null) return false;
+  if(!waitingLogistDriver(o.driverName)) return false;
+  return orderKeepsLogist(o);
+}
+function logistMargin(o){
+  const client=+o.priceForClient||0;
+  const carr=+o.priceForCarrier||0;
+  if(!(client>0) && !(carr>0)) return null;
+  return {
+    client:client||null,
+    carrier:carr||null,
+    margin:(client>0 && carr>0)?Math.round((client-carr)*100)/100:null
+  };
+}
+function logistMarginLine(o){
+  const m=logistMargin(o);
+  if(!m) return '';
+  if(m.margin!=null) return `Заказчику ${fmt(m.client)} ₽ · перевозчику ${fmt(m.carrier)} ₽ · вам ${fmt(m.margin)} ₽`;
+  if(m.client) return `Заказчику ${fmt(m.client)} ₽ · ставку перевозчику ещё не задали`;
+  return `Перевозчику ${fmt(m.carrier)} ₽`;
+}
 function statusText(o){
   if(o.cancelledAt || (o.closedAt && o.cancelReason)) return 'Отменён';
   if(looksClosedOrder(o)) return 'Закрыт';
-  if(o.onExchange && o.startOdometer==null) return 'На бирже';
+  if(isLogistInboxOrder(o)) return o.fulfillment==='direct'?'Прямой · жду парк':'Входящая';
+  if(o.onExchange && o.startOdometer==null) return 'На бирже (ищем партнёра)';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(o.startOdometer!=null) return 'В работе';
   if(o.departOdometer!=null) return 'В пути';
-  if(o.executorType==='partner' && o.transportApp) return 'Партнёр';
-  // снят с биржи / без водителя — не считаем «назначен»
-  if(!o.onExchange && o.startOdometer==null && o.departOdometer==null &&
-     (!o.driverName || o.driverName==='—' || o.driverName==='-' || o.driverName==='Биржа')){
+  if(o.executorType==='partner' && o.transportApp) return 'Партнёр везёт';
+  if(!o.onExchange && o.startOdometer==null && o.departOdometer==null && waitingLogistDriver(o.driverName)){
     return 'Черновик';
   }
   return 'Назначен';

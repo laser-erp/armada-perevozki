@@ -1089,6 +1089,7 @@ function adminDeleteSelectedOrders(){
 }
 function orderStatusClass(o){
   if(looksClosedOrder(o)) return 'closed';
+  if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) return 'inbox';
   if(o.onExchange && o.startOdometer==null) return 'exchange';
   if(o.startOdometer!=null || o.departOdometer!=null) return 'progress';
   return '';
@@ -1125,7 +1126,9 @@ function adminOrderCardHtml(o){
     ${o.ownCompanyName?`<p style="color:var(--text);font-weight:600">От: ${esc(o.ownCompanyName)}</p>`:''}
     <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
     ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
-    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${phone}</p>
+    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${o.bookedPlate&&o.bookedPlate!==o.vehiclePlate?` · бронь ${esc(o.bookedPlate)}`:''}${phone}</p>
+    ${o.fulfillment==='logist'?'<p>Срочно: заказчик просит закрыть как можно скорее</p>':o.fulfillment==='direct'?'<p>Прямой парк, без срочной ставки логиста</p>':''}
+    ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="order-money">${esc(logistMarginLine(o))}</p>`:''}
     <p>${esc(orderContactLine(o))}</p>
     <p class="order-route">${esc(routeText(o))}</p>
     ${orderTimesLines(ensureOrderTimeStamps(o))}
@@ -1312,7 +1315,8 @@ function filteredOrders(){
     // обычный админ — только свои; супер — все, плюс фильтр по админу
     if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return false;
     if(state.adminFilter==='exchange') return !looksClosedOrder(o) && !!o.onExchange && o.startOdometer==null;
-    if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && o.driverName && o.driverName!=='—' && o.driverName!=='-' && o.driverName!=='Биржа';
+    if(state.adminFilter==='inbox') return typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o);
+    if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && !waitingLogistDriver(o.driverName);
     if(state.adminFilter==='progress') return !looksClosedOrder(o) && o.startOdometer!=null;
     if(state.adminFilter==='closed') return looksClosedOrder(o);
     return true;
@@ -1367,14 +1371,19 @@ function unpublishFromExchange(id){
   if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Снять с биржи может только фирма‑заказчик'); return; }
   if(!confirm('Снять заказ с биржи?')) return;
   o.onExchange=false;
-  o.executorType='own';
-  o.driverName=o.driverName==='Биржа'?'—':(o.driverName||'—');
+  const keep=typeof orderKeepsLogist==='function' && orderKeepsLogist(o);
+  o.executorType=keep?'logist':'own';
+  if(typeof waitingLogistDriver==='function' ? waitingLogistDriver(o.driverName) : (o.driverName==='Биржа'||!o.driverName)){
+    o.driverName=keep?'Диспетчер':'—';
+  }
   bumpDataEpoch('unpublish-exchange');
   upsertOrder(o);
   renderAdmin();
 }
 function canReturnOrderToExchange(o){
   if(!o || looksClosedOrder(o) || o.cancelledAt || o.startOdometer!=null || o.onExchange) return false;
+  if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) return false;
+  if(typeof waitingLogistDriver==='function' && waitingLogistDriver(o.driverName)) return false;
   const assigned=o.driverName && o.driverName!=='Биржа' && o.driverName!=='—';
   if(!assigned) return false;
   if(isMyFirmOrder(o) || isSuperAdmin()) return true;
@@ -1388,12 +1397,15 @@ function returnOrderToExchange(id){
   billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
     if(!g.ok){ alert(g.message); return; }
     if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа'); openDetail(id); return; }
-    if(!confirm('Вернуть заказ на биржу? Назначение водителя и договор‑заявка будут сброшены.')) return;
+    if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
+      ? 'Вернуть заказ на биржу партнёрам? Для заказчика исполнителем остаётесь вы. Назначение водителя и договор‑заявка будут сброшены.'
+      : 'Вернуть заказ на биржу? Назначение водителя и договор‑заявка будут сброшены.')) return;
     o.onExchange=true;
     o.exchangeListedAt=new Date().toISOString();
     o.wasOnExchange=true;
-    o.executorType='exchange';
-    o.driverName='Биржа';
+    const keep=typeof orderKeepsLogist==='function' && (o.customerSubmitted || o.fulfillment==='logist' || o.fulfillment==='direct');
+    o.executorType=keep?'logist':'exchange';
+    o.driverName=keep?'Диспетчер':'Биржа';
     o.vehiclePlate='—';
     o.transportApp=null;
     o.partnerSpaceId=null;
@@ -1416,12 +1428,15 @@ function publishToExchange(id){
   billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
     if(!g.ok){ alert(g.message); return; }
     if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
-    if(!confirm('Выставить заказ на биржу для других фирм?')) return;
+    if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
+      ? 'Своей машины нет — выставить партнёрам на бирже? Для заказчика исполнителем остаётесь вы. Маржа = цена заказчику минус цена перевозчику.'
+      : 'Выставить заказ на биржу для других фирм?')) return;
     o.onExchange=true;
     o.exchangeListedAt=new Date().toISOString();
     o.wasOnExchange=true;
-    o.executorType='exchange';
-    o.driverName='Биржа';
+    const keep=typeof orderKeepsLogist==='function' && orderKeepsLogist(o);
+    o.executorType=keep?'logist':'exchange';
+    o.driverName=keep?'Диспетчер':'Биржа';
     o.vehiclePlate='—';
     o.transportApp=null;
     o.partnerSpaceId=null;
@@ -1433,7 +1448,7 @@ function publishToExchange(id){
 }
 function assignExchangeToOwn(id){
   const o=state.orders.find(x=>x.id===id);
-  if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
+  if(!o || looksClosedOrder(o) || o.cancelledAt || o.startOdometer!=null){ alert('Нельзя назначить'); renderAdmin(); return; }
   if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Свой парк — только для заказов вашей фирмы. Чужой забирайте кнопкой «Забрать»'); return; }
   const driver=(($('ex-drv-'+id)||{}).value||'').trim();
   const plate=(($('ex-plate-'+id)||{}).value||'').trim();
@@ -1485,14 +1500,14 @@ function openClaimExchange(id){
   $('claim-form').innerHTML=`
     <section class="form-section">
       <h2 class="form-section-title">Договор‑заявка</h2>
-      <p class="form-section-hint">Электронная заявка на перевозку между фирмами</p>
+      <p class="form-section-hint">Логист отдаёт вам заказ. Если вы владелец и сами за рулём — не нужно искать заявки: забрали, назначили своё авто и поехали.</p>
       <div class="claim-box">
         <p><strong>Заказчик перевозки:</strong> ${esc(o.ownCompanyName||'—')}</p>
         <p><strong>Перевозчик:</strong> ${esc(myCo.name)}</p>
         <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
         <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
         <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
-        <p class="hint" style="margin-top:6px">После подписи — водитель и авто из вашего парка войдут в заявку.</p>
+        <p class="hint" style="margin-top:6px">После подписи — ваш водитель (часто вы сами) и авто войдут в заявку. Для грузоотправителя исполнителем остаётся логист.</p>
       </div>
     </section>
     <section class="form-section">
@@ -1586,7 +1601,7 @@ function confirmClaimExchangeAfterGuard(o){
 function renderAdminExchangeBoard(orders){
   const mineCount=orders.filter(o=>isMyFirmOrder(o)).length;
   const head=`<div class="board-head">
-    <p class="cat-panel-hint">Чужой заказ — «Забрать» (договор‑заявка + ваш парк). Свой — назначить или снять.</p>
+    <p class="cat-panel-hint">Чужой заказ логиста — «Забрать»: вам не нужно искать клиентов, если сами за рулём. Свой — назначить из парка или снять.</p>
     ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
       <div class="m"><span>На бирже</span><b>${orders.length}</b></div>
@@ -1641,6 +1656,59 @@ function renderAdminExchangeBoard(orders){
   }).join('');
   return `${head}<div class="admin-cards">${cards}</div>`;
 }
+function renderAdminInboxBoard(orders){
+  const rush=orders.filter(o=>o.fulfillment!=='direct').length;
+  const booked=orders.filter(o=>o.bookedPlate).length;
+  const head=`<div class="board-head">
+    <p class="cat-panel-hint">Заказчик просит закрыть скорее и оплачивает ставку логиста. Свой парк — назначьте. Нет машины или вы за рулём и не успеваете планировать — отдайте перевозчику на бирже: он получит заказ и поедет.</p>
+    ${adminOrdersBulkBarHtml()}
+    <div class="board-metrics">
+      <div class="m"><span>Входящие</span><b>${orders.length}</b></div>
+      <div class="m"><span>Срочно</span><b class="${rush?'warn':''}">${rush}</b></div>
+      <div class="m"><span>Бронь ТС</span><b>${booked}</b></div>
+    </div>
+  </div>`;
+  if(!orders.length){
+    return `${head}<div class="admin-cards"><div class="empty">Входящих нет. Заявки с портала заказчика «логисту» появляются здесь.</div></div>`;
+  }
+  const myCo=currentOwnCompany();
+  const cards=orders.map(o=>{
+    const firmId=o.ownCompanyId||(myCo&&myCo.id);
+    const drvList=firmId?fleetDriversForCompany(firmId):[];
+    const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
+    const bookedPlate=String(o.bookedPlate||'').trim();
+    const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}${bookedPlate&&v.plate===bookedPlate?' · бронь':''}</option>`).join('');
+    const margin=typeof logistMarginLine==='function'?logistMarginLine(o):'';
+    return `<div class="ex-card">
+      <div class="order-card-head">
+        ${adminOrderPickHtml(o)}
+        <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+      </div>
+      <p>${esc(dateTime(o.createdAt))}</p>
+      <p>Заказчик: <strong style="color:var(--text)">${esc(o.customer||'—')}</strong></p>
+      <span class="ex-badge">${o.fulfillment==='direct'?'свой парк':'срочно · ставка логиста'}</span>
+      <p class="ex-route">${esc(routeText(o))}</p>
+      ${orderScheduleLines(o, false)}
+      <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · бронь <strong>${esc(bookedPlate)}</strong>`:''}</p>
+      ${margin?`<p class="order-money">${esc(margin)}</p>`:''}
+      <div class="ex-assign-box">
+        <label for="ex-drv-${o.id}">Водитель своего парка</label>
+        <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
+        <label for="ex-plate-${o.id}">Авто</label>
+        <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
+        <div class="ex-actions">
+          <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить свой парк</button>
+          <div class="row">
+            <button type="button" class="secondary pub-exchange" data-id="${o.id}">Отдать перевозчику</button>
+            <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  return `${head}<div class="admin-cards">${cards}</div>`;
+}
 function renderAdmin(){
   const billBanner=$('admin-billing-banner');
   if(billBanner){
@@ -1659,6 +1727,14 @@ function renderAdmin(){
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
     document.querySelectorAll('#admin-list .ex-unpub').forEach(b=>b.onclick=()=>unpublishFromExchange(b.dataset.id));
     document.querySelectorAll('#admin-list .ex-claim').forEach(b=>b.onclick=()=>openClaimExchange(b.dataset.id));
+    document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+    wireAdminOrderDeleteUi(orders);
+    return;
+  }
+  if(state.adminFilter==='inbox'){
+    $('admin-list').innerHTML=renderAdminInboxBoard(orders);
+    document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
+    document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=()=>publishToExchange(b.dataset.id));
     document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
     wireAdminOrderDeleteUi(orders);
     return;
@@ -2492,6 +2568,9 @@ function openDetail(id){
             <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
           </div>
         </div>
+        ${o.bookedPlate?`<p class="hint">Бронь заказчика: ${esc(o.bookedPlate)}</p>`:''}
+        ${o.fulfillment==='logist'?'<p class="hint">Срочно: заказчик просит закрыть как можно скорее, ставка логиста в цене.</p>':o.fulfillment==='direct'?'<p class="hint">Прямой парк, без срочной ставки логиста.</p>':''}
+        ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="hint">${esc(logistMarginLine(o))}</p>`:''}
       </div>
     </section>
     <section class="form-section">
@@ -2944,6 +3023,7 @@ function openCatalogs(){
         <label>Самосвал ×<input id="fin-dump" inputmode="decimal" value="${fin.bodyMultDump??1.15}" /></label>
         <label>От т<input id="fin-heavy-t" inputmode="decimal" value="${fin.heavyTonsFrom??20}" /></label>
         <label>Тяжёлые ×<input id="fin-heavy" inputmode="decimal" value="${fin.heavyMult??1.15}" /></label>
+        <label title="Наценка заказчику за срочный подбор логистом">Ставка логиста, %<input id="fin-logist-fee" inputmode="decimal" value="${fin.logistFeePercent??10}" /></label>
         <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф фирмы</button>
       </div>`;
       })()}
@@ -3389,7 +3469,8 @@ function openCatalogs(){
       bodyMultReefer:+(($('fin-reefer')||{}).value||'').replace(',','.')||1.25,
       bodyMultDump:+(($('fin-dump')||{}).value||'').replace(',','.')||1.15,
       heavyTonsFrom:+(($('fin-heavy-t')||{}).value||'').replace(',','.')||20,
-      heavyMult:+(($('fin-heavy')||{}).value||'').replace(',','.')||1.15
+      heavyMult:+(($('fin-heavy')||{}).value||'').replace(',','.')||1.15,
+      logistFeePercent:+(($('fin-logist-fee')||{}).value||'').replace(',','.')
     });
     co.finance=next;
     // глобальный state.finance — запасной для старых заказов без ownCompanyId

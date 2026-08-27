@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entrybc12";
+const APP_BUILD="2026-08-27-entrybc15";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -505,7 +505,7 @@ const PB_BASE=(function(){
 })();
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
-const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80,bodyMultReefer:1.25,bodyMultDump:1.15,heavyTonsFrom:20,heavyMult:1.15};
+const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80,bodyMultReefer:1.25,bodyMultDump:1.15,heavyTonsFrom:20,heavyMult:1.15,logistFeePercent:10};
 function clampMult(v, fallback){
   const n=+v;
   if(!(n>0) || Number.isNaN(n)) return fallback;
@@ -525,6 +525,8 @@ function normalizeFinance(f){
   s.bodyMultDump=clampMult(s.bodyMultDump, 1.15);
   s.heavyTonsFrom=(+s.heavyTonsFrom>0)?+s.heavyTonsFrom:20;
   s.heavyMult=clampMult(s.heavyMult, 1.15);
+  let fee=+s.logistFeePercent; if(Number.isNaN(fee)) fee=10;
+  s.logistFeePercent=Math.min(40, Math.max(0, fee));
   return s;
 }
 const state={

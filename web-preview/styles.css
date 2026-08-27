@@ -213,6 +213,7 @@
     .order-status.progress{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.35);color:#2563EB}
     .order-status.closed{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.35);color:#059669}
     .order-status.exchange{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.28);color:var(--accent)}
+    .order-status.inbox{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#B45309}
     .order-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px}
     .order-actions .row{gap:6px}
     .order-actions button{flex:1;margin-top:0!important}

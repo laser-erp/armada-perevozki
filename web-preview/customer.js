@@ -109,10 +109,12 @@ function customerOrderStatusLabel(o){
   if(!o) return '—';
   if(o.cancelledAt) return 'Отменён';
   if(looksClosedOrder(o)) return 'Закрыт';
-  if(o.onExchange) return 'На бирже';
+  if(o.onExchange) return 'Диспетчер ищет машину';
   if(o.startOdometer!=null || o.departOdometer!=null) return 'В работе';
-  if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—') return 'Назначен';
-  return 'Новая';
+  if(o.executorType==='partner') return 'Назначен';
+  if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—' && o.driverName!=='Диспетчер') return 'Назначен';
+  if(o.fulfillment==='direct') return 'У перевозчика (свой парк)';
+  return 'У диспетчера';
 }
 function customerOrderStatusTag(o){
   if(!o||!o.id) return '';
@@ -185,6 +187,10 @@ function customerSelectedTripMode(fin){
   return inferTripMode(customerRouteKm, fin);
 }
 
+function customerSelectedFulfillment(){
+  return (($('cust-fulfillment')||{}).value||'logist')==='direct'?'direct':'logist';
+}
+
 function buildCustomerDraftFromForm(){
   const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
   const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
@@ -198,6 +204,7 @@ function buildCustomerDraftFromForm(){
     estimateKm:km,
     routeKm:km,
     tripMode:trip,
+    fulfillment:customerSelectedFulfillment(),
     reqBodyType:customerSelectedBodyType(),
     cargoKind:customerSelectedCargoKind(),
     reqPayloadTons:payloadTons>0?payloadTons:null,
@@ -212,6 +219,41 @@ function buildCustomerDraftFromForm(){
     overnightStorageRateCash:null,
     priceOffer:payRaw?+payRaw:null
   };
+}
+
+function paintCustomerFleetOptions(){
+  const box=$('cust-fleet-box');
+  const sel=$('cust-book-plate');
+  const hint=$('cust-fleet-hint');
+  const fh=$('cust-fulfill-hint');
+  const mode=customerSelectedFulfillment();
+  if(fh){
+    fh.textContent=mode==='direct'
+      ?'Свой парк перевозчика, лучше заранее. Ставки логиста за срочный подбор нет. Можно забронировать свободную машину.'
+      :'Диспетчеру: закройте как можно скорее. Ставка логиста включена в цену. Если есть свободные машины — забронируйте, иначе он подберёт (в том числе у партнёров).';
+  }
+  if(!sel) return;
+  const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
+  const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
+  const payloadTons=+(($('cust-req-pay')||{}).value||'').replace(',','.');
+  const reqs={reqPayloadTons:payloadTons>0?payloadTons:null, reqBodyType:customerSelectedBodyType()};
+  const at=typeof readCustomerVehicleAt==='function'?readCustomerVehicleAt():null;
+  const list=(carrier && typeof availableFleetForCustomer==='function')
+    ? availableFleetForCustomer(carrier.id, reqs, at)
+    : [];
+  const prev=sel.value;
+  sel.innerHTML=`<option value="">Не бронировать — диспетчер подберёт</option>`+
+    list.map(v=>{
+      const spec=typeof vehicleSpecText==='function'?vehicleSpecText(v):'';
+      return `<option value="${esc(v.plate)}">${esc(v.plate)}${spec?' · '+esc(spec):''}${v.makeModel?' · '+esc(v.makeModel):''}</option>`;
+    }).join('');
+  if(prev && list.some(v=>v.plate===prev)) sel.value=prev;
+  if(hint){
+    hint.textContent=list.length
+      ?`Свободно ${list.length} по тоннажу и времени подачи. Бронь держит машину за вами.`
+      :'Сейчас свободных машин нет — диспетчер подберёт как можно скорее (свой парк или партнёры).';
+  }
+  if(box) box.style.display='';
 }
 
 async function refreshCustomerRouteKm(){
@@ -269,7 +311,7 @@ function updateCustomerPricePreview(){
     <div class="calc-row"><span>Без НДС</span><span>${fmt(s.withoutVat)} ₽</span></div>
     <div class="calc-row"><span>С НДС</span><span>${fmt(s.withVat)} ₽</span></div>
     <div class="hint">${esc(bits.concat([s.summary||'']).filter(Boolean).join(' · '))}</div>
-    <div class="hint">Это ориентир по тарифу перевозчика. Ниже минимума — только если перевозчик потом согласится.</div>`;
+    <div class="hint">Это ориентир. Через логиста в сумму входит его ставка за срочный подбор. Ниже минимума — только если диспетчер согласится.</div>`;
   const priceEl=$('cust-price');
   if(priceEl && !priceEl.value) priceEl.value=String(min);
 }
@@ -296,16 +338,18 @@ function renderCustomerPortal(){
   if(loadEl && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
   if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
   if((loadEl&&loadEl.value) && (unloadEl&&unloadEl.value)) refreshCustomerRouteKm();
+  paintCustomerFleetOptions();
   const list=$('cust-orders-list');
   if(list){
     const orders=customerOrders().slice(0,20);
     list.innerHTML=orders.length?orders.map(o=>{
       const st=customerOrderStatusLabel(o);
-      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.onExchange?'exchange':(o.startOdometer!=null?'progress':'');
+      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.onExchange?'exchange':(o.startOdometer!=null?'progress':(typeof waitingLogistDriver==='function'&&waitingLogistDriver(o.driverName)?'inbox':''));
       return `<div class="card" style="margin-bottom:8px">
         <h3>№ ${esc(o.sequentialNumber||'—')} · <span class="order-status ${stCls}">${esc(st)}</span></h3>
         <p class="meta">${esc(routeText(o))}</p>
-        <p class="meta">${o.driverName&&o.driverName!=='Биржа'?`Водитель: ${esc(o.driverName)} · `:''}${o.pricePending?'Цена: уточнит перевозчик · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
+        <p class="meta">${esc(o.ownCompanyName||'Диспетчер')}${o.bookedPlate?` · бронь ${esc(o.bookedPlate)}`:''}${o.fulfillment==='direct'?' · свой парк':''}</p>
+        <p class="meta">${o.executorType==='partner'?'':(o.driverName&&o.driverName!=='Биржа'&&o.driverName!=='Диспетчер'?`Водитель: ${esc(o.driverName)} · `:'')}${o.pricePending?'Цена: уточнит диспетчер · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
       </div>`;
     }).join(''):'<div class="empty">Заявок ещё нет</div>';
@@ -354,14 +398,20 @@ function submitCustomerOrder(){
     updateCustomerPricePreview();
     return;
   }
+  const bookedPlate=(($('cust-book-plate')||{}).value||'').trim();
+  if(bookedPlate && typeof vehicleBusyAt==='function' && vehicleBusyAt(bookedPlate, vehicleAt)){
+    if(err) err.textContent='Эта машина уже занята на это время. Выберите другую или не бронируйте.';
+    paintCustomerFleetOptions();
+    return;
+  }
   const spaceId=co.spaceId||carrier.spaceId||null;
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
-  Promise.resolve(guardFn(spaceId,'publish_exchange')).then(g=>{
+  Promise.resolve(guardFn(spaceId,'create_order')).then(g=>{
     if(!g.ok){ if(err) err.textContent=g.message; return; }
-    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, !quote);
+    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
   });
 }
-function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, pricePending){
+function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
@@ -378,9 +428,11 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     loadingAddress:load, unloadingAddress:unload,
     routePoints:defaultRoutePoints(load, unload),
     vehicleAt,
-    vehiclePlate:'—', driverName:'Биржа', driverPercent:0,
-    executorType:'exchange', onExchange:true,
-    exchangeListedAt:now, wasOnExchange:true,
+    vehiclePlate:'—', driverName:'Диспетчер', driverPercent:0,
+    executorType:'logist', onExchange:false,
+    fulfillment:draft.fulfillment||'logist',
+    bookedPlate:bookedPlate||null,
+    exchangeListedAt:null, wasOnExchange:false,
     partnerSpaceId:null,
     reqPayloadTons:payloadTons,
     reqBodyType:draft.reqBodyType||null,
@@ -404,6 +456,10 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     order.rateWithoutVat=t.withoutVat;
     order.rateWithVat=t.withVat;
     order.freight=offered;
+    const feePct=quote&&quote.logistFeePercent>0?+quote.logistFeePercent:0;
+    if(draft.fulfillment!=='direct' && feePct>0){
+      order.priceForCarrier=Math.round(offered/(1+feePct/100));
+    }
   }
   ensureRoutePoints(order);
   applyOrderSchedule(order);
@@ -411,15 +467,21 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   upsertOrder(order);
   persist();
   if(err) err.textContent='';
-  alert(order.pricePending
-    ?`Заявка №${seqNo} отправлена. Цену уточнит перевозчик.`
-    :`Заявка №${seqNo} отправлена. Ориентир цены: ${fmt(min||offered)} ₽.`);
+  const priceBit=order.pricePending
+    ?'Цену уточнит диспетчер.'
+    :`Ориентир ${fmt(min||offered)} ₽${order.fulfillment==='direct'?'':' (ставка логиста в цене)'}.`;
+  const bookBit=order.bookedPlate?` Машина ${order.bookedPlate} забронирована.`:' Диспетчер подберёт машину.';
+  const rushBit=order.fulfillment==='direct'
+    ?' Заявка в свой парк, без срочного подбора.'
+    :' Диспетчеру: закрыть как можно скорее.';
+  alert(`Заявка №${seqNo} отправлена.${rushBit}${bookBit} ${priceBit}`);
   ['cust-load','cust-unload','cust-contact-name','cust-contact-phone','cust-price','cust-req-pay'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
   customerRouteKm=null;
   if($('cust-vehicle-date')) $('cust-vehicle-date').value='';
   if($('cust-vehicle-time')) $('cust-vehicle-time').value='';
+  if($('cust-book-plate')) $('cust-book-plate').value='';
   renderCustomerPortal();
 }
 
@@ -442,9 +504,9 @@ function wireCustomerPortal(){
     el.onblur=()=>refreshCustomerRouteKm();
   });
   ['cust-req-pay','cust-price'].forEach(id=>{
-    const el=$(id); if(el) el.oninput=()=>updateCustomerPricePreview();
+    const el=$(id); if(el) el.oninput=()=>{ updateCustomerPricePreview(); if(id==='cust-req-pay') paintCustomerFleetOptions(); };
   });
-  ['cust-body-type','cust-cargo-kind','cust-trip-mode'].forEach(id=>{
+  ['cust-body-type','cust-cargo-kind','cust-trip-mode','cust-fulfillment'].forEach(id=>{
     const el=$(id);
     if(!el) return;
     el.onchange=()=>{
@@ -455,7 +517,11 @@ function wireCustomerPortal(){
         $('cust-body-type').value='dump';
       }
       updateCustomerPricePreview();
+      paintCustomerFleetOptions();
     };
+  });
+  ['cust-vehicle-date','cust-vehicle-time'].forEach(id=>{
+    const el=$(id); if(el) el.onchange=()=>paintCustomerFleetOptions();
   });
 }
 

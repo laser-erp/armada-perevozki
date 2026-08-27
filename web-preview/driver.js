@@ -1632,7 +1632,7 @@ function showOrders(){
   let html='';
   if(board.length){
     html+=`<div class="drv-section-label">Биржа</div>`;
-    html+=`<div class="orders-hint">Маршрут и подача; заказчик скрыт до взятия</div>`;
+    html+=`<div class="orders-hint">Логист ищет машину. Если вы владелец и сами за рулём — берите заказ здесь: планированием занимается логист.</div>`;
     html+=board.map(o=>`<div class="drv-order-card" style="margin-bottom:8px">
       <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <div class="st wait">На бирже</div>
