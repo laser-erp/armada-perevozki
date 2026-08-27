@@ -17,10 +17,10 @@ function portalScopeCarrierSpace(scope){
   return null;
 }
 function driverEntryPageUrl(){
-  return typeof entryLandingPage==='function'?entryLandingPage('driver'):`${location.origin}/v`;
+  return typeof entryLandingPage==='function'?entryLandingPage('driver'):`${location.origin}/v/`;
 }
 function adminEntryPageUrl(){
-  return typeof entryLandingPage==='function'?entryLandingPage('admin'):`${location.origin}/a`;
+  return typeof entryLandingPage==='function'?entryLandingPage('admin'):`${location.origin}/a/`;
 }
 function smsTemplate(kind, opts){
   const o=opts&&typeof opts==='object'?opts:{};

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entrybc3";
+const APP_BUILD="2026-08-27-entrybc4";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -233,21 +233,26 @@ function entryLoginScreenId(){
   if(m==='customer') return 'customer-login';
   return 'roles';
 }
+function entryPathWithSlash(path){
+  const p=String(path||'/');
+  if(p==='/'||p.endsWith('/')) return p;
+  return p+'/';
+}
 function entryLandingPage(mode){
   const m=normalizeEntryMode(mode)||getEntryMode();
   const origin=(typeof location!=='undefined'&&location.origin)?location.origin:'';
-  if(m==='driver') return `${origin}/v`;
-  if(m==='admin') return `${origin}/a`;
+  if(m==='driver') return `${origin}${entryPathWithSlash('/v')}`;
+  if(m==='admin') return `${origin}${entryPathWithSlash('/a')}`;
   if(m==='customer'){
     const sc=getPortalScope();
-    if(sc&&sc.portalSlug) return `${origin}/z/${sc.portalSlug}`;
+    if(sc&&sc.portalSlug) return `${origin}/z/${encodeURIComponent(sc.portalSlug)}/`;
     if(sc&&sc.spaceId){
       const sp=findSpaceById(sc.spaceId);
-      if(sp&&sp.portalSlug) return `${origin}/z/${sp.portalSlug}`;
+      if(sp&&sp.portalSlug) return `${origin}/z/${encodeURIComponent(sp.portalSlug)}/`;
     }
-    return `${origin}/z`;
+    return `${origin}${entryPathWithSlash('/z')}`;
   }
-  return `${origin}/a`;
+  return `${origin}${entryPathWithSlash('/a')}`;
 }
 function customerPortalPageUrl(opts){
   try{
@@ -258,7 +263,7 @@ function customerPortalPageUrl(opts){
     if(!spaceId && typeof currentSpaceId==='function') spaceId=currentSpaceId();
     if(spaceId){
       const sp=findSpaceById(spaceId);
-      if(sp&&sp.portalSlug) return `${origin}/z/${encodeURIComponent(sp.portalSlug)}`;
+      if(sp&&sp.portalSlug) return `${origin}/z/${encodeURIComponent(sp.portalSlug)}/`;
     }
     return `${origin}/z`;
   }catch(_){

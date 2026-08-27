@@ -1,0 +1,77 @@
+{
+	email aptown1@gmail.com
+}
+
+# Редирект с IP на канонический HTTPS-хост
+http://176.12.67.35 {
+	redir https://aptown1.fvds.ru{uri} permanent
+}
+
+aptown1.fvds.ru {
+	tls /etc/caddy/ssl/aptown1.crt /etc/caddy/ssl/aptown1.key
+
+	encode gzip
+
+	# Входы /v /a /z — отдаём index.html с явным text/html (иначе мобильный браузер «скачивает»)
+	handle /v* {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	handle /a* {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	handle /z* {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	redir /driver.html /v/ permanent
+	redir /admin.html /a/ permanent
+	redir /zakaz.html /z/ permanent
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://suggestions.dadata.ru https://api-fns.ru; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+
+	handle /armada-api/* {
+		uri strip_prefix /armada-api
+		reverse_proxy 127.0.0.1:8091
+	}
+
+	handle /api/* {
+		respond "Forbidden" 403
+	}
+	handle /_/* {
+		respond "Forbidden" 403
+	}
+
+	handle /cbr-api/* {
+		uri strip_prefix /cbr-api
+		reverse_proxy https://www.cbr.ru {
+			header_up Host www.cbr.ru
+		}
+	}
+
+	handle /egrul-api/* {
+		uri strip_prefix /egrul-api
+		reverse_proxy https://egrul.nalog.ru {
+			header_up Host egrul.nalog.ru
+		}
+	}
+
+	handle {
+		root * /var/www/armada
+		header Cache-Control "no-store, no-cache, must-revalidate"
+		try_files {path} /index.html
+		file_server
+	}
+}

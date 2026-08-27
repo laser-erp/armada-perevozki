@@ -5,21 +5,27 @@
 :80 {
 	encode gzip
 
-	handle /v {
+	handle /v* {
+		root * /var/www/armada
 		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
 	}
-	handle /a {
+	handle /a* {
+		root * /var/www/armada
 		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
 	}
-	handle /z/* {
+	handle /z* {
+		root * /var/www/armada
 		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
 	}
-	handle /z {
-		rewrite * /index.html
-	}
-	redir /driver.html /v permanent
-	redir /admin.html /a permanent
-	redir /zakaz.html /z permanent
+	redir /driver.html /v/ permanent
+	redir /admin.html /a/ permanent
+	redir /zakaz.html /z/ permanent
 
 	# Прокси ЕГРЮЛ ФНС для поиска по ИНН из браузера (без CORS)
 	handle /egrul-api/* {
