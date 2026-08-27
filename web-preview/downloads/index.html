@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>АРМАДА — материалы для загрузки</title>
+  <meta name="theme-color" content="#2563EB" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #fff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --border: #e2e8f0;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 20px 16px 40px;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    a { color: var(--accent); }
+    .back { font-weight: 600; text-decoration: none; font-size: .9rem; }
+    h1 { font-size: 1.35rem; margin: 16px 0 8px; }
+    .lead { color: var(--muted); font-size: .95rem; margin-bottom: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .card h2 { margin: 0 0 8px; font-size: 1.05rem; }
+    .card p { margin: 0 0 12px; font-size: .92rem; color: var(--muted); }
+    .btn {
+      display: inline-block;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: .9rem;
+      text-decoration: none;
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn.secondary {
+      background: #fff;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .note {
+      font-size: .85rem;
+      color: var(--muted);
+      padding: 12px;
+      background: #eff6ff;
+      border-radius: 8px;
+      border: 1px solid #bfdbfe;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← На главную АРМАДА</a>
+    <h1>Материалы для загрузки</h1>
+    <p class="lead">
+      Здесь инструкции и файлы для настройки GitHub. Это обычные страницы в браузере — не «скрытые» ссылки.
+    </p>
+
+    <div class="card">
+      <h2>Push ветки на GitHub (O-02)</h2>
+      <p>Пошаговая инструкция: как добавить ключ и отправить код в репозиторий.</p>
+      <a class="btn" href="github-push.html">Открыть инструкцию</a>
+    </div>
+
+    <div class="card">
+      <h2>Файл bundle (для программиста)</h2>
+      <p>
+        Это не страница — при клике браузер <strong>скачивает файл</strong> (~700 КБ).
+        Нужен только если push делаете с компьютера через git.
+      </p>
+      <a class="btn secondary" href="armada-compliance-4317.bundle">Скачать bundle</a>
+    </div>
+
+    <p class="note">
+      Входы в сервис: <a href="/a">администратор</a> · <a href="/v">водитель</a> · <a href="/z">заказчик</a>
+    </p>
+  </div>
+</body>
+</html>

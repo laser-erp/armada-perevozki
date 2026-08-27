@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>АРМАДА — как отправить код на GitHub</title>
+  <meta name="theme-color" content="#2563EB" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #fff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --border: #e2e8f0;
+      --warn-bg: #fef3c7;
+      --warn-border: #fcd34d;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      padding: 20px 16px 48px;
+    }
+    .wrap { max-width: 680px; margin: 0 auto; }
+    a { color: var(--accent); }
+    .back { font-weight: 600; text-decoration: none; font-size: .9rem; }
+    h1 { font-size: 1.35rem; margin: 16px 0 8px; }
+    .lead { color: var(--muted); font-size: .95rem; margin-bottom: 20px; }
+    .warn {
+      background: var(--warn-bg);
+      border: 1px solid var(--warn-border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: .9rem;
+      margin-bottom: 24px;
+    }
+    .step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .step h2 { margin: 0 0 10px; font-size: 1rem; }
+    .step ol { margin: 0; padding-left: 1.25rem; font-size: .92rem; }
+    .step li { margin-bottom: 8px; }
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82rem;
+    }
+    pre {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      margin: 10px 0 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: .9rem;
+      text-decoration: none;
+      background: var(--accent);
+      color: #fff;
+    }
+    .muted { font-size: .85rem; color: var(--muted); margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="index.html">← Все материалы</a>
+    <h1>Отправить ветку на GitHub</h1>
+    <p class="lead">
+      Ветка: <code>cursor/compliance-p0-4317</code> · репозиторий
+      <a href="https://github.com/laser-erp/armada-perevozki" target="_blank" rel="noopener">laser-erp/armada-perevozki</a>
+    </p>
+
+    <div class="warn">
+      <strong>Сейчас:</strong> код на сервере aptown1 уже работает, но в GitHub ветка ещё не появилась —
+      нужен один раз ключ с правом записи (Deploy key).
+    </div>
+
+    <div class="step">
+      <h2>Шаг 1 — открыть настройки ключей</h2>
+      <ol>
+        <li>Откройте в браузере:
+          <a href="https://github.com/laser-erp/armada-perevozki/settings/keys" target="_blank" rel="noopener">
+            github.com → armada-perevozki → Settings → Deploy keys
+          </a>
+        </li>
+        <li>Нажмите <strong>Add deploy key</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="step">
+      <h2>Шаг 2 — вставить ключ</h2>
+      <ol>
+        <li><strong>Title:</strong> <code>armada-o02-20260827</code></li>
+        <li><strong>Key</strong> — скопируйте всю строку ниже (одна строка):</li>
+      </ol>
+      <pre id="pubkey">ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILSyvSZRK4RizqeFuS9KLzHa02nDPoZEyuwomCwrvFQM armada-o02-20260827</pre>
+      <li style="list-style:none;margin-top:10px;font-size:.92rem">
+        Включите <strong>Allow write access</strong> → <strong>Add key</strong>.
+      </li>
+      <p class="muted" style="margin-top:12px">
+        Fingerprint для проверки: <code>SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI</code>
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>Шаг 3 — сообщить агенту</h2>
+      <ol>
+        <li>Напишите в Cursor: <strong>«ключ добавил, запушь на GitHub»</strong>.</li>
+        <li>Агент отправит ветку автоматически.</li>
+      </ol>
+    </div>
+
+    <div class="step">
+      <h2>Альтернатива — через программиста</h2>
+      <p style="font-size:.92rem;margin:0 0 8px;color:var(--muted)">
+        Если ключ не хотите добавлять: программист скачивает файл bundle (это <em>файл</em>, не страница)
+        и выполняет команды git на своём ПК.
+      </p>
+      <a class="btn" href="armada-compliance-4317.bundle">Скачать bundle-файл</a>
+      <pre>curl -fsSLO https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle
+git fetch ./armada-compliance-4317.bundle cursor/compliance-p0-4317:cursor/compliance-p0-4317
+git push -u origin cursor/compliance-p0-4317</pre>
+    </div>
+
+    <p class="muted">
+      Входы в АРМАДА: <a href="/a">администратор</a> · <a href="/v">водитель</a> · <a href="/z">заказчик</a>
+    </p>
+  </div>
+</body>
+</html>
