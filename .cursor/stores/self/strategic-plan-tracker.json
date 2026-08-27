@@ -7,7 +7,7 @@
     "result": "pass",
     "notes": "caddy + armada-api 8091 + onboarding + help"
   },
-  "updatedAt": "2026-08-27T11:06:00Z",
+  "updatedAt": "2026-08-27T11:07:00Z",
   "deploy": {
     "production": {
       "status": "done",
@@ -18,7 +18,7 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "f8a286d",
+      "headCommit": "13dc369",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
       "bundleHead": "f8a286d",
