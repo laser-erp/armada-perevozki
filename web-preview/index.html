@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <base href="/" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>АРМАДА — учёт перевозок</title>
   <meta name="theme-color" content="#EF4444" />
@@ -14,16 +15,16 @@
   <meta name="apple-mobile-web-app-title" content="АРМАДА" />
   <meta name="application-name" content="АРМАДА" />
   <meta name="description" content="Учёт перевозок, ЕТО, заказы и финансы" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <script>
   (function(){
     try{
-      if(!sessionStorage.getItem('armada-sw-v29')){
-        sessionStorage.setItem('armada-sw-v29','1');
+      if(!sessionStorage.getItem('armada-sw-v31')){
+        sessionStorage.setItem('armada-sw-v31','1');
         if(navigator.serviceWorker){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             regs.forEach(function(r){ r.unregister(); });
@@ -43,21 +44,21 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="styles.css?v=2026-08-27-entrybc1" />
-    <link rel="stylesheet" href="entry.css?v=2026-08-27-entrybc1" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc2" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc2" />
 
 </head>
 <body>
 <div class="phone" id="shell">
   <div id="splash" class="screen show"><div class="center splash-hero">
-    <img class="logo" src="logo.png" alt="АРМАДА" />
+    <img class="logo" src="/logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Учёт перевозок</div>
     <div class="splash-accent" aria-hidden="true"></div>
   </div></div>
 
   <div id="roles" class="screen"><div class="center roles-hero">
-    <img class="logo" src="logo.png" alt="АРМАДА" />
+    <img class="logo" src="/logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Выберите роль</div>
     <div class="hint" id="sync-hint" style="display:none;margin-bottom:8px"></div>
@@ -89,7 +90,7 @@
   <div id="driver-login" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="driver-login-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" />
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
       <h2>Вход водителя</h2>
       <div class="sub">Сначала телефон — затем PIN</div>
       <label for="drv-login-phone">Телефон</label>
@@ -112,7 +113,7 @@
   <div id="admin-pin" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="pin-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" />
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
       <h2>Вход администратора</h2>
       <div class="sub">Выберите имя и введите PIN</div>
       <label for="admin-name-select">Администратор</label>
@@ -128,7 +129,7 @@
   <div id="customer-login" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="cust-login-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" />
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
       <h2>Вход заказчика</h2>
       <div class="sub">Телефон и PIN из карточки заказчика</div>
       <p class="hint" id="cust-login-scope" style="display:none"></p>
@@ -192,7 +193,7 @@
     <div class="admin-layout">
       <aside class="admin-sidebar" id="admin-sidebar" aria-label="Меню админки">
         <div class="admin-sidebar-brand">
-          <img class="admin-sidebar-logo" src="icons/icon-192.png" alt="" width="28" height="28" />
+          <img class="admin-sidebar-logo" src="/icons/icon-192.png" alt="" width="28" height="28" />
           <span>АРМАДА</span>
         </div>
         <div class="admin-sidebar-user" id="admin-sidebar-user"></div>
@@ -493,15 +494,15 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-27-entrybc1"></script>
-<script src="billing.js?v=2026-08-27-entrybc1"></script>
-<script src="qrcode.min.js?v=2026-08-27-entrybc1"></script>
-<script src="entry-share.js?v=2026-08-27-entrybc1"></script>
-<script src="driver.js?v=2026-08-27-entrybc1"></script>
-<script src="etrn.js?v=2026-08-27-entrybc1"></script>
-<script src="admin.js?v=2026-08-27-entrybc1"></script>
-<script src="app.js?v=2026-08-27-entrybc1"></script>
-<script src="customer.js?v=2026-08-27-entrybc1"></script>
-<script src="onboarding.js?v=2026-08-27-entrybc1"></script>
+  <script src="/store.js?v=2026-08-27-entrybc2"></script>
+<script src="/billing.js?v=2026-08-27-entrybc2"></script>
+<script src="/qrcode.min.js?v=2026-08-27-entrybc2"></script>
+<script src="/entry-share.js?v=2026-08-27-entrybc2"></script>
+<script src="/driver.js?v=2026-08-27-entrybc2"></script>
+<script src="/etrn.js?v=2026-08-27-entrybc2"></script>
+<script src="/admin.js?v=2026-08-27-entrybc2"></script>
+<script src="/app.js?v=2026-08-27-entrybc2"></script>
+<script src="/customer.js?v=2026-08-27-entrybc2"></script>
+<script src="/onboarding.js?v=2026-08-27-entrybc2"></script>
 </body>
 </html>
