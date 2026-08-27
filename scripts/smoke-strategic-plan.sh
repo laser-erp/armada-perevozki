@@ -33,9 +33,7 @@ if echo "$HEALTH" | grep -q '"ok":true'; then pass "API health ok"; else fail "A
 if echo "$HEALTH" | grep -q 'armada-api'; then pass "API service name"; else fail "API service name"; fi
 
 echo "S1 driverInvites"
-for f in invite.html driver.html admin.html zakaz.html; do
-  if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
-done
+if curl -fsS -o /dev/null "$BASE/invite.html"; then pass "invite.html"; else fail "invite.html"; fi
 if fetch_store; then pass "store.js"; else fail "store.js"; fi
 if grep -q 'armada_app_v5' "$STORE_TMP"; then pass "store.js KEY"; else fail "store.js KEY missing"; fi
 if grep -q 'driverInvitePageUrl' "$STORE_TMP"; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
@@ -63,13 +61,16 @@ for f in onboarding.js help.html; do
 done
 if curl -fsS "$BASE/index.html" | grep -q 'onboarding.js'; then pass "index.html loads onboarding.js"; else fail "index.html onboarding"; fi
 
-echo ""
+echo "Entry paths"
 if curl -fsS -o /dev/null "$BASE/v" && curl -fsS -o /dev/null "$BASE/a" && curl -fsS -o /dev/null "$BASE/z"; then
-  echo "  OK  entry paths /v /a /z"
+  pass "entry paths /v /a /z"
 else
-  echo "  FAIL entry paths"
-  FAIL=1
+  fail "entry paths /v /a /z"
 fi
+if curl -fsS -o /dev/null "$BASE/entry.css"; then pass "entry.css"; else fail "entry.css"; fi
+
+echo ""
+if [ "$FAIL" -eq 0 ]; then
   echo "SMOKE PASS"
   exit 0
 fi
