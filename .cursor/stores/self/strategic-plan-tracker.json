@@ -7,7 +7,7 @@
     "result": "pass",
     "notes": "caddy + armada-api 8091 + onboarding + help"
   },
-  "updatedAt": "2026-08-27T09:48:00Z",
+  "updatedAt": "2026-08-27T10:15:00Z",
   "deploy": {
     "production": {
       "status": "done",
@@ -18,15 +18,15 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "345a179",
+      "headCommit": "7709d6f",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "345a179",
+      "bundleHead": "7709d6f",
       "notes": "GITHUB_DEPLOY_KEY set; публичный ключ не в Deploy keys GitHub"
     }
   },
   "lastSmoke": {
-    "at": "2026-08-27T09:48:00Z",
+    "at": "2026-08-27T10:15:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass",
