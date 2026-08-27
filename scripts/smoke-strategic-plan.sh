@@ -64,7 +64,12 @@ done
 if curl -fsS "$BASE/index.html" | grep -q 'onboarding.js'; then pass "index.html loads onboarding.js"; else fail "index.html onboarding"; fi
 
 echo ""
-if [ "$FAIL" -eq 0 ]; then
+if curl -fsS -o /dev/null "$BASE/v" && curl -fsS -o /dev/null "$BASE/a" && curl -fsS -o /dev/null "$BASE/z"; then
+  echo "  OK  entry paths /v /a /z"
+else
+  echo "  FAIL entry paths"
+  FAIL=1
+fi
   echo "SMOKE PASS"
   exit 0
 fi
