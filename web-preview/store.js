@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entrybc10";
+const APP_BUILD="2026-08-27-entrybc11";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -358,6 +358,18 @@ function goEntryLanding(mode){
     location.href=page;
   }
 }
+function customerKpPageUrl(){
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:'';
+  const q=new URLSearchParams();
+  try{
+    const sc=typeof getPortalScope==='function'?getPortalScope():null;
+    if(sc&&sc.portalSlug) q.set('z', sc.portalSlug);
+    const label=typeof portalScopeCarrierLabel==='function'?portalScopeCarrierLabel():'';
+    if(label) q.set('carrier', label);
+  }catch(_){}
+  const qs=q.toString();
+  return `${origin}/kp-zakaz.html${qs?'?'+qs:''}`;
+}
 function backFromEntryLogin(opts){
   const fromAdmin=opts&&opts.fromAdmin;
   if(fromAdmin && (typeof currentAdmin!=='undefined'&&currentAdmin || typeof restoreAdminSession==='function'&&restoreAdminSession())){
@@ -366,11 +378,8 @@ function backFromEntryLogin(opts){
     return;
   }
   const m=getEntryMode();
-  if(m==='admin'){ location.href='/kp.html'; return; }
-  if(m==='driver'||m==='customer'){
-    location.href='/kp.html';
-    return;
-  }
+  if(m==='customer'){ location.href=customerKpPageUrl(); return; }
+  if(m==='admin'||m==='driver'){ location.href='/kp.html'; return; }
   if(typeof show==='function') show('roles');
 }
 /** Backend API (S0). Локально → armada-api; на aptown1 → Caddy prefix. */

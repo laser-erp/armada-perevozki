@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>АРМАДА — коммерческое предложение заказчику</title>
+  <meta name="description" content="Портал заказчика: заявка с телефона, минимальная цена и статус перевозки." />
+  <meta name="theme-color" content="#0f766e" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{--accent:#0f766e;--accent2:#0d9488;--bg:#f0f7f6;--text:#1a2332;--muted:#5c6578}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+    .wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
+    header{text-align:center;padding:24px 0 8px}
+    header img{width:72px;height:auto}
+    h1{font-size:1.45rem;margin:12px 0 6px;font-weight:700}
+    .lead{color:var(--muted);font-size:1.05rem;margin:0 0 24px}
+    .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    h2{font-size:1.1rem;margin:0 0 12px}
+    ul{margin:0;padding-left:1.2rem}
+    li{margin:6px 0}
+    .carrier{background:linear-gradient(135deg,#0f766e 0%,#0d9488 100%);color:#fff;border:none}
+    .carrier h2,.carrier p{color:#fff}
+    .carrier .who{opacity:.92;font-size:.95rem}
+    .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+    .btn{display:block;text-align:center;padding:14px 18px;border-radius:10px;font-weight:700;text-decoration:none;font-size:1rem}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-secondary{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+    footer{margin-top:28px;text-align:center;font-size:.8rem;color:var(--muted)}
+    footer a{color:var(--accent)}
+    .muted{color:var(--muted);font-size:.85rem}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img src="/logo.png" alt="АРМАДА" />
+      <h1>Коммерческое предложение заказчику</h1>
+      <p class="lead">Подайте заявку перевозчику с телефона: цена и статус — в одном окне, без установки приложения.</p>
+    </header>
+
+    <div class="card carrier" id="carrier-card" hidden>
+      <h2 id="carrier-name"></h2>
+      <p class="who">Ваш перевозчик. Ниже — как работает портал заявок.</p>
+    </div>
+
+    <div class="card">
+      <h2>Для кого</h2>
+      <ul>
+        <li>Компании и ИП, которые отправляют грузы этому перевозчику</li>
+        <li>Нужно быстро оформить заявку и видеть, что с ней происходит</li>
+        <li>Не хотите ставить отдельную программу — достаточно ссылки в браузере</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Что вы получаете</h2>
+      <ul>
+        <li><strong>Новая заявка с телефона</strong> — адреса, дата подачи, тоннаж</li>
+        <li><strong>Минимальная цена сразу</strong> — до отправки, по тарифу перевозчика</li>
+        <li><strong>Статус заказа</strong> — на бирже, назначен водитель, в работе, закрыт</li>
+        <li><strong>Уведомления</strong> — когда статус меняется (если разрешите в браузере)</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Как начать</h2>
+      <ul>
+        <li>Перевозчик включает портал в вашей карточке и выдаёт <strong>телефон и PIN</strong></li>
+        <li>Откройте ссылку портала и войдите</li>
+        <li>Заполните заявку — минимальная цена считается на экране</li>
+      </ul>
+      <p class="muted">PIN выдаёт перевозчик. Если его нет — напишите или позвоните диспетчеру.</p>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-primary" id="cta-login" href="/z/">Войти в портал заказчика</a>
+      <a class="btn btn-secondary" href="mailto:aptown1@gmail.com?subject=Портал%20заказчика%20АРМАДА">Связаться с перевозчиком</a>
+    </div>
+
+    <footer>
+      <p><a href="/legal.html">Оферта и документы</a> · <a href="/help.html#customer">Как это работает</a></p>
+      <p>АРМАДА · портал заказчика</p>
+    </footer>
+  </div>
+  <script>
+  (function(){
+    var q=new URLSearchParams(location.search||'');
+    var slug=(q.get('z')||q.get('slug')||'').trim();
+    var carrier=(q.get('carrier')||'').trim();
+    var login='/z/';
+    if(slug) login='/z/'+encodeURIComponent(slug)+'/';
+    var cta=document.getElementById('cta-login');
+    if(cta) cta.href=login;
+    if(carrier){
+      var card=document.getElementById('carrier-card');
+      var name=document.getElementById('carrier-name');
+      if(name) name.textContent=carrier;
+      if(card) card.hidden=false;
+    }
+  })();
+  </script>
+</body>
+</html>
