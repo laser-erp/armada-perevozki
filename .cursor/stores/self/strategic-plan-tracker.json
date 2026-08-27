@@ -1,12 +1,19 @@
 {
   "plan": "ARMADA_STRATEGIC_PLAN_2026",
   "branch": "cursor/compliance-p0-4317",
-  "updatedAt": "2026-08-27T08:40:00Z",
+  "updatedAt": "2026-08-27T08:45:00Z",
   "lastSmoke": {
-    "at": "2026-08-27T08:40:00Z",
+    "at": "2026-08-27T08:45:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass"
+  },
+  "lastProdSync": {
+    "at": "2026-08-27T08:45:00Z",
+    "script": "scripts/verify-prod-web-sync.sh",
+    "baseUrl": "https://aptown1.fvds.ru",
+    "result": "match",
+    "notes": "web-preview на проде совпадает с веткой cursor/compliance-p0-4317"
   },
   "stages": {
     "S0": {

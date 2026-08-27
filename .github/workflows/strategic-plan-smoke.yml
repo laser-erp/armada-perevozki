@@ -1,0 +1,27 @@
+name: Strategic plan smoke
+
+on:
+  push:
+    branches: [cursor/compliance-p0-4317, main]
+    paths:
+      - "web-preview/**"
+      - "scripts/smoke-strategic-plan.sh"
+      - "scripts/verify-prod-web-sync.sh"
+      - ".github/workflows/strategic-plan-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Smoke S0–S3 (production)
+        run: |
+          chmod +x scripts/smoke-strategic-plan.sh
+          BASE_URL=https://aptown1.fvds.ru ./scripts/smoke-strategic-plan.sh
+
+      - name: Verify prod web sync (optional drift check)
+        run: |
+          chmod +x scripts/verify-prod-web-sync.sh
+          BASE_URL=https://aptown1.fvds.ru ./scripts/verify-prod-web-sync.sh

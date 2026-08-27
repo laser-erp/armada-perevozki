@@ -19,10 +19,9 @@ if echo "$HEALTH" | grep -q '"ok":true'; then pass "API health ok"; else fail "A
 if echo "$HEALTH" | grep -q 'armada-api'; then pass "API service name"; else fail "API service name"; fi
 
 echo "S1 driverInvites"
-for f in invite.html store.js; do
-  if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
-done
-STORE="$(curl -fsS "$BASE/store.js")"
+if curl -fsS -o /dev/null "$BASE/invite.html"; then pass "invite.html"; else fail "invite.html"; fi
+STORE="$(curl -fsS "$BASE/store.js" 2>/dev/null || true)"
+if [ -n "$STORE" ]; then pass "store.js"; else fail "store.js"; fi
 if echo "$STORE" | grep -q 'const KEY="armada_app_v5"'; then pass "store.js KEY"; else fail "store.js KEY missing"; fi
 if echo "$STORE" | grep -q 'driverInvitePageUrl'; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
 

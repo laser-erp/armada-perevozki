@@ -21,7 +21,16 @@
 
 JSON-трекер: `.cursor/stores/self/strategic-plan-tracker.json`
 
-Проверка продакшена: `chmod +x scripts/smoke-strategic-plan.sh && BASE_URL=https://aptown1.fvds.ru ./scripts/smoke-strategic-plan.sh`
+Проверка продакшена:
+
+```bash
+chmod +x scripts/smoke-strategic-plan.sh scripts/verify-prod-web-sync.sh
+BASE_URL=https://aptown1.fvds.ru ./scripts/smoke-strategic-plan.sh
+BASE_URL=https://aptown1.fvds.ru ./scripts/verify-prod-web-sync.sh
+```
+
+Деплой ветки на VPS: `scripts/deploy-fvds.sh` (нужен `FVDS_SSH_PASSWORD`).
+
 
 ## Тарифы в программе (billing.js)
 
