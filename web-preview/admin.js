@@ -259,10 +259,22 @@ function renderAdminBilling(){
       <p class="meta" style="margin-top:10px">Портал заказчиков:
         <a href="${esc(customerPortalPageUrl({spaceId:sp.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({spaceId:sp.id}))}</a>
       </p>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center">
+      <div class="share-row" style="margin-top:8px">
+        ${entryShareBlockHtml({kind:'customerPortal',url:customerPortalPageUrl({spaceId:sp.id}),title:'QR + SMS заказчику',carrier:sp.name})}
+        ${entryShareBlockHtml({kind:'driverEntry',url:driverEntryPageUrl(),title:'QR + SMS водителям',carrier:sp.name})}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center">
         <label class="meta" for="bill-slug-${esc(sp.id)}">Короткий адрес /z/</label>
         <input id="bill-slug-${esc(sp.id)}" placeholder="severlog" value="${esc(sp.portalSlug||'')}" style="width:120px" />
         <button type="button" class="secondary" data-bill-slug="${esc(sp.id)}">Сохранить slug</button>
+      </div>
+      <div style="margin-top:10px">
+        <label class="meta">Логотип на входе заказчика (PNG/JPG, до 80 КБ)</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px">
+          ${sp.portalLogo?`<img src="${esc(sp.portalLogo)}" alt="" style="height:40px;border-radius:8px;border:1px solid #e2e8f0" />`:''}
+          <input type="file" accept="image/png,image/jpeg,image/webp" data-bill-logo="${esc(sp.id)}" />
+          ${sp.portalLogo?`<button type="button" class="secondary" data-bill-logo-clear="${esc(sp.id)}">Убрать</button>`:''}
+        </div>
       </div>
     </section>`;
   }).join('');
@@ -315,6 +327,54 @@ function renderAdminBilling(){
       renderAdminBilling();
     };
   });
+  form.querySelectorAll('[data-bill-logo]').forEach(inp=>{
+    inp.onchange=()=>{
+      const sid=inp.dataset.billLogo;
+      const sp=findSpaceById(sid);
+      const file=inp.files&&inp.files[0];
+      if(!sp||!file) return;
+      if(file.size>80*1024){ alert('Логотип до 80 КБ'); inp.value=''; return; }
+      const reader=new FileReader();
+      reader.onload=()=>{
+        sp.portalLogo=String(reader.result||'');
+        bumpDataEpoch('portal-logo');
+        persist();
+        renderAdminBilling();
+      };
+      reader.readAsDataURL(file);
+    };
+  });
+  form.querySelectorAll('[data-bill-logo-clear]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sp=findSpaceById(btn.dataset.billLogoClear);
+      if(!sp) return;
+      sp.portalLogo='';
+      bumpDataEpoch('portal-logo');
+      persist();
+      renderAdminBilling();
+    };
+  });
+  wireEntryShareButtons(form);
+}
+function renderAdminSharePanel(){
+  const el=$('admin-share-panel');
+  if(!el) return;
+  const sid=currentSpaceId();
+  if(!sid){ el.style.display='none'; el.innerHTML=''; return; }
+  const sp=findSpaceById(sid);
+  const co=currentOwnCompany();
+  const carrier=(co&&co.name)||(sp&&sp.name)||'АРМАДА';
+  const portalUrl=customerPortalPageUrl({spaceId:sid});
+  const drvUrl=driverEntryPageUrl();
+  el.innerHTML=`<h4>Ссылки, QR и SMS</h4>
+    <p class="meta" style="margin:0 0 8px">Готовые тексты для заказчиков и водителей — с QR-кодом.</p>
+    <div class="share-row">
+      ${entryShareBlockHtml({kind:'customerPortal',url:portalUrl,title:'Заказчик',carrier})}
+      ${entryShareBlockHtml({kind:'driverEntry',url:drvUrl,title:'Водители',carrier})}
+      ${entryShareBlockHtml({kind:'adminEntry',url:adminEntryPageUrl(),title:'Диспетчер'})}
+    </div>`;
+  el.style.display='block';
+  wireEntryShareButtons(el);
 }
 function renderAdminActivity(){
   migrateAdmins();
@@ -1572,14 +1632,19 @@ function renderAdmin(){
   if(portalBanner){
     const sid=currentSpaceId();
     if(sid){
+      const sp=findSpaceById(sid);
+      const carrier=(currentOwnCompany()||{}).name||(sp&&sp.name)||'';
       const url=customerPortalPageUrl({spaceId:sid});
-      portalBanner.innerHTML=`Ссылка для заказчиков (ваш space): <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`;
+      portalBanner.innerHTML=`Ссылка для заказчиков: <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>
+        ${entryShareBlockHtml({kind:'customerPortal',url,title:'QR + SMS',carrier})}`;
       portalBanner.style.display='block';
+      wireEntryShareButtons(portalBanner);
     } else {
       portalBanner.textContent='';
       portalBanner.style.display='none';
     }
   }
+  renderAdminSharePanel();
   updateAdminChrome();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();
@@ -3191,10 +3256,16 @@ function openCatalogs(){
     const res=await createDriverInvite(i);
     if(!res.ok){ alert(res.message||'Не удалось создать ссылку'); return; }
     const exp=res.invite&&res.invite.expiresAt?new Date(res.invite.expiresAt).toLocaleDateString('ru-RU'):'7 дней';
-    const msg=`Ссылка для водителя (до ${exp}):\n\n${res.url}\n\nСкопируйте и отправьте в WhatsApp/Telegram.`;
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(res.url).then(()=>alert(msg)).catch(()=>prompt('Скопируйте ссылку:', res.url));
-    } else prompt('Скопируйте ссылку:', res.url);
+    const co=findCompanyById(state.drivers[i].companyId)||currentOwnCompany();
+    const carrier=(co&&co.name)||'АРМАДА';
+    openShareSheet({
+      kind:'driverInvite',
+      url:res.url,
+      title:'Приглашение водителя',
+      carrier,
+      phone:state.drivers[i].phone,
+      expires:exp
+    });
   });
   document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveDrvMeta;

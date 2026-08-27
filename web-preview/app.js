@@ -3361,8 +3361,8 @@ const ENTRY_ASIDE={
     badge:'Администратор',
     title:'Кабинет диспетчера',
     lead:'Заявки, внутренняя биржа между перевозчиками, справочники и ЭТрН — для микро-парка.',
-    items:['Создание и контроль заявок','Биржа и назначение водителей','Водители, авто, тарифы'],
-    foot:'<a href="help.html#admin">Помощь</a> · <a href="kp.html">Пилот и тарифы</a>'
+    items:['Создание и контроль заявок','Биржа и назначение водителей','Водители, авто, тарифы','ЭТрН и биллинг в одном окне'],
+    foot:'<a href="help.html#admin">Помощь</a> · <a href="kp.html">Пилот и тарифы</a> · <a href="/downloads/">Материалы</a>'
   },
   customer:{
     badge:'Заказчик',
@@ -3393,10 +3393,8 @@ function applyEntrySkin(screenId){
   if(mode==='customer'){
     const label=portalScopeCarrierLabel();
     if(label){
-      carrierBlock=`<div class="entry-aside-carrier-wrap">
-        <p class="entry-aside-carrier">${esc(label)}</p>
-        <p class="entry-aside-lead" style="margin:0">Ваш перевозчик</p>
-      </div>`;
+      const sp=typeof portalScopeCarrierSpace==='function'?portalScopeCarrierSpace():null;
+      carrierBlock=carrierBrandHtml(label, sp);
     }
   }
   aside.innerHTML=`
@@ -3433,6 +3431,7 @@ try{
   else if(restoreDriverSession()) show('driver');
 }catch(_){}
 (async function boot(){
+  if(typeof initShareSheet==='function') initShareSheet();
   initEntryFromPage();
   initPortalScopeFromPage();
   migrateAdmins();

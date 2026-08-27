@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entryui1";
+const APP_BUILD="2026-08-27-entrybc1";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -756,9 +756,11 @@ function normalizeSpace(s){
   let portalSlug=String(s.portalSlug||'').trim().toLowerCase()
     .replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'').slice(0,32);
   if(!portalSlug) portalSlug=slugifyPortalSlug(name, id);
+  const portalLogo=String(s.portalLogo||'').trim();
   return {
     id, name,
     portalSlug,
+    portalLogo:portalLogo.startsWith('data:image')?portalLogo:'',
     inn:String(s.inn||'').trim(),
     ogrn:String(s.ogrn||'').trim(),
     kpp:String(s.kpp||'').trim(),
