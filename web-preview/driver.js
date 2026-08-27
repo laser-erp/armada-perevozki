@@ -327,6 +327,7 @@ function continueDriverPhone(){
   showDriverPickStep(sorted);
 }
 function openDriverLogin(fromAdmin){
+  setDriverFromAdmin(!!fromAdmin);
   migrateSpaces();
   let dirty=ensureFleetPerSpaces();
   if(migrateDriverPins()) dirty=true;
@@ -353,10 +354,12 @@ function openDriverLogin(fromAdmin){
   const back=$('driver-login-back');
   if(back){
     back.onclick=()=>{
-      if(fromAdmin || currentAdmin || peekAdminSessionName()){
-        if(currentAdmin || restoreAdminSession()){ show('admin'); renderAdmin(); return; }
+      if(fromAdmin && (currentAdmin || restoreAdminSession())){
+        show('admin');
+        renderAdmin();
+        return;
       }
-      backFromEntryLogin();
+      backFromEntryLogin({fromAdmin:false});
     };
   }
   show('driver-login');
@@ -462,11 +465,12 @@ async function enterAsDriver(rec){
 function leaveDriverMode(){
   clearDriverSession();
   state.shift=null; state.step='idle'; state.orderStep='idle'; state.messages=[]; state.draft={}; state.error='';
-  if(restoreAdminSession()){
+  if(isDriverFromAdmin() && restoreAdminSession()){
+    setDriverFromAdmin(false);
     show('admin');
     renderAdmin();
   } else if(getEntryMode()==='driver'){
-    goEntryLanding('driver');
+    openDriverLogin(false);
   } else {
     show('roles');
   }

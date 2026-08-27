@@ -3425,10 +3425,16 @@ function showDefaultAfterSplash(){
 }
 // Сразу после загрузки localStorage — без PIN, если сессия была
 try{
-  const last=localStorage.getItem(LAST_ROLE_KEY)||'';
-  if(last==='driver' && restoreDriverSession()) show('driver');
-  else if(restoreAdminSession()) show('admin');
-  else if(restoreDriverSession()) show('driver');
+  const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
+  if(urlEntry==='driver' && restoreDriverSession()) show('driver');
+  else if(urlEntry==='admin' && restoreAdminSession()) show('admin');
+  else if(!urlEntry){
+    const last=localStorage.getItem(LAST_ROLE_KEY)||'';
+    if(last==='driver' && restoreDriverSession()) show('driver');
+    else if(last==='customer'){ /* customer.js ниже */ }
+    else if(restoreAdminSession()) show('admin');
+    else if(restoreDriverSession()) show('driver');
+  }
 }catch(_){}
 (async function boot(){
   if(typeof initShareSheet==='function') initShareSheet();
@@ -3463,8 +3469,21 @@ try{
     await enterAsDriver(rec);
     return true;
   };
-  if(lastRole==='driver'){
+  const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
+  if(urlEntry==='driver'){
+    if(lastRole==='driver' && (await tryDriver())){ /* ok */ }
+    else if(restoreDriverSession() && (await tryDriver())){ /* ok */ }
+    else openDriverLogin(false);
+  } else if(urlEntry==='customer'){
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(typeof openCustomerLogin==='function') openCustomerLogin();
+  } else if(urlEntry==='admin'){
+    openAdminLogin();
+  } else if(lastRole==='driver'){
     if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
+  } else if(lastRole==='customer'){
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
   } else if(restoreAdminSession()){
     show('admin');
     renderAdmin();

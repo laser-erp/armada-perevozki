@@ -87,7 +87,7 @@ function loginCustomer(){
 function logoutCustomer(){
   currentCustomer=null;
   clearCustomerSession();
-  if(getEntryMode()==='customer') goEntryLanding('customer');
+  if(getEntryMode()==='customer') openCustomerLogin();
   else show('roles');
 }
 

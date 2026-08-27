@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entrybc4";
+const APP_BUILD="2026-08-27-entrybc5";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -328,6 +328,27 @@ function portalScopeCarrierLabel(scope){
   }
   return '';
 }
+function isDedicatedEntryUrl(){
+  try{
+    const path=(location.pathname||'').toLowerCase();
+    return /\/(v|a|z)(\/|$)/.test(path)
+      || /(driver|admin|zakaz)\.html$/i.test(path);
+  }catch(_){ return false; }
+}
+function dedicatedEntryMode(){
+  if(!isDedicatedEntryUrl()) return null;
+  return readEntryFromUrl();
+}
+const DRIVER_FROM_ADMIN_KEY='armada_driver_from_admin_v1';
+function setDriverFromAdmin(on){
+  try{
+    if(on) sessionStorage.setItem(DRIVER_FROM_ADMIN_KEY,'1');
+    else sessionStorage.removeItem(DRIVER_FROM_ADMIN_KEY);
+  }catch(_){}
+}
+function isDriverFromAdmin(){
+  try{ return sessionStorage.getItem(DRIVER_FROM_ADMIN_KEY)==='1'; }catch(_){ return false; }
+}
 function goEntryLanding(mode){
   const page=entryLandingPage(mode);
   try{
@@ -337,10 +358,19 @@ function goEntryLanding(mode){
     location.href=page;
   }
 }
-function backFromEntryLogin(){
+function backFromEntryLogin(opts){
+  const fromAdmin=opts&&opts.fromAdmin;
+  if(fromAdmin && (typeof currentAdmin!=='undefined'&&currentAdmin || typeof restoreAdminSession==='function'&&restoreAdminSession())){
+    if(typeof show==='function') show('admin');
+    if(typeof renderAdmin==='function') renderAdmin();
+    return;
+  }
   const m=getEntryMode();
-  if(m==='admin'){ location.href='kp.html'; return; }
-  if(m==='driver'||m==='customer'){ goEntryLanding(m); return; }
+  if(m==='admin'){ location.href='/kp.html'; return; }
+  if(m==='driver'||m==='customer'){
+    location.href='/kp.html';
+    return;
+  }
   if(typeof show==='function') show('roles');
 }
 /** Backend API (S0). Локально → armada-api; на aptown1 → Caddy prefix. */
@@ -509,6 +539,7 @@ function show(id){
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
+    else if(id==='customer-login'||id==='customer-portal') localStorage.setItem(LAST_ROLE_KEY,'customer');
     else if(wide) localStorage.setItem(LAST_ROLE_KEY,'admin');
   }catch(_){}
   if(currentAdmin && wide){
