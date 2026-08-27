@@ -16,6 +16,8 @@ if [ -z "$PUB" ]; then
   exit 1
 fi
 echo "OK  ключ валиден: $PUB"
+FP="$(ssh-keygen -lf <(echo "$PUB") -E sha256 2>/dev/null | awk '{print $2}')"
+[ -n "$FP" ] && echo "    fingerprint: $FP"
 OUT="$(ssh -i <(printf '%s\n' "$DEPLOY_KEY") -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -T git@github.com 2>&1 || true)"
 if echo "$OUT" | grep -qi 'successfully authenticated'; then
   echo "OK  GitHub принимает deploy key"
@@ -23,4 +25,5 @@ if echo "$OUT" | grep -qi 'successfully authenticated'; then
 fi
 echo "FAIL GitHub не знает этот ключ — добавьте публичный ключ в Deploy keys (Allow write):"
 echo "$PUB"
+[ -n "$FP" ] && echo "Fingerprint: $FP"
 exit 1
