@@ -109,16 +109,20 @@ function customerOrderStatusLabel(o){
   if(!o) return '—';
   if(o.cancelledAt) return 'Отменён';
   if(looksClosedOrder(o)) return 'Закрыт';
+  if(o.bookStatus==='rejected' && (typeof waitingLogistDriver==='function'?waitingLogistDriver(o.driverName):true) && !o.onExchange)
+    return 'Бронь отклонена';
   if(o.onExchange) return 'Диспетчер ищет машину';
   if(o.startOdometer!=null || o.departOdometer!=null) return 'В работе';
   if(o.executorType==='partner') return 'Назначен';
   if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—' && o.driverName!=='Диспетчер') return 'Назначен';
+  if(o.bookStatus==='requested') return 'Ждёт подтверждения брони';
+  if(o.bookStatus==='confirmed') return 'Бронь подтверждена';
   if(o.fulfillment==='direct') return 'У перевозчика (свой парк)';
   return 'У диспетчера';
 }
 function customerOrderStatusTag(o){
   if(!o||!o.id) return '';
-  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.closedAt||''}|${o.cancelledAt||''}`;
+  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}`;
 }
 function loadCustomerOrderSeen(){
   try{ return JSON.parse(localStorage.getItem(CUSTOMER_ORDER_SEEN_KEY)||'{}'); }catch(_){ return {}; }
@@ -174,6 +178,7 @@ function customerOrders(){
 
 let customerRouteKm=null;
 let customerRouteBusy=false;
+let customerCal={year:new Date().getFullYear(), month:new Date().getMonth(), from:null};
 
 function customerSelectedBodyType(){
   return (($('cust-body-type')||{}).value||'tent');
@@ -229,8 +234,8 @@ function paintCustomerFleetOptions(){
   const mode=customerSelectedFulfillment();
   if(fh){
     fh.textContent=mode==='direct'
-      ?'Свой парк перевозчика, лучше заранее. Ставки логиста за срочный подбор нет. Можно забронировать свободную машину.'
-      :'Диспетчеру: закройте как можно скорее. Ставка логиста включена в цену. Если есть свободные машины — забронируйте, иначе он подберёт (в том числе у партнёров).';
+      ?'Свой парк перевозчика, лучше заранее. Ставки логиста за срочный подбор нет. Можно запросить свободную машину — бронь подтвердит перевозчик.'
+      :'Диспетчеру: закройте как можно скорее. Ставка логиста включена в цене. Свободную машину можно запросить; точку в календаре поставит подтверждение перевозчика.';
   }
   if(!sel) return;
   const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
@@ -250,10 +255,42 @@ function paintCustomerFleetOptions(){
   if(prev && list.some(v=>v.plate===prev)) sel.value=prev;
   if(hint){
     hint.textContent=list.length
-      ?`Свободно ${list.length} по тоннажу и времени подачи. Бронь держит машину за вами.`
+      ?`Свободно ${list.length}. Запрос брони подтвердит перевозчик — после этого дата подачи будет в календаре.`
       :'Сейчас свободных машин нет — диспетчер подберёт как можно скорее (свой парк или партнёры).';
   }
   if(box) box.style.display='';
+}
+
+function paintCustomerBookingCal(){
+  const box=$('cust-book-cal');
+  if(!box || typeof monthCalHtml!=='function') return;
+  const marked=new Set();
+  customerOrders().forEach(o=>{
+    const k=typeof confirmedBookingDayKey==='function'?confirmedBookingDayKey(o):'';
+    if(k) marked.add(k);
+  });
+  const title=customerCal.from
+    ?(typeof driverHistDayLabel==='function'?driverHistDayLabel(customerCal.from):customerCal.from)
+    :'Точка — подтверждённая бронь на дату подачи';
+  box.innerHTML=monthCalHtml(customerCal, marked, {
+    id:'cust-book-cal-inner',
+    dayAttr:'data-cust-cal-day',
+    period:title,
+    showReset:!!customerCal.from
+  });
+  const prev=box.querySelector('[data-cal-prev]');
+  const next=box.querySelector('[data-cal-next]');
+  const reset=box.querySelector('[data-cal-reset]');
+  if(prev) prev.onclick=()=>{ customerCal.month--; if(customerCal.month<0){ customerCal.month=11; customerCal.year--; } renderCustomerPortal(); };
+  if(next) next.onclick=()=>{ customerCal.month++; if(customerCal.month>11){ customerCal.month=0; customerCal.year++; } renderCustomerPortal(); };
+  if(reset) reset.onclick=()=>{ customerCal.from=null; renderCustomerPortal(); };
+  box.querySelectorAll('[data-cust-cal-day]').forEach(btn=>{
+    btn.onclick=()=>{
+      const key=btn.getAttribute('data-cust-cal-day');
+      customerCal.from=customerCal.from===key?null:key;
+      renderCustomerPortal();
+    };
+  });
 }
 
 async function refreshCustomerRouteKm(){
@@ -339,20 +376,33 @@ function renderCustomerPortal(){
   if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
   if((loadEl&&loadEl.value) && (unloadEl&&unloadEl.value)) refreshCustomerRouteKm();
   paintCustomerFleetOptions();
+  paintCustomerBookingCal();
   const list=$('cust-orders-list');
   if(list){
     const orders=customerOrders().slice(0,20);
-    list.innerHTML=orders.length?orders.map(o=>{
+    const day=customerCal.from;
+    const shown=day?orders.filter(o=>{
+      const k=typeof dayKeyFromIso==='function'?dayKeyFromIso(o.vehicleAt||o.createdAt):'';
+      return k===day;
+    }):orders;
+    list.innerHTML=shown.length?shown.map(o=>{
       const st=customerOrderStatusLabel(o);
-      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.onExchange?'exchange':(o.startOdometer!=null?'progress':(typeof waitingLogistDriver==='function'&&waitingLogistDriver(o.driverName)?'inbox':''));
+      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.bookStatus==='confirmed'?'closed':o.bookStatus==='requested'?'inbox':o.onExchange?'exchange':(o.startOdometer!=null?'progress':(typeof waitingLogistDriver==='function'&&waitingLogistDriver(o.driverName)?'inbox':''));
+      const bookLine=o.bookedPlate
+        ?(o.bookStatus==='confirmed'
+          ?`бронь ${o.bookedPlate} подтверждена`
+          :o.bookStatus==='rejected'
+            ?`бронь ${o.bookedPlate} отклонена`
+            :`запрос брони ${o.bookedPlate}`)
+        :'';
       return `<div class="card" style="margin-bottom:8px">
         <h3>№ ${esc(o.sequentialNumber||'—')} · <span class="order-status ${stCls}">${esc(st)}</span></h3>
         <p class="meta">${esc(routeText(o))}</p>
-        <p class="meta">${esc(o.ownCompanyName||'Диспетчер')}${o.bookedPlate?` · бронь ${esc(o.bookedPlate)}`:''}${o.fulfillment==='direct'?' · свой парк':''}</p>
+        <p class="meta">${esc(o.ownCompanyName||'Диспетчер')}${bookLine?` · ${esc(bookLine)}`:''}${o.fulfillment==='direct'?' · свой парк':''}</p>
         <p class="meta">${o.executorType==='partner'?'':(o.driverName&&o.driverName!=='Биржа'&&o.driverName!=='Диспетчер'?`Водитель: ${esc(o.driverName)} · `:'')}${o.pricePending?'Цена: уточнит диспетчер · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
       </div>`;
-    }).join(''):'<div class="empty">Заявок ещё нет</div>';
+    }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
   }
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
@@ -432,6 +482,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     executorType:'logist', onExchange:false,
     fulfillment:draft.fulfillment||'logist',
     bookedPlate:bookedPlate||null,
+    bookStatus:bookedPlate?'requested':null,
+    bookConfirmedAt:null,
     exchangeListedAt:null, wasOnExchange:false,
     partnerSpaceId:null,
     reqPayloadTons:payloadTons,
@@ -470,7 +522,9 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   const priceBit=order.pricePending
     ?'Цену уточнит диспетчер.'
     :`Ориентир ${fmt(min||offered)} ₽${order.fulfillment==='direct'?'':' (ставка логиста в цене)'}.`;
-  const bookBit=order.bookedPlate?` Машина ${order.bookedPlate} забронирована.`:' Диспетчер подберёт машину.';
+  const bookBit=order.bookedPlate
+    ?` Запрос брони ${order.bookedPlate}: перевозчик подтвердит — тогда дата подачи появится в календаре.`
+    :' Диспетчер подберёт машину.';
   const rushBit=order.fulfillment==='direct'
     ?' Заявка в свой парк, без срочного подбора.'
     :' Диспетчеру: закрыть как можно скорее.';

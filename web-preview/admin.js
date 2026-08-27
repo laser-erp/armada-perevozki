@@ -1108,6 +1108,10 @@ function adminOrderCardHtml(o){
   const phone=(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })();
   const sideBtns=[
     onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:'',
+    typeof isBookingRequested==='function' && isBookingRequested(o) && isMyFirmOrder(o)
+      ?`<button type="button" class="primary in-book-ok" data-id="${o.id}">Подтвердить бронь</button>`:'',
+    typeof isBookingRequested==='function' && isBookingRequested(o) && isMyFirmOrder(o)
+      ?`<button type="button" class="secondary in-book-no" data-id="${o.id}">Отклонить бронь</button>`:'',
     !onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)
       ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:'',
     canReturnOrderToExchange(o)
@@ -1271,6 +1275,11 @@ function adminOrdersSelectDay(dayKey){
 function adminOrdersCalHtml(groups){
   const cal=ensureAdminOrdersCal();
   const marked=new Set((groups||[]).map(g=>g.dayKey).filter(k=>k && k!=='без-даты'));
+  allOrders().forEach(o=>{
+    if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return;
+    const k=typeof confirmedBookingDayKey==='function'?confirmedBookingDayKey(o):'';
+    if(k) marked.add(k);
+  });
   const y=cal.year, m=cal.month;
   const title=new Date(y,m,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
   const first=new Date(y,m,1);
@@ -1380,6 +1389,33 @@ function unpublishFromExchange(id){
   upsertOrder(o);
   renderAdmin();
 }
+function confirmOrderBooking(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !String(o.bookedPlate||'').trim()){ alert('Нет запроса брони'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  if(typeof vehicleBusyAt==='function' && vehicleBusyAt(o.bookedPlate, o.vehicleAt, o.id)){
+    alert('Эта машина уже занята на это время. Выберите другое авто или отклоните запрос.');
+    return;
+  }
+  if(!confirm(`Подтвердить бронь ${o.bookedPlate} на ${o.vehicleAt?formatRuDateTimeAt(o.vehicleAt):'указанную подачу'}? Дата появится в календаре у вас и у заказчика.`)) return;
+  stampConfirmedBooking(o, o.bookedPlate);
+  bumpDataEpoch('book-confirm');
+  upsertOrder(o);
+  persist();
+  renderAdmin();
+}
+function rejectOrderBooking(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !String(o.bookedPlate||'').trim()){ alert('Нет запроса брони'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  if(!confirm(`Отклонить бронь ${o.bookedPlate}? Заказчик увидит отказ, точка в календаре не появится.`)) return;
+  o.bookStatus='rejected';
+  o.bookRejectedAt=new Date().toISOString();
+  bumpDataEpoch('book-reject');
+  upsertOrder(o);
+  persist();
+  renderAdmin();
+}
 function canReturnOrderToExchange(o){
   if(!o || looksClosedOrder(o) || o.cancelledAt || o.startOdometer!=null || o.onExchange) return false;
   if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) return false;
@@ -1415,6 +1451,7 @@ function returnOrderToExchange(id){
     o.carrierVehicleId=null;
     o.executorAdminId=null;
     o.driverPhone='';
+    if(typeof clearOrderBooking==='function') clearOrderBooking(o);
     bumpDataEpoch('return-exchange');
     upsertOrder(o);
     if(state.detailId===id && typeof openDetail==='function') openDetail(id);
@@ -1441,6 +1478,7 @@ function publishToExchange(id){
     o.transportApp=null;
     o.partnerSpaceId=null;
     o.executorAdminId=null;
+    if(typeof clearOrderBooking==='function') clearOrderBooking(o);
     bumpDataEpoch('publish-exchange');
     upsertOrder(o);
     setAdminNav('exchange');
@@ -1468,6 +1506,7 @@ function assignExchangeToOwn(id){
   o.driverPercent=driverPercent(driver, firmId);
   o.driverPhone=driverPhone(driver, firmId);
   o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
+  if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
   stampOrderDriverPhone(o);
   bumpDataEpoch('assign-exchange-own');
   upsertOrder(o);
@@ -1589,6 +1628,7 @@ function confirmClaimExchangeAfterGuard(o){
   o.executorAdminId=currentAdmin.id;
   if(o.transportApp) o.transportApp.driverPhone=o.driverPhone||'';
   stampOrderDriverPhone(o);
+  if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
   bumpDataEpoch('claim-exchange');
   upsertOrder(o);
   claimOrderId=null;
@@ -1658,14 +1698,27 @@ function renderAdminExchangeBoard(orders){
 }
 function renderAdminInboxBoard(orders){
   const rush=orders.filter(o=>o.fulfillment!=='direct').length;
-  const booked=orders.filter(o=>o.bookedPlate).length;
+  const waitBook=orders.filter(o=>typeof isBookingRequested==='function' && isBookingRequested(o)).length;
+  const okBook=orders.filter(o=>typeof isBookingConfirmed==='function' && isBookingConfirmed(o)).length;
+  const calMarks=[];
+  (orders||[]).forEach(o=>{
+    const k=dayKeyFromIso(o.vehicleAt||o.createdAt);
+    if(k) calMarks.push({dayKey:k});
+  });
+  allOrders().forEach(o=>{
+    if(!canAdminSeeOrder(o)||!matchesOwnerFilter(o)) return;
+    const k=typeof confirmedBookingDayKey==='function'?confirmedBookingDayKey(o):'';
+    if(k) calMarks.push({dayKey:k});
+  });
   const head=`<div class="board-head">
-    <p class="cat-panel-hint">Заказчик просит закрыть скорее и оплачивает ставку логиста. Свой парк — назначьте. Нет машины или вы за рулём и не успеваете планировать — отдайте перевозчику на бирже: он получит заказ и поедет.</p>
+    <p class="cat-panel-hint">Запрос брони подтвердите кнопкой — после этого точка появится в календаре у вас и у заказчика на дату подачи. Свой парк — назначьте. Нет машины — отдайте перевозчику на бирже.</p>
+    ${adminOrdersCalHtml(calMarks)}
     ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
       <div class="m"><span>Входящие</span><b>${orders.length}</b></div>
+      <div class="m"><span>Ждут бронь</span><b class="${waitBook?'warn':''}">${waitBook}</b></div>
+      <div class="m"><span>Бронь ок</span><b class="ok">${okBook}</b></div>
       <div class="m"><span>Срочно</span><b class="${rush?'warn':''}">${rush}</b></div>
-      <div class="m"><span>Бронь ТС</span><b>${booked}</b></div>
     </div>
   </div>`;
   if(!orders.length){
@@ -1680,6 +1733,15 @@ function renderAdminInboxBoard(orders){
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
     const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}${bookedPlate&&v.plate===bookedPlate?' · бронь':''}</option>`).join('');
     const margin=typeof logistMarginLine==='function'?logistMarginLine(o):'';
+    const reqBook=typeof isBookingRequested==='function' && isBookingRequested(o);
+    const okB=typeof isBookingConfirmed==='function' && isBookingConfirmed(o);
+    const bookLine=reqBook
+      ? `<p class="rate-missing">Запрос брони ${esc(bookedPlate)} — подтвердите, тогда дата подачи попадёт в календарь.</p>`
+      : okB
+        ? `<p class="order-money">Бронь ${esc(bookedPlate)} подтверждена · в календаре ${esc(o.vehicleAt?dayOnly(o.vehicleAt):'')}</p>`
+        : o.bookStatus==='rejected'
+          ? `<p class="hint">Бронь ${esc(bookedPlate)} отклонена</p>`
+          : '';
     return `<div class="ex-card">
       <div class="order-card-head">
         ${adminOrderPickHtml(o)}
@@ -1690,9 +1752,14 @@ function renderAdminInboxBoard(orders){
       <span class="ex-badge">${o.fulfillment==='direct'?'свой парк':'срочно · ставка логиста'}</span>
       <p class="ex-route">${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
-      <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · бронь <strong>${esc(bookedPlate)}</strong>`:''}</p>
+      <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · ${esc(bookedPlate)}`:''}</p>
+      ${bookLine}
       ${margin?`<p class="order-money">${esc(margin)}</p>`:''}
       <div class="ex-assign-box">
+        ${reqBook?`<div class="ex-actions" style="margin-bottom:8px">
+          <button type="button" class="primary in-book-ok" data-id="${o.id}">Подтвердить бронь</button>
+          <button type="button" class="secondary in-book-no" data-id="${o.id}">Отклонить бронь</button>
+        </div>`:''}
         <label for="ex-drv-${o.id}">Водитель своего парка</label>
         <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
         <label for="ex-plate-${o.id}">Авто</label>
@@ -1735,7 +1802,18 @@ function renderAdmin(){
     $('admin-list').innerHTML=renderAdminInboxBoard(orders);
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
     document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=()=>publishToExchange(b.dataset.id));
+    document.querySelectorAll('#admin-list .in-book-ok').forEach(b=>b.onclick=()=>confirmOrderBooking(b.dataset.id));
+    document.querySelectorAll('#admin-list .in-book-no').forEach(b=>b.onclick=()=>rejectOrderBooking(b.dataset.id));
     document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+    const prev=$('admin-cal-prev');
+    const next=$('admin-cal-next');
+    const reset=$('admin-cal-reset');
+    if(prev) prev.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month--; if(c.month<0){ c.month=11; c.year--; } if(!c.from) c.showAll=false; renderAdmin(); };
+    if(next) next.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month++; if(c.month>11){ c.month=0; c.year++; } if(!c.from) c.showAll=false; renderAdmin(); };
+    if(reset) reset.onclick=()=>{ const c=ensureAdminOrdersCal(); c.from=null; c.to=null; c.showAll=true; renderAdmin(); };
+    document.querySelectorAll('#admin-list [data-admin-cal-day]').forEach(btn=>{
+      btn.onclick=e=>{ e.stopPropagation(); adminOrdersSelectDay(btn.dataset.adminCalDay); };
+    });
     wireAdminOrderDeleteUi(orders);
     return;
   }
@@ -1871,6 +1949,14 @@ function renderAdmin(){
   document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
     publishToExchange(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .in-book-ok').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    confirmOrderBooking(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .in-book-no').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    rejectOrderBooking(b.dataset.id);
   });
   document.querySelectorAll('#admin-list .ret-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
@@ -2568,7 +2654,7 @@ function openDetail(id){
             <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
           </div>
         </div>
-        ${o.bookedPlate?`<p class="hint">Бронь заказчика: ${esc(o.bookedPlate)}</p>`:''}
+        ${o.bookedPlate?`<p class="hint">${o.bookStatus==='confirmed'?'Бронь подтверждена':'Запрос брони'}: ${esc(o.bookedPlate)}${o.bookStatus==='confirmed'?' · в календаре на дату подачи':o.bookStatus==='requested'?' · ждут вашего подтверждения':o.bookStatus==='rejected'?' · отклонена':''}</p>`:''}
         ${o.fulfillment==='logist'?'<p class="hint">Срочно: заказчик просит закрыть как можно скорее, ставка логиста в цене.</p>':o.fulfillment==='direct'?'<p class="hint">Прямой парк, без срочной ставки логиста.</p>':''}
         ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="hint">${esc(logistMarginLine(o))}</p>`:''}
       </div>

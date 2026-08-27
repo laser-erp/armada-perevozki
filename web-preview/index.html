@@ -44,8 +44,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc15" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc15" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc16" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc16" />
 
 </head>
 <body>
@@ -191,11 +191,11 @@
             <option value="logist">Логисту — как можно скорее (ставка логиста в цене)</option>
             <option value="direct">Свой парк перевозчика — заранее, без срочного подбора</option>
           </select>
-          <p class="hint" id="cust-fulfill-hint">Вы говорите диспетчеру: закройте заказ как можно быстрее и готовы оплатить его работу по ставке. Если у него есть свободные машины — выберите и забронируйте ниже.</p>
+          <p class="hint" id="cust-fulfill-hint">Вы говорите диспетчеру: закройте заказ как можно быстрее и готовы оплатить его работу по ставке. Свободную машину можно запросить — бронь подтвердит перевозчик.</p>
           <div id="cust-fleet-box">
             <label for="cust-book-plate">Свободные машины</label>
             <select id="cust-book-plate"></select>
-            <p class="hint" id="cust-fleet-hint">Подберём по тоннажу и дате подачи.</p>
+            <p class="hint" id="cust-fleet-hint">Запрос брони подтвердит перевозчик. После подтверждения дата подачи появится в календаре у вас и у него.</p>
           </div>
           <label for="cust-contact-name">Контакт на загрузке</label>
           <input id="cust-contact-name" placeholder="ФИО" />
@@ -206,6 +206,11 @@
           <input id="cust-price" inputmode="decimal" placeholder="из расчёта или уточнит перевозчик" />
           <div class="error" id="cust-form-error"></div>
           <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Календарь броней</h2>
+          <p class="hint">Точка на дате подачи появляется, когда перевозчик подтвердит бронь. Запрос без точки, пока ждёте.</p>
+          <div id="cust-book-cal"></div>
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Мои заявки</h2>
@@ -530,15 +535,15 @@
     </div>
   </div>
 </div>
-  <script src="/store.js?v=2026-08-27-entrybc15"></script>
-<script src="/billing.js?v=2026-08-27-entrybc15"></script>
-<script src="/qrcode.min.js?v=2026-08-27-entrybc15"></script>
-<script src="/entry-share.js?v=2026-08-27-entrybc15"></script>
-<script src="/driver.js?v=2026-08-27-entrybc15"></script>
-<script src="/etrn.js?v=2026-08-27-entrybc15"></script>
-  <script src="/admin.js?v=2026-08-27-entrybc15"></script>
-  <script src="/customer.js?v=2026-08-27-entrybc15"></script>
-  <script src="/app.js?v=2026-08-27-entrybc15"></script>
-<script src="/onboarding.js?v=2026-08-27-entrybc15"></script>
+  <script src="/store.js?v=2026-08-27-entrybc16"></script>
+<script src="/billing.js?v=2026-08-27-entrybc16"></script>
+<script src="/qrcode.min.js?v=2026-08-27-entrybc16"></script>
+<script src="/entry-share.js?v=2026-08-27-entrybc16"></script>
+<script src="/driver.js?v=2026-08-27-entrybc16"></script>
+<script src="/etrn.js?v=2026-08-27-entrybc16"></script>
+  <script src="/admin.js?v=2026-08-27-entrybc16"></script>
+  <script src="/customer.js?v=2026-08-27-entrybc16"></script>
+  <script src="/app.js?v=2026-08-27-entrybc16"></script>
+<script src="/onboarding.js?v=2026-08-27-entrybc16"></script>
 </body>
 </html>

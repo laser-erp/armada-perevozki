@@ -628,15 +628,19 @@ function fleetVehiclesForCompany(companyId){
   if(!companyId) return [];
   return (state.vehicles||[]).filter(v=>v.companyId===companyId);
 }
-function vehicleBusyAt(plate, atIso){
+function vehicleBusyAt(plate, atIso, exceptOrderId){
   const want=String(plate||'').trim();
   if(!want) return false;
   const at=atIso?Date.parse(atIso):Date.now();
+  const placeholder=n=>!n || n==='—' || n==='-' || n==='Биржа' || n==='Диспетчер';
   return (state.orders||[]).some(o=>{
     if(!o || o.cancelledAt || looksClosedOrder(o)) return false;
+    if(exceptOrderId && o.id===exceptOrderId) return false;
     const used=String(o.vehiclePlate||'').trim();
     const booked=String(o.bookedPlate||'').trim();
-    if(used!==want && booked!==want) return false;
+    const usedHit=!placeholder(used) && used===want;
+    const bookedHit=booked===want && o.bookStatus!=='rejected';
+    if(!usedHit && !bookedHit) return false;
     if(o.startOdometer!=null) return true;
     const start=Date.parse(o.vehicleAt||o.createdAt||0);
     const free=Date.parse(o.freeAt||0);
@@ -1542,6 +1546,72 @@ function orderBeingClosed(){
 /** Текущий заказ на закрытии (не путать с «зомби» незакрытым №1). */
 function openOrder(){ return orderBeingClosed(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
+function isBookingRequested(o){
+  return !!(o && String(o.bookedPlate||'').trim() && o.bookStatus==='requested');
+}
+function isBookingConfirmed(o){
+  return !!(o && String(o.bookedPlate||'').trim() && o.bookStatus==='confirmed');
+}
+function confirmedBookingDayKey(o){
+  if(!isBookingConfirmed(o) || o.cancelledAt) return '';
+  return typeof dayKeyFromIso==='function'?dayKeyFromIso(o.vehicleAt):'';
+}
+function monthCalHtml(cal, marked, opt){
+  opt=opt||{};
+  const dayAttr=opt.dayAttr||'data-cal-day';
+  const wrapId=opt.id||'';
+  const y=cal.year, m=cal.month;
+  const title=new Date(y,m,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  const first=new Date(y,m,1);
+  const startPad=(first.getDay()+6)%7;
+  const dim=new Date(y,m+1,0).getDate();
+  const todayKey=typeof dayKeyFromIso==='function'?dayKeyFromIso(new Date().toISOString()):'';
+  const a=cal.from?(cal.to && cal.to<cal.from?cal.to:cal.from):null;
+  const b=cal.from?(cal.to && cal.to>cal.from?cal.to:(cal.to||cal.from)):null;
+  let cells='';
+  for(let i=0;i<startPad;i++) cells+=`<button type="button" class="mute" disabled>·</button>`;
+  for(let day=1;day<=dim;day++){
+    const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cls=[
+      marked.has(key)?'has':'',
+      key===todayKey?'today':'',
+      a && key===a?'edge':'',
+      b && key===b?'edge':'',
+      a && b && key>a && key<b?'in':''
+    ].filter(Boolean).join(' ');
+    cells+=`<button type="button" class="${cls}" ${dayAttr}="${esc(key)}">${day}</button>`;
+  }
+  const showReset=!!(cal.from || opt.showReset);
+  return `<div class="drv-cal"${wrapId?` id="${esc(wrapId)}"`:''}>
+    <div class="drv-cal-head">
+      <button type="button" data-cal-prev aria-label="Предыдущий месяц">‹</button>
+      <h3>${esc(title.charAt(0).toUpperCase()+title.slice(1))}</h3>
+      <button type="button" data-cal-next aria-label="Следующий месяц">›</button>
+    </div>
+    <div class="drv-cal-week">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="drv-cal-grid">${cells}</div>
+    <div class="drv-cal-meta">
+      <span class="period">${esc(opt.period||'Точка — подтверждённая бронь на дату подачи')}</span>
+      <button type="button" data-cal-reset${showReset?'':' hidden'}>Сбросить</button>
+    </div>
+  </div>`;
+}
+function stampConfirmedBooking(o, plate){
+  if(!o) return;
+  const p=String(plate||o.bookedPlate||'').trim();
+  if(!p) return;
+  o.bookedPlate=p;
+  o.bookStatus='confirmed';
+  o.bookConfirmedAt=new Date().toISOString();
+  o.bookRejectedAt=null;
+}
+function clearOrderBooking(o){
+  if(!o) return;
+  o.bookedPlate=null;
+  o.bookStatus=null;
+  o.bookConfirmedAt=null;
+  o.bookRejectedAt=null;
+}
 function waitingLogistDriver(name){
   const n=String(name||'').trim();
   return !n || n==='—' || n==='-' || n==='Биржа' || n==='Диспетчер';
@@ -1575,7 +1645,11 @@ function logistMarginLine(o){
 function statusText(o){
   if(o.cancelledAt || (o.closedAt && o.cancelReason)) return 'Отменён';
   if(looksClosedOrder(o)) return 'Закрыт';
-  if(isLogistInboxOrder(o)) return o.fulfillment==='direct'?'Прямой · жду парк':'Входящая';
+  if(isLogistInboxOrder(o)){
+    if(typeof isBookingRequested==='function' && isBookingRequested(o)) return 'Бронь · жду подтверждения';
+    if(typeof isBookingConfirmed==='function' && isBookingConfirmed(o)) return o.fulfillment==='direct'?'Прямой · бронь в календаре':'Входящая · бронь в календаре';
+    return o.fulfillment==='direct'?'Прямой · жду парк':'Входящая';
+  }
   if(o.onExchange && o.startOdometer==null) return 'На бирже (ищем партнёра)';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(o.startOdometer!=null) return 'В работе';
