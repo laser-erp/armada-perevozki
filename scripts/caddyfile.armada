@@ -19,6 +19,16 @@
 	handle /_/* {
 		reverse_proxy 127.0.0.1:8090
 	}
+	handle /v {
+		redir /driver.html permanent
+	}
+	handle /a {
+		redir /admin.html permanent
+	}
+	handle /z {
+		redir /zakaz.html permanent
+	}
+
 	handle {
 		root * /var/www/armada
 		header Cache-Control "no-store, no-cache, must-revalidate"

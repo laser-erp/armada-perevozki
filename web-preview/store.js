@@ -179,7 +179,89 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-onboard1";
+const APP_BUILD="2026-08-27-entries1";
+const ENTRY_MODES=['driver','admin','customer'];
+const ENTRY_SESSION_KEY='armada_entry_mode_v1';
+function normalizeEntryMode(v){
+  const x=String(v||'').trim().toLowerCase();
+  return ENTRY_MODES.includes(x)?x:null;
+}
+function readEntryFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    const fromQ=normalizeEntryMode(q.get('entry'));
+    if(fromQ) return fromQ;
+    const path=(location.pathname||'').toLowerCase();
+    if(/driver\.html$/i.test(path)||/\/v\/?$/.test(path)) return 'driver';
+    if(/admin\.html$/i.test(path)||/\/a\/?$/.test(path)) return 'admin';
+    if(/zakaz\.html$/i.test(path)||/\/z\/?$/.test(path)) return 'customer';
+  }catch(_){}
+  return null;
+}
+function setEntryMode(mode){
+  const m=normalizeEntryMode(mode);
+  try{
+    if(m) sessionStorage.setItem(ENTRY_SESSION_KEY,m);
+    else sessionStorage.removeItem(ENTRY_SESSION_KEY);
+  }catch(_){}
+}
+function getEntryMode(){
+  try{
+    const fromUrl=readEntryFromUrl();
+    if(fromUrl){
+      setEntryMode(fromUrl);
+      return fromUrl;
+    }
+    return normalizeEntryMode(sessionStorage.getItem(ENTRY_SESSION_KEY));
+  }catch(_){ return null; }
+}
+function initEntryFromPage(){
+  const fromUrl=readEntryFromUrl();
+  if(fromUrl) setEntryMode(fromUrl);
+  else if(!getEntryMode()){
+    const path=(location.pathname||'').toLowerCase();
+    if(/index\.html$/.test(path)||path==='/'||path.endsWith('/')){
+      setEntryMode('admin');
+    }
+  }
+}
+function entryLoginScreenId(){
+  const m=getEntryMode();
+  if(m==='driver') return 'driver-login';
+  if(m==='admin') return 'admin-pin';
+  if(m==='customer') return 'customer-login';
+  return 'roles';
+}
+function entryLandingPage(mode){
+  const m=normalizeEntryMode(mode)||getEntryMode();
+  if(m==='driver') return 'driver.html';
+  if(m==='admin') return 'admin.html';
+  if(m==='customer') return 'zakaz.html';
+  return 'index.html';
+}
+function customerPortalPageUrl(){
+  try{
+    const u=new URL('zakaz.html', location.href);
+    return u.href;
+  }catch(_){
+    return `${location.origin}/zakaz.html`;
+  }
+}
+function goEntryLanding(mode){
+  const page=entryLandingPage(mode);
+  try{
+    const u=new URL(page, location.href);
+    location.href=u.href;
+  }catch(_){
+    location.href=page;
+  }
+}
+function backFromEntryLogin(){
+  const m=getEntryMode();
+  if(m==='admin'){ location.href='kp.html'; return; }
+  if(m==='driver'||m==='customer'){ goEntryLanding(m); return; }
+  if(typeof show==='function') show('roles');
+}
 /** Backend API (S0). Локально → armada-api; на aptown1 → Caddy prefix. */
 const API_BASE=(()=>{
   if(typeof location==='undefined') return '';
@@ -351,10 +433,14 @@ function show(id){
 }
 const SPLASH_STARTED_MS=Date.now();
 const MIN_SPLASH_MS=900;
-function showAfterSplash(id){
+function showAfterSplash(idOrFn){
   const wait=Math.max(0, MIN_SPLASH_MS-(Date.now()-SPLASH_STARTED_MS));
-  if(wait<=0){ show(id); return; }
-  setTimeout(()=>show(id), wait);
+  const run=()=>{
+    if(typeof idOrFn==='function') idOrFn();
+    else show(idOrFn);
+  };
+  if(wait<=0){ run(); return; }
+  setTimeout(run, wait);
 }
 function isCancelledOrder(o){
   return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));

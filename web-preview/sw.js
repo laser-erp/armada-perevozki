@@ -1,5 +1,5 @@
 /* АРМАДА PWA — JS/CSS network-first (не держать сломанный кэш) */
-const CACHE = 'armada-shell-v26';
+const CACHE = 'armada-shell-v27';
 const SHELL = ['./manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {

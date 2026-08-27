@@ -206,7 +206,8 @@ function logoutAdmin(){
   clearAdminSession();
   setArmadaApiToken('');
   updateAdminChrome();
-  show('roles');
+  if(getEntryMode()==='admin') goEntryLanding('admin');
+  else show('roles');
 }
 function openAdminActivity(){
   if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
@@ -2832,7 +2833,8 @@ function openCatalogs(){
         <input id="co-portal-phone" inputmode="tel" placeholder="+7…" value="${esc(c.portalPhone||contactPhone(c.contacts&&c.contacts[0])||'')}" />
         <label>PIN (от 4 цифр)</label>
         <input id="co-portal-pin" inputmode="numeric" maxlength="8" placeholder="PIN" value="${esc(c.portalPin||'')}" />
-        <p class="hint">Заказчик на стартовом экране → «Заказчик». Заявки идут на биржу с проверкой минимальной цены.</p>
+        <p class="hint">Ссылка для заказчика: <a href="${esc(customerPortalPageUrl())}" target="_blank" rel="noopener">${esc(customerPortalPageUrl())}</a></p>
+        <p class="hint">Заявки идут на биржу с проверкой минимальной цены.</p>
         <h4>Адреса заказчика</h4>
         <label>Загрузки (каждый с новой строки)</label>
         <textarea id="co-loads" rows="3">${esc((c.loadingAddresses||[]).join('\n'))}</textarea>

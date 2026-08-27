@@ -12,7 +12,7 @@
 |------|--------|------------|
 | S0 HTTPS + armada-api | ✅ done | LE до 2026-11-22, smoke + ssh-verify OK |
 | S1 driverInvites | ✅ done | invite.html, KEY в store.js, smoke OK |
-| S2 пилот 2–3 space | 🔄 in_progress | kp.html, **онбординг + help.html на проде**, ждут партнёров |
+| S2 пилот 2–3 space | 🔄 in_progress | kp.html, **раздельные входы** (admin/driver/zakaz), онбординг + help |
 | S3 ETRN MVP (код 2 спринта) | ✅ done | UI + API + webhook; smoke OK |
 | S3-1.2 письма операторам | 📤 ready_to_send | PDF на проде, `docs/PISMO_OPERATORAM_ETRN.md` |
 | S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false`, нужны ключи оператора |

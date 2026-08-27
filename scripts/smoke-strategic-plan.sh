@@ -33,10 +33,13 @@ if echo "$HEALTH" | grep -q '"ok":true'; then pass "API health ok"; else fail "A
 if echo "$HEALTH" | grep -q 'armada-api'; then pass "API service name"; else fail "API service name"; fi
 
 echo "S1 driverInvites"
-if curl -fsS -o /dev/null "$BASE/invite.html"; then pass "invite.html"; else fail "invite.html"; fi
+for f in invite.html driver.html admin.html zakaz.html; do
+  if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
+done
 if fetch_store; then pass "store.js"; else fail "store.js"; fi
 if grep -q 'armada_app_v5' "$STORE_TMP"; then pass "store.js KEY"; else fail "store.js KEY missing"; fi
 if grep -q 'driverInvitePageUrl' "$STORE_TMP"; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
+if grep -q 'ENTRY_SESSION_KEY' "$STORE_TMP"; then pass "separate entry modes in store.js"; else fail "entry modes"; fi
 
 echo "S3 ETRN MVP"
 for f in etrn.js billing.js; do

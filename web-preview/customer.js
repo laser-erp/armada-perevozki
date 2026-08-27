@@ -46,7 +46,7 @@ function openCustomerLogin(){
   const phoneEl=$('cust-login-phone'); const pinEl=$('cust-login-pin');
   if(phoneEl) phoneEl.value='';
   if(pinEl) pinEl.value='';
-  $('cust-login-back').onclick=()=>show('roles');
+  $('cust-login-back').onclick=()=>backFromEntryLogin();
   show('customer-login');
   setTimeout(()=>{ try{ (phoneEl||pinEl)?.focus(); }catch(_){} }, 120);
 }
@@ -73,7 +73,8 @@ function loginCustomer(){
 function logoutCustomer(){
   currentCustomer=null;
   clearCustomerSession();
-  show('roles');
+  if(getEntryMode()==='customer') goEntryLanding('customer');
+  else show('roles');
 }
 
 function customerOrders(){
@@ -260,7 +261,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
 }
 
 function wireCustomerPortal(){
-  $('role-customer')&&($('role-customer').onclick=openCustomerLogin);
+  $('role-customer')&&($('role-customer').onclick=()=>{ setEntryMode('customer'); openCustomerLogin(); });
   $('cust-login-ok')&&($('cust-login-ok').onclick=loginCustomer);
   $('cust-login-pin')&&($('cust-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginCustomer(); });
   $('cust-portal-back')&&($('cust-portal-back').onclick=logoutCustomer);

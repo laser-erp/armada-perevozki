@@ -268,7 +268,7 @@ function openDriverLogin(fromAdmin){
       if(fromAdmin || currentAdmin || peekAdminSessionName()){
         if(currentAdmin || restoreAdminSession()){ show('admin'); renderAdmin(); return; }
       }
-      show('roles');
+      backFromEntryLogin();
     };
   }
   show('driver-login');
@@ -365,6 +365,8 @@ function leaveDriverMode(){
   if(restoreAdminSession()){
     show('admin');
     renderAdmin();
+  } else if(getEntryMode()==='driver'){
+    goEntryLanding('driver');
   } else {
     show('roles');
   }

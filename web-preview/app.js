@@ -3295,6 +3295,33 @@ function updateSyncHint(){
   }
   updateDriverNetHint();
 }
+function openAdminLogin(){
+  migrateAdmins();
+  if(restoreAdminSession()){
+    show('admin');
+    renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+    return;
+  }
+  fillAdminLoginSelect();
+  const pinIn=$('pin-input');
+  if(pinIn) pinIn.value='';
+  const pinErr=$('pin-error');
+  if(pinErr) pinErr.textContent='';
+  show('admin-pin');
+}
+function showDefaultAfterSplash(){
+  initEntryFromPage();
+  const entryId=entryLoginScreenId();
+  if(entryId==='roles'){
+    show('roles');
+    if(window.ArmadaOnboarding) ArmadaOnboarding.showRolesWelcome();
+    return;
+  }
+  if(entryId==='driver-login') openDriverLogin(false);
+  else if(entryId==='admin-pin') openAdminLogin();
+  else if(entryId==='customer-login') openCustomerLogin();
+}
 // Сразу после загрузки localStorage — без PIN, если сессия была
 try{
   const last=localStorage.getItem(LAST_ROLE_KEY)||'';
@@ -3303,6 +3330,7 @@ try{
   else if(restoreDriverSession()) show('driver');
 }catch(_){}
 (async function boot(){
+  initEntryFromPage();
   migrateAdmins();
   let dirty=migrateDriverOwners();
   if(migrateSpaces()) dirty=true;
@@ -3339,10 +3367,9 @@ try{
     renderAdmin();
     if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
   } else if(!(await tryDriver())){
-    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show')){
-      if(document.querySelector('#splash.show')) showAfterSplash('roles');
-      else show('roles');
-      if(window.ArmadaOnboarding) ArmadaOnboarding.showRolesWelcome();
+    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show')){
+      if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
+      else showDefaultAfterSplash();
     }
   }
   startAutoSync();
@@ -3352,7 +3379,7 @@ try{
   }).catch(()=>updateSyncHint());
   setTimeout(updateSyncHint, 700);
 })();
-$('role-driver').onclick=()=>openDriverLogin(false);
+$('role-driver').onclick=()=>{ setEntryMode('driver'); openDriverLogin(false); };
 $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
   if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
   openDriverLogin(true);
@@ -3361,20 +3388,8 @@ $('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
 $('drv-login-pin')&&($('drv-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginDriver(); });
 $('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ($('drv-login-pin')||{}).focus?.(); } });
 $('btn-home')&&($('btn-home').onclick=showDriverHome);
-$('role-admin').onclick=()=>{
-  migrateAdmins();
-  if(restoreAdminSession()){
-    show('admin');
-    renderAdmin();
-    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
-    return;
-  }
-  fillAdminLoginSelect();
-  $('pin-input').value='';
-  $('pin-error').textContent='';
-  show('admin-pin');
-};
-$('pin-back').onclick=()=>show('roles');
+$('role-admin').onclick=()=>openAdminLogin();
+$('pin-back').onclick=()=>backFromEntryLogin();
 $('pin-ok').onclick=loginAdmin;
 $('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin(); });
 $('admin-exit').onclick=logoutAdmin;
