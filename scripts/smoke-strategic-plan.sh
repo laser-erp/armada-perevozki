@@ -54,6 +54,12 @@ fi
 BUILD="$(grep -m1 'APP_BUILD=' "$STORE_TMP" | sed 's/.*"\(.*\)".*/\1/')"
 if [ -n "$BUILD" ]; then pass "APP_BUILD=$BUILD"; else fail "APP_BUILD"; fi
 
+echo "Onboarding"
+for f in onboarding.js help.html; do
+  if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
+done
+if curl -fsS "$BASE/index.html" | grep -q 'onboarding.js'; then pass "index.html loads onboarding.js"; else fail "index.html onboarding"; fi
+
 echo ""
 if [ "$FAIL" -eq 0 ]; then
   echo "SMOKE PASS"

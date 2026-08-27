@@ -3333,14 +3333,16 @@ try{
     return true;
   };
   if(lastRole==='driver'){
-    if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); }
+    if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
   } else if(restoreAdminSession()){
     show('admin');
     renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
   } else if(!(await tryDriver())){
     if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show')){
       if(document.querySelector('#splash.show')) showAfterSplash('roles');
       else show('roles');
+      if(window.ArmadaOnboarding) ArmadaOnboarding.showRolesWelcome();
     }
   }
   startAutoSync();
@@ -3364,6 +3366,7 @@ $('role-admin').onclick=()=>{
   if(restoreAdminSession()){
     show('admin');
     renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     return;
   }
   fillAdminLoginSelect();
@@ -3375,6 +3378,9 @@ $('pin-back').onclick=()=>show('roles');
 $('pin-ok').onclick=loginAdmin;
 $('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin(); });
 $('admin-exit').onclick=logoutAdmin;
+$('admin-help')&&($('admin-help').onclick=()=>{
+  window.open('help.html','_blank','noopener');
+});
 $('admin-catalogs').onclick=()=>setAdminNav('catalogs');
 $('admin-activity').onclick=()=>setAdminNav('activity');
 $('admin-billing')&&($('admin-billing').onclick=()=>setAdminNav('billing'));

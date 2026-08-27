@@ -858,3 +858,57 @@
     @media (prefers-reduced-motion:reduce){
       *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
     }
+    /* Онбординг: welcome + product tour */
+    body.onboard-active{overflow:hidden}
+    .onboard-overlay{
+      position:fixed;inset:0;z-index:10000;background:rgba(17,24,39,.45);pointer-events:none
+    }
+    .onboard-highlight{
+      position:relative;z-index:10001!important;
+      box-shadow:0 0 0 3px rgba(239,68,68,.55),0 0 0 9999px rgba(17,24,39,.72);
+      border-radius:var(--radius)
+    }
+    .onboard-tooltip{
+      position:fixed;z-index:10002;background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;padding:14px 16px;box-shadow:0 12px 40px rgba(17,24,39,.18);
+      pointer-events:auto
+    }
+    .onboard-tooltip.centered{
+      left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(380px,calc(100vw - 24px))
+    }
+    .onboard-meta{font-size:.72rem;color:var(--muted);margin-bottom:4px}
+    .onboard-title{margin:0 0 8px;font-size:1.05rem;font-weight:700;color:var(--text)}
+    .onboard-body,.onboard-welcome-body{font-size:.88rem;line-height:1.45;color:var(--text)}
+    .onboard-body p,.onboard-welcome-body p{margin:0 0 8px}
+    .onboard-body p:last-child,.onboard-welcome-body p:last-child{margin-bottom:0}
+    .onboard-body a{color:var(--accent);font-weight:600}
+    .onboard-actions{
+      display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:14px;flex-wrap:wrap
+    }
+    .onboard-nav{display:flex;gap:8px;flex-wrap:wrap}
+    .onboard-skip,.onboard-welcome-skip{
+      border:0;background:transparent;color:var(--muted);font-size:.8rem;font-weight:600;
+      cursor:pointer;padding:6px 4px;font-family:inherit
+    }
+    .onboard-prev,.onboard-next,.onboard-welcome-prev,.onboard-welcome-next{
+      min-height:40px;padding:8px 14px;font-size:.85rem
+    }
+    .onboard-welcome{
+      position:fixed;inset:0;z-index:10003;background:rgba(17,24,39,.55);
+      display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:auto
+    }
+    .onboard-welcome-card{
+      background:var(--surface);border-radius:16px;padding:20px 18px 16px;max-width:400px;width:100%;
+      box-shadow:0 16px 48px rgba(17,24,39,.22);border:1px solid var(--border)
+    }
+    .onboard-welcome-brand{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-weight:700;font-size:1rem}
+    .onboard-welcome-brand img{border-radius:10px}
+    .onboard-welcome-card h2{margin:0 0 10px;font-size:1.15rem}
+    .onboard-welcome-dots{display:flex;gap:6px;margin:12px 0 4px}
+    .onboard-welcome-dots span{
+      width:8px;height:8px;border-radius:50%;background:var(--border);display:block
+    }
+    .onboard-welcome-dots span.on{background:var(--accent)}
+    .onboard-welcome-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+    .onboard-welcome-foot{margin:12px 0 0;text-align:center;font-size:.75rem}
+    .onboard-welcome-foot a{color:var(--accent)}

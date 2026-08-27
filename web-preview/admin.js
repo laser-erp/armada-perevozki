@@ -193,6 +193,7 @@ function loginAdmin(){
   updateAdminChrome();
   show('admin');
   renderAdmin();
+  if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
 }
 function logoutAdmin(){
   if(currentAdmin){

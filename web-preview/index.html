@@ -22,8 +22,8 @@
   <script>
   (function(){
     try{
-      if(!sessionStorage.getItem('armada-sw-v25')){
-        sessionStorage.setItem('armada-sw-v25','1');
+      if(!sessionStorage.getItem('armada-sw-v26')){
+        sessionStorage.setItem('armada-sw-v26','1');
         if(navigator.serviceWorker){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             regs.forEach(function(r){ r.unregister(); });
@@ -42,7 +42,7 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="styles.css?v=2026-08-24-bootfix5" />
+    <link rel="stylesheet" href="styles.css?v=2026-08-27-onboard1" />
 
 </head>
 <body>
@@ -73,7 +73,7 @@
         <span class="role-btn-desc">Своя заявка и расчёт цены</span>
       </button>
     </div>
-    <p class="hint" style="margin-top:8px;font-size:.8rem"><a href="kp.html">О сервисе и пилоте</a></p>
+    <p class="hint" style="margin-top:8px;font-size:.8rem"><a href="kp.html">О сервисе и пилоте</a> · <a href="help.html">Помощь и инструкции</a></p>
     <p class="hint legal-notice" style="margin-top:14px;font-size:.72rem;line-height:1.4;max-width:320px">
       Использование сервиса — по <a href="legal.html#offer">оферте</a>.
       ПДн — по <a href="legal.html#privacy">политике</a>.
@@ -134,6 +134,7 @@
       <header class="form-topbar">
         <button type="button" class="form-back" id="cust-portal-back">← Выход</button>
         <h1 id="cust-portal-head">Заказчик</h1>
+        <a href="help.html" class="hint" style="margin-left:auto;font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
       </header>
       <div class="admin-form-scroll">
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
@@ -190,6 +191,7 @@
           <button type="button" class="admin-nav-item" data-nav="billing" id="admin-billing" style="display:none">Тарифы</button>
         </nav>
         <div class="admin-sidebar-foot">
+          <button type="button" class="admin-nav-item ghost" id="admin-help">Помощь</button>
           <button type="button" class="admin-nav-item ghost" id="admin-as-driver" title="Войти как водитель">Водитель</button>
           <button type="button" class="admin-nav-item ghost" id="admin-exit">Выход</button>
         </div>
@@ -474,12 +476,13 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-24-bootfix5"></script>
-<script src="billing.js?v=2026-08-24-bootfix5"></script>
-<script src="driver.js?v=2026-08-24-bootfix5"></script>
-<script src="etrn.js?v=2026-08-24-bootfix5"></script>
-<script src="admin.js?v=2026-08-24-bootfix5"></script>
-<script src="app.js?v=2026-08-24-bootfix5"></script>
-<script src="customer.js?v=2026-08-24-bootfix5"></script>
+  <script src="store.js?v=2026-08-27-onboard1"></script>
+<script src="billing.js?v=2026-08-27-onboard1"></script>
+<script src="driver.js?v=2026-08-27-onboard1"></script>
+<script src="etrn.js?v=2026-08-27-onboard1"></script>
+<script src="admin.js?v=2026-08-27-onboard1"></script>
+<script src="app.js?v=2026-08-27-onboard1"></script>
+<script src="customer.js?v=2026-08-27-onboard1"></script>
+<script src="onboarding.js?v=2026-08-27-onboard1"></script>
 </body>
 </html>

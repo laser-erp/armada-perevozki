@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-24-bootfix5";
+const APP_BUILD="2026-08-27-onboard1";
 /** Backend API (S0). Локально → armada-api; на aptown1 → Caddy prefix. */
 const API_BASE=(()=>{
   if(typeof location==='undefined') return '';

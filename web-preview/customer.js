@@ -137,6 +137,7 @@ function showCustomerPortal(){
   }
   renderCustomerPortal();
   show('customer-portal');
+  if(window.ArmadaOnboarding) ArmadaOnboarding.maybeCustomer();
 }
 
 function renderCustomerPortal(){

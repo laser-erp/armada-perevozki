@@ -20,19 +20,25 @@ gh auth login
 git push -u origin cursor/compliance-p0-4317
 ```
 
-## Вариант 3 — git bundle (без сети с агента)
+## Вариант 3 — git bundle (без токена на агенте)
 
-На машине с клоном, где есть ветка:
+Bundle на проде (обновляется `scripts/publish-compliance-bundle.sh`):
 
-```bash
-git bundle create armada-compliance-4317.bundle cursor/compliance-p0-4317
-```
+https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle
 
-На вашем ПК:
+На вашем ПК с клоном `laser-erp/armada-perevozki`:
 
 ```bash
+curl -fsSLO https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle
 git fetch ./armada-compliance-4317.bundle cursor/compliance-p0-4317:cursor/compliance-p0-4317
 git push -u origin cursor/compliance-p0-4317
+```
+
+Локально в репо:
+
+```bash
+./scripts/create-compliance-bundle.sh
+./scripts/publish-compliance-bundle.sh
 ```
 
 ## После push

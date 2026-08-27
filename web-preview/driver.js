@@ -336,6 +336,7 @@ async function enterAsDriver(rec){
   renderChat();
   renderInput();
   renderDriverBanner();
+  if(window.ArmadaOnboarding) ArmadaOnboarding.maybeDriver();
   // Сервер — в фоне, не блокируем UI
   (async()=>{
     try{
@@ -1425,6 +1426,9 @@ function showCabinet(){
   }
   html+=`<div class="drv-section-label">Аккаунт</div>
     <button type="button" class="secondary" id="profile-exit" style="margin-top:4px">Выход</button>
+    <div class="drv-section-label" style="margin-top:14px">Помощь</div>
+    <button type="button" class="secondary" id="profile-help-tour" style="margin-top:4px">Показать подсказки</button>
+    <a href="help.html" class="hint" style="display:block;margin-top:6px" target="_blank" rel="noopener">Полная инструкция</a>
     <div class="drv-section-label" style="margin-top:14px">О приложении</div>
     <div class="hint" style="margin-top:4px">АРМАДА · учёт перевозок<br>Сборка ${esc(APP_BUILD)}</div>`;
   $('cabinet-list').innerHTML=html;
@@ -1434,6 +1438,8 @@ function showCabinet(){
   if(nOn) nOn.onclick=async()=>{ await enableDriverNotifications(); showCabinet(); };
   const nOff=$('profile-notify-off');
   if(nOff) nOff.onclick=()=>{ setDriverNotifyWanted(false); showCabinet(); };
+  const helpTour=$('profile-help-tour');
+  if(helpTour) helpTour.onclick=()=>{ if(window.ArmadaOnboarding) ArmadaOnboarding.replay('driver'); };
 }
 function hideDriverPanels(){
   ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
