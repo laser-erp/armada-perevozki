@@ -7,7 +7,7 @@
     "result": "pass",
     "notes": "caddy + armada-api 8091 + onboarding + help"
   },
-  "updatedAt": "2026-08-27T10:15:00Z",
+  "updatedAt": "2026-08-27T10:18:00Z",
   "deploy": {
     "production": {
       "status": "done",
@@ -18,22 +18,23 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "7709d6f",
+      "headCommit": "823bbfa",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "7709d6f",
-      "notes": "GITHUB_DEPLOY_KEY set; публичный ключ не в Deploy keys GitHub"
+      "bundleHead": "823bbfa",
+      "deployKeyFingerprint": "SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI",
+      "notes": "GITHUB_DEPLOY_KEY ok; публичный ключ не в Deploy keys (write)"
     }
   },
   "lastSmoke": {
-    "at": "2026-08-27T10:15:00Z",
+    "at": "2026-08-27T10:18:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass",
     "notes": "S0–S3 + onboarding; APP_BUILD 2026-08-27-onboard1"
   },
   "lastProdSync": {
-    "at": "2026-08-27T09:48:00Z",
+    "at": "2026-08-27T10:18:00Z",
     "script": "scripts/verify-prod-web-sync.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "match",
@@ -77,7 +78,7 @@
     "O-02": {
       "title": "Push GitHub",
       "status": "blocked",
-      "notes": "GITHUB_DEPLOY_KEY ok; нужен публичный ключ в Deploy keys (write)"
+      "notes": "GITHUB_DEPLOY_KEY ok; fingerprint SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI — добавить в Deploy keys"
     }
   },
   "production": {
