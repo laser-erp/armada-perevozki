@@ -1,6 +1,6 @@
 # ARMADA — стратегический план 2026
 
-Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `9ae17df`, 8 коммитов ahead of `main`)
+Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD — `git rev-parse --short HEAD`, 9 коммитов ahead of `main`)
 
 Продакшен: https://aptown1.fvds.ru · API: https://aptown1.fvds.ru/armada-api
 
@@ -17,7 +17,7 @@
 | S3-1.2 письма операторам | 📤 ready_to_send | PDF на проде, `docs/PISMO_OPERATORAM_ETRN.md` |
 | S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false`, нужны ключи оператора |
 | S4–S7 | ⏸ paused | только по явному «Делай» |
-| O-02 Push GitHub | ⏸ blocked | `docs/PUSH_COMPLIANCE_BRANCH.md`, нужен `GITHUB_TOKEN` |
+| O-02 Push GitHub | ⏸ blocked | `docs/PUSH_COMPLIANCE_BRANCH.md`, `./scripts/github-auth-and-push.sh` |
 
 JSON-трекер: `.cursor/stores/self/strategic-plan-tracker.json`
 

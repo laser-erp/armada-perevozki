@@ -10,7 +10,7 @@
 
 ```bash
 export GITHUB_TOKEN='…'
-./scripts/git-push-branch.sh cursor/compliance-p0-4317
+./scripts/github-auth-and-push.sh cursor/compliance-p0-4317
 ```
 
 ## Вариант 2 — gh CLI
