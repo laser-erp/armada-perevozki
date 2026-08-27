@@ -18,10 +18,10 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "238cd84",
+      "headCommit": "9ae17df",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "238cd84",
+      "bundleHead": "pending-9ae17df",
       "notes": "GITHUB_TOKEN не задан; git push fatal; check-github-remote-branch.sh"
     }
   },
