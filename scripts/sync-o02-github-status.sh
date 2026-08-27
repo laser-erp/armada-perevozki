@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# O-02: проверить ветку на GitHub, push если есть токен, обновить трекер.
+# O-02: проверить ветку на GitHub, push если есть credentials, обновить трекер.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 BRANCH="${1:-cursor/compliance-p0-4317}"
 TRACKER="$ROOT/.cursor/stores/self/strategic-plan-tracker.json"
 TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+DEPLOY_KEY="${GITHUB_DEPLOY_KEY:-}"
 
 check_remote() {
   if "$ROOT/scripts/check-github-remote-branch.sh" "$BRANCH" >/tmp/o02_check.txt 2>&1; then
@@ -43,13 +44,23 @@ if check_remote; then
   exit 0
 fi
 
-if [ -n "$TOKEN" ]; then
-  echo "→ remote missing, GITHUB_TOKEN set — push"
-  "$ROOT/scripts/github-auth-and-push.sh" "$BRANCH"
-  check_remote
-  update_tracker_done
+if [ -n "$TOKEN" ] || [ -n "$DEPLOY_KEY" ]; then
+  echo "→ remote missing, push credentials set"
+  "$ROOT/scripts/github-push-branch.sh" "$BRANCH"
+  if ! check_remote; then
+    echo "Push не подтверждён на API GitHub"
+    exit 1
+  fi
+  HEAD="$(git rev-parse --short HEAD)"
+  if [ -n "${FVDS_SSH_PASSWORD:-${root:-}}" ]; then
+    FVDS_SSH_PASSWORD="${FVDS_SSH_PASSWORD:-${root:-}}" "$ROOT/scripts/publish-compliance-bundle.sh"
+  fi
+  update_tracker_done "$HEAD"
   exit 0
 fi
 
-echo "O-02 blocked: нет ветки на GitHub и GITHUB_TOKEN не задан"
+echo "O-02 blocked: нет ветки на GitHub"
+echo "  Вариант A: секрет GITHUB_TOKEN в Environment"
+echo "  Вариант B: ./scripts/setup-github-deploy-key.sh → Deploy key + секрет GITHUB_DEPLOY_KEY"
+echo "  Вариант C: push с ПК через bundle (docs/PUSH_COMPLIANCE_BRANCH.md)"
 exit 1

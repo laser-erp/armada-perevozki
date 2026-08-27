@@ -41,6 +41,18 @@ git push -u origin cursor/compliance-p0-4317
 ./scripts/publish-compliance-bundle.sh
 ```
 
+## Вариант 4 — Deploy key (без PAT)
+
+На агенте или локально:
+
+```bash
+./scripts/setup-github-deploy-key.sh
+```
+
+1. Скопируйте **публичный** ключ → GitHub → `laser-erp/armada-perevozki` → Settings → Deploy keys → **Allow write access**.
+2. Скопируйте **приватный** ключ (`~/.ssh/armada_github_deploy`) → секрет **`GITHUB_DEPLOY_KEY`** в Cursor Environment.
+3. Агент выполнит `./scripts/sync-o02-github-status.sh`.
+
 ## После push
 
 GitHub Actions `strategic-plan-smoke.yml` проверит smoke и sync с aptown1.fvds.ru.
