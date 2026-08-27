@@ -2,38 +2,38 @@
   "plan": "ARMADA_STRATEGIC_PLAN_2026",
   "branch": "cursor/compliance-p0-4317",
   "lastServerVerify": {
-    "at": "2026-08-27T09:45:00Z",
+    "at": "2026-08-27T09:48:00Z",
     "script": "scripts/ssh-verify-fvds.sh",
     "result": "pass",
     "notes": "caddy + armada-api 8091 + onboarding + help"
   },
-  "updatedAt": "2026-08-27T09:45:00Z",
+  "updatedAt": "2026-08-27T09:48:00Z",
   "deploy": {
     "production": {
       "status": "done",
       "verified": "scripts/verify-prod-web-sync.sh",
-      "at": "2026-08-27T09:45:00Z",
+      "at": "2026-08-27T09:48:00Z",
       "notes": "16 файлов MATCH; run-strategic-verification PASS"
     },
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "c6a45f7",
+      "headCommit": "345a179",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "c6a45f7",
+      "bundleHead": "345a179",
       "notes": "GITHUB_TOKEN не задан; ./scripts/sync-o02-github-status.sh"
     }
   },
   "lastSmoke": {
-    "at": "2026-08-27T09:45:00Z",
+    "at": "2026-08-27T09:48:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass",
     "notes": "S0–S3 + onboarding; APP_BUILD 2026-08-27-onboard1"
   },
   "lastProdSync": {
-    "at": "2026-08-27T09:45:00Z",
+    "at": "2026-08-27T09:48:00Z",
     "script": "scripts/verify-prod-web-sync.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "match",
@@ -62,47 +62,22 @@
       "status": "done",
       "verified": "smoke + COMPETITIVE_ANALYSIS_2026",
       "subtasks": {
-        "S3-sprint1": {
-          "status": "done",
-          "notes": "admin create, billing guard"
-        },
-        "S3-sprint2": {
-          "status": "done",
-          "notes": "driver sign, API refresh, webhook"
-        },
-        "S3-1.2": {
-          "status": "ready_to_send",
-          "notes": "PDF: docs/operator-letters/ARMADA_Pismo_Operatoram_ETRN.pdf"
-        },
-        "S3-2.7": {
-          "status": "paused",
-          "notes": "5 живых ЭТрН; epd.configured false"
-        }
+        "S3-sprint1": { "status": "done", "notes": "admin create, billing guard" },
+        "S3-sprint2": { "status": "done", "notes": "driver sign, API refresh, webhook" },
+        "S3-1.2": { "status": "ready_to_send", "notes": "PDF: docs/operator-letters/ARMADA_Pismo_Operatoram_ETRN.pdf" },
+        "S3-2.7": { "status": "paused", "notes": "5 живых ЭТрН; epd.configured false" }
       }
     },
-    "S4": {
-      "title": "—",
-      "status": "paused",
-      "notes": "Не автозапускать без «Делай»"
-    },
-    "S5": {
-      "title": "—",
-      "status": "paused"
-    },
-    "S6": {
-      "title": "—",
-      "status": "paused"
-    },
-    "S7": {
-      "title": "—",
-      "status": "paused"
-    }
+    "S4": { "title": "—", "status": "paused", "notes": "Не автозапускать без «Делай»" },
+    "S5": { "title": "—", "status": "paused" },
+    "S6": { "title": "—", "status": "paused" },
+    "S7": { "title": "—", "status": "paused" }
   },
   "ops": {
     "O-02": {
       "title": "Push GitHub",
       "status": "blocked",
-      "notes": "11 коммитов ahead of main; ./scripts/sync-o02-github-status.sh"
+      "notes": "12 коммитов ahead of main; bundle 345a179; нужен GITHUB_TOKEN или push с ПК"
     }
   },
   "production": {
