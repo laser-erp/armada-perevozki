@@ -254,7 +254,7 @@
       },
       {
         title:'Разделы',
-        body:'<p><strong>Парк</strong> — свои заказы и машины. <strong>ЕТО</strong> — техосмотры по авто. <strong>Биржа</strong> — общие заявки между фирмами.</p><p>Сверху всегда кнопки <strong>Парк / Биржа</strong>. <strong>Справочники</strong> — водители, авто, компании, тарифы.</p>',
+        body:'<p><strong>Парк</strong> — свои заказы и машины. <strong>ЕТО</strong> — техосмотры по авто.</p><p>Кнопка <strong>Биржа</strong> появляется, если в справочнике включён <strong>Диспетчер</strong> (логист и диспетчер — одна должность). Биржа — в тарифе «Бизнес». <strong>Справочники</strong> — водители, авто, компании, тарифы.</p>',
         target:()=>document.querySelector('.admin-sidebar-nav'),
         placement:'right',
         onEnter(){
@@ -266,7 +266,7 @@
       },
       {
         title:'Новый заказ',
-        body:'<p>Кнопка <strong>+ Заказ</strong> — создать заявку: заказчик, маршрут, цены. Кто везёт — кнопки <strong>Парк</strong> или <strong>Биржа</strong>.</p>',
+        body:'<p>Кнопка <strong>+ Заказ</strong> — создать заявку: заказчик, маршрут, цены. Кто везёт — <strong>Парк</strong>; кнопка <strong>Биржа</strong> есть, если включён диспетчер (тариф «Бизнес»).</p>',
         target:'admin-new',
         placement:'bottom',
         onEnter(){

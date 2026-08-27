@@ -23,8 +23,8 @@
   <script>
   (function(){
     try{
-      if(!sessionStorage.getItem('armada-sw-v33')){
-        sessionStorage.setItem('armada-sw-v33','1');
+      if(!sessionStorage.getItem('armada-sw-v34')){
+        sessionStorage.setItem('armada-sw-v34','1');
         if(navigator.serviceWorker){
           navigator.serviceWorker.getRegistrations().then(function(regs){
             regs.forEach(function(r){ r.unregister(); });
@@ -44,8 +44,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc19" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc19" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc20" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc20" />
 
 </head>
 <body>
@@ -209,7 +209,7 @@
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Календарь броней</h2>
-          <p class="hint">Точка на дате подачи — когда штатный логист подтвердил бронь своей машины или диспетчер нашёл перевозчика.</p>
+          <p class="hint">Точка на дате подачи — когда логист подтвердил бронь своей машины или нашёл перевозчика на бирже.</p>
           <div id="cust-book-cal"></div>
         </section>
         <section class="form-section">
@@ -544,15 +544,15 @@
     </div>
   </div>
 </div>
-  <script src="/store.js?v=2026-08-27-entrybc19"></script>
-<script src="/billing.js?v=2026-08-27-entrybc19"></script>
-<script src="/qrcode.min.js?v=2026-08-27-entrybc19"></script>
-<script src="/entry-share.js?v=2026-08-27-entrybc19"></script>
-<script src="/driver.js?v=2026-08-27-entrybc19"></script>
-<script src="/etrn.js?v=2026-08-27-entrybc19"></script>
-  <script src="/admin.js?v=2026-08-27-entrybc19"></script>
-  <script src="/customer.js?v=2026-08-27-entrybc19"></script>
-  <script src="/app.js?v=2026-08-27-entrybc19"></script>
-<script src="/onboarding.js?v=2026-08-27-entrybc19"></script>
+  <script src="/store.js?v=2026-08-27-entrybc20"></script>
+<script src="/billing.js?v=2026-08-27-entrybc20"></script>
+<script src="/qrcode.min.js?v=2026-08-27-entrybc20"></script>
+<script src="/entry-share.js?v=2026-08-27-entrybc20"></script>
+<script src="/driver.js?v=2026-08-27-entrybc20"></script>
+<script src="/etrn.js?v=2026-08-27-entrybc20"></script>
+  <script src="/admin.js?v=2026-08-27-entrybc20"></script>
+  <script src="/customer.js?v=2026-08-27-entrybc20"></script>
+  <script src="/app.js?v=2026-08-27-entrybc20"></script>
+<script src="/onboarding.js?v=2026-08-27-entrybc20"></script>
 </body>
 </html>

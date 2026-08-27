@@ -143,9 +143,17 @@ function companyLogistKind(co){
   const n=typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(co.id).length:0;
   return n>0?'staff':'broker';
 }
-function isStaffLogistCompany(co){ return companyLogistKind(co)==='staff'; }
-function isBrokerDispatcherCompany(co){ return companyLogistKind(co)==='broker'; }
+/** Диспетчер = тот же логист; включает кнопку «Биржа» (тариф Бизнес). */
+function isDispatcherCompany(co){ return companyLogistKind(co)==='broker'; }
+function isStaffLogistCompany(co){ return !isDispatcherCompany(co); }
+function isBrokerDispatcherCompany(co){ return isDispatcherCompany(co); }
 function currentLogistKind(){ return companyLogistKind(typeof currentOwnCompany==='function'?currentOwnCompany():null); }
+function companyHasOwnPark(co){
+  const firm=co || (typeof currentOwnCompany==='function'?currentOwnCompany():null);
+  if(!firm||!firm.id) return false;
+  const n=typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(firm.id).length:((firm.vehicles||[]).length||0);
+  return n>0;
+}
 function carrierOwnCompanyForSpace(spaceId){
   if(spaceId){
     const hit=(state.companies||[]).find(c=>c.spaceId===spaceId && companyHasRole(c,'own'));
@@ -1043,23 +1051,25 @@ function fillAddressPickers(name){
   if(unloadEl && !unloadEl.value.trim() && (c.unloadingAddresses||[])[0]) unloadEl.value=c.unloadingAddresses[0];
 }
 function fillExecutorUI(){
-  const broker=typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(typeof currentOwnCompany==='function'?currentOwnCompany():null);
+  const co=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(co);
+  const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(co);
   const sel=$('create-exec-mode');
   if(sel){
     const ownOpt=sel.querySelector('option[value="own"]');
-    if(ownOpt) ownOpt.disabled=!!broker;
-    if(broker && (sel.value==='own'||!sel.value)) sel.value='exchange';
+    if(ownOpt) ownOpt.disabled=!hasPark;
+    if(!hasPark && (sel.value==='own'||!sel.value)) sel.value=dispatcher?'exchange':'carrier';
+    if(!dispatcher && sel.value==='exchange') sel.value=hasPark?'own':'carrier';
   }
-  const mode=(($('create-exec-mode')||{}).value)|| (broker?'exchange':'own');
+  const mode=(($('create-exec-mode')||{}).value)|| (hasPark?'own':(dispatcher?'exchange':'carrier'));
   const ownBox=$('create-own-box');
   const carrierPeople=$('create-carrier-people');
   const exchangeHint=$('create-exchange-hint');
   const execHint=$('create-exec-hint');
   const sw=$('create-exec-switch');
   if(sw){
-    sw.style.display=broker?'none':'flex';
     sw.querySelectorAll('[data-exec]').forEach(b=>{
-      const hide=broker && b.dataset.exec==='own';
+      const hide=(b.dataset.exec==='own' && !hasPark) || (b.dataset.exec==='exchange' && !dispatcher);
       b.hidden=hide;
       b.disabled=hide;
       b.classList.toggle('on', !hide && b.dataset.exec===mode);
@@ -1072,6 +1082,8 @@ function fillExecutorUI(){
         };
       }
     });
+    const visible=sw.querySelectorAll('[data-exec]:not([hidden])').length;
+    sw.style.display=visible>1?'flex':'none';
   }
   const carBtn=$('create-exec-carrier');
   const carWrap=$('create-exec-carrier-wrap');
@@ -1084,21 +1096,21 @@ function fillExecutorUI(){
     };
   }
   if(carBtn) carBtn.classList.toggle('on-link', mode==='carrier');
-  if(carWrap) carWrap.style.display=broker?'none':'block';
-  if(ownBox) ownBox.style.display=(!broker && mode==='own')?'block':'none';
+  if(carWrap) carWrap.style.display='block';
+  if(ownBox) ownBox.style.display=(hasPark && mode==='own')?'block':'none';
   if(carrierPeople) carrierPeople.style.display=(mode==='carrier' || !!(($('create-carrier-company')||{}).value))?'block':'none';
   if(exchangeHint){
     exchangeHint.style.display=mode==='exchange'?'block':'none';
     if(mode==='exchange'){
-      exchangeHint.textContent=broker
-        ?'Диспетчер-посредник: своего транспорта нет. Заявка на биржу — вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.'
-        :'Штатный логист сначала закрывает свои машины. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.';
+      exchangeHint.textContent=hasPark
+        ?'Сначала свой парк. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику. Биржа — в тарифе «Бизнес».'
+        :'Своего парка нет — заявка на биржу. Вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Биржа — в тарифе «Бизнес».';
     }
   }
   if(execHint){
-    execHint.textContent=broker
-      ?'Своего парка нет — вы посредник: перевозчик с биржи или из справочника'
-      :'Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки';
+    execHint.textContent=dispatcher
+      ?(hasPark?'Парк или биржа: сначала свои машины, остаток партнёрам':'Биржа: партнёр везёт, вы заказчик перевозки')
+      :(hasPark?'Свой водитель из парка':'Нет своего парка — включите диспетчера, появится Биржа');
   }
   const saveBtn=$('create-save');
   if(saveBtn){

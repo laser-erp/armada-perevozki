@@ -233,21 +233,21 @@ function paintCustomerFleetOptions(){
   const fh=$('cust-fulfill-hint');
   const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
   const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
-  const broker=typeof isBrokerDispatcherCompany==='function' && isBrokerDispatcherCompany(carrier);
+  const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(carrier);
   const fulfillSel=$('cust-fulfillment');
   const directOpt=fulfillSel&&fulfillSel.querySelector('option[value="direct"]');
-  if(directOpt) directOpt.hidden=!!broker;
-  if(broker && fulfillSel) fulfillSel.value='logist';
+  if(directOpt) directOpt.hidden=!hasPark;
+  if(!hasPark && fulfillSel) fulfillSel.value='logist';
   const mode=customerSelectedFulfillment();
   if(fh){
-    fh.textContent=broker
-      ?'Диспетчер без своего парка: подберёт перевозчика. Ставка посредника включена в цене.'
+    fh.textContent=!hasPark
+      ?'Диспетчер подберёт перевозчика. Ставка включена в цене.'
       :(mode==='direct'
       ?'Свой парк перевозчика, лучше заранее. Ставки логиста за срочный подбор нет. Можно запросить свободную машину — бронь подтвердит перевозчик.'
-      :'Штатному логисту: закройте как можно скорее. Ставка логиста включена в цене. Свободную машину можно запросить; точку в календаре поставит подтверждение.');
+      :'Логисту / диспетчеру: закройте как можно скорее. Ставка включена в цене. Свободную машину можно запросить; точку в календаре поставит подтверждение.');
   }
-  if(box) box.style.display=broker?'none':'';
-  if(broker || !sel) return;
+  if(box) box.style.display=hasPark?'':'none';
+  if(!hasPark || !sel) return;
   const payloadTons=+(($('cust-req-pay')||{}).value||'').replace(',','.');
   const reqs={reqPayloadTons:payloadTons>0?payloadTons:null, reqBodyType:customerSelectedBodyType()};
   const at=typeof readCustomerVehicleAt==='function'?readCustomerVehicleAt():null;
