@@ -12,6 +12,11 @@ function etrnTitulWhenHint(key){
   };
   return m[key]||'';
 }
+function etrnTitulStatusLabel(st){
+  if(st==='signed') return 'подписан';
+  if(st==='error') return 'ошибка';
+  return 'ожидает';
+}
 function orderEtrnEligible(o){
   if(!o || o.cancelledAt || looksClosedOrder(o)) return false;
   if(typeof orderHasDriverVehicleAssigned==='function') return orderHasDriverVehicleAssigned(o);
