@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-28-yandex-map-load-types4317a';
+  var APP_BUILD = '2026-08-28-draft-delete-reset24317a';
 
   window.__armadaBootDone = false;
   setTimeout(function () {
