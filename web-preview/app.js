@@ -794,7 +794,75 @@ function vehicleFitsOrder(v, o){
   if(!anyReq) return true;
   return true;
 }
-/** Рекомендация типа ТС по грузу: вес → габариты → вид груза. */
+/** Способы загрузки/выгрузки по выбранным кузовам и параметрам груза. */
+function inferCustomerLoadUnloadMethods(vtypes, draft){
+  vtypes=vtypes||[];
+  draft=draft||{};
+  const tons=+(draft.reqPayloadTons||0);
+  const l=+(draft.reqLengthM||0);
+  const kind=String(draft.cargoKind||'general');
+  const packaging=String(draft.cargoPackaging||'');
+  const fragile=!!draft.cargoFragile;
+  const hasTemp=!!draft.cargoTempMode||draft.cargoTempFromC!=null||draft.cargoTempToC!=null;
+  let effectiveKind=kind;
+  if(packaging==='bulk') effectiveKind='bulk';
+
+  const isDump=vtypes.includes('dump');
+  const isPlatform=vtypes.includes('platform');
+  const isOpen=vtypes.some(id=>['board','open','shalanda'].includes(id));
+  const isClosed=vtypes.some(id=>['tent','container','van','metal'].includes(id));
+  const isRefr=vtypes.some(id=>['reefer','reefer_partition','reefer_multimode','isotherm'].includes(id));
+  const isOversize=packaging==='oversize'||(l>0&&l>13.6);
+  const isLong=l>6.2;
+  const isPalletized=packaging==='pallets'||packaging==='boxes';
+
+  let load=[], unload=[];
+
+  if(isDump||effectiveKind==='bulk'){
+    load=['top'];
+    unload=['rear'];
+  }else if(isRefr||hasTemp||effectiveKind==='food'){
+    load=['rear'];
+    unload=['rear'];
+  }else if(isPlatform||isOversize){
+    load=['side','top'];
+    unload=['side'];
+    if(isOversize){
+      load.push('full_tent','remove_crossbars');
+      if(vtypes.includes('tent')) load.push('remove_posts');
+    }
+    if(isLong) load.push('side_both');
+  }else if(isOpen){
+    load=['side','boards'];
+    unload=['side','boards'];
+    if(isLong) load.push('side_both');
+  }else if(isPalletized||fragile){
+    load=['rear'];
+    unload=['rear'];
+    if(isPalletized&&tons>=1.5) load.push('tail_lift');
+  }else if(isClosed){
+    load=['rear'];
+    unload=['rear'];
+  }else{
+    load=['rear'];
+    unload=['rear'];
+  }
+
+  return {
+    loadingMethods:[...new Set(load.filter(Boolean))],
+    unloadingMethods:[...new Set((unload.length?unload:load).filter(Boolean))]
+  };
+}
+function formatCustomerLoadUnloadHint(loadingMethods, unloadingMethods){
+  const fmt=id=>typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id;
+  const loads=(loadingMethods||[]).slice(0,2).map(fmt);
+  const unloads=(unloadingMethods||[]).slice(0,2).map(fmt);
+  const bits=[];
+  if(loads.length) bits.push('загр.: '+loads.join(', '));
+  if(unloads.length) bits.push('выгр.: '+unloads.join(', '));
+  return bits.length?' · '+bits.join('; '):'';
+}
+/** Рекомендация типа ТС по грузу: вес → габариты → вид груза → способ загрузки. */
 function inferCustomerVehicleRecommendation(draft){
   draft=draft||{};
   const tons=+(draft.reqPayloadTons||0);
@@ -861,11 +929,18 @@ function inferCustomerVehicleRecommendation(draft){
     if(fitting.length) fleetHint=` · в парке ${fitting.length} подходящ${fitting.length===1?'ая машина':'их машин'}`;
   }
 
+  const loadUnload=inferCustomerLoadUnloadMethods(vtypes, draft);
+  const loadingMethods=loadUnload.loadingMethods;
+  const unloadingMethods=loadUnload.unloadingMethods;
+  if(!rearLoad&&loadingMethods.length===1&&loadingMethods[0]==='rear'&&unloadingMethods.length===1&&unloadingMethods[0]==='rear'){
+    rearLoad=true;
+  }
+
   const labelName=typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtypes[0]):vtypes[0];
   const tDisp=tons>=1?(tons%1===0?tons:tons.toFixed(1)):tons.toFixed(2);
-  const label=`Рекомендуем: ${String(labelName).toLowerCase()}, до ${tDisp} т${fleetHint}`;
+  const label=`Рекомендуем: ${String(labelName).toLowerCase()}, до ${tDisp} т${formatCustomerLoadUnloadHint(loadingMethods, unloadingMethods)}${fleetHint}`;
 
-  return {vehicleTypeIds:vtypes, rearLoad, label, minPayloadTons:minPayload};
+  return {vehicleTypeIds:vtypes, rearLoad, loadingMethods, unloadingMethods, label, minPayloadTons:minPayload};
 }
 function readOrderRequirementsFromCreate(){
   return {

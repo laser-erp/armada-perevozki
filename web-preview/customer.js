@@ -706,7 +706,16 @@ function applyCustomerVehicleRecommendation(){
   syncCustomerClosedAllCheckbox();
   syncCustomerRefrAllCheckbox();
   syncCustomerOpenAllCheckbox();
-  if(rec.rearLoad) applyRearOnlyVehicleTypeRules();
+  syncCustomerVehicleTypeUi();
+  clearCustomerLoadUnloadMethods();
+  const loads=rec.loadingMethods||[];
+  const unloads=rec.unloadingMethods||[];
+  if(loads.length||unloads.length){
+    loads.forEach(id=>setCustomerLoadMethod(id, true));
+    unloads.forEach(id=>setCustomerUnloadMethod(id, true));
+  }else if(rec.rearLoad){
+    applyRearOnlyVehicleTypeRules();
+  }
   syncCustomerVehicleTypeUi();
   updateCustomerPricePreview();
   paintCustomerFleetOptions();
