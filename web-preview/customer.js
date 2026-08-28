@@ -331,10 +331,6 @@ function setCustomerUnloadMethod(id, on){
   const el=document.querySelector(`#cust-unload-methods [data-unload="${id}"]`);
   if(el) el.checked=!!on;
 }
-function customerIsothermChecked(){
-  const el=document.querySelector(`#cust-vehicle-types [data-vtype="${CUST_ISOTHERM_VTYPE_ID}"]`);
-  return !!(el&&el.checked);
-}
 function setCustomerIsotherm(on){
   const el=document.querySelector(`#cust-vehicle-types [data-vtype="${CUST_ISOTHERM_VTYPE_ID}"]`);
   if(el) el.checked=!!on;
@@ -388,6 +384,129 @@ function paintCustomerIsothermHighlight(){
   const wrap=el&&el.closest('.cust-vtype-isotherm');
   if(wrap) wrap.classList.toggle('is-highlight', !!(el&&el.checked));
 }
+function customerChecklistShortText(s, max){
+  max=max||32;
+  s=String(s||'').trim();
+  if(!s) return '';
+  return s.length<=max?s:s.slice(0,max-1)+'…';
+}
+const CUST_METHOD_SHORT={top:'верх.',side:'бок.',rear:'задн.',full_tent:'раст.',remove_crossbars:'перекл.',remove_posts:'стоек',no_gates:'б/ ворот',tail_lift:'гидр.',ramps:'апп.',crate:'обр.',boards:'борт.',side_both:'бок×2'};
+function customerChecklistMethodShort(id){
+  return CUST_METHOD_SHORT[id]||id;
+}
+function customerVehicleChecklistDetail(){
+  const vehicleAt=readCustomerVehicleAt();
+  if(vehicleAt&&typeof dateTime==='function') return dateTime(vehicleAt);
+  const d=(($('cust-vehicle-date')||{}).value||'').trim();
+  const t=(($('cust-vehicle-time')||{}).value||'').trim();
+  if(d&&t) return `${d}, ${t}`;
+  if(d||t) return 'уточните дату и время';
+  return 'не заполнено';
+}
+function customerRouteChecklistDetail(){
+  const load=(($('cust-load')||{}).value||'').trim();
+  const unload=(($('cust-unload')||{}).value||'').trim();
+  if(!load&&!unload) return 'не заполнено';
+  if(!load||!unload) return load?`загрузка: ${customerChecklistShortText(load)}`:`выгрузка: ${customerChecklistShortText(unload)}`;
+  let s=`${customerChecklistShortText(load,22)} → ${customerChecklistShortText(unload,22)}`;
+  if(customerRouteKm>0) s+=` · ≈${Math.round(customerRouteKm)} км`;
+  const modeEl=$('cust-trip-mode-display');
+  if(modeEl&&modeEl.textContent&&modeEl.textContent!=='—') s+=` · ${modeEl.textContent}`;
+  return s;
+}
+function customerTransportChecklistSummary(){
+  const types=customerSelectedVehicleTypes();
+  if(!types.length) return null;
+  const names=types.slice(0,3).map(id=>{
+    const lbl=typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(id):id;
+    return String(lbl).split(/\s+/)[0].toLowerCase();
+  });
+  let s=names.join(', ');
+  if(types.length>3) s+=` и ещё ${types.length-3}`;
+  const loads=customerSelectedLoadMethods();
+  const unloads=customerSelectedUnloadMethods();
+  if(loads.length) s+=`, загр.: ${loads.map(customerChecklistMethodShort).join(', ')}`;
+  if(unloads.length) s+=`, выгр.: ${unloads.map(customerChecklistMethodShort).join(', ')}`;
+  return s;
+}
+function customerCargoChecklistDetail(){
+  const cargo=(($('cust-cargo-text')||{}).value||'').trim();
+  const tons=customerWeightTons();
+  if(cargo&&tons>0){
+    const t=tons>=1?(tons%1===0?tons:tons.toFixed(1)):tons.toFixed(2);
+    const unit=(($('cust-weight-unit')||{}).value||'t')==='kg'?'кг':'т';
+    return `${t} ${unit} · ${customerChecklistShortText(cargo,24)}`;
+  }
+  if(cargo) return customerChecklistShortText(cargo);
+  if(tons>0) return `${tons} т`;
+  return 'не заполнено';
+}
+function customerTermsChecklistDetail(){
+  const parts=[];
+  parts.push(customerSelectedFulfillment()==='direct'?'свой парк':'логисту');
+  const priceRaw=(($('cust-price')||{}).value||'').replace(/\s/g,'').replace(',','.');
+  const price=priceRaw?+priceRaw:null;
+  parts.push(price>0?`${fmt(Math.round(price))} ₽`:'без цены');
+  const plate=(($('cust-book-plate')||{}).value||'').trim();
+  if(plate) parts.push(`бронь ${plate}`);
+  return parts.join(' · ');
+}
+function customerFormReadyToSubmit(){
+  if(!readCustomerVehicleAt()) return false;
+  const load=(($('cust-load')||{}).value||'').trim();
+  const unload=(($('cust-unload')||{}).value||'').trim();
+  if(!load||!unload) return false;
+  if(!customerSelectedVehicleTypes().length) return false;
+  if(!(($('cust-cargo-text')||{}).value||'').trim()) return false;
+  if(!(customerWeightTons()>0)) return false;
+  return true;
+}
+function setCustomerChecklistItem(step, done, partial, detail){
+  const item=document.querySelector(`.cust-checklist-item[data-cust-step="${step}"]`);
+  const detailEl=$(`cust-check-${step}`);
+  if(detailEl) detailEl.textContent=detail||'';
+  if(item){
+    item.classList.toggle('is-done', !!done);
+    item.classList.toggle('is-partial', !!partial&&!done);
+  }
+}
+function paintCustomerFormChecklist(){
+  if(!$('cust-form-checklist')) return;
+  const vehicleAt=!!readCustomerVehicleAt();
+  const load=(($('cust-load')||{}).value||'').trim();
+  const unload=(($('cust-unload')||{}).value||'').trim();
+  const routeDone=!!(load&&unload);
+  const routePartial=!!(load||unload);
+  const vtypes=customerSelectedVehicleTypes();
+  const cargo=(($('cust-cargo-text')||{}).value||'').trim();
+  const tons=customerWeightTons();
+  const cargoDone=!!(cargo&&tons>0);
+  const cargoPartial=!!(cargo||tons>0);
+  const datePartial=!!(($('cust-vehicle-date')||{}).value||'').trim()||!!(($('cust-vehicle-time')||{}).value||'').trim();
+  setCustomerChecklistItem('vehicle', vehicleAt, !vehicleAt&&datePartial, customerVehicleChecklistDetail());
+  setCustomerChecklistItem('route', routeDone, routePartial&&!routeDone, customerRouteChecklistDetail());
+  setCustomerChecklistItem('transport', vtypes.length>0, false, vtypes.length?customerTransportChecklistSummary():'не заполнено');
+  setCustomerChecklistItem('cargo', cargoDone, cargoPartial&&!cargoDone, customerCargoChecklistDetail());
+  setCustomerChecklistItem('terms', true, false, customerTermsChecklistDetail());
+  const ready=customerFormReadyToSubmit();
+  const sideSubmit=$('cust-checklist-submit');
+  if(sideSubmit) sideSubmit.disabled=!ready;
+}
+function wireCustomerFormChecklist(){
+  document.querySelectorAll('.cust-checklist-item[data-cust-step]').forEach(btn=>{
+    if(btn.dataset.scrollWired) return;
+    btn.dataset.scrollWired='1';
+    btn.onclick=()=>{
+      const block=document.querySelector(`.cust-form-block[data-cust-step="${btn.dataset.custStep}"]`);
+      if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
+    };
+  });
+  const sideSubmit=$('cust-checklist-submit');
+  if(sideSubmit&&!sideSubmit.dataset.wired){
+    sideSubmit.dataset.wired='1';
+    sideSubmit.onclick=()=>{ const btn=$('cust-submit'); if(btn) btn.click(); };
+  }
+}
 function customerPrimaryBodyType(types){
   types=types||customerSelectedVehicleTypes();
   if(types.some(id=>CUST_REFR_VTYPE_IDS.includes(id))) return 'reefer';
@@ -411,6 +530,7 @@ function syncCustomerVehicleTypeUi(){
   syncCustomerClosedAllCheckbox();
   syncCustomerRefrAllCheckbox();
   paintCustomerIsothermHighlight();
+  paintCustomerFormChecklist();
 }
 function syncCustomerBodyType(){
   syncCustomerVehicleTypeUi();
@@ -520,12 +640,14 @@ function updateCustomerTripModeDisplay(fin){
     badge.textContent='—';
     badge.dataset.mode='';
     if(hid) hid.value='auto';
+    paintCustomerFormChecklist();
     return;
   }
   const mode=inferTripMode(km, fin||normalizeFinance(state.finance));
   badge.textContent=tripModeLabel(mode);
   badge.dataset.mode=mode;
   if(hid) hid.value=mode;
+  paintCustomerFormChecklist();
 }
 function renderCustomerRouteMap(geom){
   const box=$('cust-route-map');
@@ -727,6 +849,7 @@ function updateCustomerPricePreview(){
   const draft=buildCustomerDraftFromForm();
   if(!draft.ownCompanyId){
     box.innerHTML='<div class="hint">Тариф перевозчика не настроен — свяжитесь с диспетчером.</div>';
+    paintCustomerFormChecklist();
     return;
   }
   const bits=[];
@@ -742,6 +865,7 @@ function updateCustomerPricePreview(){
     box.innerHTML=`
       <div class="hint">${esc(bits.join(' · '))}</div>
       <div class="hint">Ориентир цены появится, когда по адресам посчитается км (или если в тарифе заданы ₽/час). Заявку можно отправить — цену уточнит перевозчик.</div>`;
+    paintCustomerFormChecklist();
     return;
   }
   const min=Math.round(s.minimumCash);
@@ -753,6 +877,7 @@ function updateCustomerPricePreview(){
     <div class="hint">Это ориентир. Через логиста в сумму входит его ставка за срочный подбор. Ниже минимума — только если диспетчер согласится.</div>`;
   const priceEl=$('cust-price');
   if(priceEl && !priceEl.value) priceEl.value=String(min);
+  paintCustomerFormChecklist();
 }
 
 function showCustomerPortal(){
@@ -817,6 +942,7 @@ function renderCustomerPortal(){
   const notifyBtn=$('cust-notify-toggle');
   if(notifyBtn) notifyBtn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
   maybeNotifyCustomerOrderUpdates();
+  paintCustomerFormChecklist();
 }
 
 function readCustomerVehicleAt(){
@@ -1014,7 +1140,14 @@ function wireCustomerPortal(){
   const calToggle=$('cust-vehicle-date-cal-toggle');
   if(calToggle) calToggle.onchange=()=>syncCustomerVehicleDateCalVisibility();
   wireCustomerVehicleTypes();
+  wireCustomerFormChecklist();
   syncCustomerVehicleDateCalVisibility();
+  const orderForm=$('cust-order-form');
+  if(orderForm&&!orderForm.dataset.checklistLive){
+    orderForm.dataset.checklistLive='1';
+    orderForm.addEventListener('input', ()=>paintCustomerFormChecklist());
+    orderForm.addEventListener('change', ()=>paintCustomerFormChecklist());
+  }
 }
 
 wireCustomerPortal();

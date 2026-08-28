@@ -734,6 +734,40 @@
     }
     .cust-date-field-wrap.cal-open{z-index:31}
     .cust-form-blocks{display:flex;flex-direction:column;gap:12px;margin:6px 0 2px}
+    .cust-form-layout{display:flex;align-items:flex-start;gap:16px}
+    .cust-form-main{flex:1;min-width:0}
+    .cust-form-checklist{
+      flex:0 0 232px;position:sticky;top:10px;
+      padding:12px;border-radius:14px;border:1px solid var(--border);
+      background:var(--surface,#fff);box-shadow:0 4px 16px rgba(15,23,42,.05);
+    }
+    .cust-checklist-items{display:flex;flex-direction:column;gap:6px}
+    .cust-checklist-item{
+      display:flex;align-items:flex-start;gap:10px;width:100%;padding:8px 10px;
+      border:1px solid transparent;border-radius:10px;background:transparent;
+      text-align:left;cursor:pointer;color:inherit;font:inherit;
+    }
+    .cust-checklist-item:hover{background:var(--surface2,#f4f6f5)}
+    .cust-checklist-item.is-done{border-color:rgba(16,185,129,.22);background:rgba(16,185,129,.06)}
+    .cust-checklist-item.is-partial{border-color:rgba(245,158,11,.25);background:rgba(245,158,11,.06)}
+    .cust-checklist-icon{
+      flex:0 0 22px;width:22px;height:22px;border-radius:999px;border:2px solid var(--border);
+      margin-top:1px;position:relative;background:var(--surface,#fff);
+    }
+    .cust-checklist-item.is-done .cust-checklist-icon{
+      border-color:#10b981;background:#10b981;
+    }
+    .cust-checklist-item.is-done .cust-checklist-icon::after{
+      content:'';position:absolute;left:6px;top:3px;width:5px;height:9px;
+      border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);
+    }
+    .cust-checklist-item.is-partial .cust-checklist-icon{border-color:#f59e0b;background:#fff7ed}
+    .cust-checklist-body{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+    .cust-checklist-title{font-size:.78rem;font-weight:800;line-height:1.2}
+    .cust-checklist-detail{font-size:.7rem;line-height:1.35;color:var(--muted);word-break:break-word}
+    .cust-checklist-submit{width:100%;margin-top:12px}
+    .cust-checklist-submit:disabled{opacity:.45;cursor:not-allowed}
+    #customer-portal .admin-form-shell{max-width:980px}
     .cust-form-block{
       border:1px solid var(--border);border-radius:14px;background:var(--surface,#fff);overflow:hidden;
     }
@@ -958,6 +992,19 @@
       .form-pair{grid-template-columns:1fr}
       .cust-vtype-cols{grid-template-columns:1fr}
       .cust-vtype-col{max-height:200px}
+      .cust-form-layout{flex-direction:column;gap:10px}
+      .cust-form-checklist{
+        position:static;flex:none;width:100%;padding:10px;
+      }
+      .cust-checklist-items{
+        flex-direction:row;gap:8px;overflow-x:auto;padding-bottom:2px;
+        scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+      }
+      .cust-checklist-item{
+        flex:0 0 148px;scroll-snap-align:start;padding:8px;
+      }
+      .cust-checklist-detail{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .cust-checklist-submit{display:none}
       .center{padding:16px 14px calc(16px + env(safe-area-inset-bottom,0))}
       .pin,.stack{max-width:100%}
       button.primary:active,button.secondary:active,.nums button:active,.yesno button:active,

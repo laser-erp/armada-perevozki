@@ -130,8 +130,10 @@
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
         <section class="form-section" id="cust-order-form">
           <h2 class="form-section-title">Новая заявка</h2>
+          <div class="cust-form-layout">
+            <div class="cust-form-main">
           <div class="cust-form-blocks">
-            <div class="cust-form-block">
+            <div class="cust-form-block" data-cust-step="vehicle">
               <div class="cust-form-block-head">1. Подача ТС</div>
               <div class="cust-form-block-body">
                 <div class="form-pair">
@@ -151,7 +153,7 @@
                 </div>
               </div>
             </div>
-            <div class="cust-form-block">
+            <div class="cust-form-block" data-cust-step="route">
               <div class="cust-form-block-head">2. Маршрут</div>
               <div class="cust-form-block-body">
                 <label for="cust-load">Адрес загрузки</label>
@@ -185,7 +187,7 @@
                 <input type="hidden" id="cust-trip-mode" value="auto" />
               </div>
             </div>
-            <div class="cust-form-block">
+            <div class="cust-form-block" data-cust-step="transport">
               <div class="cust-form-block-head">3. Транспорт</div>
               <div class="cust-form-block-body cust-form-block-body-flush">
                 <div id="cust-vehicle-types" class="cust-vtype-panel">
@@ -268,7 +270,7 @@
                 <input type="hidden" id="cust-body-type" value="tent" />
               </div>
             </div>
-            <div class="cust-form-block">
+            <div class="cust-form-block" data-cust-step="cargo">
               <div class="cust-form-block-head">4. Груз</div>
               <div class="cust-form-block-body">
                 <label for="cust-cargo-text">Что везём</label>
@@ -291,7 +293,7 @@
                 <input type="hidden" id="cust-req-pay" />
               </div>
             </div>
-            <div class="cust-form-block">
+            <div class="cust-form-block" data-cust-step="terms">
               <div class="cust-form-block-head">5. Условия и цена</div>
               <div class="cust-form-block-body">
                 <label for="cust-fulfillment">Как закрыть рейс</label>
@@ -312,6 +314,48 @@
                 <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
               </div>
             </div>
+          </div>
+            </div>
+            <aside class="cust-form-checklist" id="cust-form-checklist" aria-label="Прогресс заявки">
+              <div class="cust-checklist-items">
+                <button type="button" class="cust-checklist-item" data-cust-step="vehicle">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Подача ТС</span>
+                    <span class="cust-checklist-detail" id="cust-check-vehicle">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="route">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Маршрут</span>
+                    <span class="cust-checklist-detail" id="cust-check-route">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="transport">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Транспорт</span>
+                    <span class="cust-checklist-detail" id="cust-check-transport">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="cargo">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Груз</span>
+                    <span class="cust-checklist-detail" id="cust-check-cargo">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="terms">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Условия и цена</span>
+                    <span class="cust-checklist-detail" id="cust-check-terms">логисту</span>
+                  </span>
+                </button>
+              </div>
+              <button type="button" class="primary cust-checklist-submit" id="cust-checklist-submit" disabled>Отправить заявку</button>
+            </aside>
           </div>
         </section>
         <section class="form-section">
