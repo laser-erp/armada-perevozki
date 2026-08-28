@@ -3319,6 +3319,14 @@ function openCatalogs(){
           <option value="vat" ${(typeof companyVatPayer==='function'?companyVatPayer(c):'none')==='vat'?'selected':''}>С НДС — счёт перевозчика с НДС</option>
         </select>
         <p class="hint">Если перевозчик на УСН, заказчик с НДС не передаёт НДС перевозчику — в портале одна сумма без НДС.</p>
+        <h4>Банковские реквизиты (для счетов заказчику и QR СБП)</h4>
+        <label>Банк</label><input id="co-bank-name" placeholder="Сбербанк" value="${esc((c.bank&&c.bank.bankName)||c.bankName||'')}" />
+        <div class="form-pair">
+          <div><label>БИК</label><input id="co-bank-bik" inputmode="numeric" maxlength="9" placeholder="044525225" value="${esc((c.bank&&c.bank.bankBik)||c.bankBik||'')}" /></div>
+          <div><label>Р/с</label><input id="co-bank-account" inputmode="numeric" maxlength="20" placeholder="40802810…" value="${esc((c.bank&&c.bank.bankAccount)||c.bankAccount||'')}" /></div>
+        </div>
+        <label>К/с</label><input id="co-bank-corr" inputmode="numeric" maxlength="20" placeholder="30101810…" value="${esc((c.bank&&c.bank.bankCorrAccount)||c.bankCorrAccount||'')}" />
+        <p class="hint">Заполните для QR по стандарту СБП в счёте заказчика после отправки заявки.</p>
       </div>
       <div id="co-own-fleet" style="display:${isOwn?'block':'none'}">
         <h4>Водители фирмы (телефоны)</h4>
@@ -3519,7 +3527,13 @@ function openCatalogs(){
         vatPayer:roles.includes('own')?(($('co-vat-payer')||{}).value==='vat'?'vat':'none'):null,
         portalEnabled:roles.includes('customer')&&!!($('co-portal-enabled')&&$('co-portal-enabled').checked),
         portalPhone:formatPhone((($('co-portal-phone')||{}).value||'').trim()),
-        portalPin:(($('co-portal-pin')||{}).value||'').trim()
+        portalPin:(($('co-portal-pin')||{}).value||'').trim(),
+        bank:normalizeCompanyBank({
+          bankName:(($('co-bank-name')||{}).value||'').trim(),
+          bankBik:(($('co-bank-bik')||{}).value||'').trim(),
+          bankAccount:(($('co-bank-account')||{}).value||'').trim(),
+          bankCorrAccount:(($('co-bank-corr')||{}).value||'').trim()
+        })
       });
       if(roles.includes('customer') && $('co-portal-enabled')&&$('co-portal-enabled').checked){
         const pp=(($('co-portal-pin')||{}).value||'').trim();

@@ -770,6 +770,18 @@
     .cust-route-svg{width:100%;height:auto;display:block}
     .cust-map-tag{font:600 10px/1.2 system-ui,sans-serif;fill:var(--muted,#667)}
     .chat-load-chips .chat-chip.primary{box-shadow:0 0 0 2px rgba(37,99,235,.25)}
+    .chat-chip.is-selected{
+      background:#2563eb;color:#fff;border-color:#2563eb;
+      box-shadow:0 0 0 2px rgba(37,99,235,.35),0 2px 8px rgba(37,99,235,.2);
+    }
+    .chat-chip.muted.is-selected{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+    .chat-vtype-suggest-item.is-selected{background:rgba(37,99,235,.12);font-weight:700;color:#1d4ed8}
+    .chat-invoice-link{display:inline-block;margin-top:8px;color:#2563eb;font-weight:700;text-decoration:none;border-bottom:1px dashed rgba(37,99,235,.45)}
+    .chat-invoice-link:hover{color:#1d4ed8;border-bottom-color:#1d4ed8}
+    .cust-submit-success{margin:0 0 12px;padding:12px 14px;border-radius:var(--radius,14px);background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.35);font-size:.82rem;line-height:1.45}
+    .cust-submit-success[hidden]{display:none!important}
+    .cust-invoice-row{margin-top:6px}
+    .cust-invoice-link{font-size:.76rem;font-weight:700;color:var(--accent,#2563eb);cursor:pointer;border:0;background:transparent;padding:0;font-family:inherit;text-decoration:underline}
     .cust-trip-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface2,#f4f6f5);border:1px solid var(--border)}
     .cust-trip-label{font-size:var(--fs-sm);color:var(--muted);font-weight:600}
     .cust-trip-badge{font-weight:800;font-size:.95rem;color:var(--accent);padding:4px 10px;border-radius:999px;background:rgba(37,99,235,.08)}

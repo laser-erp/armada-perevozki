@@ -135,6 +135,8 @@ function normalizeCompany(c){
   out.portalPhone=formatPhone(String(c.portalPhone||'').trim());
   out.portalPin=String(c.portalPin||'').trim();
   out.vatPayer=(c.vatPayer==='vat')?'vat':'none';
+  const bank=normalizeCompanyBank(c);
+  if(bank.bankName||bank.bankBik||bank.bankAccount||bank.bankCorrAccount) out.bank=bank;
   return out;
 }
 /** Перевозчик на ОСН с НДС или без (УСН и т.п.) */
@@ -322,6 +324,7 @@ function upsertCompany(raw){
     c.kpp=c.kpp||prev.kpp||'';
     c.address=c.address||prev.address||'';
     if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
+    if(!c.bank && prev.bank) c.bank=normalizeCompanyBank(prev.bank);
     if(!('logistKind' in (raw||{})) && prev.logistKind) c.logistKind=prev.logistKind;
     if(!('portalEnabled' in raw)){
       c.portalEnabled=!!prev.portalEnabled;

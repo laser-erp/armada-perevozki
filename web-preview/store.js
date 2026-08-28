@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-draft-delete-reset24317a";
+const APP_BUILD="2026-08-28-chat-invoice-qr4317a";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -875,7 +875,8 @@ const state={
   driverInvites:Array.isArray(saved.driverInvites)?saved.driverInvites:[],
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
   adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{},
-  billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}}
+  billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}},
+  invoices:Array.isArray(saved.invoices)?saved.invoices:[]
 };
 let pbRecordId=null;
 let persistTimer=null;
@@ -1082,6 +1083,7 @@ function snapshot(){
     driverInvites:Array.isArray(state.driverInvites)?state.driverInvites:[],
     dataEpoch:Number(state.dataEpoch)||0,
     billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
+    invoices:Array.isArray(state.invoices)?state.invoices:[],
     opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
@@ -1114,6 +1116,7 @@ function applyPayload(p, opts){
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   if(typeof applyBillingPayload==='function') applyBillingPayload(p.billing);
   else if(p.billing&&typeof p.billing==='object') state.billing=p.billing;
+  state.invoices=Array.isArray(p.invoices)?p.invoices:[];
   state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{}, p.settings||{});
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];

@@ -396,6 +396,7 @@
                 <input id="cust-price" inputmode="decimal" placeholder="из расчёта или уточнит перевозчик" />
                 <div class="error" id="cust-form-error"></div>
                 <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
+                <div class="cust-submit-success" id="cust-submit-success" hidden></div>
               </div>
             </div>
           </div>
@@ -457,6 +458,11 @@
           <h2 class="form-section-title">Календарь броней</h2>
           <p class="hint">Точка на дате подачи — когда логист подтвердил бронь своей машины или нашёл перевозчика на бирже.</p>
           <div id="cust-book-cal"></div>
+        </section>
+        <section class="form-section">
+          <h2 class="form-section-title">Мои счета</h2>
+          <p class="hint">Счета формируются автоматически после отправки заявки. QR-код — для оплаты через приложение банка.</p>
+          <div id="cust-invoices-list"></div>
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Мои заявки</h2>

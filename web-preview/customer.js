@@ -1249,14 +1249,35 @@ function renderCustomerPortal(){
         <p class="meta">${esc(o.ownCompanyName||'Диспетчер')}${bookLine?` · ${esc(bookLine)}`:''}${o.fulfillment==='direct'?' · свой парк':''}</p>
         <p class="meta">${o.executorType==='partner'?'':(o.driverName&&o.driverName!=='Биржа'&&o.driverName!=='Диспетчер'?`Водитель: ${esc(o.driverName)} · `:'')}${o.pricePending?'Цена: уточнит диспетчер · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
+        ${(()=>{
+          const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
+          return inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
+        })()}
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
+    customerWireInvoiceLinks(list);
   }
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
   if(notifyBtn) notifyBtn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
   maybeNotifyCustomerOrderUpdates();
   paintCustomerFormChecklist();
+  renderCustomerInvoicesList();
+}
+
+function renderCustomerInvoicesList(){
+  const list=$('cust-invoices-list');
+  if(!list||!currentCustomer) return;
+  const invoices=typeof customerInvoicesForPortal==='function'?customerInvoicesForPortal(currentCustomer.companyId):[];
+  list.innerHTML=invoices.length?invoices.slice(0,15).map(inv=>{
+    const amt=inv.amount>0?`${fmt(inv.amount)} ₽`:(inv.pricePending?'уточняется':'—');
+    return `<div class="card cust-invoice-row" style="margin-bottom:8px">
+      <h3 style="margin:0 0 4px;font-size:.9rem">Счёт № ${esc(inv.number)} · заявка № ${esc(inv.orderSeq||'—')}</h3>
+      <p class="meta">${esc(inv.route||'')} · ${amt}</p>
+      <button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Скачать счёт с QR</button>
+    </div>`;
+  }).join(''):'<div class="empty">Счета появятся после отправки заявки</div>';
+  customerWireInvoiceLinks(list);
 }
 
 function readCustomerVehicleAt(){
@@ -1411,18 +1432,16 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   persist();
   if(err) showCustomerSubmitError('');
   const chatErr=$('cust-chat-error'); if(chatErr) chatErr.textContent='';
-  const priceBit=order.pricePending
-    ?'Цену уточнит диспетчер.'
-    :`Ориентир ${fmt(min||offered)} ₽${typeof customerCarrierPriceLabel==='function'&&carrier?' ('+customerCarrierPriceLabel(carrier)+')':''}${order.fulfillment==='direct'?'':' (ставка логиста в цене)'}.`;
-  const bookBit=order.bookedPlate
-    ?` Запрос брони ${order.bookedPlate}: перевозчик подтвердит — тогда дата подачи появится в календаре.`
-    :' Диспетчер подберёт машину.';
-  const rushBit=order.fulfillment==='direct'
-    ?' Заявка в свой парк, без срочного подбора.'
-    :' Диспетчеру: закрыть как можно скорее.';
-  alert(`Заявка №${seqNo} отправлена.${rushBit}${bookBit} ${priceBit}`);
-  resetCustomerOrderForm();
-  clearCustomerOrderDraft();
+  const invoice=typeof createCustomerInvoiceForOrder==='function'?createCustomerInvoiceForOrder(order, co, carrier):null;
+  if(invoice) persist();
+  const inChat=customerOrderMode()==='chat';
+  if(inChat){
+    customerChatAfterOrderSubmit(order, invoice);
+    resetCustomerOrderFormFields();
+  }else{
+    customerFormAfterOrderSubmit(order, invoice);
+    resetCustomerOrderForm();
+  }
   renderCustomerPortal();
 }
 
@@ -1574,7 +1593,49 @@ function clearCustomerOrderDraft(){
   customerDraftPromptLoaded=null;
   hideCustomerDraftBanner();
 }
-function resetCustomerOrderForm(){
+function customerSubmitSuccessMessage(invoice){
+  const name=customerChatFirstName();
+  const who=name?`С вами, ${name}, `:''; 
+  let html=`${who}приятно иметь дело. Счёт на оплату автоматически сформируется и будет доступен для скачивания.`;
+  if(invoice){
+    html+=`<br><button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
+  }
+  return html;
+}
+function customerWireInvoiceLinks(root){
+  (root||document).querySelectorAll('[data-invoice-id]').forEach(btn=>{
+    btn.onclick=e=>{
+      e.preventDefault();
+      const id=btn.getAttribute('data-invoice-id');
+      if(typeof openCustomerInvoice==='function') openCustomerInvoice(id);
+      else if(typeof downloadCustomerInvoice==='function') downloadCustomerInvoice(id);
+    };
+  });
+}
+function customerChatAfterOrderSubmit(order, invoice){
+  customerChat.messages.push({
+    role:'bot',
+    html:`<strong>Заявка №${esc(order.sequentialNumber)} отправлена.</strong><br>${customerSubmitSuccessMessage(invoice)}`,
+    stepId:'submitted'
+  });
+  customerChat.stepIndex=CUST_CHAT_STEPS.length;
+  customerChat.summaryReady=false;
+  customerChat.data={};
+  clearCustomerOrderDraft();
+  saveCustomerChatState();
+  customerChatRenderAll();
+  customerWireInvoiceLinks($('cust-chat-thread'));
+}
+function customerFormAfterOrderSubmit(order, invoice){
+  const box=$('cust-submit-success');
+  if(box){
+    box.hidden=false;
+    box.innerHTML=`<strong>Заявка №${esc(order.sequentialNumber)} отправлена.</strong><br>${customerSubmitSuccessMessage(invoice)}`;
+    customerWireInvoiceLinks(box);
+  }
+  clearCustomerOrderDraft();
+}
+function resetCustomerOrderFormFields(){
   customerDraftApplying=true;
   try{
     clearTimeout(customerDraftSaveTimer);
@@ -1610,15 +1671,17 @@ function resetCustomerOrderForm(){
     syncCustomerCargoKind();
     syncCustomerTempField();
     syncCustomerVehicleDateCalVisibility();
-    resetCustomerChat();
     const chatInp=$('cust-chat-input');
     if(chatInp) chatInp.value='';
     const chatSearch=$('cust-chat-vtype-search');
     if(chatSearch) chatSearch.value='';
     const chatSuggest=$('cust-chat-vtype-suggest');
     if(chatSuggest){ chatSuggest.innerHTML=''; chatSuggest.hidden=true; }
-    if(customerOrderMode()==='chat') initCustomerChatWizard(true);
-    else customerChatRenderAll();
+    if(customerOrderMode()==='chat' && !customerChat.messages.some(m=>m.stepId==='submitted')){
+      initCustomerChatWizard(true);
+    }else if(customerOrderMode()==='chat'){
+      customerChatRenderAll();
+    }
     updateCustomerPricePreview();
     paintCustomerFleetOptions();
     paintCustomerBookingCal();
@@ -1628,6 +1691,13 @@ function resetCustomerOrderForm(){
   }finally{
     customerDraftApplying=false;
   }
+}
+function resetCustomerOrderForm(){
+  resetCustomerChat();
+  clearCustomerChatState();
+  resetCustomerOrderFormFields();
+  const okBox=$('cust-submit-success');
+  if(okBox) okBox.hidden=true;
 }
 function discardCustomerOrderDraft(){
   resetCustomerOrderForm();
@@ -1791,8 +1861,12 @@ function customerChatSyncFromForm(){
   if(unload) d.unload=unload;
   const types=customerSelectedVehicleTypes();
   if(types.length) d.bodyVtype=types[0];
-  d.loadMethods=customerSelectedLoadMethods();
-  d.unloadMethods=customerSelectedUnloadMethods();
+  const chatStep=CUST_CHAT_STEPS[customerChat.stepIndex];
+  const onMethodStep=chatStep&&(chatStep.id==='loadMethod'||chatStep.id==='unloadMethod');
+  if(!onMethodStep){
+    d.loadMethods=customerSelectedLoadMethods();
+    d.unloadMethods=customerSelectedUnloadMethods();
+  }
   const loadName=(($('cust-loading-contact-name')||{}).value||'').trim();
   const loadPhone=formatPhone((($('cust-loading-contact-phone')||{}).value||'').trim());
   const unloadName=(($('cust-unloading-contact-name')||{}).value||'').trim();
@@ -1872,7 +1946,7 @@ function customerChatFilterVtypeSuggest(raw){
     btn.dataset.vtype=t.id;
     btn.dataset.idx=String(i);
     btn.textContent=t.ati||t.label||t.id;
-    btn.onmousedown=e=>{ e.preventDefault(); customerChatSelectBody(t.id, t.ati||t.label||t.id); };
+    btn.onmousedown=e=>{ e.preventDefault(); customerChatSelectBody(t.id, t.ati||t.label||t.id, false); };
     list.appendChild(btn);
   });
   list.hidden=false;
@@ -1909,15 +1983,67 @@ function customerChatSelectUnloadMethods(ids, label){
   scheduleCustomerOrderDraftSave();
   customerChatAdvance(label||customerChatMethodsLabel(ids));
 }
-function customerChatSelectBody(vtype, label){
+function customerChatConfirmMethods(stepId, ids, label){
+  if(stepId==='loadMethod') customerChatSelectLoadMethods(ids, label);
+  else customerChatSelectUnloadMethods(ids, label);
+}
+function customerChatPaintMethodChips(thread, attr, selected){
+  if(!thread) return;
+  thread.querySelectorAll(`[${attr}]`).forEach(btn=>{
+    const id=btn.getAttribute(attr);
+    const on=selected.has(id);
+    btn.classList.toggle('primary', on);
+    btn.classList.toggle('muted', !on);
+    btn.classList.toggle('is-selected', on);
+  });
+}
+function customerChatPaintSingleChip(root, attr, selectedId){
+  if(!root) return;
+  root.querySelectorAll(`[${attr}]`).forEach(btn=>{
+    const on=btn.getAttribute(attr)===selectedId;
+    btn.classList.toggle('is-selected', on);
+    btn.classList.toggle('muted', !on);
+    btn.classList.toggle('primary', false);
+  });
+}
+function customerChatPaintBodyChips(selectedVtype){
+  const root=$('cust-chat-body-chips');
+  if(!root) return;
+  root.querySelectorAll('[data-chat-body]').forEach(btn=>{
+    const chip=CUST_CHAT_BODY_CHIPS.find(c=>c.id===btn.getAttribute('data-chat-body'));
+    const on=!!(chip&&chip.vtype&&chip.vtype===selectedVtype);
+    btn.classList.toggle('is-selected', on);
+    btn.classList.toggle('muted', !on);
+  });
+}
+function customerChatPaintVtypeSuggest(selectedVtype){
+  const list=$('cust-chat-vtype-suggest');
+  if(!list) return;
+  list.querySelectorAll('.chat-vtype-suggest-item').forEach(btn=>{
+    btn.classList.toggle('is-selected', btn.dataset.vtype===selectedVtype);
+  });
+}
+function customerChatUpdateMethodNextBtn(ok, count){
+  if(!ok) return;
+  ok.disabled=count<1;
+  ok.textContent=count>0?`Далее → (${count})`:'Далее →';
+}
+function customerChatSelectBody(vtype, label, advance){
   if(!vtype) return;
   customerChat.data.bodyVtype=vtype;
+  customerChat.data.pendingBodyLabel=label||customerChatBodyLabel(vtype);
   customerChat.data.loadMethods=[];
   customerChat.data.unloadMethods=[];
   customerChatApplyToForm();
   saveCustomerChatState();
   scheduleCustomerOrderDraftSave();
-  customerChatAdvance(label||customerChatBodyLabel(vtype));
+  customerChatPaintBodyChips(vtype);
+  customerChatPaintVtypeSuggest(vtype);
+  const ok=$('cust-chat-body-ok');
+  if(ok) ok.disabled=false;
+  if(advance!==false){
+    customerChatAdvance(label||customerChatBodyLabel(vtype));
+  }
 }
 function customerChatOpenFormTransport(){
   saveCustomerChatState();
@@ -2155,12 +2281,14 @@ function customerChatRenderWidgets(){
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
   if(!step) return;
   if(step.id!=='summary' && customerChat.summaryReady) return;
+  if(customerChat.messages.some(m=>m.stepId==='submitted')) return;
   let widget='';
   if(step.id==='when'){
+    const pendingWhen=customerChat.data.pendingWhen||'';
     widget=`<div class="chat-chips" id="cust-chat-chips">
-      <button type="button" class="chat-chip muted" data-chat-when="1">Завтра</button>
-      <button type="button" class="chat-chip muted" data-chat-when="2">Послезавтра</button>
-      <button type="button" class="chat-chip" data-chat-when="pick">Выбрать дату…</button>
+      <button type="button" class="chat-chip muted${pendingWhen==='1'?' is-selected':''}" data-chat-when="1">Завтра</button>
+      <button type="button" class="chat-chip muted${pendingWhen==='2'?' is-selected':''}" data-chat-when="2">Послезавтра</button>
+      <button type="button" class="chat-chip${pendingWhen==='pick'?' is-selected':''}" data-chat-when="pick">Выбрать дату…</button>
     </div>
     <div class="chat-widget" id="cust-chat-when-pick" hidden>
       <div class="chat-widget-row">
@@ -2170,7 +2298,8 @@ function customerChatRenderWidgets(){
       <div class="chat-chips" style="padding-left:0;margin-top:8px">
         <button type="button" class="chat-chip primary" id="cust-chat-when-ok">Готово</button>
       </div>
-    </div>`;
+    </div>
+    <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-when-next"${pendingWhen?'':' disabled'}>Далее →</button></div>`;
   }else if(step.id==='load' || step.id==='unload'){
     const val=step.id==='load'?(customerChat.data.load||''):(customerChat.data.unload||'');
     widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" autocomplete="off" aria-label="Адрес" /></div>
@@ -2197,9 +2326,15 @@ function customerChatRenderWidgets(){
     </div>
     <p class="chat-vtype-hint">Или выберите:</p>
     <div class="chat-chips chat-vtype-chips" id="cust-chat-body-chips">${
-      CUST_CHAT_BODY_CHIPS.map(c=>`<button type="button" class="chat-chip muted" data-chat-body="${c.id}">${esc(c.label)}</button>`).join('')
+      CUST_CHAT_BODY_CHIPS.map(c=>{
+        const on=customerChat.data.bodyVtype===c.vtype;
+        return `<button type="button" class="chat-chip muted${on?' is-selected':''}" data-chat-body="${c.id}">${esc(c.label)}</button>`;
+      }).join('')
     }</div>
-    <div class="chat-chips"><button type="button" class="chat-chip muted" data-chat-body="${CUST_CHAT_BODY_FORM_FALLBACK.id}">${esc(CUST_CHAT_BODY_FORM_FALLBACK.label)}</button></div>`;
+    <div class="chat-chips">
+      <button type="button" class="chat-chip muted" data-chat-body="${CUST_CHAT_BODY_FORM_FALLBACK.id}">${esc(CUST_CHAT_BODY_FORM_FALLBACK.label)}</button>
+      <button type="button" class="chat-chip primary" id="cust-chat-body-ok"${customerChat.data.bodyVtype?'':' disabled'}>Далее →</button>
+    </div>`;
   }else if(step.id==='loadMethod' || step.id==='unloadMethod'){
     const vtype=customerChat.data.bodyVtype||'tent';
     const selKey=step.id==='loadMethod'?'loadMethods':'unloadMethods';
@@ -2210,13 +2345,15 @@ function customerChatRenderWidgets(){
     const selected=new Set(customerChat.data[selKey]||[]);
     const attr=step.id==='loadMethod'?'data-chat-load':'data-chat-unload';
     const okId=step.id==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok';
-    widget=`<div class="chat-chips chat-load-chips">${
+    const selCount=selected.size;
+    widget=`<p class="chat-vtype-hint">Выберите один или несколько вариантов, затем «Далее» или повторное нажатие на выбранный.</p>
+    <div class="chat-chips chat-load-chips">${
       opts.map(o=>{
         const on=selected.has(o.id);
-        return `<button type="button" class="chat-chip ${on?'primary':'muted'}" ${attr}="${esc(o.id)}">${esc(o.label)}</button>`;
+        return `<button type="button" class="chat-chip ${on?'primary is-selected':'muted'}" ${attr}="${esc(o.id)}">${esc(o.label)}</button>`;
       }).join('')
     }</div>
-    <div class="chat-chips"><button type="button" class="chat-chip primary" id="${okId}">Далее →</button></div>`;
+    <div class="chat-chips"><button type="button" class="chat-chip primary" id="${okId}"${selCount?'':' disabled'}>${selCount?`Далее → (${selCount})`:'Далее →'}</button></div>`;
   }else if(step.id==='summary' && customerChat.summaryReady){
     widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
   }
@@ -2230,22 +2367,38 @@ function customerChatRenderWidgets(){
 }
 function customerChatWireWidgets(stepId){
   if(stepId==='when'){
+    const thread=$('cust-chat-thread');
+    const syncWhenChips=mode=>{
+      customerChat.data.pendingWhen=mode;
+      saveCustomerChatState();
+      customerChatPaintSingleChip(thread, 'data-chat-when', mode);
+      const next=$('cust-chat-when-next');
+      if(next) next.disabled=!mode || mode==='pick';
+      const pick=$('cust-chat-when-pick');
+      if(pick) pick.hidden=mode!=='pick';
+    };
     document.querySelectorAll('[data-chat-when]').forEach(btn=>{
       btn.onclick=()=>{
         const mode=btn.getAttribute('data-chat-when');
-        const pick=$('cust-chat-when-pick');
         if(mode==='pick'){
-          if(pick) pick.hidden=false;
+          syncWhenChips('pick');
           const de=$('cust-chat-date');
           if(de) de.focus();
           return;
         }
-        const days=+mode||1;
-        customerChat.data.date=customerChatOffsetDate(days);
-        customerChat.data.time='09:00';
-        customerChatAdvance(customerChatWhenLabel());
+        syncWhenChips(mode);
       };
     });
+    const next=$('cust-chat-when-next');
+    if(next) next.onclick=()=>{
+      const mode=customerChat.data.pendingWhen;
+      if(!mode || mode==='pick') return;
+      const days=+mode||1;
+      customerChat.data.date=customerChatOffsetDate(days);
+      customerChat.data.time='09:00';
+      delete customerChat.data.pendingWhen;
+      customerChatAdvance(customerChatWhenLabel());
+    };
     const ok=$('cust-chat-when-ok');
     if(ok) ok.onclick=()=>{
       const de=$('cust-chat-date');
@@ -2260,6 +2413,7 @@ function customerChatWireWidgets(stepId){
       }
       customerChat.data.date=date;
       customerChat.data.time=time;
+      delete customerChat.data.pendingWhen;
       customerChatAdvance(customerChatWhenLabel());
     };
     const de=$('cust-chat-date');
@@ -2343,9 +2497,21 @@ function customerChatWireWidgets(stepId){
         }
         const chip=CUST_CHAT_BODY_CHIPS.find(c=>c.id===id);
         if(!chip||!chip.vtype) return;
-        customerChatSelectBody(chip.vtype, chip.label);
+        customerChatSelectBody(chip.vtype, chip.label, false);
       };
     });
+    const bodyOk=$('cust-chat-body-ok');
+    if(bodyOk) bodyOk.onclick=()=>{
+      const vtype=customerChat.data.bodyVtype;
+      if(!vtype){
+        const err=$('cust-chat-error');
+        if(err) err.textContent='Выберите тип кузова';
+        return;
+      }
+      const err=$('cust-chat-error');
+      if(err) err.textContent='';
+      customerChatAdvance(customerChat.data.pendingBodyLabel||customerChatBodyLabel(vtype));
+    };
     const search=$('cust-chat-vtype-search');
     const suggest=$('cust-chat-vtype-suggest');
     if(search){
@@ -2354,7 +2520,7 @@ function customerChatWireWidgets(stepId){
         if(!suggest||suggest.hidden) return;
         const btn=suggest.querySelector(`.chat-vtype-suggest-item[data-idx="${activeIdx}"]`);
         if(!btn) return;
-        customerChatSelectBody(btn.dataset.vtype, btn.textContent);
+        customerChatSelectBody(btn.dataset.vtype, btn.textContent, false);
       };
       search.oninput=()=>{
         activeIdx=-1;
@@ -2381,7 +2547,7 @@ function customerChatWireWidgets(stepId){
           if(activeIdx>=0){ pickActive(); return; }
           const q=search.value.trim();
           const matches=typeof filterCustVehicleTypesByQuery==='function'?filterCustVehicleTypesByQuery(q):[];
-          if(matches.length===1) customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label);
+          if(matches.length===1) customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label, false);
           else if(matches.length>1){
             const err=$('cust-chat-error');
             if(err) err.textContent='Выберите тип из списка или уточните запрос';
@@ -2399,28 +2565,48 @@ function customerChatWireWidgets(stepId){
   if(stepId==='loadMethod' || stepId==='unloadMethod'){
     const key=stepId==='loadMethod'?'loadMethods':'unloadMethods';
     const attr=stepId==='loadMethod'?'data-chat-load':'data-chat-unload';
+    const thread=$('cust-chat-thread');
     const selected=new Set(customerChat.data[key]||[]);
-    document.querySelectorAll(`[${attr}]`).forEach(btn=>{
-      btn.onclick=()=>{
-        const id=btn.getAttribute(attr);
-        if(selected.has(id)) selected.delete(id);
-        else selected.add(id);
-        btn.classList.toggle('primary', selected.has(id));
-        btn.classList.toggle('muted', !selected.has(id));
-      };
-    });
-    const ok=$(stepId==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok');
-    if(ok) ok.onclick=()=>{
-      const ids=[...selected];
+    const opts=stepId==='loadMethod'
+      ?customerChatLoadMethodOptions(customerChat.data.bodyVtype||'tent')
+      :customerChatUnloadMethodOptions(customerChat.data.bodyVtype||'tent');
+    const advanceMethods=(ids)=>{
       const err=$('cust-chat-error');
       if(!ids.length){
         if(err) err.textContent='Выберите хотя бы один вариант';
         return;
       }
       if(err) err.textContent='';
-      if(stepId==='loadMethod') customerChatSelectLoadMethods(ids, customerChatMethodsLabel(ids));
-      else customerChatSelectUnloadMethods(ids, customerChatMethodsLabel(ids));
+      customerChatConfirmMethods(stepId, ids, customerChatMethodsLabel(ids));
     };
+    const syncSelection=()=>{
+      customerChat.data[key]=[...selected];
+      saveCustomerChatState();
+      customerChatPaintMethodChips(thread, attr, selected);
+      customerChatUpdateMethodNextBtn($(stepId==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok'), selected.size);
+    };
+    if(opts.length===1){
+      const only=opts[0];
+      thread&&thread.querySelectorAll(`[${attr}]`).forEach(btn=>{
+        btn.onclick=()=>advanceMethods([only.id]);
+      });
+    }else{
+      thread&&thread.querySelectorAll(`[${attr}]`).forEach(btn=>{
+        btn.onclick=()=>{
+          const id=btn.getAttribute(attr);
+          if(selected.has(id)){
+            if(selected.size===1){
+              advanceMethods([id]);
+              return;
+            }
+            selected.delete(id);
+          }else selected.add(id);
+          syncSelection();
+        };
+      });
+    }
+    const ok=$(stepId==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok');
+    if(ok) ok.onclick=()=>advanceMethods([...(customerChat.data[key]||[]).length?customerChat.data[key]:selected]);
   }
   if(stepId==='summary'){
     const sub=$('cust-chat-submit');
@@ -2454,7 +2640,7 @@ function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
   const textSteps=['cargo','weight','loadContact','unloadContact'];
-  const show=step && textSteps.includes(step.id) && !customerChat.summaryReady;
+  const show=step && textSteps.includes(step.id) && !customerChat.summaryReady && !customerChat.messages.some(m=>m.stepId==='submitted');
   const inp=$('cust-chat-input');
   if(inp) inp.placeholder='Напишите ответ…';
   if(compose && step){
@@ -2573,7 +2759,7 @@ function customerChatHandleTextInput(){
     if(search) search.value=raw;
     const matches=customerChatFilterVtypeSuggest(raw);
     if(matches.length===1){
-      customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label);
+      customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label, false);
       return;
     }
     if(matches.length>1){
