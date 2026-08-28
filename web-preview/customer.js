@@ -1,4 +1,9 @@
 /* АРМАДА: портал заказчика — вход, заявка, минимальная цена */
+if(typeof globalThis.esc!=='function'){
+  globalThis.esc=function esc(s){
+    return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+  };
+}
 const CUSTOMER_SESSION_KEY='armada_customer_session_v1';
 let currentCustomer=null; // { companyId, name, phone, spaceId }
 
@@ -605,6 +610,7 @@ function wireCustomerVehicleTypeChange(el){
   updateCustomerPricePreview();
   paintCustomerFleetOptions();
   filterCustomerVtypeSearch(($('cust-vtype-search')||{}).value||'');
+  scheduleCustomerOrderDraftSave();
 }
 function initCustomerVtypeExtraList(){
   const box=$('cust-vtype-extra-list');
@@ -1074,6 +1080,7 @@ function showCustomerPortal(){
     return;
   }
   renderCustomerPortal();
+  maybePromptCustomerOrderDraft();
   show('customer-portal');
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeCustomer();
 }
@@ -1320,6 +1327,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   if($('cust-body-type')) $('cust-body-type').value='tent';
   if($('cust-book-plate')) $('cust-book-plate').value='';
   if(customerOrderMode()==='chat') initCustomerChatWizard(true);
+  clearCustomerOrderDraft();
+  clearCustomerChatState();
   renderCustomerPortal();
 }
 
@@ -1342,7 +1351,219 @@ const CUST_CHAT_BODY_CHIPS=[
   {id:'other', label:'Другое → форма', vtype:null}
 ];
 const CUST_CHAT_STATE_KEY='armada_customer_chat_state_v1';
+const CUST_ORDER_DRAFT_PREFIX='armada_customer_order_draft_v1';
+const CUST_ORDER_DRAFT_TTL_MS=7*24*60*60*1000;
+const CUST_ORDER_DRAFT_FIELD_IDS=[
+  'cust-cargo-text','cust-cargo-places','cust-cargo-volume','cust-cargo-packaging',
+  'cust-cargo-temp-from','cust-cargo-temp-to','cust-weight-value','cust-weight-unit',
+  'cust-vehicle-date','cust-vehicle-time','cust-load','cust-unload',
+  'cust-load-note','cust-unload-note','cust-loading-contact-name','cust-loading-contact-phone',
+  'cust-unloading-contact-name','cust-unloading-contact-phone','cust-price',
+  'cust-req-l','cust-req-w','cust-req-h','cust-book-plate','cust-fulfillment',
+  'cust-body-type','cust-cargo-kind','cust-trip-mode'
+];
+const CUST_ORDER_DRAFT_CHECK_IDS=['cust-cargo-fragile','cust-cargo-temp','cust-vehicle-date-cal-toggle','cust-load-match-all','cust-unload-match-all'];
 let customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
+let customerDraftSaveTimer=null;
+let customerDraftApplying=false;
+let customerDraftPromptLoaded=null;
+
+function customerOrderDraftKey(){
+  const id=currentCustomer&&currentCustomer.companyId;
+  return id?`${CUST_ORDER_DRAFT_PREFIX}_${id}`:null;
+}
+function customerDraftTimeLabel(iso){
+  if(!iso) return '';
+  if(typeof dateTime==='function') return dateTime(iso);
+  try{
+    const d=new Date(iso);
+    if(Number.isNaN(d.getTime())) return '';
+    const pad=n=>String(n).padStart(2,'0');
+    return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }catch(_){ return ''; }
+}
+function loadCustomerOrderDraftRaw(){
+  const key=customerOrderDraftKey();
+  if(!key) return null;
+  try{
+    const raw=JSON.parse(localStorage.getItem(key)||'null');
+    if(!raw||!raw.savedAt) return null;
+    const age=Date.now()-new Date(raw.savedAt).getTime();
+    if(!(age>=0) || age>CUST_ORDER_DRAFT_TTL_MS){
+      localStorage.removeItem(key);
+      return null;
+    }
+    return raw;
+  }catch(_){ return null; }
+}
+function customerOrderDraftHasContent(d){
+  if(!d) return false;
+  const f=d.fields||{};
+  const textKeys=['cust-cargo-text','cust-load','cust-unload','cust-weight-value','cust-load-note','cust-unload-note',
+    'cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone',
+    'cust-cargo-places','cust-cargo-volume','cust-vehicle-date','cust-vehicle-time','cust-price'];
+  if(textKeys.some(id=>String(f[id]||'').trim())) return true;
+  if((d.vehicleTypes||[]).length) return true;
+  if((d.loadMethods||[]).length || (d.unloadMethods||[]).length) return true;
+  const chat=d.chat||{};
+  if((chat.messages||[]).length>1) return true;
+  if(chat.data && Object.keys(chat.data).length) return true;
+  return false;
+}
+function collectCustomerOrderDraft(){
+  if(!currentCustomer) return null;
+  if(customerOrderMode()==='chat') customerChatSyncFromForm();
+  const fields={};
+  CUST_ORDER_DRAFT_FIELD_IDS.forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    fields[id]=el.value;
+  });
+  CUST_ORDER_DRAFT_CHECK_IDS.forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    fields[id]=!!el.checked;
+  });
+  const priceEl=$('cust-price');
+  const volEl=$('cust-cargo-volume');
+  return {
+    v:1,
+    companyId:currentCustomer.companyId,
+    savedAt:new Date().toISOString(),
+    mode:customerOrderMode(),
+    fields,
+    vehicleTypes:customerSelectedVehicleTypes(),
+    loadMethods:customerSelectedLoadMethods(),
+    unloadMethods:customerSelectedUnloadMethods(),
+    routeKm:customerRouteKm>0?customerRouteKm:null,
+    bookCalFrom:customerCal.from||null,
+    vehicleDateCal:{year:customerVehicleDateCal.year, month:customerVehicleDateCal.month, from:customerVehicleDateCal.from||null},
+    priceAuto:priceEl&&priceEl.dataset.auto!=null?priceEl.dataset.auto:null,
+    volumeManual:volEl&&volEl.dataset.manual!=null?volEl.dataset.manual:null,
+    chat:{
+      messages:customerChat.messages.slice(),
+      stepIndex:customerChat.stepIndex,
+      data:Object.assign({}, customerChat.data||{}),
+      summaryReady:!!customerChat.summaryReady
+    }
+  };
+}
+function persistCustomerOrderDraft(){
+  if(customerDraftApplying || !currentCustomer) return;
+  const key=customerOrderDraftKey();
+  if(!key) return;
+  try{
+    const draft=collectCustomerOrderDraft();
+    if(!customerOrderDraftHasContent(draft)){
+      localStorage.removeItem(key);
+      hideCustomerDraftBanner();
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(draft));
+  }catch(_){}
+}
+function scheduleCustomerOrderDraftSave(){
+  if(customerDraftApplying || !currentCustomer) return;
+  clearTimeout(customerDraftSaveTimer);
+  customerDraftSaveTimer=setTimeout(persistCustomerOrderDraft, 500);
+}
+function clearCustomerOrderDraft(){
+  const key=customerOrderDraftKey();
+  if(key){ try{ localStorage.removeItem(key); }catch(_){} }
+  customerDraftPromptLoaded=null;
+  hideCustomerDraftBanner();
+}
+function hideCustomerDraftBanner(){
+  const box=$('cust-draft-banner');
+  if(box) box.hidden=true;
+}
+function showCustomerDraftBanner(draft){
+  const box=$('cust-draft-banner');
+  const text=$('cust-draft-banner-text');
+  if(!box||!text||!draft) return;
+  text.textContent=`Есть черновик заявки от ${customerDraftTimeLabel(draft.savedAt)}. Восстановить?`;
+  box.hidden=false;
+}
+function applyCustomerOrderDraft(draft){
+  if(!draft) return;
+  customerDraftApplying=true;
+  try{
+    const f=draft.fields||{};
+    CUST_ORDER_DRAFT_FIELD_IDS.forEach(id=>{
+      const el=$(id);
+      if(!el || f[id]==null) return;
+      el.value=String(f[id]);
+    });
+    CUST_ORDER_DRAFT_CHECK_IDS.forEach(id=>{
+      const el=$(id);
+      if(!el || f[id]==null) return;
+      el.checked=!!f[id];
+    });
+    resetCustomerVehicleTypes();
+    (draft.vehicleTypes||[]).forEach(vtype=>{
+      const el=document.querySelector(`#cust-vehicle-types [data-vtype="${vtype}"]`);
+      if(el) el.checked=true;
+    });
+    clearCustomerLoadUnloadMethods();
+    (draft.loadMethods||[]).forEach(id=>setCustomerLoadMethod(id, true));
+    (draft.unloadMethods||[]).forEach(id=>setCustomerUnloadMethod(id, true));
+    syncCustomerClosedAllCheckbox();
+    syncCustomerRefrAllCheckbox();
+    syncCustomerOpenAllCheckbox();
+    syncCustomerVehicleTypeUi();
+    syncCustomerPayloadTons();
+    syncCustomerCargoKind();
+    syncCustomerTempField();
+    syncCustomerVehicleDateCalVisibility();
+    if(draft.vehicleDateCal){
+      customerVehicleDateCal.year=+draft.vehicleDateCal.year||customerVehicleDateCal.year;
+      customerVehicleDateCal.month=+draft.vehicleDateCal.month||customerVehicleDateCal.month;
+      customerVehicleDateCal.from=draft.vehicleDateCal.from||null;
+      if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
+    }
+    customerCal.from=draft.bookCalFrom||null;
+    customerRouteKm=draft.routeKm>0?draft.routeKm:null;
+    customerRouteGeometry=null;
+    const priceEl=$('cust-price');
+    if(priceEl && draft.priceAuto!=null) priceEl.dataset.auto=String(draft.priceAuto);
+    const volEl=$('cust-cargo-volume');
+    if(volEl && draft.volumeManual!=null) volEl.dataset.manual=String(draft.volumeManual);
+    const chat=draft.chat||{};
+    if(chat.messages&&chat.messages.length){
+      customerChat={
+        messages:chat.messages.slice(),
+        stepIndex:+chat.stepIndex||0,
+        data:Object.assign({}, chat.data||{}),
+        summaryReady:!!chat.summaryReady
+      };
+      saveCustomerChatState();
+    }else{
+      resetCustomerChat();
+    }
+    const mode=draft.mode==='chat'?'chat':'form';
+    setCustomerOrderMode(mode);
+    if(mode==='chat') initCustomerChatWizard(false);
+    else if(chat.data&&Object.keys(chat.data).length) customerChatApplyToForm();
+    const load=(($('cust-load')||{}).value||'').trim();
+    const unload=(($('cust-unload')||{}).value||'').trim();
+    if(load&&unload) refreshCustomerRouteKm();
+    else updateCustomerPricePreview();
+    paintCustomerFleetOptions();
+    paintCustomerBookingCal();
+    paintCustomerFormChecklist();
+    hideCustomerDraftBanner();
+    customerDraftPromptLoaded=draft.savedAt;
+  }finally{
+    customerDraftApplying=false;
+  }
+}
+function maybePromptCustomerOrderDraft(){
+  if(!currentCustomer) return;
+  const draft=loadCustomerOrderDraftRaw();
+  if(!draft || !customerOrderDraftHasContent(draft)) return;
+  if(customerDraftPromptLoaded && customerDraftPromptLoaded===draft.savedAt) return;
+  showCustomerDraftBanner(draft);
+}
 
 function saveCustomerChatState(){
   try{
@@ -1351,6 +1572,7 @@ function saveCustomerChatState(){
       messages:customerChat.messages, stepIndex:customerChat.stepIndex,
       data:customerChat.data, summaryReady:customerChat.summaryReady
     }));
+    scheduleCustomerOrderDraftSave();
   }catch(_){}
 }
 function restoreCustomerChatState(){
@@ -1394,6 +1616,7 @@ function customerOrderMode(){
 function setCustomerOrderMode(mode){
   try{ localStorage.setItem(CUST_CHAT_MODE_KEY, mode==='chat'?'chat':'form'); }catch(_){}
   syncCustomerOrderModeUi();
+  scheduleCustomerOrderDraftSave();
 }
 function syncCustomerOrderModeUi(){
   const mode=customerOrderMode();
@@ -1887,11 +2110,32 @@ function wireCustomerPortal(){
   wireCustomerOrderMode();
   syncCustomerVehicleDateCalVisibility();
   syncCustomerTempField();
+  const restoreBtn=$('cust-draft-restore');
+  if(restoreBtn && !restoreBtn.dataset.wired){
+    restoreBtn.dataset.wired='1';
+    restoreBtn.onclick=()=>{
+      const draft=loadCustomerOrderDraftRaw();
+      if(draft) applyCustomerOrderDraft(draft);
+    };
+  }
+  const discardBtn=$('cust-draft-discard');
+  if(discardBtn && !discardBtn.dataset.wired){
+    discardBtn.dataset.wired='1';
+    discardBtn.onclick=()=>{
+      clearCustomerOrderDraft();
+    };
+  }
   const orderForm=$('cust-order-form');
   if(orderForm&&!orderForm.dataset.checklistLive){
     orderForm.dataset.checklistLive='1';
-    orderForm.addEventListener('input', ()=>paintCustomerFormChecklist());
-    orderForm.addEventListener('change', ()=>paintCustomerFormChecklist());
+    orderForm.addEventListener('input', ()=>{
+      paintCustomerFormChecklist();
+      scheduleCustomerOrderDraftSave();
+    });
+    orderForm.addEventListener('change', ()=>{
+      paintCustomerFormChecklist();
+      scheduleCustomerOrderDraftSave();
+    });
   }
 }
 
