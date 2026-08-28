@@ -1,4 +1,5 @@
 /* АРМАДА admin UI: login/chrome, vehicle card, boards/catalogs (phase2 chunk D) */
+const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
   if(!box) return;
