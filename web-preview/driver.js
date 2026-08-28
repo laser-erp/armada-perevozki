@@ -1110,8 +1110,8 @@ function acceptArrive(value){
   const tTo=order.timeToOrderMin!=null?`\nВремя до заказа: ${formatDurationMin(order.timeToOrderMin)}`:'';
   const linkNote=linked?`\nУ заказа №${linked.sequentialNumber} «до стоянки» = ${order.emptyKmBefore} км (как нулевой до этого).`:'';
   if(typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(order, {silent:true});
-  if(typeof signEtrnTitulSandboxAuto==='function') signEtrnTitulSandboxAuto(order.id,'t3',DRIVER||'driver');
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}\n\nЭТрН: подписан титул T3 (приём груза).`);
+  if(typeof signEtrnTitulsAtLoading==='function') signEtrnTitulsAtLoading(order.id);
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}\n\nЭТрН: подписаны T1 (грузоотправитель), T2 (перевозчик), T3 (водитель — приём).`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
