@@ -280,7 +280,9 @@ function paintCustomerVehicleDateCal(){
 }
 
 const CUST_CLOSED_VTYPE_IDS=['tent','container','van','metal'];
-const CUST_MASTER_VTYPE_IDS=['tent','container','van','metal','isotherm'];
+const CUST_MASTER_VTYPE_IDS=['tent','container','van','metal'];
+const CUST_REFR_VTYPE_IDS=['reefer','reefer_partition','reefer_multimode'];
+const CUST_REAR_AUTO_VTYPE_IDS=new Set(['container','van','metal','reefer','reefer_partition','reefer_multimode']);
 
 function customerLoadMatchAll(){
   const el=$('cust-load-match-all');
@@ -335,15 +337,30 @@ function syncCustomerClosedAllCheckbox(){
   });
   master.checked=all;
 }
-function setCustomerClosedVehicleTypes(on){
-  CUST_MASTER_VTYPE_IDS.forEach(id=>{
+function syncCustomerRefrAllCheckbox(){
+  const master=$('cust-vtype-refr-all');
+  if(!master) return;
+  master.checked=CUST_REFR_VTYPE_IDS.every(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    return el&&el.checked;
+  });
+}
+function setCustomerRefrVehicleTypes(on){
+  CUST_REFR_VTYPE_IDS.forEach(id=>{
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     if(el) el.checked=!!on;
   });
 }
+function customerPrimaryBodyType(types){
+  types=types||customerSelectedVehicleTypes();
+  if(types.some(id=>CUST_REFR_VTYPE_IDS.includes(id))) return 'reefer';
+  if(types.includes('isotherm') && !types.some(id=>CUST_CLOSED_VTYPE_IDS.includes(id))) return 'reefer';
+  if(types.length) return 'tent';
+  return 'tent';
+}
 function applyRearOnlyVehicleTypeRules(){
   const types=customerSelectedVehicleTypes();
-  const needRear=types.some(id=>typeof CUST_REAR_ONLY_VEHICLE_TYPES!=='undefined' && CUST_REAR_ONLY_VEHICLE_TYPES.has(id));
+  const needRear=types.some(id=>CUST_REAR_AUTO_VTYPE_IDS.has(id));
   if(needRear){
     setCustomerLoadMethod('rear', true);
     setCustomerUnloadMethod('rear', true);
@@ -352,13 +369,10 @@ function applyRearOnlyVehicleTypeRules(){
 function syncCustomerVehicleTypeUi(){
   const types=customerSelectedVehicleTypes();
   const hid=$('cust-body-type');
-  if(hid){
-    if(types.includes('isotherm') && !types.some(id=>CUST_CLOSED_VTYPE_IDS.includes(id))) hid.value='reefer';
-    else if(types.length) hid.value='tent';
-    else hid.value='tent';
-  }
+  if(hid) hid.value=customerPrimaryBodyType(types);
   setCustomerLoadUnloadEnabled(types.length>0);
   syncCustomerClosedAllCheckbox();
+  syncCustomerRefrAllCheckbox();
 }
 function syncCustomerBodyType(){
   syncCustomerVehicleTypeUi();
@@ -369,6 +383,8 @@ function resetCustomerVehicleTypes(){
   document.querySelectorAll('#cust-unload-methods [data-unload]').forEach(el=>{ el.checked=false; });
   const master=$('cust-vtype-closed-all');
   if(master) master.checked=false;
+  const refrMaster=$('cust-vtype-refr-all');
+  if(refrMaster) refrMaster.checked=false;
   ['cust-load-match-all','cust-unload-match-all'].forEach(id=>{
     const el=$(id); if(el){ el.checked=false; el.disabled=true; }
   });
@@ -389,11 +405,23 @@ function wireCustomerVehicleTypes(){
       paintCustomerFleetOptions();
     };
   }
+  const refrMaster=$('cust-vtype-refr-all');
+  if(refrMaster){
+    refrMaster.onchange=()=>{
+      setCustomerRefrVehicleTypes(refrMaster.checked);
+      if(!refrMaster.checked) clearCustomerLoadUnloadMethods();
+      else applyRearOnlyVehicleTypeRules();
+      syncCustomerVehicleTypeUi();
+      updateCustomerPricePreview();
+      paintCustomerFleetOptions();
+    };
+  }
   document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{
     el.onchange=()=>{
       if(!el.checked) clearCustomerLoadUnloadMethods();
-      else if(['container','van','metal'].includes(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
+      else if(CUST_REAR_AUTO_VTYPE_IDS.has(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
       if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerClosedAllCheckbox();
+      if(CUST_REFR_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerRefrAllCheckbox();
       syncCustomerVehicleTypeUi();
       updateCustomerPricePreview();
       paintCustomerFleetOptions();
@@ -417,8 +445,9 @@ function syncCustomerCargoKind(){
   if(hid) hid.value=inferCargoKindFromText(text);
   const body=customerSelectedBodyType();
   if(text && inferCargoKindFromText(text)==='food'){
-    const iso=document.querySelector('#cust-vehicle-types [data-vtype="isotherm"]');
-    if(iso && !iso.checked) iso.checked=true;
+    const refr=document.querySelector('#cust-vehicle-types [data-vtype="reefer"]');
+    if(refr && !refr.checked) refr.checked=true;
+    syncCustomerRefrAllCheckbox();
     syncCustomerVehicleTypeUi();
   }
 }
@@ -788,8 +817,8 @@ function submitCustomerOrder(){
   const vtypes=customerSelectedVehicleTypes();
   if(!vtypes.length){ if(err) err.textContent='Выберите хотя бы один тип ТС'; return; }
   const cargo=customerSelectedCargoKind();
-  if(cargo==='food' && !vtypes.includes('isotherm')){
-    if(!confirm('Для продуктов обычно нужен изотерм или рефрижератор. Отправить как есть?')) return;
+  if(cargo==='food' && !vtypes.some(id=>CUST_REFR_VTYPE_IDS.includes(id)||id==='isotherm')){
+    if(!confirm('Для продуктов обычно нужен изотермический кузов или рефрижератор. Отправить как есть?')) return;
   }
   const draft=buildCustomerDraftFromForm();
   const quote=suggestCustomerOrderPrice(draft);

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc39";
+const APP_BUILD="2026-08-28-entrybc41";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -409,7 +409,7 @@ const ATI_BODY_TYPES=[
   {id:'open', ati:'Открытый', label:'Открытый', mapTo:'board', keywords:['открыт']},
   {id:'platform', ati:'Площадка', label:'Площадка', mapTo:'board', keywords:['площад']},
   {id:'reefer', ati:'Рефрижератор', label:'Рефрижератор', mapTo:'reefer', keywords:['реф','рефриж','холод']},
-  {id:'isotherm', ati:'Изотерм', label:'Изотерм', mapTo:'reefer', keywords:['изотерм']},
+  {id:'isotherm', ati:'Изотермический', label:'Изотермический', mapTo:'reefer', keywords:['изотерм','изотермич','термос']},
   {id:'van', ati:'Фургон', label:'Фургон', mapTo:'tent', keywords:['фург']},
   {id:'metal', ati:'Цельнометалл', label:'Цельнометалл', mapTo:'tent', keywords:['цельномет','металл']},
   {id:'container', ati:'Контейнер', label:'Контейнер', mapTo:'tent', keywords:['контейн','20','40']},
@@ -443,8 +443,13 @@ const CUST_CLOSED_VEHICLE_TYPES=[
   {id:'van', label:'Фургон'},
   {id:'metal', label:'Цельнометаллический'}
 ];
-const CUST_ISOTHERM_VEHICLE_TYPE={id:'isotherm', label:'Изотерм'};
-const CUST_REAR_ONLY_VEHICLE_TYPES=new Set(['container','van','metal']);
+const CUST_ISOTHERM_VEHICLE_TYPE={id:'isotherm', label:'Изотермический'};
+const CUST_REFR_VEHICLE_TYPES=[
+  {id:'reefer', label:'Рефрижератор'},
+  {id:'reefer_partition', label:'Реф. с перегородкой'},
+  {id:'reefer_multimode', label:'Реф. мультирежимный'}
+];
+const CUST_REAR_ONLY_VEHICLE_TYPES=new Set(['container','van','metal','reefer','reefer_partition','reefer_multimode']);
 const CUST_LOAD_METHODS=[
   {id:'top', label:'верхняя'},
   {id:'side', label:'боковая'},
@@ -463,6 +468,8 @@ const CUST_UNLOAD_METHODS=CUST_LOAD_METHODS.slice();
 function custVehicleTypeLabel(id){
   const hit=CUST_CLOSED_VEHICLE_TYPES.find(x=>x.id===id);
   if(hit) return hit.label;
+  const refr=CUST_REFR_VEHICLE_TYPES.find(x=>x.id===id);
+  if(refr) return refr.label;
   if(id===CUST_ISOTHERM_VEHICLE_TYPE.id) return CUST_ISOTHERM_VEHICLE_TYPE.label;
   return bodyTypeInputLabel(id)||id;
 }

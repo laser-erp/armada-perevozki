@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc39" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc39" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc41" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc41" />
 
 </head>
 <body>
@@ -174,14 +174,24 @@
                 <div class="cust-vtype-col-body" id="cust-vtype-body-list">
                   <label class="cust-vtype-master cust-vtype-tree-root">
                     <input type="checkbox" id="cust-vtype-closed-all" />
-                    <span>все закр.+изотерм</span>
+                    <span>все закр.</span>
                   </label>
                   <div class="cust-vtype-tree">
-                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="тентованный"><input type="checkbox" data-vtype="tent" /> тентованный</label>
-                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="контейнер"><input type="checkbox" data-vtype="container" /> контейнер</label>
-                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="фургон"><input type="checkbox" data-vtype="van" /> фургон</label>
-                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="цельнометалл"><input type="checkbox" data-vtype="metal" /> цельнометалл.</label>
-                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="изотерм"><input type="checkbox" data-vtype="isotherm" /> изотерм</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="tent" /> тентованный</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="container" /> контейнер</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="van" /> фургон</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="metal" /> цельнометалл.</label>
+                  </div>
+                  <label class="cust-vtype-item cust-vtype-standalone"><input type="checkbox" data-vtype="isotherm" /> изотермический</label>
+                  <p class="hint cust-vtype-isotherm-hint">Отдельный кузов — подойдёт и как фургон, и как термос.</p>
+                  <label class="cust-vtype-master cust-vtype-tree-root cust-vtype-group-gap">
+                    <input type="checkbox" id="cust-vtype-refr-all" />
+                    <span>реф.+изотерм</span>
+                  </label>
+                  <div class="cust-vtype-tree">
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="reefer" /> рефрижератор</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="reefer_partition" /> реф. с перегородкой</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="reefer_multimode" /> реф. мультирежимный</label>
                   </div>
                 </div>
               </div>
@@ -615,6 +625,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-28-entrybc39"></script>
+  <script src="/boot-loader.js?v=2026-08-28-entrybc41"></script>
 </body>
 </html>
