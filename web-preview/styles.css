@@ -704,6 +704,9 @@
       background:rgba(16,185,129,.15);color:#065F46;font-weight:700;font-size:.78rem;text-align:center;
       animation:catIn .16s ease
     }
+    .toast-warn{
+      background:rgba(245,158,11,.18);color:#92400E
+    }
 
     /* ПК / планшет: чуть просторнее, формы шире, 2 колонки где уместно */
     @media (min-width:700px){
