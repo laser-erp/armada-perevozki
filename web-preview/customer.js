@@ -280,8 +280,11 @@ function paintCustomerVehicleDateCal(){
 }
 
 const CUST_CLOSED_VTYPE_IDS=['tent','container','van','metal'];
+const CUST_ISOTHERM_VTYPE_ID='isotherm';
 const CUST_MASTER_VTYPE_IDS=['tent','container','van','metal'];
 const CUST_REFR_VTYPE_IDS=['reefer','reefer_partition','reefer_multimode'];
+const CUST_CLOSED_MASTER_IDS=[...CUST_MASTER_VTYPE_IDS, CUST_ISOTHERM_VTYPE_ID];
+const CUST_REFR_MASTER_IDS=[...CUST_REFR_VTYPE_IDS, CUST_ISOTHERM_VTYPE_ID];
 const CUST_REAR_AUTO_VTYPE_IDS=new Set(['container','van','metal','reefer','reefer_partition','reefer_multimode']);
 
 function customerLoadMatchAll(){
@@ -328,25 +331,40 @@ function setCustomerUnloadMethod(id, on){
   const el=document.querySelector(`#cust-unload-methods [data-unload="${id}"]`);
   if(el) el.checked=!!on;
 }
+function customerIsothermChecked(){
+  const el=document.querySelector(`#cust-vehicle-types [data-vtype="${CUST_ISOTHERM_VTYPE_ID}"]`);
+  return !!(el&&el.checked);
+}
+function setCustomerIsotherm(on){
+  const el=document.querySelector(`#cust-vehicle-types [data-vtype="${CUST_ISOTHERM_VTYPE_ID}"]`);
+  if(el) el.checked=!!on;
+}
 function syncCustomerClosedAllCheckbox(){
   const master=$('cust-vtype-closed-all');
   if(!master) return;
-  const all=CUST_MASTER_VTYPE_IDS.every(id=>{
+  master.checked=CUST_CLOSED_MASTER_IDS.every(id=>{
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     return el&&el.checked;
   });
-  master.checked=all;
 }
 function setCustomerClosedVehicleTypes(on){
   CUST_MASTER_VTYPE_IDS.forEach(id=>{
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     if(el) el.checked=!!on;
   });
+  if(on) setCustomerIsotherm(true);
+  else{
+    const anyRefr=CUST_REFR_VTYPE_IDS.some(id=>{
+      const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+      return el&&el.checked;
+    });
+    if(!anyRefr) setCustomerIsotherm(false);
+  }
 }
 function syncCustomerRefrAllCheckbox(){
   const master=$('cust-vtype-refr-all');
   if(!master) return;
-  master.checked=CUST_REFR_VTYPE_IDS.every(id=>{
+  master.checked=CUST_REFR_MASTER_IDS.every(id=>{
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     return el&&el.checked;
   });
@@ -356,6 +374,19 @@ function setCustomerRefrVehicleTypes(on){
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     if(el) el.checked=!!on;
   });
+  if(on) setCustomerIsotherm(true);
+  else{
+    const anyClosed=CUST_MASTER_VTYPE_IDS.some(id=>{
+      const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+      return el&&el.checked;
+    });
+    if(!anyClosed) setCustomerIsotherm(false);
+  }
+}
+function paintCustomerIsothermHighlight(){
+  const el=document.querySelector(`#cust-vehicle-types [data-vtype="${CUST_ISOTHERM_VTYPE_ID}"]`);
+  const wrap=el&&el.closest('.cust-vtype-isotherm');
+  if(wrap) wrap.classList.toggle('is-highlight', !!(el&&el.checked));
 }
 function customerPrimaryBodyType(types){
   types=types||customerSelectedVehicleTypes();
@@ -379,6 +410,7 @@ function syncCustomerVehicleTypeUi(){
   setCustomerLoadUnloadEnabled(types.length>0);
   syncCustomerClosedAllCheckbox();
   syncCustomerRefrAllCheckbox();
+  paintCustomerIsothermHighlight();
 }
 function syncCustomerBodyType(){
   syncCustomerVehicleTypeUi();
@@ -426,8 +458,8 @@ function wireCustomerVehicleTypes(){
     el.onchange=()=>{
       if(!el.checked) clearCustomerLoadUnloadMethods();
       else if(CUST_REAR_AUTO_VTYPE_IDS.has(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
-      if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerClosedAllCheckbox();
-      if(CUST_REFR_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerRefrAllCheckbox();
+      if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerClosedAllCheckbox();
+      if(CUST_REFR_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerRefrAllCheckbox();
       syncCustomerVehicleTypeUi();
       updateCustomerPricePreview();
       paintCustomerFleetOptions();
