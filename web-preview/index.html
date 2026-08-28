@@ -133,8 +133,62 @@
           <div class="cust-form-layout">
             <div class="cust-form-main">
           <div class="cust-form-blocks">
+            <div class="cust-form-block" data-cust-step="cargo">
+              <div class="cust-form-block-head">1. Груз</div>
+              <div class="cust-form-block-body">
+                <label for="cust-cargo-text">Что везём</label>
+                <input id="cust-cargo-text" placeholder="Паллеты, оборудование, продукты…" />
+                <input type="hidden" id="cust-cargo-kind" value="general" />
+                <div class="form-triple cust-cargo-meta-row">
+                  <div>
+                    <label for="cust-cargo-places">Мест</label>
+                    <input id="cust-cargo-places" inputmode="numeric" placeholder="8" aria-label="Количество мест" />
+                  </div>
+                  <div>
+                    <label for="cust-cargo-volume">Объём, м³</label>
+                    <input id="cust-cargo-volume" inputmode="decimal" placeholder="авто" aria-label="Объём, м³" />
+                  </div>
+                  <div>
+                    <label for="cust-cargo-packaging">Упаковка</label>
+                    <select id="cust-cargo-packaging">
+                      <option value="">—</option>
+                      <option value="pallets">Паллеты</option>
+                      <option value="boxes">Короба / места</option>
+                      <option value="bulk">Россыпь / навал</option>
+                      <option value="oversize">Негабарит</option>
+                      <option value="other">Другое</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="cust-cargo-flags">
+                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-fragile" /> хрупкий</label>
+                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
+                  <span id="cust-cargo-temp-range" class="cust-cargo-temp-range" hidden>
+                    <span class="cust-temp-label">от</span>
+                    <input id="cust-cargo-temp-from" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура от, °C" />
+                    <span class="cust-temp-label">до</span>
+                    <input id="cust-cargo-temp-to" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура до, °C" />
+                  </span>
+                </div>
+                <label>Габариты, м (Д × Ш × В)</label>
+                <div class="form-triple">
+                  <input id="cust-req-l" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
+                  <input id="cust-req-w" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
+                  <input id="cust-req-h" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
+                </div>
+                <label>Вес груза</label>
+                <div class="form-pair">
+                  <div><input id="cust-weight-value" inputmode="decimal" placeholder="например 5000 или 5" /></div>
+                  <div>
+                    <label for="cust-weight-unit">Единица</label>
+                    <select id="cust-weight-unit"><option value="kg">кг</option><option value="t" selected>т</option></select>
+                  </div>
+                </div>
+                <input type="hidden" id="cust-req-pay" />
+              </div>
+            </div>
             <div class="cust-form-block" data-cust-step="vehicle">
-              <div class="cust-form-block-head">1. Подача ТС</div>
+              <div class="cust-form-block-head">2. Когда</div>
               <div class="cust-form-block-body">
                 <div class="form-pair cust-datetime-pair">
                   <div class="cust-date-field-wrap" id="cust-date-field-wrap">
@@ -156,7 +210,7 @@
               </div>
             </div>
             <div class="cust-form-block" data-cust-step="route">
-              <div class="cust-form-block-head">2. Маршрут</div>
+              <div class="cust-form-block-head">3. Маршрут</div>
               <div class="cust-form-block-body">
                 <label for="cust-load">Адрес загрузки</label>
                 <input id="cust-load" placeholder="Город, улица, дом" autocomplete="street-address" />
@@ -194,8 +248,12 @@
               </div>
             </div>
             <div class="cust-form-block" data-cust-step="transport">
-              <div class="cust-form-block-head">3. Транспорт</div>
+              <div class="cust-form-block-head">4. Транспорт</div>
               <div class="cust-form-block-body cust-form-block-body-flush">
+                <div id="cust-vtype-recommend" class="cust-vtype-recommend" hidden>
+                  <p class="cust-vtype-recommend-text" id="cust-vtype-recommend-text"></p>
+                  <button type="button" class="secondary cust-vtype-recommend-apply" id="cust-vtype-recommend-apply">Применить рекомендацию</button>
+                </div>
                 <div id="cust-vehicle-types" class="cust-vtype-panel">
                   <div class="cust-vtype-cols">
               <div class="cust-vtype-col">
@@ -287,60 +345,6 @@
                 <input type="hidden" id="cust-body-type" value="tent" />
               </div>
             </div>
-            <div class="cust-form-block" data-cust-step="cargo">
-              <div class="cust-form-block-head">4. Груз</div>
-              <div class="cust-form-block-body">
-                <label for="cust-cargo-text">Что везём</label>
-                <input id="cust-cargo-text" placeholder="Паллеты, оборудование, продукты…" />
-                <input type="hidden" id="cust-cargo-kind" value="general" />
-                <div class="form-triple cust-cargo-meta-row">
-                  <div>
-                    <label for="cust-cargo-places">Мест</label>
-                    <input id="cust-cargo-places" inputmode="numeric" placeholder="8" aria-label="Количество мест" />
-                  </div>
-                  <div>
-                    <label for="cust-cargo-volume">Объём, м³</label>
-                    <input id="cust-cargo-volume" inputmode="decimal" placeholder="авто" aria-label="Объём, м³" />
-                  </div>
-                  <div>
-                    <label for="cust-cargo-packaging">Упаковка</label>
-                    <select id="cust-cargo-packaging">
-                      <option value="">—</option>
-                      <option value="pallets">Паллеты</option>
-                      <option value="boxes">Короба / места</option>
-                      <option value="bulk">Россыпь / навал</option>
-                      <option value="oversize">Негабарит</option>
-                      <option value="other">Другое</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="cust-cargo-flags">
-                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-fragile" /> хрупкий</label>
-                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
-                  <span id="cust-cargo-temp-range" class="cust-cargo-temp-range" hidden>
-                    <span class="cust-temp-label">от</span>
-                    <input id="cust-cargo-temp-from" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура от, °C" />
-                    <span class="cust-temp-label">до</span>
-                    <input id="cust-cargo-temp-to" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура до, °C" />
-                  </span>
-                </div>
-                <label>Габариты, м (Д × Ш × В)</label>
-                <div class="form-triple">
-                  <input id="cust-req-l" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
-                  <input id="cust-req-w" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
-                  <input id="cust-req-h" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
-                </div>
-                <label>Вес груза</label>
-                <div class="form-pair">
-                  <div><input id="cust-weight-value" inputmode="decimal" placeholder="например 5000 или 5" /></div>
-                  <div>
-                    <label for="cust-weight-unit">Единица</label>
-                    <select id="cust-weight-unit"><option value="kg">кг</option><option value="t" selected>т</option></select>
-                  </div>
-                </div>
-                <input type="hidden" id="cust-req-pay" />
-              </div>
-            </div>
             <div class="cust-form-block" data-cust-step="terms">
               <div class="cust-form-block-head">5. Условия и цена</div>
               <div class="cust-form-block-body">
@@ -366,10 +370,17 @@
             </div>
             <aside class="cust-form-checklist" id="cust-form-checklist" aria-label="Прогресс заявки">
               <div class="cust-checklist-items">
+                <button type="button" class="cust-checklist-item" data-cust-step="cargo">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Груз</span>
+                    <span class="cust-checklist-detail" id="cust-check-cargo">не заполнено</span>
+                  </span>
+                </button>
                 <button type="button" class="cust-checklist-item" data-cust-step="vehicle">
                   <span class="cust-checklist-icon" aria-hidden="true"></span>
                   <span class="cust-checklist-body">
-                    <span class="cust-checklist-title">Подача ТС</span>
+                    <span class="cust-checklist-title">Когда</span>
                     <span class="cust-checklist-detail" id="cust-check-vehicle">не заполнено</span>
                   </span>
                 </button>
@@ -385,13 +396,6 @@
                   <span class="cust-checklist-body">
                     <span class="cust-checklist-title">Транспорт</span>
                     <span class="cust-checklist-detail" id="cust-check-transport">не заполнено</span>
-                  </span>
-                </button>
-                <button type="button" class="cust-checklist-item" data-cust-step="cargo">
-                  <span class="cust-checklist-icon" aria-hidden="true"></span>
-                  <span class="cust-checklist-body">
-                    <span class="cust-checklist-title">Груз</span>
-                    <span class="cust-checklist-detail" id="cust-check-cargo">не заполнено</span>
                   </span>
                 </button>
                 <button type="button" class="cust-checklist-item" data-cust-step="terms">

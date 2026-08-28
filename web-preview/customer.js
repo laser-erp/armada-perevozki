@@ -586,9 +586,17 @@ function resetCustomerVehicleTypes(){
   setCustomerLoadUnloadEnabled(false);
   const hid=$('cust-body-type');
   if(hid) hid.value='tent';
+  customerVehicleRecommendation=null;
+  const recBox=$('cust-vtype-recommend');
+  if(recBox) recBox.hidden=true;
   syncCustomerVehicleTypeUi();
 }
 function wireCustomerVehicleTypes(){
+  const applyBtn=$('cust-vtype-recommend-apply');
+  if(applyBtn&&!applyBtn.dataset.wired){
+    applyBtn.dataset.wired='1';
+    applyBtn.onclick=()=>applyCustomerVehicleRecommendation();
+  }
   const master=$('cust-vtype-closed-all');
   if(master){
     master.onchange=()=>{
@@ -645,17 +653,70 @@ function inferCargoKindFromText(text){
   if(/другое|проч/.test(q)) return 'other';
   return 'general';
 }
-function syncCustomerCargoKind(){
+let customerVehicleRecommendation=null;
+function buildCustomerCargoDraftForRecommend(){
+  syncCustomerCargoKind(false);
+  syncCustomerPayloadTons();
+  const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
+  const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
+  return {
+    ownCompanyId:carrier&&carrier.id||null,
+    reqPayloadTons:customerWeightTons(),
+    reqLengthM:typeof numOrNull==='function'?numOrNull((($('cust-req-l')||{}).value)):null,
+    reqWidthM:typeof numOrNull==='function'?numOrNull((($('cust-req-w')||{}).value)):null,
+    reqHeightM:typeof numOrNull==='function'?numOrNull((($('cust-req-h')||{}).value)):null,
+    cargoKind:(($('cust-cargo-kind')||{}).value||'general'),
+    cargoPackaging:customerCargoPackaging(),
+    cargoFragile:customerCargoFragile(),
+    cargoTempFromC:customerCargoTempFromC(),
+    cargoTempToC:customerCargoTempToC(),
+    cargoTempMode:!!($('cust-cargo-temp')&&$('cust-cargo-temp').checked),
+    cargoText:(($('cust-cargo-text')||{}).value||'').trim()
+  };
+}
+function updateCustomerVehicleRecommendation(){
+  const box=$('cust-vtype-recommend');
+  const txt=$('cust-vtype-recommend-text');
+  if(!box) return;
+  const draft=buildCustomerCargoDraftForRecommend();
+  if(typeof inferCustomerVehicleRecommendation!=='function'){
+    customerVehicleRecommendation=null;
+    box.hidden=true;
+    return;
+  }
+  const rec=inferCustomerVehicleRecommendation(draft);
+  customerVehicleRecommendation=rec;
+  if(!rec||!rec.vehicleTypeIds||!rec.vehicleTypeIds.length){
+    box.hidden=true;
+    return;
+  }
+  box.hidden=false;
+  if(txt) txt.textContent=rec.label||'';
+}
+function applyCustomerVehicleRecommendation(){
+  const rec=customerVehicleRecommendation;
+  if(!rec||!rec.vehicleTypeIds||!rec.vehicleTypeIds.length) return;
+  document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{ el.checked=false; });
+  rec.vehicleTypeIds.forEach(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    if(el) el.checked=true;
+  });
+  syncCustomerClosedAllCheckbox();
+  syncCustomerRefrAllCheckbox();
+  syncCustomerOpenAllCheckbox();
+  if(rec.rearLoad) applyRearOnlyVehicleTypeRules();
+  syncCustomerVehicleTypeUi();
+  updateCustomerPricePreview();
+  paintCustomerFleetOptions();
+}
+function syncCustomerCargoKind(updateRecommend=true){
   const text=(($('cust-cargo-text')||{}).value||'').trim();
   const hid=$('cust-cargo-kind');
-  if(hid) hid.value=inferCargoKindFromText(text);
-  const body=customerSelectedBodyType();
-  if(text && inferCargoKindFromText(text)==='food'){
-    const refr=document.querySelector('#cust-vehicle-types [data-vtype="reefer"]');
-    if(refr && !refr.checked) refr.checked=true;
-    syncCustomerRefrAllCheckbox();
-    syncCustomerVehicleTypeUi();
-  }
+  let kind=inferCargoKindFromText(text);
+  const pack=customerCargoPackaging();
+  if(pack==='bulk') kind='bulk';
+  if(hid) hid.value=kind;
+  if(updateRecommend) updateCustomerVehicleRecommendation();
 }
 function customerWeightTons(){
   const raw=+(($('cust-weight-value')||{}).value||'').replace(',','.');
@@ -1267,6 +1328,7 @@ function wireCustomerPortal(){
     el.oninput=bumpRoute;
     el.onblur=()=>refreshCustomerRouteKm();
   });
+  const bumpCargoRecommend=()=>updateCustomerVehicleRecommendation();
   ['cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-places','cust-cargo-volume','cust-load-note','cust-unload-note'].forEach(id=>{
     const el=$(id);
     if(!el) return;
@@ -1276,23 +1338,24 @@ function wireCustomerPortal(){
       syncCustomerPayloadTons();
       updateCustomerPricePreview();
       if(id==='cust-weight-value') paintCustomerFleetOptions();
+      if(['cust-weight-value','cust-req-l','cust-req-w','cust-req-h','cust-cargo-places','cust-cargo-volume'].includes(id)) bumpCargoRecommend();
     };
   });
   const volEl=$('cust-cargo-volume');
-  if(volEl) volEl.onchange=()=>{ if(volEl.value) volEl.dataset.manual='1'; updateCustomerPricePreview(); };
+  if(volEl) volEl.onchange=()=>{ if(volEl.value) volEl.dataset.manual='1'; updateCustomerPricePreview(); bumpCargoRecommend(); };
   const tempToggle=$('cust-cargo-temp');
-  if(tempToggle) tempToggle.onchange=()=>{ syncCustomerTempField(); updateCustomerPricePreview(); };
+  if(tempToggle) tempToggle.onchange=()=>{ syncCustomerTempField(); updateCustomerPricePreview(); bumpCargoRecommend(); };
   ['cust-cargo-temp-from','cust-cargo-temp-to'].forEach(id=>{
     const el=$(id);
     if(!el) return;
-    el.oninput=()=>updateCustomerPricePreview();
+    el.oninput=()=>{ updateCustomerPricePreview(); bumpCargoRecommend(); };
   });
   const fragileEl=$('cust-cargo-fragile');
-  if(fragileEl) fragileEl.onchange=()=>updateCustomerPricePreview();
+  if(fragileEl) fragileEl.onchange=()=>{ updateCustomerPricePreview(); bumpCargoRecommend(); };
   const packEl=$('cust-cargo-packaging');
-  if(packEl) packEl.onchange=()=>updateCustomerPricePreview();
+  if(packEl) packEl.onchange=()=>{ syncCustomerCargoKind(); updateCustomerPricePreview(); bumpCargoRecommend(); };
   const weightUnit=$('cust-weight-unit');
-  if(weightUnit) weightUnit.onchange=()=>{ syncCustomerPayloadTons(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
+  if(weightUnit) weightUnit.onchange=()=>{ syncCustomerPayloadTons(); updateCustomerPricePreview(); paintCustomerFleetOptions(); bumpCargoRecommend(); };
   const cargoInp=$('cust-cargo-text');
   if(cargoInp) cargoInp.oninput=()=>{ syncCustomerCargoKind(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
   const fulfillEl=$('cust-fulfillment');

@@ -794,6 +794,79 @@ function vehicleFitsOrder(v, o){
   if(!anyReq) return true;
   return true;
 }
+/** Рекомендация типа ТС по грузу: вес → габариты → вид груза. */
+function inferCustomerVehicleRecommendation(draft){
+  draft=draft||{};
+  const tons=+(draft.reqPayloadTons||0);
+  const l=+(draft.reqLengthM||0);
+  const w=+(draft.reqWidthM||0);
+  const h=+(draft.reqHeightM||0);
+  const kind=String(draft.cargoKind||'general');
+  const packaging=String(draft.cargoPackaging||'');
+  const fragile=!!draft.cargoFragile;
+  const tempFrom=draft.cargoTempFromC;
+  const tempTo=draft.cargoTempToC;
+  const hasTemp=!!draft.cargoTempMode||tempFrom!=null||tempTo!=null;
+  const cargoText=String(draft.cargoText||'').trim();
+  if(!(tons>0)||!cargoText) return null;
+
+  let vtypes=['tent'];
+  let rearLoad=false;
+  const minPayload=tons;
+
+  if(tons>20) vtypes=['platform'];
+  else if(tons>10) vtypes=['tent'];
+  else if(tons<=1.5) vtypes=['van'];
+  else vtypes=['tent'];
+
+  const hasDims=l>0&&w>0&&h>0;
+  if(packaging==='oversize'||(hasDims&&(l>13.6||w>2.45||h>2.65))){
+    vtypes=['platform'];
+  }else if(hasDims&&l>6.2&&tons>10){
+    vtypes=['tent','container'];
+  }else if(hasDims&&l<=4&&w<=2&&h<=1.9&&tons<=1.5){
+    vtypes=['van'];
+  }
+
+  let effectiveKind=kind;
+  if(packaging==='bulk') effectiveKind='bulk';
+
+  if(hasTemp||effectiveKind==='food'){
+    const cold=(tempFrom!=null&&tempFrom<=-1)||(tempTo!=null&&tempTo<=-1);
+    vtypes=[cold?'reefer':'isotherm'];
+    rearLoad=true;
+  }else if(effectiveKind==='bulk'){
+    vtypes=['dump'];
+  }else if(effectiveKind==='general'){
+    if(fragile||packaging==='pallets'||packaging==='boxes'){
+      if(vtypes.includes('board')||vtypes.includes('dump')) vtypes=['tent'];
+    }else if(tons<=3&&!fragile&&!hasDims&&packaging!=='oversize'){
+      vtypes=['board'];
+    }
+  }
+
+  vtypes=[...new Set(vtypes.filter(Boolean))];
+  if(!vtypes.length) return null;
+
+  let fleetHint='';
+  const coId=draft.ownCompanyId;
+  if(coId&&typeof fleetVehiclesForCompany==='function'){
+    const req={
+      reqPayloadTons:minPayload>0?minPayload:null,
+      reqLengthM:l>0?l:null,
+      reqWidthM:w>0?w:null,
+      reqHeightM:h>0?h:null
+    };
+    const fitting=fleetVehiclesForCompany(coId).filter(v=>vehicleFitsOrder(v, req));
+    if(fitting.length) fleetHint=` · в парке ${fitting.length} подходящ${fitting.length===1?'ая машина':'их машин'}`;
+  }
+
+  const labelName=typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtypes[0]):vtypes[0];
+  const tDisp=tons>=1?(tons%1===0?tons:tons.toFixed(1)):tons.toFixed(2);
+  const label=`Рекомендуем: ${String(labelName).toLowerCase()}, до ${tDisp} т${fleetHint}`;
+
+  return {vehicleTypeIds:vtypes, rearLoad, label, minPayloadTons:minPayload};
+}
 function readOrderRequirementsFromCreate(){
   return {
     reqPayloadTons:numOrNull(($('create-req-pay')||{}).value),
