@@ -1748,8 +1748,9 @@ function resetCustomerOrderFormFields(){
     CUST_ORDER_DRAFT_CHECK_IDS.forEach(id=>{
       const el=$(id);
       if(!el) return;
-      el.checked=false;
+      el.checked=id==='cust-shipper-same';
     });
+    syncCustomerShipperFields();
     const priceEl=$('cust-price');
     if(priceEl) delete priceEl.dataset.auto;
     const volEl=$('cust-cargo-volume');
