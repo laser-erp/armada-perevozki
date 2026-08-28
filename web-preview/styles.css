@@ -365,6 +365,11 @@
     .cust-doc-name{display:block;font-weight:600;font-size:.82rem;margin-bottom:4px}
     .cust-doc-row .doc-status{margin-top:0}
     .cust-doc-row button{width:auto;flex:0 0 auto;padding:6px 10px;font-size:.78rem}
+    .cust-etrn-banner{margin-bottom:10px;padding:10px 12px;border:1px solid var(--accent);border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 8%,var(--surface));font-size:.82rem}
+    .cust-etrn-banner button{margin:0 4px 4px 0;font-size:.78rem;padding:4px 8px}
+    .cust-etrn-t1-block{margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 6%,var(--surface));font-size:.82rem}
+    .cust-etrn-t1-block .hint{margin:4px 0 8px;font-size:.75rem}
+    .cust-etrn-t1-block button{font-size:.82rem;padding:6px 12px;width:auto}
     .cust-contract-banner{border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06)}
     .cust-contract-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px}
     .cust-doc-submit-list{margin:8px 0 0;padding-left:18px;font-size:.85rem;line-height:1.45}

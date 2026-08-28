@@ -1111,7 +1111,7 @@ function acceptArrive(value){
   const linkNote=linked?`\nУ заказа №${linked.sequentialNumber} «до стоянки» = ${order.emptyKmBefore} км (как нулевой до этого).`:'';
   if(typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(order, {silent:true});
   if(typeof signEtrnTitulsAtLoading==='function') signEtrnTitulsAtLoading(order.id);
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}\n\nЭТрН: подписаны T1 (грузоотправитель), T2 (перевозчик), T3 (водитель — приём).`);
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}\n\nЭТрН: T2 (перевозчик) подписан. T1 — грузоотправитель в личном кабинете. T3 — водитель после подписи T1.`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }

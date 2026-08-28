@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-28-etrn-tituls-timing4317a';
+  var APP_BUILD = '2026-08-28-etrn-t1-customer4317b';
 
   window.__armadaBootDone = false;
   setTimeout(function () {
@@ -45,7 +45,7 @@
     var files = ['store.js', 'billing.js'];
     if (isV) files.push('qrcode.min.js', 'entry-share.js', 'etrn.js', 'driver.js');
     else if (isA) files.push('qrcode.min.js', 'entry-share.js', 'order-documents.js', 'etrn.js', 'admin.js', 'onboarding.js');
-    else if (isZ) files.push('qrcode.min.js', 'customer-invoice.js', 'order-documents.js', 'customer.js', 'onboarding.js');
+    else if (isZ) files.push('qrcode.min.js', 'customer-invoice.js', 'order-documents.js', 'etrn.js', 'customer.js', 'onboarding.js');
     else {
       files.push(
         'qrcode.min.js',

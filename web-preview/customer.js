@@ -1225,6 +1225,11 @@ function renderCustomerPortal(){
   else updateCustomerTripModeDisplay(carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance));
   paintCustomerFleetOptions();
   paintCustomerBookingCal();
+  const etrnBanner=$('cust-etrn-banner');
+  if(etrnBanner){
+    etrnBanner.innerHTML=typeof customerEtrnT1BannerHtml==='function'?customerEtrnT1BannerHtml():'';
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(etrnBanner);
+  }
   const list=$('cust-orders-list');
   if(list){
     const orders=customerOrders().slice(0,20);
@@ -1253,10 +1258,12 @@ function renderCustomerPortal(){
           const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
           return inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
         })()}
+        ${typeof customerEtrnT1SignHtml==='function'?customerEtrnT1SignHtml(o):''}
         ${typeof customerOrderDocumentsHtml==='function'?`<details class="cust-order-docs-wrap"><summary>Документы по заявке</summary>${customerOrderDocumentsHtml(o)}</details>`:''}
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
     customerWireInvoiceLinks(list);
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(list);
     if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments(list);
   }
   const scroll=$('cust-portal-scroll')||document.querySelector('#customer-portal .admin-form-scroll');
