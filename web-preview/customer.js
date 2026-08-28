@@ -1754,16 +1754,58 @@ function resetCustomerChat(){
   customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
   clearCustomerChatState();
 }
+function customerChatContactPerson(){
+  if(!currentCustomer) return null;
+  const co=findCompanyById(currentCustomer.companyId);
+  if(!co) return null;
+  const phone=formatPhone(currentCustomer.phone||'');
+  if(phone && (co.contacts||[]).length){
+    for(const ct of co.contacts){
+      const ph=typeof contactPhone==='function'?contactPhone(ct):'';
+      if(ph && formatPhone(ph)===phone) return ct;
+    }
+  }
+  return typeof primaryContact==='function'?primaryContact(co):null;
+}
+function customerChatFirstNameFromFull(full){
+  const parts=String(full||'').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '';
+  if(parts.length===1) return parts[0];
+  const patronymicRe=/^(.*)(ович|евич|ич|овна|евна|ична)$/i;
+  const surnameRe=/(?:ов|ев|ин|ын|ский|ская|ко|юк|чук)$/i;
+  if(parts.length>=3 && patronymicRe.test(parts[2])) return parts[1];
+  if(parts.length===2 && patronymicRe.test(parts[1])) return parts[0];
+  if(parts.length>=2 && surnameRe.test(parts[0]) && !surnameRe.test(parts[1])) return parts[1];
+  return parts[0];
+}
+function customerChatFirstName(){
+  const person=customerChatContactPerson();
+  return customerChatFirstNameFromFull(person&&person.name);
+}
+function customerChatNamePrefix(){
+  const name=customerChatFirstName();
+  return name?`${esc(name)}, `:'';
+}
 function customerChatBotPrompt(stepId){
-  if(stepId==='cargo') return 'Здравствуйте! Оформим заявку на перевозку. <strong>Что нужно перевезти?</strong>';
+  const who=customerChatNamePrefix();
+  if(stepId==='cargo'){
+    if(who) return `${who}здравствуйте! Оформим заявку на перевозку. <strong>Что нужно перевезти?</strong>`;
+    return 'Здравствуйте! Оформим заявку на перевозку. <strong>Что нужно перевезти?</strong>';
+  }
   if(stepId==='weight') return '<strong>Сколько весит груз?</strong> Укажите число — тонны или килограммы.';
-  if(stepId==='when') return '<strong>Когда подать машину?</strong>';
+  if(stepId==='when'){
+    if(who) return `${who}<strong>когда подать машину?</strong>`;
+    return '<strong>Когда подать машину?</strong>';
+  }
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Укажите адрес загрузки.';
   if(stepId==='unload') return '<strong>Куда везём?</strong>';
   if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — чтобы водитель мог связаться на месте.';
   if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Имя и телефон (можно пропустить, если тот же).';
   if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
-  if(stepId==='summary') return 'Проверьте заявку перед отправкой:';
+  if(stepId==='summary'){
+    if(who) return `${who}проверьте заявку перед отправкой:`;
+    return 'Проверьте заявку перед отправкой:';
+  }
   return '';
 }
 function customerChatAddBot(stepId){
