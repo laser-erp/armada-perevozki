@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc30";
+const APP_BUILD="2026-08-28-entrybc31";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -1665,6 +1665,35 @@ function persist(){
       .then(()=>{ syncStatus='ok'; pullFailCount=0; updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); })
       .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); });
   }, PERSIST_DEBOUNCE_MS);
+}
+/** Сохранить PIN админа локально и сразу отправить на сервер (без debounce). */
+async function persistAdminPinImmediate(){
+  persistLocalOnly();
+  if(navigator.onLine===false){
+    syncStatus='error';
+    updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
+    return { ok:false, offline:true };
+  }
+  clearTimeout(persistTimer);
+  persistTimer=null;
+  syncStatus='syncing';
+  updateDriverNetHint();
+  if(typeof updateSyncHint==='function') updateSyncHint();
+  try{
+    await pushServerStateQueued();
+    syncStatus='ok';
+    pullFailCount=0;
+    updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
+    return { ok:true };
+  }catch(err){
+    syncStatus='error';
+    console.warn('admin pin push', err);
+    updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
+    return { ok:false, offline:false, err };
+  }
 }
 async function initCloudSync(){
   syncStatus='syncing';

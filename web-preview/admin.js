@@ -417,6 +417,16 @@ function activityLogWhen(at){
     return new Date(at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   }catch(_){ return '—'; }
 }
+function flashAdmPinOk(msg, isWarn){
+  const el=$('adm-pin-ok'); if(!el) return;
+  el.textContent=msg||'Пин-код записан';
+  el.classList.toggle('toast-warn', !!isWarn);
+  el.classList.toggle('toast-ok', !isWarn);
+  el.style.display='block';
+  clearTimeout(flashAdmPinOk._t);
+  const ms=(msg&&msg.length>28)?4200:2200;
+  flashAdmPinOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, ms);
+}
 function renderAdminActivity(){
   migrateAdmins();
   const online=onlineAdmins();
@@ -500,6 +510,7 @@ function renderAdminActivity(){
         <input id="dadata-token" type="password" placeholder="Token DaData" value="${esc((state.settings&&state.settings.dadataToken)||'')}" style="flex:1" />
         <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
       </div>
+      <div class="toast-ok" id="adm-pin-ok" style="display:none"></div>
       <div class="cat-list" style="margin-top:8px">
         ${admins.map((a,i)=>{
           const sp=findSpaceById(a.spaceId);
@@ -578,7 +589,7 @@ function renderAdminActivity(){
     });
     persist(); renderAdminActivity();
   };
-  document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=async()=>{
     if(!isSuperAdmin()) return;
     const i=+b.dataset.saveAdm;
     const pin=(($('adm-pin-'+i)||{}).value||'').trim();
@@ -607,7 +618,24 @@ function renderAdminActivity(){
       updateAdminChrome();
     }
     if(typeof bumpDataEpoch==='function') bumpDataEpoch('admin-pin');
-    persist(); renderAdminActivity();
+    const btn=b;
+    const prevText=btn.textContent;
+    btn.disabled=true;
+    btn.textContent='…';
+    let saveResult={ ok:navigator.onLine!==false, offline:navigator.onLine===false };
+    if(typeof persistAdminPinImmediate==='function'){
+      saveResult=await persistAdminPinImmediate();
+    } else {
+      persist();
+    }
+    btn.disabled=false;
+    btn.textContent=prevText;
+    renderAdminActivity();
+    if(saveResult.ok){
+      flashAdmPinOk('Пин-код записан');
+    } else {
+      flashAdmPinOk('Пин-код записан на этом устройстве, но не на сервере — проверьте интернет', true);
+    }
   });
   document.querySelectorAll('[data-del-adm]').forEach(b=>b.onclick=()=>{
     if(!isSuperAdmin()) return;

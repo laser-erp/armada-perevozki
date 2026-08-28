@@ -381,18 +381,42 @@ function migrateAdmins(){
   }
   state.adminLogins=Array.isArray(state.adminLogins)?state.adminLogins:[];
   state.adminPresence=Array.isArray(state.adminPresence)?state.adminPresence:[];
-  if(typeof readRecoverSuperFromUrl==='function' && readRecoverSuperFromUrl()){
+  if(typeof consumeRecoverSuperFromUrl==='function' && consumeRecoverSuperFromUrl()){
     forceSuperAdminPinRecovery('recover-url');
+    if(typeof markRecoverSuperConsumed==='function') markRecoverSuperConsumed();
   } else {
+    if(typeof stripRecoverParamFromUrl==='function') stripRecoverParamFromUrl();
     ensureSuperAdminPinRecovery();
   }
 }
+const RECOVER_SUPER_SESSION_KEY='armada_recover_super_v1';
 function readRecoverSuperFromUrl(){
   try{
     const q=new URLSearchParams(location.search||'');
     const v=String(q.get('recover')||q.get('reset')||'').trim().toLowerCase();
     return v==='super' || v==='admin';
   }catch(_){ return false; }
+}
+function stripRecoverParamFromUrl(){
+  try{
+    const u=new URL(location.href);
+    if(!u.searchParams.has('recover') && !u.searchParams.has('reset')) return;
+    u.searchParams.delete('recover');
+    u.searchParams.delete('reset');
+    const next=u.pathname+(u.search||'')+u.hash;
+    history.replaceState(history.state,'',next);
+  }catch(_){}
+}
+function consumeRecoverSuperFromUrl(){
+  if(!readRecoverSuperFromUrl()) return false;
+  try{
+    if(sessionStorage.getItem(RECOVER_SUPER_SESSION_KEY)==='1') return false;
+  }catch(_){}
+  return true;
+}
+function markRecoverSuperConsumed(){
+  try{ sessionStorage.setItem(RECOVER_SUPER_SESSION_KEY,'1'); }catch(_){}
+  stripRecoverParamFromUrl();
 }
 function superPinRecoveryNoticeText(){
   return 'Временный PIN супер-админа: '+SUPER_ADMIN_RECOVERY_PIN+' — смените в «Активность» после входа.';
