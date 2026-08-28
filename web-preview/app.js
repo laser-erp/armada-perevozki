@@ -3692,6 +3692,25 @@ function openAdminLogin(){
   if(pinErr) pinErr.textContent='';
   show('admin-pin');
   applyEntrySkin('admin-pin');
+  wireAdminLoginHandlers();
+}
+function wireAdminLoginHandlers(){
+  const ok=$('pin-ok');
+  if(ok){
+    ok.type='button';
+    ok.onclick=()=>loginAdmin();
+  }
+  const pin=$('pin-input');
+  if(pin){
+    pin.onkeydown=e=>{
+      if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); }
+    };
+  }
+  const back=$('pin-back');
+  if(back && typeof backFromEntryLogin==='function'){
+    back.type='button';
+    back.onclick=()=>backFromEntryLogin();
+  }
 }
 const ENTRY_ASIDE={
   driver:{
@@ -3864,51 +3883,60 @@ try{
     window.__armadaBootDone=true;
   }
 })();
-$('role-driver').onclick=()=>{ setEntryMode('driver'); openDriverLogin(false); };
-$('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
-  if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
-  openDriverLogin(true);
-});
-$('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
-$('drv-login-phone-ok')&&($('drv-login-phone-ok').onclick=continueDriverPhone);
-$('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); } });
-$('btn-home')&&($('btn-home').onclick=showDriverHome);
-$('role-admin').onclick=()=>openAdminLogin();
-$('pin-back').onclick=()=>backFromEntryLogin();
-$('pin-ok').onclick=loginAdmin;
-$('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin(); });
-$('admin-exit').onclick=logoutAdmin;
-$('admin-help')&&($('admin-help').onclick=()=>{
-  window.open('help.html','_blank','noopener');
-});
-$('admin-catalogs').onclick=()=>setAdminNav('catalogs');
-$('admin-activity').onclick=()=>setAdminNav('activity');
-$('admin-billing')&&($('admin-billing').onclick=()=>setAdminNav('billing'));
-$('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
-  const sb=$('admin-sidebar');
-  if(sb && sb.classList.contains('open')) closeAdminSidebar();
-  else openAdminSidebar();
-});
-$('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
-document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
-  b.onclick=()=>setAdminNav(b.dataset.nav);
-});
-document.querySelectorAll('#admin-park-ex [data-park-ex]').forEach(b=>{
-  b.onclick=()=>setAdminNav(b.dataset.parkEx==='exchange'?'exchange':'orders');
-});
-updateAdminChrome();
-$('btn-cabinet').onclick=showCabinet;
-$('btn-orders').onclick=showOrders;
-$('btn-shifts').onclick=showShifts;
-document.querySelectorAll('.back-driver').forEach(b=>{
-  b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
-});
-document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
-  state.adminFilter=b.dataset.filter;
-  document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
-  renderAdmin();
-});
-bindAdminCreate();
+function wireShellHandlers(){
+  $('role-driver')&&($('role-driver').onclick=()=>{ setEntryMode('driver'); if(typeof openDriverLogin==='function') openDriverLogin(false); });
+  $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
+    if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
+    if(typeof openDriverLogin==='function') openDriverLogin(true);
+  });
+  if(typeof loginDriver==='function'){
+    $('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
+    $('drv-login-phone-ok')&&($('drv-login-phone-ok').onclick=continueDriverPhone);
+    $('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); } });
+  }
+  $('btn-home')&&typeof showDriverHome==='function'&&($('btn-home').onclick=showDriverHome);
+  $('role-admin')&&($('role-admin').onclick=()=>openAdminLogin());
+  $('pin-back')&&typeof backFromEntryLogin==='function'&&($('pin-back').onclick=()=>backFromEntryLogin());
+  if(typeof loginAdmin==='function'){
+    $('pin-ok')&&($('pin-ok').onclick=loginAdmin);
+    $('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); } });
+  }
+  $('admin-exit')&&typeof logoutAdmin==='function'&&($('admin-exit').onclick=logoutAdmin);
+  $('admin-help')&&($('admin-help').onclick=()=>{
+    window.open('help.html','_blank','noopener');
+  });
+  $('admin-catalogs')&&typeof setAdminNav==='function'&&($('admin-catalogs').onclick=()=>setAdminNav('catalogs'));
+  $('admin-activity')&&typeof setAdminNav==='function'&&($('admin-activity').onclick=()=>setAdminNav('activity'));
+  $('admin-billing')&&typeof setAdminNav==='function'&&($('admin-billing').onclick=()=>setAdminNav('billing'));
+  $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
+    const sb=$('admin-sidebar');
+    if(sb && sb.classList.contains('open')) closeAdminSidebar();
+    else openAdminSidebar();
+  });
+  $('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
+  document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
+    b.onclick=()=>setAdminNav(b.dataset.nav);
+  });
+  document.querySelectorAll('#admin-park-ex [data-park-ex]').forEach(b=>{
+    b.onclick=()=>setAdminNav(b.dataset.parkEx==='exchange'?'exchange':'orders');
+  });
+  if(typeof updateAdminChrome==='function') updateAdminChrome();
+  if(typeof showCabinet==='function') $('btn-cabinet')&&($('btn-cabinet').onclick=showCabinet);
+  if(typeof showOrders==='function') $('btn-orders')&&($('btn-orders').onclick=showOrders);
+  if(typeof showShifts==='function') $('btn-shifts')&&($('btn-shifts').onclick=showShifts);
+  if(typeof hideDriverPanels==='function'){
+    document.querySelectorAll('.back-driver').forEach(b=>{
+      b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
+    });
+  }
+  document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
+    state.adminFilter=b.dataset.filter;
+    document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
+    renderAdmin();
+  });
+  if(typeof bindAdminCreate==='function') bindAdminCreate();
+}
+wireShellHandlers();
 (function bindMobileFocusScroll(){
   let t=null;
   document.addEventListener('focusin',e=>{
