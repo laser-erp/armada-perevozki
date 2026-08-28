@@ -756,6 +756,8 @@
     .chat-widget .addr-suggest-list{position:relative;top:0;margin-top:6px;max-height:180px;box-shadow:none}
     .chat-vtype-widget .chat-vtype-suggest{margin-top:6px}
     .chat-vtype-suggest-item{font-size:.8rem}
+    .chat-vtype-hint{margin:8px 0 0;padding-left:36px;font-size:.72rem;color:var(--muted,#64748b)}
+    .chat-vtype-chips{margin-top:4px}
     .cust-route-map-wrap:not(.has-route){display:none}
     .cust-route-map{min-height:160px;display:flex;align-items:center;justify-content:center}
     .cust-route-svg{width:100%;height:auto;display:block}

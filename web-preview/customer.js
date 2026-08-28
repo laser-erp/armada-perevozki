@@ -1669,6 +1669,8 @@ function syncCustomerOrderModeUi(){
     btn.setAttribute('aria-selected', on?'true':'false');
   });
   if(formPanel) formPanel.hidden=mode==='chat';
+  const vtypeSearchWrap=$('cust-vtype-search-wrap');
+  if(vtypeSearchWrap) vtypeSearchWrap.hidden=mode==='chat';
   if(chatPanel){
     if(mode==='chat') chatPanel.removeAttribute('hidden');
     else chatPanel.hidden=true;
@@ -1726,7 +1728,7 @@ function customerChatFilterVtypeSuggest(raw){
 function customerChatSelectBody(vtype, label){
   if(!vtype) return;
   customerChat.data.bodyVtype=vtype;
-  customerChatSetVehicleType(vtype);
+  customerChatApplyToForm();
   saveCustomerChatState();
   scheduleCustomerOrderDraftSave();
   customerChatAdvance(label||customerChatBodyLabel(vtype));
@@ -1748,7 +1750,7 @@ function customerChatBotPrompt(stepId){
   if(stepId==='when') return '<strong>Когда подать машину?</strong>';
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Укажите адрес загрузки.';
   if(stepId==='unload') return '<strong>Куда везём?</strong>';
-  if(stepId==='body') return '<strong>Какой кузов нужен?</strong>';
+  if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
   if(stepId==='summary') return 'Проверьте заявку перед отправкой:';
   return '';
 }
@@ -1885,13 +1887,14 @@ function customerChatRenderWidgets(){
     widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" autocomplete="off" aria-label="Адрес" /></div>
     <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-addr-ok">Далее →</button></div>`;
   }else if(step.id==='body'){
-    widget=`<div class="chat-chips" id="cust-chat-body-chips">${
-      CUST_CHAT_BODY_CHIPS.map((c,i)=>`<button type="button" class="chat-chip ${i===0?'primary':'muted'}" data-chat-body="${c.id}">${esc(c.label)}</button>`).join('')
-    }</div>
-    <div class="chat-widget chat-vtype-widget">
-      <input type="search" id="cust-chat-vtype-search" placeholder="Поиск: трал, гидро, танк…" autocomplete="off" aria-label="Поиск типа кузова" />
+    widget=`<div class="chat-widget chat-vtype-widget">
+      <input type="search" id="cust-chat-vtype-search" placeholder="тр, тент, трал…" autocomplete="off" aria-label="Поиск типа кузова" />
       <div id="cust-chat-vtype-suggest" class="addr-suggest-list chat-vtype-suggest" hidden role="listbox"></div>
     </div>
+    <p class="chat-vtype-hint">Или выберите:</p>
+    <div class="chat-chips chat-vtype-chips" id="cust-chat-body-chips">${
+      CUST_CHAT_BODY_CHIPS.map(c=>`<button type="button" class="chat-chip muted" data-chat-body="${c.id}">${esc(c.label)}</button>`).join('')
+    }</div>
     <div class="chat-chips"><button type="button" class="chat-chip muted" data-chat-body="${CUST_CHAT_BODY_FORM_FALLBACK.id}">${esc(CUST_CHAT_BODY_FORM_FALLBACK.label)}</button></div>`;
   }else if(step.id==='summary' && customerChat.summaryReady){
     widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
@@ -2064,13 +2067,10 @@ function customerChatRenderAll(){
 function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
-  const textSteps=['cargo','weight','body'];
+  const textSteps=['cargo','weight'];
   const show=step && textSteps.includes(step.id) && !customerChat.summaryReady;
   const inp=$('cust-chat-input');
-  if(inp){
-    if(step&&step.id==='body') inp.placeholder='Или введите тип кузова…';
-    else inp.placeholder='Напишите ответ…';
-  }
+  if(inp) inp.placeholder='Напишите ответ…';
   if(compose) compose.style.display=show?'flex':'none';
 }
 function customerChatAdvance(userText){
