@@ -356,6 +356,17 @@
       padding:8px 10px;background:#fff;color:var(--text);font-size:16px;min-height:40px;font-family:inherit
     }
     .doc-actions button{flex:1;min-width:110px;width:auto}
+    .cust-order-docs-wrap{margin-top:8px;font-size:.82rem}
+    .cust-order-docs-wrap summary{cursor:pointer;font-weight:600;color:var(--accent)}
+    .cust-order-docs{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+    .cust-doc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+    .cust-doc-name{display:block;font-weight:600;font-size:.82rem;margin-bottom:4px}
+    .cust-doc-row .doc-status{margin-top:0}
+    .cust-doc-row button{width:auto;flex:0 0 auto;padding:6px 10px;font-size:.78rem}
+    .cust-contract-banner{border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06)}
+    .cust-contract-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+    .cust-doc-submit-list{margin:8px 0 0;padding-left:18px;font-size:.85rem;line-height:1.45}
+    .cust-doc-submit-list li{margin:4px 0}
     .rate-missing{color:#DC2626;font-size:var(--fs-sm);font-weight:700}
     .swipe-item{position:relative;overflow:hidden;border-radius:var(--radius);touch-action:pan-y}
     .swipe-actions{position:absolute;inset:0 0 0 auto;display:flex;z-index:0}

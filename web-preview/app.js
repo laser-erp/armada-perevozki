@@ -65,7 +65,7 @@ function normalizeCarrierVehicle(v){
 function normalizeCarrierDriver(d){
   if(!d||typeof d!=='object') return null;
   const name=String(d.name||'').trim(); if(!name) return null;
-  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), vehicleId:d.vehicleId||null};
+  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), licenseNo:String(d.licenseNo||'').trim(), vehicleId:d.vehicleId||null};
 }
 /** Привести все телефоны в базе к +7XXXXXXXXXX. */
 function normalizeAllPhones(){
@@ -134,6 +134,12 @@ function normalizeCompany(c){
   out.portalEnabled=!!c.portalEnabled;
   out.portalPhone=formatPhone(String(c.portalPhone||'').trim());
   out.portalPin=String(c.portalPin||'').trim();
+  out.contractSigned=!!c.contractSigned;
+  if(c.frameworkContract && typeof normalizeFrameworkContract==='function'){
+    out.frameworkContract=normalizeFrameworkContract(c.frameworkContract);
+  } else if(out.contractSigned){
+    out.frameworkContract={status:'signed', signedAt:null, signedBy:''};
+  }
   out.vatPayer=(c.vatPayer==='vat')?'vat':'none';
   const bank=normalizeCompanyBank(c);
   if(bank.bankName||bank.bankBik||bank.bankAccount||bank.bankCorrAccount) out.bank=bank;
@@ -331,6 +337,8 @@ function upsertCompany(raw){
       c.portalPhone=prev.portalPhone||'';
       c.portalPin=prev.portalPin||'';
     }
+    if(!('contractSigned' in (raw||{})) && prev.contractSigned) c.contractSigned=!!prev.contractSigned;
+    if(!('frameworkContract' in (raw||{})) && prev.frameworkContract) c.frameworkContract=prev.frameworkContract;
     state.companies[i]=c;
   } else {
     if(companyHasRole(c,'own') && !c.finance) c.finance=normalizeFinance(state.finance);
@@ -945,6 +953,7 @@ function migrateCompanies(){
     salaryPercent:d.salaryPercent??30,
     exchangeEnabled:!!d.exchangeEnabled,
     phone:String(d.phone||'').trim(),
+    licenseNo:String(d.licenseNo||'').trim(),
     ownerAdminId:d.ownerAdminId||null,
     ownerAdminName:d.ownerAdminName||null,
     spaceId:d.spaceId||null,

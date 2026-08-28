@@ -1253,9 +1253,27 @@ function renderCustomerPortal(){
           const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
           return inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
         })()}
+        ${typeof customerOrderDocumentsHtml==='function'?`<details class="cust-order-docs-wrap"><summary>Документы по заявке</summary>${customerOrderDocumentsHtml(o)}</details>`:''}
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
     customerWireInvoiceLinks(list);
+    if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments(list);
+  }
+  const scroll=$('cust-portal-scroll')||document.querySelector('#customer-portal .admin-form-scroll');
+  if(scroll && typeof customerFrameworkContractBannerHtml==='function'){
+    const existing=$('cust-contract-banner');
+    const bannerHtml=customerFrameworkContractBannerHtml(co, carrier);
+    if(bannerHtml && !existing){
+      const wrap=document.createElement('div');
+      wrap.innerHTML=bannerHtml;
+      const banner=wrap.firstElementChild;
+      const subEl=$('cust-portal-sub');
+      if(banner && subEl && subEl.parentNode) subEl.parentNode.insertBefore(banner, subEl.nextSibling);
+      else if(banner && scroll.firstChild) scroll.insertBefore(banner, scroll.firstChild);
+      if(typeof wireCustomerFrameworkContractBanner==='function') wireCustomerFrameworkContractBanner(co, carrier);
+    } else if(!bannerHtml && existing){
+      existing.remove();
+    }
   }
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
@@ -1427,6 +1445,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   }
   ensureRoutePoints(order);
   applyOrderSchedule(order);
+  if(typeof ensureOrderDocs==='function') ensureOrderDocs(order);
+  if(typeof ensureCustomerFrameworkContract==='function') ensureCustomerFrameworkContract(co, carrier);
   bumpDataEpoch('customer-portal-order');
   upsertOrder(order);
   persist();
@@ -1593,12 +1613,23 @@ function clearCustomerOrderDraft(){
   customerDraftPromptLoaded=null;
   hideCustomerDraftBanner();
 }
-function customerSubmitSuccessMessage(invoice){
+function customerSubmitSuccessMessage(invoice, order){
   const name=customerChatFirstName();
   const who=name?`С вами, ${name}, `:''; 
-  let html=`${who}приятно иметь дело. Счёт на оплату автоматически сформируется и будет доступен для скачивания.`;
+  let html=`${who}приятно иметь дело. Документы по заявке:`;
+  html+=`<ul class="cust-doc-submit-list">`;
+  html+=`<li><strong>Счёт</strong> — ${invoice?'готов, скачайте ниже':'сформируется автоматически'}</li>`;
+  const co=currentCustomer&&findCompanyById(currentCustomer.companyId);
+  const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(co):'none';
+  html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (раздел выше)':'будет подготовлен'}</li>`;
+  html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
+  html+=`<li><strong>ЭТрН</strong> — после рейса (оператор ЭПД — в разработке)</li>`;
+  html+=`</ul>`;
   if(invoice){
-    html+=`<br><button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
+    html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
+  }
+  if(order&&typeof customerOrderDocumentsHtml==='function'){
+    html+=`<details class="cust-order-docs-wrap" style="margin-top:8px"><summary>Документы по заявке №${esc(order.sequentialNumber)}</summary>${customerOrderDocumentsHtml(order)}</details>`;
   }
   return html;
 }
@@ -1615,7 +1646,7 @@ function customerWireInvoiceLinks(root){
 function customerChatAfterOrderSubmit(order, invoice){
   customerChat.messages.push({
     role:'bot',
-    html:`<strong>Заявка №${esc(order.sequentialNumber)} отправлена.</strong><br>${customerSubmitSuccessMessage(invoice)}`,
+    html:`<strong>Заявка №${esc(order.sequentialNumber)} отправлена.</strong><br>${customerSubmitSuccessMessage(invoice, order)}`,
     stepId:'submitted'
   });
   customerChat.stepIndex=CUST_CHAT_STEPS.length;
@@ -1625,13 +1656,15 @@ function customerChatAfterOrderSubmit(order, invoice){
   saveCustomerChatState();
   customerChatRenderAll();
   customerWireInvoiceLinks($('cust-chat-thread'));
+  if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments($('cust-chat-thread'));
 }
 function customerFormAfterOrderSubmit(order, invoice){
   const box=$('cust-submit-success');
   if(box){
     box.hidden=false;
-    box.innerHTML=`<strong>Заявка №${esc(order.sequentialNumber)} отправлена.</strong><br>${customerSubmitSuccessMessage(invoice)}`;
+    box.innerHTML=`<strong>Заявка №${esc(order.sequentialNumber)} отправлена.</strong><br>${customerSubmitSuccessMessage(invoice, order)}`;
     customerWireInvoiceLinks(box);
+    if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments(box);
   }
   clearCustomerOrderDraft();
 }

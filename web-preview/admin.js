@@ -1613,6 +1613,7 @@ function assignExchangeToOwn(id){
   o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
   if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
   stampOrderDriverPhone(o);
+  if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
   bumpDataEpoch('assign-exchange-own');
   upsertOrder(o);
   renderAdmin();
@@ -1734,6 +1735,14 @@ function confirmClaimExchangeAfterGuard(o){
   if(o.transportApp) o.transportApp.driverPhone=o.driverPhone||'';
   stampOrderDriverPhone(o);
   if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
+  if(typeof syncOrderDocsOnAssign==='function'){
+    syncOrderDocsOnAssign(o);
+    ensureOrderDocs(o);
+    if(o.transportApp&&o.transportApp.signedAt){
+      o.docs.transportApp.status='signed';
+      o.docs.transportApp.updatedAt=o.transportApp.signedAt;
+    }
+  }
   bumpDataEpoch('claim-exchange');
   upsertOrder(o);
   claimOrderId=null;
@@ -2305,278 +2314,7 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
   show('admin'); renderAdmin();
 }
 
-/** Документооборот v1: статусы + печатные формы по заявке */
-const DOC_STATUSES=[
-  {id:'draft', label:'Черновик'},
-  {id:'ready', label:'Готов'},
-  {id:'sent', label:'Отправлен'},
-  {id:'signed', label:'Подписан'}
-];
-const DOC_KINDS=[
-  {id:'application', title:'Заявка на перевозку', hint:'Основные данные заявки для заказчика'},
-  {id:'transportApp', title:'Договор‑заявка', hint:'Между заказчиком и перевозчиком'},
-  {id:'act', title:'Акт выполненных работ', hint:'После выполнения / закрытия заказа'}
-];
-function docStatusLabel(st){
-  return (DOC_STATUSES.find(x=>x.id===st)||{}).label||'Черновик';
-}
-function ensureOrderDocs(o){
-  if(!o) return {};
-  if(!o.docs || typeof o.docs!=='object') o.docs={};
-  DOC_KINDS.forEach(k=>{
-    const cur=o.docs[k.id];
-    if(!cur || typeof cur!=='object'){
-      o.docs[k.id]={status:'draft', updatedAt:null};
-    } else {
-      if(!DOC_STATUSES.some(s=>s.id===cur.status)) cur.status='draft';
-      if(cur.updatedAt==null) cur.updatedAt=null;
-    }
-  });
-  return o.docs;
-}
-function paymentFormLabel(o){
-  if(!o) return 'наличные';
-  if(o.paymentForm==='withVat') return 'с НДС';
-  if(o.paymentForm==='withoutVat') return 'без НДС';
-  return 'наличные';
-}
-function resolveParty(companyId, companyName, spaceId){
-  let co=findCompanyById(companyId)||findCompanyByName(companyName)||null;
-  let sp=spaceId?findSpaceById(spaceId):null;
-  if(!sp && co && co.spaceId) sp=findSpaceById(co.spaceId);
-  const name=(co&&co.name)||(sp&&sp.name)||companyName||'—';
-  return {
-    name,
-    inn:(co&&co.inn)||(sp&&sp.inn)||'',
-    kpp:(co&&co.kpp)||(sp&&sp.kpp)||'',
-    ogrn:(co&&co.ogrn)||(sp&&sp.ogrn)||'',
-    address:(co&&co.address)||(sp&&sp.address)||''
-  };
-}
-function partyLinesHtml(p){
-  const bits=[];
-  if(p.inn) bits.push(`ИНН ${esc(p.inn)}`);
-  if(p.kpp) bits.push(`КПП ${esc(p.kpp)}`);
-  if(p.ogrn) bits.push(`ОГРН ${esc(p.ogrn)}`);
-  const req=bits.length?`<div class="muted">${bits.join(' · ')}</div>`:'';
-  const addr=p.address?`<div class="muted">${esc(p.address)}</div>`:'';
-  return `<div class="party"><strong>${esc(p.name||'—')}</strong>${req}${addr}</div>`;
-}
-function orderDocMoneyLine(o){
-  const rate=clientRate(o);
-  const form=paymentFormLabel(o);
-  if(rate==null) return `Форма оплаты: ${form}. Сумма не заполнена.`;
-  return `Форма оплаты: ${form}. Сумма к оплате: ${fmt(rate)} ₽`;
-}
-function orderDocRouteRows(o){
-  const pts=ensureRoutePoints(o)||[];
-  if(!pts.length) return `<tr><td colspan="2">${esc(routeText(o)||'—')}</td></tr>`;
-  return pts.map((p,i)=>`<tr><td>${i+1}. ${esc(kindTitle(p.kind))}</td><td>${esc(p.address||'—')}</td></tr>`).join('');
-}
-function buildOrderDocBody(kind, o){
-  const own=resolveParty(o.ownCompanyId, o.ownCompanyName, o.spaceId);
-  const customer=resolveParty(null, o.customer, null);
-  const carrierName=o.carrierCompanyName||(o.executorType==='partner'?'':own.name);
-  const carrier=resolveParty(o.carrierCompanyId, carrierName||own.name, o.executorType==='partner'?o.partnerSpaceId:o.spaceId);
-  const app=o.transportApp||null;
-  const title=(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ';
-  const num=o.sequentialNumber!=null?o.sequentialNumber:'—';
-  const when=dayOnly(o.vehicleAt||o.createdAt)||dayOnly(o.createdAt)||'—';
-  const driver=app&&app.driverName?app.driverName:(o.driverName||'—');
-  const plate=app&&app.vehiclePlate?app.vehiclePlate:(o.vehiclePlate||'—');
-  const phone=orderDriverPhone(o)||(app&&app.driverPhone)||'';
-  const contact=[o.contactName, formatPhone(o.contactPhone||'')].filter(Boolean).join(', ')||'—';
-  const kmBits=[
-    o.emptyKmBefore!=null?`нулевой ${fmt(o.emptyKmBefore)} км`:'',
-    o.loadedKm!=null?`с грузом ${fmt(o.loadedKm)} км`:'',
-    o.emptyKmAfter!=null?`до стоянки ${fmt(o.emptyKmAfter)} км`:''
-  ].filter(Boolean).join(' · ')||'—';
-  const commonHead=`
-    <div class="doc-head">
-      <div class="brand">АРМАДА</div>
-      <h1>${esc(title)}</h1>
-      <div class="muted">к заявке № ${esc(num)} · ${esc(when)}</div>
-    </div>`;
-  if(kind==='application'){
-    return `${commonHead}
-      <h2>1. Заказчик</h2>
-      ${partyLinesHtml(customer)}
-      <p>Контакт: ${esc(contact)}</p>
-      <h2>2. Исполнитель (наша фирма)</h2>
-      ${partyLinesHtml(own)}
-      <h2>3. Подача и маршрут</h2>
-      <p>Подача ТС: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
-      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <h2>4. Транспорт и водитель</h2>
-      <p>Водитель: <strong>${esc(driver)}</strong>${phone?` · ☎ ${esc(phone)}`:''}<br>
-      Авто: <strong>${esc(plate)}</strong>
-      ${orderReqText(o)?`<br>Требования к ТС: ${esc(orderReqText(o))}`:''}</p>
-      <h2>5. Стоимость</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
-      <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
-        <div>Исполнитель _______________ / _______________</div>
-      </div>`;
-  }
-  if(kind==='transportApp'){
-    const left=app?resolveParty(app.customerCompanyId, app.customerCompanyName, null):own;
-    const right=app?resolveParty(app.carrierCompanyId, app.carrierCompanyName, null):carrier;
-    return `${commonHead}
-      <p class="muted">${app&&app.signedAt?`Подписан в системе: ${esc(dateTime(app.signedAt))}`:'Черновик договора‑заявки по данным заказа'}</p>
-      <h2>1. Заказчик перевозки</h2>
-      ${partyLinesHtml(left)}
-      <h2>2. Перевозчик</h2>
-      ${partyLinesHtml(right)}
-      <h2>3. Условия перевозки</h2>
-      <p>Маршрут: <strong>${esc((app&&app.route)||routeText(o)||'—')}</strong></p>
-      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <p>Подача: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong><br>
-      Водитель: <strong>${esc(driver)}</strong>${phone?` · ☎ ${esc(phone)}`:''}<br>
-      ТС: <strong>${esc(plate)}</strong>
-      ${orderReqText(o)?`<br>Требования: ${esc(orderReqText(o))}`:''}</p>
-      <h2>4. Оплата</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
-      <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
-        <div>Перевозчик _______________ / _______________</div>
-      </div>`;
-  }
-  // act
-  return `${commonHead}
-    <p class="muted">${looksClosedOrder(o)?`Заказ закрыт ${esc(dateTime(o.closedAt))}`:'Заказ ещё не закрыт — акт по текущим данным'}</p>
-    <h2>1. Заказчик</h2>
-    ${partyLinesHtml(customer)}
-    <h2>2. Исполнитель</h2>
-    ${partyLinesHtml(o.executorType==='partner'?carrier:own)}
-    <h2>3. Выполненные работы</h2>
-    <p>Перевозка груза по заявке № <strong>${esc(num)}</strong>.<br>
-    Маршрут: <strong>${esc(routeText(o)||'—')}</strong><br>
-    Водитель / ТС: <strong>${esc(driver)}</strong> · <strong>${esc(plate)}</strong><br>
-    Пробег: ${esc(kmBits)}</p>
-    <h2>4. Стоимость</h2>
-    <p>${esc(orderDocMoneyLine(o))}</p>
-    <p>Работы выполнены полностью, стороны претензий не имеют.</p>
-    <div class="sign">
-      <div>Заказчик _______________ / _______________</div>
-      <div>Исполнитель _______________ / _______________</div>
-    </div>`;
-}
-function openPrintHtml(title, bodyHtml){
-  const w=window.open('', '_blank');
-  if(!w){ alert('Разрешите всплывающие окна, чтобы печатать документ'); return; }
-  const html=`<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8" />
-<title>${esc(title)}</title>
-<style>
-  @page{size:A4;margin:16mm}
-  body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;font-size:12.5px;line-height:1.45;margin:0;padding:0}
-  .sheet{max-width:180mm;margin:0 auto;padding:8mm 4mm}
-  .doc-head{margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #EF4444}
-  .brand{font-weight:700;letter-spacing:.14em;font-size:13px;color:#EF4444;margin-bottom:4px}
-  h1{margin:0 0 4px;font-size:18px;line-height:1.2}
-  h2{margin:16px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#444}
-  p{margin:0 0 8px}
-  .muted{color:#666;font-size:11.5px}
-  .party{margin:0 0 8px;padding:8px 10px;border:1px solid #e5e7eb;border-radius:6px}
-  table{width:100%;border-collapse:collapse;margin:6px 0 10px}
-  th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}
-  th{background:#f3f4f6;font-size:11px}
-  .sign{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:28px}
-  .sign div{padding-top:18px;border-top:1px solid #111}
-  .toolbar{display:flex;gap:8px;margin:0 0 12px;position:sticky;top:0;background:#fff;padding:8px 0}
-  .toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;background:#EF4444;color:#fff}
-  .toolbar button.secondary{background:#f3f4f6;color:#111}
-  @media print{.toolbar{display:none!important}.sheet{padding:0}}
-</style></head><body>
-<div class="sheet">
-  <div class="toolbar">
-    <button type="button" onclick="window.print()">Печать / PDF</button>
-    <button type="button" class="secondary" onclick="window.close()">Закрыть</button>
-  </div>
-  ${bodyHtml}
-</div>
-</body></html>`;
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-}
-function refreshOrderDocRow(orderId, kind){
-  const o=state.orders.find(x=>x.id===orderId); if(!o) return;
-  ensureOrderDocs(o);
-  const st=o.docs[kind].status||'draft';
-  const row=document.querySelector(`#detail-form .doc-row[data-doc-kind="${kind}"]`);
-  if(!row) return;
-  const chip=row.querySelector('.doc-status');
-  if(chip){ chip.className=`doc-status ${st}`; chip.textContent=docStatusLabel(st); }
-  const sel=row.querySelector('[data-doc-status]');
-  if(sel && sel.value!==st) sel.value=st;
-  const kindMeta=DOC_KINDS.find(k=>k.id===kind);
-  const meta=row.querySelector('.doc-meta');
-  if(meta && kindMeta){
-    const updated=o.docs[kind].updatedAt?` · ${dateTime(o.docs[kind].updatedAt)}`:'';
-    meta.textContent=`${kindMeta.hint}${updated}`;
-  }
-}
-function printOrderDoc(orderId, kind){
-  const o=state.orders.find(x=>x.id===orderId); if(!o) return;
-  ensureOrderDocs(o);
-  if(!o.docs[kind]) return;
-  if(o.docs[kind].status==='draft'){
-    o.docs[kind].status='ready';
-    o.docs[kind].updatedAt=new Date().toISOString();
-    bumpDataEpoch('doc-ready');
-    upsertOrder(o);
-    refreshOrderDocRow(orderId, kind);
-  }
-  const title=`${(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ'} · заявка №${o.sequentialNumber}`;
-  openPrintHtml(title, buildOrderDocBody(kind, o));
-}
-function setOrderDocStatus(orderId, kind, status){
-  const o=state.orders.find(x=>x.id===orderId); if(!o) return;
-  ensureOrderDocs(o);
-  if(!DOC_STATUSES.some(s=>s.id===status)) return;
-  o.docs[kind].status=status;
-  o.docs[kind].updatedAt=new Date().toISOString();
-  bumpDataEpoch('doc-status');
-  upsertOrder(o);
-  refreshOrderDocRow(orderId, kind);
-}
-function orderDocsSectionHtml(o){
-  ensureOrderDocs(o);
-  const rows=DOC_KINDS.map(k=>{
-    const st=o.docs[k.id].status||'draft';
-    const updated=o.docs[k.id].updatedAt?` · ${dateTime(o.docs[k.id].updatedAt)}`:'';
-    const opts=DOC_STATUSES.map(s=>`<option value="${s.id}" ${s.id===st?'selected':''}>${esc(s.label)}</option>`).join('');
-    return `<div class="doc-row" data-doc-kind="${esc(k.id)}">
-      <div>
-        <div class="doc-name">${esc(k.title)}</div>
-        <div class="doc-meta">${esc(k.hint)}${esc(updated)}</div>
-        <div class="doc-status ${esc(st)}">${esc(docStatusLabel(st))}</div>
-      </div>
-      <div class="doc-actions">
-        <select data-doc-status="${esc(k.id)}" aria-label="Статус: ${esc(k.title)}">${opts}</select>
-        <button type="button" class="secondary" data-doc-print="${esc(k.id)}">Печать</button>
-      </div>
-    </div>`;
-  }).join('');
-  return `<section class="form-section" id="order-docs-section">
-    <h2 class="form-section-title">Документы</h2>
-    <p class="form-section-hint">Печать или PDF через диалог браузера. Статус сохраняется в заявке.</p>
-    <div class="docs-list">${rows}</div>
-  </section>`;
-}
-function wireOrderDocs(orderId){
-  document.querySelectorAll('#detail-form [data-doc-print]').forEach(btn=>{
-    btn.onclick=e=>{
-      e.preventDefault();
-      printOrderDoc(orderId, btn.getAttribute('data-doc-print'));
-    };
-  });
-  document.querySelectorAll('#detail-form [data-doc-status]').forEach(sel=>{
-    sel.onchange=()=>{
-      setOrderDocStatus(orderId, sel.getAttribute('data-doc-status'), sel.value);
-    };
-  });
-}
+/* Документооборот — order-documents.js */
 
 function openDetail(id){
   state.detailId=id;
@@ -3052,6 +2790,7 @@ function openDetail(id){
     order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
     order.freight=selectedRate(order);
     const pay=metrics(order).driverPay; order.earnings=pay!=null?pay:null;
+    if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
     upsertOrder(order);
     openDetail(id);
     $('detail-ok').style.display='block';
@@ -3342,6 +3081,15 @@ function openCatalogs(){
         <input id="co-portal-pin" inputmode="numeric" maxlength="8" placeholder="PIN" value="${esc(c.portalPin||'')}" />
         <p class="hint">Ссылка для этого заказчика: <a href="${esc(customerPortalPageUrl({companyId:c.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({companyId:c.id}))}</a></p>
         <p class="hint">Заявки идут на биржу с проверкой минимальной цены.</p>
+        <h4>Рамочный договор</h4>
+        ${(()=>{
+          const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(c):'none';
+          const fcLbl=typeof customerFrameworkContractLabel==='function'?customerFrameworkContractLabel(fcSt):'—';
+          const fc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(c.frameworkContract):{};
+          const signedAt=fc.signedAt?` · ${dateTime(fc.signedAt)}`:'' ;
+          return `<p class="hint">Статус: <strong>${esc(fcLbl)}</strong>${signedAt}${fc.signedBy?` · ${esc(fc.signedBy)}`:''}</p>
+        <label class="check"><input type="checkbox" id="co-contract-signed" ${fcSt==='signed'?'checked':''}/> Договор подписан (вручную / через портал)</label>`;
+        })()}
         <h4>Адреса заказчика</h4>
         <label>Загрузки (каждый с новой строки)</label>
         <textarea id="co-loads" rows="3">${esc((c.loadingAddresses||[]).join('\n'))}</textarea>
@@ -3513,6 +3261,14 @@ function openCatalogs(){
       const loads=uniqAddrs((($('co-loads')||{}).value||'').split(/\n/));
       const unloads=uniqAddrs((($('co-unloads')||{}).value||'').split(/\n/));
       const innRaw=String((($('co-inn')||{}).value||'')).replace(/\D/g,'');
+      const contractSigned=roles.includes('customer')&&!!($('co-contract-signed')&&$('co-contract-signed').checked);
+      const prevFc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(c.frameworkContract):{status:'none'};
+      const frameworkContract=contractSigned?{
+        ...prevFc,
+        status:'signed',
+        signedAt:prevFc.signedAt||new Date().toISOString(),
+        signedBy:prevFc.signedBy||name
+      }:prevFc;
       upsertCompany({
         id:c.id, name, roles, note:($('co-note').value||'').trim(),
         inn:innRaw, ogrn:(($('co-ogrn')||{}).value||'').trim(),
@@ -3528,6 +3284,8 @@ function openCatalogs(){
         portalEnabled:roles.includes('customer')&&!!($('co-portal-enabled')&&$('co-portal-enabled').checked),
         portalPhone:formatPhone((($('co-portal-phone')||{}).value||'').trim()),
         portalPin:(($('co-portal-pin')||{}).value||'').trim(),
+        contractSigned,
+        frameworkContract:roles.includes('customer')?frameworkContract:undefined,
         bank:normalizeCompanyBank({
           bankName:(($('co-bank-name')||{}).value||'').trim(),
           bankBik:(($('co-bank-bik')||{}).value||'').trim(),

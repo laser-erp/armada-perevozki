@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/web-preview"
 BASE="${BASE_URL:-https://aptown1.fvds.ru}"
-FILES=(boot-loader.js boot-redirect.js kp-zakaz-boot.js store.js billing.js etrn.js customer.js admin.js app.js driver.js index.html kp.html invite.html sw.js onboarding.js help.html entry.css entry-share.js qrcode.min.js)
+FILES=(boot-loader.js boot-redirect.js kp-zakaz-boot.js store.js billing.js order-documents.js etrn.js customer-invoice.js customer.js admin.js app.js driver.js index.html kp.html invite.html sw.js onboarding.js help.html entry.css entry-share.js qrcode.min.js)
 FAIL=0
 
 echo "Verify web-preview ↔ $BASE"
