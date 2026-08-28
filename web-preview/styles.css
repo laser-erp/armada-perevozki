@@ -370,6 +370,14 @@
     .cust-etrn-t1-block{margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 6%,var(--surface));font-size:.82rem}
     .cust-etrn-t1-block .hint{margin:4px 0 8px;font-size:.75rem}
     .cust-etrn-t1-block button{font-size:.82rem;padding:6px 12px;width:auto}
+    .cust-etrn-t1-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+    .cust-etrn-t1-actions .secondary,.cust-etrn-t1-actions a.secondary{font-size:.78rem;padding:4px 10px;text-decoration:none;display:inline-block}
+    .cust-shipper-fields{margin:8px 0;padding:8px 10px;border:1px dashed var(--border);border-radius:var(--radius);font-size:.85rem}
+    .cust-shipper-toggle{margin:10px 0 6px;font-size:.85rem}
+    .cust-shipper-etrn-overlay{position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+    .cust-shipper-etrn-overlay[hidden]{display:none!important}
+    .cust-shipper-etrn-card{max-width:420px;width:100%;background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+    .cust-shipper-etrn-card h2{margin:0 0 12px;font-size:1rem}
     .cust-contract-banner{border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06)}
     .cust-contract-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px}
     .cust-doc-submit-list{margin:8px 0 0;padding-left:18px;font-size:.85rem;line-height:1.45}

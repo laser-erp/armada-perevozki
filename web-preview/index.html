@@ -245,6 +245,25 @@
                     <input id="cust-loading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
                   </div>
                 </div>
+                <label class="cust-check-item cust-shipper-toggle">
+                  <input type="checkbox" id="cust-shipper-same" checked />
+                  <span>Я грузоотправитель (подписывает ЭТрН на погрузке)</span>
+                </label>
+                <div id="cust-shipper-fields" class="cust-shipper-fields" hidden>
+                  <p class="hint">Грузоотправитель сдаёт груз и подписывает T1 в ЭТрН. Может отличаться от заказчика (кто платит за перевозку).</p>
+                  <label for="cust-shipper-name">Грузоотправитель</label>
+                  <input id="cust-shipper-name" placeholder="Организация или ФИО" />
+                  <div class="form-pair">
+                    <div>
+                      <label for="cust-shipper-phone">Телефон для подписи ЭТрН</label>
+                      <input id="cust-shipper-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+                    </div>
+                    <div>
+                      <label for="cust-shipper-inn">ИНН (если есть)</label>
+                      <input id="cust-shipper-inn" inputmode="numeric" placeholder="необязательно" />
+                    </div>
+                  </div>
+                </div>
                 <label for="cust-unload">Адрес выгрузки</label>
                 <input id="cust-unload" placeholder="Город, улица, дом" autocomplete="off" />
                 <label for="cust-unload-note">Комментарий к выгрузке</label>
@@ -469,6 +488,12 @@
           <div id="cust-etrn-banner"></div>
           <div id="cust-orders-list"></div>
         </section>
+      </div>
+    </div>
+    <div id="cust-shipper-etrn-overlay" class="cust-shipper-etrn-overlay" hidden>
+      <div class="cust-shipper-etrn-card">
+        <h2>ЭТрН · подпись грузоотправителя (T1)</h2>
+        <div id="cust-shipper-etrn-body"></div>
       </div>
     </div>
   </div>

@@ -471,7 +471,10 @@ function customerOrderDocStatus(kind, o){
     const et=o.etrn;
     if(!orderHasDriverVehicleAssigned(o)) return {label:'После назначения ТС', cls:'draft', available:false};
     if(!et) return {label:'Перед выездом', cls:'draft', available:false};
-    if(typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o)) return {label:'Ждёт подпись T1', cls:'sent', available:true};
+    if(typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o)){
+      const lbl=typeof customerCanSignEtrnT1==='function'&&customerCanSignEtrnT1(o)?'Ждёт подпись T1':'Ждёт грузоотправителя';
+      return {label:lbl, cls:'sent', available:true};
+    }
     if(orderEtrnTransportActive&&orderEtrnTransportActive(o)) return {label:'У водителя (QR)', cls:'ready', available:true};
     const st=et.status||'draft';
     const lbl=st==='signed'||st==='completed'?'Готов':st==='draft'?'Черновик':'В работе';

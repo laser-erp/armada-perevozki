@@ -74,7 +74,8 @@ function applyEtrnToOrder(order, etrn){
     tituls:etrn.tituls||{ t1:'pending', t2:'pending', t3:'pending', t4:'pending' },
     lastError:etrn.lastError||null,
     sandbox:!!etrn.sandbox,
-    signUrl:etrn.signUrl||etrn.driverSignUrl||null
+    signUrl:etrn.signUrl||etrn.driverSignUrl||null,
+    shipperSignToken:etrn.shipperSignToken||null
   };
 }
 function ensureEtrnForOrder(order, opts){
@@ -158,7 +159,8 @@ function sandboxCreateEtrnLocal(o){
     status:'draft',
     tituls:{ t1:'pending', t2:'pending', t3:'pending', t4:'pending' },
     sandbox:true,
-    driverSignUrl:`sandbox://etrn/sign/${extId}`
+    driverSignUrl:`sandbox://etrn/sign/${extId}`,
+    shipperSignToken:typeof uuid==='function'?uuid():`t${Date.now()}`
   });
   return o.etrn;
 }
@@ -184,6 +186,56 @@ function signEtrnTitul(orderId, titulKey, signedBy){
   if(typeof logOpsEvent==='function') logOpsEvent('etrn',`Подписан ${titulKey} заказ ${o.sequentialNumber}`,{ orderId, titulKey });
   return true;
 }
+function orderShipperSameAsCustomer(o){
+  return !o || o.shipperSameAsCustomer!==false;
+}
+function orderShipperInfo(o){
+  if(!o) return {name:'', phone:'', inn:'', sameAsCustomer:true};
+  if(orderShipperSameAsCustomer(o)){
+    const co=typeof findCompanyById==='function'?findCompanyById(o.customerId):null;
+    return {
+      name:co&&co.name||o.customer||'',
+      inn:co&&co.inn||o.customerInn||'',
+      phone:typeof formatPhone==='function'?formatPhone(o.contactPhone||co&&co.portalPhone||''):'',
+      sameAsCustomer:true
+    };
+  }
+  return {
+    name:String(o.shipperName||'').trim(),
+    inn:String(o.shipperInn||'').trim(),
+    phone:typeof formatPhone==='function'?formatPhone(o.shipperPhone||''):String(o.shipperPhone||''),
+    email:String(o.shipperEmail||'').trim(),
+    sameAsCustomer:false
+  };
+}
+function customerCanSignEtrnT1(o){
+  return orderShipperSameAsCustomer(o);
+}
+function ensureEtrnShipperSignToken(o){
+  if(!o||!o.etrn) return null;
+  if(!o.etrn.shipperSignToken){
+    o.etrn.shipperSignToken=typeof uuid==='function'?uuid():`t${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
+    upsertOrder(o);
+    persist();
+  }
+  return o.etrn.shipperSignToken;
+}
+function shipperEtrnT1SignUrl(o){
+  if(!o||!o.id) return '';
+  const token=ensureEtrnShipperSignToken(o);
+  if(!token) return '';
+  const base=(typeof location!=='undefined'&&location.origin)?location.origin:'https://app.armada.sx';
+  return `${base}/z/?etrn-t1=${encodeURIComponent(o.id)}&t=${encodeURIComponent(token)}`;
+}
+function validateShipperEtrnT1Token(o, token){
+  if(!o||!o.etrn||!token) return false;
+  return String(o.etrn.shipperSignToken||'')===String(token);
+}
+function shipperEtrnT1SmsText(o){
+  const ship=orderShipperInfo(o);
+  const url=shipperEtrnT1SignUrl(o);
+  return `АРМАДА: подпишите ЭТрН (T1) по заявке №${o.sequentialNumber||'—'}.\n${url}`;
+}
 function orderEtrnLoadingPhase(o){
   if(!o) return false;
   return o.arrivedAt!=null || o.startOdometer!=null;
@@ -196,35 +248,109 @@ function customerEtrnT1Pending(o){
 }
 function customerEtrnT1SignHtml(o){
   if(!customerEtrnT1Pending(o)) return '';
+  const ship=orderShipperInfo(o);
   const st=etrnTitulStatusLabel('pending');
+  if(customerCanSignEtrnT1(o)){
+    return `<div class="cust-etrn-t1-block">
+      <strong>ЭТрН · T1 · грузоотправитель</strong>
+      <p class="hint">Водитель на погрузке — подтвердите отгрузку (${st}).</p>
+      <button type="button" class="primary cust-etrn-t1-sign" data-order-id="${esc(o.id)}">Подписать T1</button>
+    </div>`;
+  }
+  const url=shipperEtrnT1SignUrl(o);
+  const shipLine=ship.name?`${esc(ship.name)}${ship.phone?` · ${esc(formatPhone(ship.phone))}`:''}`:'грузоотправитель';
   return `<div class="cust-etrn-t1-block">
     <strong>ЭТрН · T1 · грузоотправитель</strong>
-    <p class="hint">Водитель на погрузке — подтвердите отгрузку (${st}).</p>
-    <button type="button" class="primary cust-etrn-t1-sign" data-order-id="${esc(o.id)}">Подписать T1</button>
+    <p class="hint">Грузоотправитель: ${shipLine}. Отправьте ссылку для подписи T1 (${st}).</p>
+    <div class="cust-etrn-t1-actions">
+      <button type="button" class="secondary cust-etrn-shipper-copy" data-order-id="${esc(o.id)}" data-url="${esc(url)}">Скопировать ссылку</button>
+      ${ship.phone?`<a class="secondary cust-etrn-shipper-sms" href="sms:${encodeURIComponent(formatPhone(ship.phone))}?body=${encodeURIComponent(shipperEtrnT1SmsText(o))}">SMS грузоотправителю</a>`:''}
+    </div>
   </div>`;
 }
 function customerEtrnT1BannerHtml(){
   if(typeof customerOrders!=='function') return '';
-  const pending=customerOrders().filter(customerEtrnT1Pending);
+  const pending=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o));
   if(!pending.length) return '';
   const btns=pending.map(o=>
     `<button type="button" class="secondary cust-etrn-t1-sign" data-order-id="${esc(o.id)}">№ ${esc(o.sequentialNumber||'—')}</button>`
   ).join(' ');
-  return `<div class="cust-etrn-banner"><strong>ЭТрН:</strong> подпишите T1 (грузоотправитель) ${btns}</div>`;
+  return `<div class="cust-etrn-banner"><strong>ЭТрН:</strong> подпишите T1 (вы — грузоотправитель) ${btns}</div>`;
 }
 function wireCustomerEtrnT1(root){
   (root||document).querySelectorAll('.cust-etrn-t1-sign').forEach(btn=>{
     btn.onclick=()=>{
       const oid=btn.dataset.orderId;
       const o=(state.orders||[]).find(x=>x.id===oid);
-      const co=o&&findCompanyById(o.customerId);
-      const by=co?co.name:'грузоотправитель';
+      const ship=orderShipperInfo(o);
+      const by=ship.name||'грузоотправитель';
       if(signEtrnTitul(oid,'t1',by)){
         if(typeof bumpDataEpoch==='function') bumpDataEpoch('etrn-t1-customer');
         if(typeof renderCustomerPortal==='function') renderCustomerPortal();
       }
     };
   });
+  (root||document).querySelectorAll('.cust-etrn-shipper-copy').forEach(btn=>{
+    btn.onclick=async()=>{
+      const url=btn.dataset.url||'';
+      if(!url){ alert('Ссылка недоступна'); return; }
+      try{
+        await navigator.clipboard.writeText(url);
+        btn.textContent='Скопировано';
+        setTimeout(()=>{ btn.textContent='Скопировать ссылку'; }, 2000);
+      }catch(_){
+        prompt('Скопируйте ссылку для грузоотправителя:', url);
+      }
+    };
+  });
+}
+function renderShipperEtrnT1Overlay(orderId, token){
+  const overlay=$('cust-shipper-etrn-overlay');
+  const body=$('cust-shipper-etrn-body');
+  if(!overlay||!body) return false;
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o||!validateShipperEtrnT1Token(o, token)){
+    body.innerHTML='<p class="error">Ссылка недействительна или устарела.</p>';
+    overlay.hidden=false;
+    return false;
+  }
+  if(!o.etrn && typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+  const ship=orderShipperInfo(o);
+  const t1Signed=o.etrn&&o.etrn.tituls&&o.etrn.tituls.t1==='signed';
+  const atLoading=orderEtrnLoadingPhase(o);
+  let inner='';
+  if(t1Signed){
+    inner=`<p><strong>T1 подписан.</strong> Спасибо, ${esc(ship.name||'грузоотправитель')}.</p>`;
+  }else if(!atLoading){
+    inner=`<p class="hint">Заявка № ${esc(o.sequentialNumber||'—')} · ${esc(routeText(o)||'')}</p>
+      <p>Подпись T1 будет доступна, когда водитель приедет на погрузку.</p>`;
+  }else{
+    inner=`<p class="hint">Заявка № ${esc(o.sequentialNumber||'—')} · ${esc(routeText(o)||'')}</p>
+      <p><strong>${esc(ship.name||'Грузоотправитель')}</strong>, подтвердите отгрузку груза (T1 в ЭТрН).</p>
+      <button type="button" class="primary" id="cust-shipper-etrn-sign">Подписать T1</button>`;
+  }
+  body.innerHTML=inner;
+  overlay.hidden=false;
+  const signBtn=$('cust-shipper-etrn-sign');
+  if(signBtn){
+    signBtn.onclick=()=>{
+      const by=ship.name||'грузоотправитель';
+      if(signEtrnTitul(orderId,'t1',by)){
+        renderShipperEtrnT1Overlay(orderId, token);
+        if(typeof bumpDataEpoch==='function') bumpDataEpoch('etrn-t1-shipper');
+      }
+    };
+  }
+  return true;
+}
+function tryInitShipperEtrnT1FromUrl(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    const orderId=String(q.get('etrn-t1')||'').trim();
+    const token=String(q.get('t')||'').trim();
+    if(!orderId||!token) return false;
+    return renderShipperEtrnT1Overlay(orderId, token);
+  }catch(_){ return false; }
 }
 function signEtrnTitulsAtLoading(orderId){
   const o=(state.orders||[]).find(x=>x.id===orderId);
@@ -421,7 +547,7 @@ async function openDriverEtrnSign(orderId){
     if(t.t3==='pending'||t.t2==='pending'||t.t1==='pending'){
       if(t.t1==='pending'){
         renderDriverBanner();
-        alert(`ЭТрН: ждём подпись T1 от грузоотправителя · заказ №${o.sequentialNumber}\n\nПопросите заказчика подписать в личном кабинете.`);
+        alert(`ЭТрН: ждём подпись T1 от грузоотправителя · заказ №${o.sequentialNumber}\n\n${orderShipperSameAsCustomer(o)?'Попросите заказчика подписать в личном кабинете.':'Отправьте ссылку грузоотправителю (заказчик получил её в кабинете).'}`);
         return;
       }
       if(t.t2==='pending') signEtrnTitul(o.id,'t2','перевозчик');

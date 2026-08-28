@@ -2576,6 +2576,25 @@ function openDetail(id){
             <input id="d-unloading-contact-phone" inputmode="tel" value="${esc(formatPhone(o.unloadingContactPhone||''))}" placeholder="+79650730002" />
           </div>
         </div>
+        <label class="cust-check-item">
+          <input type="checkbox" id="d-shipper-same" ${o.shipperSameAsCustomer!==false?'checked':''} />
+          <span>Грузоотправитель = заказчик</span>
+        </label>
+        <div id="d-shipper-fields" class="cust-shipper-fields" ${o.shipperSameAsCustomer!==false?'hidden':''}>
+          <p class="hint">Грузоотправитель подписывает T1 в ЭТрН на погрузке.</p>
+          <div class="form-pair">
+            <div>
+              <label for="d-shipper-name">Грузоотправитель</label>
+              <input id="d-shipper-name" value="${esc(o.shipperName||'')}" placeholder="Организация или ФИО" />
+            </div>
+            <div>
+              <label for="d-shipper-phone">Телефон</label>
+              <input id="d-shipper-phone" inputmode="tel" value="${esc(formatPhone(o.shipperPhone||''))}" placeholder="+79650730002" />
+            </div>
+          </div>
+          <label for="d-shipper-inn">ИНН грузоотправителя</label>
+          <input id="d-shipper-inn" value="${esc(o.shipperInn||'')}" placeholder="необязательно" />
+        </div>
         <label for="d-empty-after">Пробег до стоянки, км</label>
         <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
       </div>
@@ -2711,6 +2730,11 @@ function openDetail(id){
   wireRateAutoFill(o);
   wireOrderDocs(id);
   wireOrderEtrn(id);
+  const shipSameEl=$('d-shipper-same');
+  const shipBox=$('d-shipper-fields');
+  if(shipSameEl&&shipBox){
+    shipSameEl.onchange=()=>{ shipBox.hidden=shipSameEl.checked; };
+  }
   $('d-customer-inn-lookup')&&($('d-customer-inn-lookup').onclick=()=>{
     applyCustomerFromInn((($('d-customer-inn')||{}).value||'').trim(), $('d-customer-inn-status'), 'd');
   });
@@ -2784,6 +2808,10 @@ function openDetail(id){
     order.loadingContactPhone=formatPhone((($('d-loading-contact-phone')||{}).value||'').trim());
     order.unloadingContactName=(($('d-unloading-contact-name')||{}).value||'').trim();
     order.unloadingContactPhone=formatPhone((($('d-unloading-contact-phone')||{}).value||'').trim());
+    order.shipperSameAsCustomer=!($('d-shipper-same')&&!$('d-shipper-same').checked);
+    order.shipperName=(($('d-shipper-name')||{}).value||'').trim();
+    order.shipperInn=(($('d-shipper-inn')||{}).value||'').trim();
+    order.shipperPhone=formatPhone((($('d-shipper-phone')||{}).value||'').trim());
     if(order.customer){
       const co=upsertCompany({name:order.customer, inn:custInn, roles:['customer'], spaceId:order.spaceId||currentSpaceId()});
       if(co){ order.customerId=co.id; order.customerInn=custInn||(co.inn||''); }

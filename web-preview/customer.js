@@ -1188,6 +1188,14 @@ function updateCustomerPricePreview(){
 }
 
 function showCustomerPortal(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    if(q.get('etrn-t1')&&q.get('t')&&typeof tryInitShipperEtrnT1FromUrl==='function'){
+      show('customer-portal');
+      tryInitShipperEtrnT1FromUrl();
+      return;
+    }
+  }catch(_){}
   if(!currentCustomer && !restoreCustomerSession()){
     openCustomerLogin();
     return;
@@ -1316,6 +1324,31 @@ function readCustomerVehicleAt(){
   return Number.isNaN(dt.getTime())?null:dt.toISOString();
 }
 
+function readCustomerShipperFields(){
+  const same=!($('cust-shipper-same')&&!$('cust-shipper-same').checked);
+  if(same) return {shipperSameAsCustomer:true, shipperName:'', shipperInn:'', shipperPhone:''};
+  return {
+    shipperSameAsCustomer:false,
+    shipperName:(($('cust-shipper-name')||{}).value||'').trim(),
+    shipperInn:(($('cust-shipper-inn')||{}).value||'').trim(),
+    shipperPhone:formatPhone((($('cust-shipper-phone')||{}).value||'').trim())
+  };
+}
+function syncCustomerShipperFields(){
+  const sameEl=$('cust-shipper-same');
+  const box=$('cust-shipper-fields');
+  if(!sameEl||!box) return;
+  const show=!sameEl.checked;
+  box.hidden=!show;
+  if(show){
+    const loadName=(($('cust-loading-contact-name')||{}).value||'').trim();
+    const loadPhone=formatPhone((($('cust-loading-contact-phone')||{}).value||'').trim());
+    const nameEl=$('cust-shipper-name');
+    const phoneEl=$('cust-shipper-phone');
+    if(nameEl&&!nameEl.value&&loadName) nameEl.value=loadName;
+    if(phoneEl&&!phoneEl.value&&loadPhone) phoneEl.value=loadPhone;
+  }
+}
 function showCustomerSubmitError(msg){
   const text=String(msg||'').trim();
   const formErr=$('cust-form-error');
@@ -1336,6 +1369,15 @@ function submitCustomerOrder(){
   const loadingContactPhone=formatPhone((($('cust-loading-contact-phone')||{}).value||'').trim());
   const unloadingContactName=(($('cust-unloading-contact-name')||{}).value||'').trim();
   const unloadingContactPhone=formatPhone((($('cust-unloading-contact-phone')||{}).value||'').trim());
+  const shipper=readCustomerShipperFields();
+  if(!shipper.shipperSameAsCustomer && !shipper.shipperName){
+    showCustomerSubmitError('Укажите грузоотправителя (кто подписывает ЭТрН на погрузке)');
+    return;
+  }
+  if(!shipper.shipperSameAsCustomer && !shipper.shipperPhone){
+    showCustomerSubmitError('Укажите телефон грузоотправителя для подписи ЭТрН');
+    return;
+  }
   const contactName=loadingContactName||loadingContactPhone||'';
   const contactPhone=loadingContactPhone||'';
   const cargoText=(($('cust-cargo-text')||{}).value||'').trim();
@@ -1374,10 +1416,10 @@ function submitCustomerOrder(){
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
   Promise.resolve(guardFn(spaceId,'create_order')).then(g=>{
     if(!g.ok){ showCustomerSubmitError(g.message); return; }
-    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
+    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
   });
 }
-function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, cargoText, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
+function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
@@ -1395,6 +1437,10 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     contactPhone:contactPhone||co.portalPhone||'',
     loadingContactName, loadingContactPhone,
     unloadingContactName, unloadingContactPhone,
+    shipperSameAsCustomer:shipper.shipperSameAsCustomer!==false,
+    shipperName:shipper.shipperName||'',
+    shipperInn:shipper.shipperInn||'',
+    shipperPhone:shipper.shipperPhone||'',
     cargoDescription:cargoText||'',
     cargoPlaces:draft.cargoPlaces||null,
     cargoVolumeM3:draft.cargoVolumeM3||null,
@@ -1481,6 +1527,7 @@ const CUST_CHAT_STEPS=[
   {id:'load', title:'Загрузка'},
   {id:'unload', title:'Выгрузка'},
   {id:'loadContact', title:'Контакт загрузки'},
+  {id:'shipper', title:'Грузоотправитель'},
   {id:'unloadContact', title:'Контакт выгрузки'},
   {id:'body', title:'Кузов'},
   {id:'loadMethod', title:'Погрузка'},
@@ -1502,11 +1549,13 @@ const CUST_ORDER_DRAFT_FIELD_IDS=[
   'cust-cargo-temp-from','cust-cargo-temp-to','cust-weight-value','cust-weight-unit',
   'cust-vehicle-date','cust-vehicle-time','cust-load','cust-unload',
   'cust-load-note','cust-unload-note','cust-loading-contact-name','cust-loading-contact-phone',
-  'cust-unloading-contact-name','cust-unloading-contact-phone','cust-price',
+  'cust-unloading-contact-name','cust-unloading-contact-phone',
+  'cust-shipper-name','cust-shipper-inn','cust-shipper-phone',
+  'cust-price',
   'cust-req-l','cust-req-w','cust-req-h','cust-book-plate','cust-fulfillment',
   'cust-body-type','cust-cargo-kind','cust-trip-mode'
 ];
-const CUST_ORDER_DRAFT_CHECK_IDS=['cust-cargo-fragile','cust-cargo-temp','cust-vehicle-date-cal-toggle','cust-load-match-all','cust-unload-match-all'];
+const CUST_ORDER_DRAFT_CHECK_IDS=['cust-cargo-fragile','cust-cargo-temp','cust-vehicle-date-cal-toggle','cust-load-match-all','cust-unload-match-all','cust-shipper-same'];
 let customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
 let customerDraftSaveTimer=null;
 let customerDraftApplying=false;
@@ -1631,7 +1680,7 @@ function customerSubmitSuccessMessage(invoice, order){
   html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (раздел выше)':'будет подготовлен'}</li>`;
   html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
   html+=`<li><strong>Акт</strong> — после закрытия заказа</li>`;
-  html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке, QR у водителя в пути</li>`;
+  html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке${order&&order.shipperSameAsCustomer===false?' (отдельная ссылка отправится грузоотправителю)':''}, QR у водителя в пути</li>`;
   html+=`</ul>`;
   if(invoice){
     html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
@@ -1789,6 +1838,7 @@ function applyCustomerOrderDraft(draft){
     syncCustomerCargoKind();
     syncCustomerTempField();
     syncCustomerVehicleDateCalVisibility();
+    syncCustomerShipperFields();
     if(draft.vehicleDateCal){
       customerVehicleDateCal.year=+draft.vehicleDateCal.year||customerVehicleDateCal.year;
       customerVehicleDateCal.month=+draft.vehicleDateCal.month||customerVehicleDateCal.month;
@@ -2146,6 +2196,7 @@ function customerChatBotPrompt(stepId){
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Укажите адрес загрузки.';
   if(stepId==='unload') return '<strong>Куда везём?</strong>';
   if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — чтобы водитель мог связаться на месте.';
+  if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> Грузоотправитель подписывает ЭТрН (T1) на погрузке. Заказчик перевозки может быть другим.';
   if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Имя и телефон (можно пропустить, если тот же).';
   if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
   if(stepId==='loadMethod'){
@@ -2226,6 +2277,15 @@ function customerChatApplyToForm(){
   if(loadPhoneEl && d.loadingContactPhone!=null) loadPhoneEl.value=d.loadingContactPhone;
   if(unloadNameEl && d.unloadingContactName!=null) unloadNameEl.value=d.unloadingContactName;
   if(unloadPhoneEl && d.unloadingContactPhone!=null) unloadPhoneEl.value=d.unloadingContactPhone;
+  const shipSameEl=$('cust-shipper-same');
+  if(shipSameEl) shipSameEl.checked=d.shipperSameAsCustomer!==false;
+  const shipNameEl=$('cust-shipper-name');
+  const shipInnEl=$('cust-shipper-inn');
+  const shipPhoneEl=$('cust-shipper-phone');
+  if(shipNameEl && d.shipperName!=null) shipNameEl.value=d.shipperName;
+  if(shipInnEl && d.shipperInn!=null) shipInnEl.value=d.shipperInn;
+  if(shipPhoneEl && d.shipperPhone!=null) shipPhoneEl.value=d.shipperPhone;
+  syncCustomerShipperFields();
   if(d.bodyVtype) customerChatSetVehicleType(d.bodyVtype);
   if(Array.isArray(d.loadMethods)||Array.isArray(d.unloadMethods)){
     clearCustomerLoadUnloadMethods();
@@ -2295,6 +2355,7 @@ function customerChatSummaryHtml(){
     {id:'load', label:'Загрузка', val:d.load||'—', html:false},
     {id:'unload', label:'Выгрузка', val:d.unload||'—', html:false},
     {id:'loadContact', label:'Контакт загрузки', val:customerChatContactLine(d.loadingContactName, d.loadingContactPhone), html:false},
+    {id:'shipper', label:'Грузоотправитель', val:d.shipperSameAsCustomer!==false?'Заказчик':customerChatContactLine(d.shipperName, d.shipperPhone), html:false},
     {id:'unloadContact', label:'Контакт выгрузки', val:customerChatContactLine(d.unloadingContactName, d.unloadingContactPhone), html:false},
     {id:'body', label:'Кузов', val:d.bodyVtype?customerChatBodyLabel(d.bodyVtype):'—', html:false},
     {id:'loadMethod', label:'Погрузка', val:(d.loadMethods||[]).length?customerChatMethodsLabel(d.loadMethods):'—', html:false},
@@ -2363,6 +2424,21 @@ function customerChatRenderWidgets(){
         !isLoad?`<button type="button" class="chat-chip muted" id="cust-chat-contact-skip">Пропустить</button>
       <button type="button" class="chat-chip muted" id="cust-chat-contact-same">Как на загрузке</button>`:''
       }</div>`;
+  }else if(step.id==='shipper'){
+    const other=customerChat.data.shipperSameAsCustomer===false;
+    widget=`<div class="chat-chips">
+      <button type="button" class="chat-chip primary${!other?' is-selected':''}" id="cust-chat-shipper-yes">Да, я грузоотправитель</button>
+      <button type="button" class="chat-chip muted${other?' is-selected':''}" id="cust-chat-shipper-no">Нет, другой</button>
+    </div>
+    <div class="chat-widget" id="cust-chat-shipper-other"${other?'':' hidden'}>
+      <div class="chat-widget-row">
+        <input id="cust-chat-shipper-name" placeholder="Организация или ФИО" value="${esc(customerChat.data.shipperName||'')}" aria-label="Грузоотправитель" />
+        <input id="cust-chat-shipper-phone" placeholder="+7…" value="${esc(customerChat.data.shipperPhone||'')}" inputmode="tel" aria-label="Телефон" style="max-width:9.5rem" />
+      </div>
+      <div class="chat-chips" style="padding-left:0;margin-top:8px">
+        <button type="button" class="chat-chip primary" id="cust-chat-shipper-ok">Далее →</button>
+      </div>
+    </div>`;
   }else if(step.id==='body'){
     widget=`<div class="chat-widget chat-vtype-widget">
       <input type="search" id="cust-chat-vtype-search" placeholder="тр, тент, трал…" autocomplete="off" aria-label="Поиск типа кузова" />
@@ -2530,6 +2606,50 @@ function customerChatWireWidgets(stepId){
       el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } };
     });
     setTimeout(()=>{(phoneInp||nameInp).focus();}, 80);
+  }
+  if(stepId==='shipper'){
+    const yes=$('cust-chat-shipper-yes');
+    const no=$('cust-chat-shipper-no');
+    const otherBox=$('cust-chat-shipper-other');
+    const ok=$('cust-chat-shipper-ok');
+    const nameInp=$('cust-chat-shipper-name');
+    const phoneInp=$('cust-chat-shipper-phone');
+    const submitOther=()=>{
+      const name=(nameInp&&nameInp.value||'').trim();
+      const phone=formatPhone((phoneInp&&phoneInp.value||'').trim());
+      const err=$('cust-chat-error');
+      if(!name){ if(err) err.textContent='Укажите грузоотправителя'; if(nameInp) nameInp.focus(); return; }
+      if(!phone){ if(err) err.textContent='Укажите телефон грузоотправителя'; if(phoneInp) phoneInp.focus(); return; }
+      if(err) err.textContent='';
+      customerChat.data.shipperSameAsCustomer=false;
+      customerChat.data.shipperName=name;
+      customerChat.data.shipperPhone=phone;
+      customerChatApplyToForm();
+      saveCustomerChatState();
+      customerChatAdvance(customerChatContactLine(name, phone));
+    };
+    if(yes) yes.onclick=()=>{
+      customerChat.data.shipperSameAsCustomer=true;
+      customerChat.data.shipperName='';
+      customerChat.data.shipperPhone='';
+      customerChatApplyToForm();
+      saveCustomerChatState();
+      customerChatAdvance('Я грузоотправитель');
+    };
+    if(no) no.onclick=()=>{
+      customerChat.data.shipperSameAsCustomer=false;
+      if(otherBox) otherBox.hidden=false;
+      const n=customerChat.data.loadingContactName||'';
+      const p=customerChat.data.loadingContactPhone||'';
+      if(nameInp&&!nameInp.value&&n) nameInp.value=n;
+      if(phoneInp&&!phoneInp.value&&p) phoneInp.value=p;
+      setTimeout(()=>{(nameInp||phoneInp).focus();}, 80);
+    };
+    if(ok) ok.onclick=submitOther;
+    [nameInp, phoneInp].forEach(el=>{
+      if(!el) return;
+      el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submitOther(); } };
+    });
   }
   if(stepId==='body'){
     document.querySelectorAll('[data-chat-body]').forEach(btn=>{
@@ -2922,6 +3042,16 @@ function wireCustomerPortal(){
   wireCustomerVtypeSearch();
   wireCustomerFormChecklist();
   wireCustomerOrderMode();
+  syncCustomerShipperFields();
+  const shipSameEl=$('cust-shipper-same');
+  if(shipSameEl && !shipSameEl.dataset.wired){
+    shipSameEl.dataset.wired='1';
+    shipSameEl.onchange=()=>{ syncCustomerShipperFields(); scheduleCustomerOrderDraftSave(); };
+  }
+  ['cust-shipper-name','cust-shipper-phone','cust-shipper-inn'].forEach(id=>{
+    const el=$(id);
+    if(el) el.oninput=()=>scheduleCustomerOrderDraftSave();
+  });
   syncCustomerVehicleDateCalVisibility();
   syncCustomerTempField();
   const restoreBtn=$('cust-draft-restore');
