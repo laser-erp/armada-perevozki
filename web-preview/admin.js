@@ -584,13 +584,16 @@ function renderAdminActivity(){
     const isSuper=!!(($('adm-super-'+i)||{}).checked);
     if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
     state.admins[i].pin=pin;
-    if(typeof WEAK_ADMIN_PINS!=='undefined' && !WEAK_ADMIN_PINS.has(pin)) delete state.admins[i].mustChangePin;
-    if(state.admins[i].id==='admin-super'){
+    const isSuperRow=!!state.admins[i].isSuper || state.admins[i].id==='admin-super';
+    const weak=typeof isRecoveryOrWeakAdminPin==='function'?isRecoveryOrWeakAdminPin(pin)
+      :(typeof WEAK_ADMIN_PINS!=='undefined' && WEAK_ADMIN_PINS.has(pin));
+    if(!weak) delete state.admins[i].mustChangePin;
+    if(isSuperRow){
       if(!state.settings) state.settings={};
-      if(pin!==SUPER_ADMIN_RECOVERY_PIN && !WEAK_ADMIN_PINS.has(pin)){
-        state.settings.superPinChangedByUser=true;
+      if(!weak){
+        if(typeof markSuperPinChangedByUser==='function') markSuperPinChangedByUser();
+        else { state.settings.superPinChangedByUser=true; delete state.settings.superPinRecoveryNotice; }
       }
-      delete state.settings.superPinRecoveryNotice;
     }
     state.admins[i].isSuper=isSuper;
     if(!state.admins.some(a=>a.isSuper)){ alert('Должен остаться хотя бы один супер админ'); state.admins[i].isSuper=true; }
@@ -602,6 +605,7 @@ function renderAdminActivity(){
       saveAdminSession();
       updateAdminChrome();
     }
+    if(typeof bumpDataEpoch==='function') bumpDataEpoch('admin-pin');
     persist(); renderAdminActivity();
   });
   document.querySelectorAll('[data-del-adm]').forEach(b=>b.onclick=()=>{
