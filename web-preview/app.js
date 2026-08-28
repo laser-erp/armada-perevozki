@@ -2352,6 +2352,9 @@ function renderDriverBanner(){
   document.querySelectorAll('.banner-etrn-sign').forEach(b=>b.onclick=()=>{
     if(typeof openDriverEtrnSign==='function') openDriverEtrnSign(b.dataset.etrnSign);
   });
+  document.querySelectorAll('.banner-etrn-qr').forEach(b=>b.onclick=()=>{
+    if(typeof driverEtrnShowQr==='function') driverEtrnShowQr(b.dataset.etrnQr);
+  });
   if(typeof refreshDriverEtrnFromApi==='function') refreshDriverEtrnFromApi().then(changed=>{
     if(changed && typeof renderDriverBanner==='function') renderDriverBanner();
   });

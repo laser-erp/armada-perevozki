@@ -382,6 +382,8 @@
     .driver-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.3}
     .driver-banner .banner-actions{margin-top:8px;display:flex;flex-direction:column;gap:6px}
     .driver-banner button{width:100%}
+    .driver-etrn-qr-block{margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,.08)}
+    .driver-etrn-qr-block .hint{font-size:.72rem}
     .driver-net{
       display:none;flex-shrink:0;margin:0;padding:7px 12px;font-size:.72rem;font-weight:600;line-height:1.3;
       background:rgba(245,158,11,.12);color:#92400E;border-bottom:1px solid rgba(245,158,11,.35)

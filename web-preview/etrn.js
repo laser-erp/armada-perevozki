@@ -8,8 +8,19 @@ function etrnTitulStatusLabel(st){
   if(st==='error') return 'ошибка';
   return 'ожидает';
 }
+function orderEtrnEligible(o){
+  if(!o || o.cancelledAt || looksClosedOrder(o)) return false;
+  if(typeof orderHasDriverVehicleAssigned==='function') return orderHasDriverVehicleAssigned(o);
+  const drv=String(o.driverName||'').trim();
+  const plate=String(o.vehiclePlate||'').trim();
+  return !!(drv && plate && drv!=='—' && plate!=='—' && drv!=='Диспетчер' && drv!=='Биржа');
+}
+function orderEtrnTransportActive(o){
+  if(!o || looksClosedOrder(o) || o.cancelledAt) return false;
+  return o.departOdometer!=null || o.startOdometer!=null;
+}
 function orderEtrnSectionHtml(o){
-  if(!o || !looksClosedOrder(o)) return '';
+  if(!o || !orderEtrnEligible(o)) return '';
   const et=o.etrn;
   const tituls=et&&et.tituls?Object.entries(et.tituls).map(([k,v])=>
     `<div class="calc-row"><span>${esc(etrnTitulLabel(k))}</span><span>${esc(etrnTitulStatusLabel(v))}</span></div>`
@@ -19,7 +30,7 @@ function orderEtrnSectionHtml(o){
        ${et.createdAt?`<p class="hint">Создан: ${esc(dateTime(et.createdAt))}</p>`:''}
        ${tituls?`<div class="calc" style="margin-top:8px">${tituls}</div>`:''}
        ${et.lastError?`<p class="error">${esc(et.lastError)}</p>`:''}`
-    : `<p class="hint">Электронная транспортная накладная (ЭТрН) — после закрытия заказа. Sandbox до подключения оператора.</p>`;
+    : `<p class="hint">Электронная транспортная накладная (ЭТрН) — после назначения ТС и водителя, до/во время рейса. QR у водителя для инспектора. Sandbox до подключения оператора.</p>`;
   return `
     <section class="form-section" id="etrn-section">
       <h2 class="form-section-title">ЭТрН</h2>
@@ -51,6 +62,78 @@ function applyEtrnToOrder(order, etrn){
     sandbox:!!etrn.sandbox,
     signUrl:etrn.signUrl||etrn.driverSignUrl||null
   };
+}
+function ensureEtrnForOrder(order, opts){
+  if(!order||!orderEtrnEligible(order)) return null;
+  if(order.etrn) return order.etrn;
+  const silent=opts&&opts.silent;
+  const etrn=sandboxCreateEtrnLocal(order);
+  if(typeof logOpsEvent==='function') logOpsEvent('etrn','Авто ЭТрН заказ '+order.sequentialNumber,{ orderId:order.id, externalId:etrn.externalId });
+  upsertOrder(order);
+  persist();
+  if(!silent && typeof bumpDataEpoch==='function') bumpDataEpoch('etrn-auto');
+  return etrn;
+}
+function etrnQrPayload(order){
+  const et=order&&order.etrn;
+  if(!et) return '';
+  const base=(typeof location!=='undefined'&&location.origin)?location.origin:'https://app.armada.sx';
+  return JSON.stringify({
+    type:'armada-etrn',
+    orderId:order.id,
+    orderNo:order.sequentialNumber,
+    externalId:et.externalId||'',
+    operatorId:et.operatorId||'stub',
+    route:typeof routeText==='function'?routeText(order):'',
+    vehicle:order.vehiclePlate||'',
+    driver:order.driverName||'',
+    verify:`${base}/?etrn=${encodeURIComponent(order.id)}`
+  });
+}
+function drawEtrnQrCanvas(text, size){
+  const qr=typeof qrcode==='function'?qrcode(0,'M'):null;
+  if(!qr||!text) return null;
+  qr.addData(String(text));
+  qr.make();
+  const n=qr.getModuleCount();
+  const cell=Math.max(2, Math.floor((size||160)/n));
+  const canvas=document.createElement('canvas');
+  canvas.width=canvas.height=n*cell;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#000';
+  for(let r=0;r<n;r++) for(let c=0;c<n;c++){
+    if(qr.isDark(r,c)) ctx.fillRect(c*cell,r*cell,cell,cell);
+  }
+  return canvas;
+}
+function driverEtrnShowQr(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o) return;
+  if(!o.etrn && typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+  const canvas=drawEtrnQrCanvas(etrnQrPayload(o), 200);
+  if(!canvas){ alert('QR недоступен — обновите приложение'); return; }
+  const w=window.open('', '_blank', 'noopener,width=360,height=420');
+  if(!w){ alert('Разрешите всплывающие окна для QR ЭТрН'); return; }
+  w.document.write(`<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>ЭТрН №${o.sequentialNumber||''}</title>
+<style>body{font-family:system-ui,sans-serif;text-align:center;padding:16px;margin:0}h1{font-size:1rem;margin:0 0 8px}p{font-size:.85rem;color:#555;margin:6px 0}</style></head><body>
+<h1>ЭТрН · заказ №${o.sequentialNumber||'—'}</h1>
+<p>${esc(routeText(o))}</p>
+<p>${esc(o.vehiclePlate||'')} · ${esc(o.driverName||'')}</p>
+<p><strong>Покажите инспектору</strong></p>
+</body></html>`);
+  w.document.body.appendChild(canvas);
+  w.document.close();
+}
+function driverActiveEtrnOrders(){
+  if(typeof DRIVER==='undefined' || !DRIVER) return [];
+  return (state.orders||[]).filter(o=>{
+    if(!o || !orderEtrnTransportActive(o)) return false;
+    if(typeof orderBelongsToDriver==='function' && !orderBelongsToDriver(o)) return false;
+    if(!o.etrn && typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+    return !!o.etrn;
+  });
 }
 function sandboxCreateEtrnLocal(o){
   const extId=`local-${o.id}-${Date.now()}`;
@@ -101,7 +184,7 @@ async function createEtrnForOrder(orderId){
   const btn=$('etrn-create');
   const o=(state.orders||[]).find(x=>x.id===orderId);
   if(!o){ if(statusEl) statusEl.textContent='Заказ не найден'; return; }
-  if(!looksClosedOrder(o)){ if(statusEl) statusEl.textContent='Заказ не закрыт'; return; }
+  if(!orderEtrnEligible(o)){ if(statusEl) statusEl.textContent='Нужны водитель и ТС'; return; }
   if(o.etrn){ if(statusEl) statusEl.textContent='Уже создан'; return; }
   const sid=o.spaceId||currentSpaceId();
   if(typeof billingGuardWithServer==='function'){
@@ -171,14 +254,27 @@ async function openDriverEtrnSign(orderId){
   alert(`ЭТрН (sandbox): заказ №${o.sequentialNumber||'—'}\nОператор: ${et.operatorId||'stub'}\nID: ${et.externalId||'—'}\nПодпись: ${tit}\n\nПосле подключения оператора откроется ссылка или QR для подписи T3/T4.`);
 }
 function driverEtrnBannerHtml(){
+  let html='';
+  const active=typeof driverActiveEtrnOrders==='function'?driverActiveEtrnOrders():[];
+  active.forEach(o=>{
+    const et=o.etrn||{};
+    html+=`<div class="driver-etrn-qr-block">
+      <strong>ЭТрН · заказ № ${esc(o.sequentialNumber||'—')}</strong>
+      <p class="hint">Покажите QR инспектору на дороге</p>
+      <button type="button" class="secondary banner-etrn-qr" data-etrn-qr="${esc(o.id)}">Показать QR ЭТрН</button>
+      <span class="hint">ID: ${esc(et.externalId||'—')}</span>
+    </div>`;
+  });
   const list=driverEtrnPendingOrders();
-  if(!list.length) return '';
-  const items=list.map(o=>{
-    const tit=driverEtrnTitulsPending(o);
-    return `<p>Заказ № ${esc(o.sequentialNumber||'—')} — ${esc(tit)}
-      <button type="button" class="secondary banner-etrn-sign" data-etrn-sign="${esc(o.id)}">Подписать ЭТрН</button></p>`;
-  }).join('');
-  return `<strong>ЭТрН: подпись водителя</strong>${items}`;
+  if(list.length){
+    const items=list.map(o=>{
+      const tit=driverEtrnTitulsPending(o);
+      return `<p>Заказ № ${esc(o.sequentialNumber||'—')} — ${esc(tit)}
+        <button type="button" class="secondary banner-etrn-sign" data-etrn-sign="${esc(o.id)}">Подписать ЭТрН</button></p>`;
+    }).join('');
+    html+=`<strong>ЭТрН: подпись водителя</strong>${items}`;
+  }
+  return html;
 }
 async function refreshDriverEtrnFromApi(){
   if(!API_BASE || typeof DRIVER==='undefined' || !DRIVER) return false;

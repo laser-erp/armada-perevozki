@@ -465,7 +465,9 @@ function customerOrderDocStatus(kind, o){
   }
   if(kind==='etrn'){
     const et=o.etrn;
-    if(!et) return {label:'После рейса', cls:'draft', available:false};
+    if(!orderHasDriverVehicleAssigned(o)) return {label:'После назначения ТС', cls:'draft', available:false};
+    if(!et) return {label:'Перед выездом', cls:'draft', available:false};
+    if(orderEtrnTransportActive&&orderEtrnTransportActive(o)) return {label:'У водителя (QR)', cls:'ready', available:true};
     const st=et.status||'draft';
     const lbl=st==='signed'||st==='completed'?'Готов':st==='draft'?'Черновик':'В работе';
     return {label:lbl, cls:st==='draft'?'draft':'ready', available:true};
