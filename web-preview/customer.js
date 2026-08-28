@@ -1081,6 +1081,7 @@ function showCustomerPortal(){
   }
   renderCustomerPortal();
   maybePromptCustomerOrderDraft();
+  syncCustomerOrderModeUi();
   show('customer-portal');
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeCustomer();
 }
