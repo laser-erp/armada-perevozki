@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-27-entrybc21";
+const APP_BUILD="2026-08-28-entrybc22";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -477,11 +477,12 @@ const ARMADA_API_TOKEN_KEY="armada_api_token_v1";
 const LAST_ROLE_KEY="armada_last_role_v1";
 const PRESENCE_ONLINE_MS=90*1000;
 const PRESENCE_TICK_MS=25*1000;
-const AUTO_SYNC_MS=28*1000;
-const AUTO_SYNC_SLOW_MS=50*1000;
-const FETCH_TIMEOUT_MS=10000;
-const FETCH_PREFLIGHT_MS=6000;
-const PERSIST_DEBOUNCE_MS=1400;
+const AUTO_SYNC_MS=55*1000;
+const AUTO_SYNC_SLOW_MS=70*1000;
+const FETCH_TIMEOUT_MS=8000;
+const FETCH_PREFLIGHT_MS=4000;
+const INIT_FETCH_MS=5000;
+const PERSIST_DEBOUNCE_MS=1800;
 const SYNC_BACKOFF_MAX_MS=90000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
 function uuid(){
@@ -1594,54 +1595,52 @@ async function patchServerStatePayload(payload){
   if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
   return { ok:true, aborted:false };
 }
-async function pushServerState(){
-  // Перед записью сверяем эпоху (с таймаутом — при плохой сети не блокируемся).
-  try{
-    const rec=await fetchServerState(FETCH_PREFLIGHT_MS);
-    if(rec){
-      pbRecordId=rec.id;
-      const remote=rec.payload||{};
-      // tombstone только расширяем — старая вкладка не должна очищать удалённые id
-      unionDeletedOrderIds(remote.deletedOrderIds||[]);
-      state.orders=stripCancelledFromOrders(state.orders);
-      (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
-      const remoteEpoch=Number(remote.dataEpoch)||0;
-      const localEpoch=Number(state.dataEpoch)||0;
-      if(remoteEpoch>localEpoch){
-        const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
-        const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-        const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
-        // Сначала сервер, потом аккуратно вернём локальный прогресс ЕТО/заказов
-        applyPayload(remote, {remoteSeq:true});
-        let merged=false;
-        if(mergeLocalShifts(localShifts)) merged=true;
-        if(liveShift && mergeLocalShifts([liveShift])) merged=true;
-        if(mergeLocalOrders(localOrders)) merged=true;
-        if(healOrphanOrdersIntoShifts()) merged=true;
-        if(migrateEtoFromMessages()) merged=true;
-        if(merged){
-          bumpDataEpoch('merge-local-remote-ahead');
-          localStorage.setItem(KEY, JSON.stringify(snapshot()));
-          try{
-            await patchServerStatePayload(snapshot());
-            console.warn('push merged local into remote epoch', remoteEpoch);
-            return {aborted:false, merged:true};
-          }catch(e){ console.warn('merge push', e); }
-        } else {
-          localStorage.setItem(KEY, JSON.stringify(snapshot()));
-        }
-        console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
-        return {aborted:true, reason:'remote_ahead'};
-      }
-    }
-  }catch(err){
-    console.warn('PB preflight', err);
+async function mergeRemoteAheadOnPush(remote){
+  if(!remote||typeof remote!=='object') return {aborted:true, reason:'remote_ahead'};
+  unionDeletedOrderIds(remote.deletedOrderIds||[]);
+  state.orders=stripCancelledFromOrders(state.orders);
+  (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
+  const remoteEpoch=Number(remote.dataEpoch)||0;
+  const localEpoch=Number(state.dataEpoch)||0;
+  if(remoteEpoch<=localEpoch) return {aborted:false};
+  const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+  const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+  const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+  applyPayload(remote, {remoteSeq:true});
+  let merged=false;
+  if(mergeLocalShifts(localShifts)) merged=true;
+  if(liveShift && mergeLocalShifts([liveShift])) merged=true;
+  if(mergeLocalOrders(localOrders)) merged=true;
+  if(healOrphanOrdersIntoShifts()) merged=true;
+  if(migrateEtoFromMessages()) merged=true;
+  if(merged){
+    bumpDataEpoch('merge-local-remote-ahead');
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    try{
+      await patchServerStatePayload(snapshot());
+      console.warn('push merged local into remote epoch', remoteEpoch);
+      return {aborted:false, merged:true};
+    }catch(e){ console.warn('merge push', e); }
+  } else {
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
   }
+  console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
+  return {aborted:true, reason:'remote_ahead'};
+}
+async function pushServerState(){
   const payload=snapshot();
   localStorage.setItem(KEY, JSON.stringify(payload));
-  const pushed=await patchServerStatePayload(payload);
-  if(pushed.ok) return {aborted:false};
-  if(pushed.aborted) return {aborted:true, reason:'remote_ahead'};
+  try{
+    const pushed=await patchServerStatePayload(payload);
+    if(pushed.ok) return {aborted:false};
+    if(pushed.aborted){
+      if(pushed.remotePayload) return mergeRemoteAheadOnPush(pushed.remotePayload);
+      return {aborted:true, reason:'remote_ahead'};
+    }
+  }catch(err){
+    console.warn('PB push', err);
+    throw err;
+  }
   throw new Error('Не удалось сохранить');
 }
 function persist(){
@@ -1665,7 +1664,7 @@ function persist(){
 async function initCloudSync(){
   syncStatus='syncing';
   try{
-    const rec=await fetchServerState();
+    const rec=await fetchServerState(INIT_FETCH_MS);
     if(rec){
       pbRecordId=rec.id;
       const remote=rec.payload||{};
@@ -1692,6 +1691,10 @@ async function initCloudSync(){
     syncStatus='error';
     console.warn('PB init', err);
   }
+}
+function scheduleAdminRerender(){
+  if(typeof renderAdminDebounced==='function') renderAdminDebounced();
+  else if(typeof renderAdmin==='function') renderAdmin();
 }
 /** Подтянуть новую эпоху с сервера без перезагрузки и без повторного PIN. */
 async function pullRemoteUpdates(reason){
@@ -1758,7 +1761,7 @@ async function pullRemoteUpdates(reason){
       if(detailId && (state.orders||[]).some(o=>o.id===detailId)) openDetail(detailId);
       else if(document.querySelector('#admin-vehicle-card.show') && state._vehicleCardId) openVehicleCard(state._vehicleCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
-      else if(document.querySelector('#admin.show')) renderAdmin();
+      else if(document.querySelector('#admin.show')) scheduleAdminRerender();
     } else if(typeof currentCustomer!=='undefined' && currentCustomer || document.querySelector('#customer-portal.show')){
       if(typeof restoreCustomerSession==='function') restoreCustomerSession();
       if(typeof renderCustomerPortal==='function') renderCustomerPortal();
@@ -1823,7 +1826,7 @@ if(typeof document!=='undefined'){
         syncStatus='ok';
         if(typeof updateSyncHint==='function') updateSyncHint();
         if(typeof updateDriverNetHint==='function') updateDriverNetHint();
-        if(currentAdmin && typeof renderAdmin==='function') renderAdmin();
+        if(currentAdmin) scheduleAdminRerender();
         if(DRIVER && typeof renderDriverBanner==='function') renderDriverBanner();
         if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
         if(typeof currentCustomer!=='undefined' && currentCustomer && typeof renderCustomerPortal==='function') renderCustomerPortal();

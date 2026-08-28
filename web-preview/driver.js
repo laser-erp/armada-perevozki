@@ -356,7 +356,7 @@ function openDriverLogin(fromAdmin){
     back.onclick=()=>{
       if(fromAdmin && (currentAdmin || restoreAdminSession())){
         show('admin');
-        renderAdmin();
+        if(typeof renderAdmin==='function') renderAdmin();
         return;
       }
       backFromEntryLogin({fromAdmin:false});
@@ -468,7 +468,7 @@ function leaveDriverMode(){
   if(isDriverFromAdmin() && restoreAdminSession()){
     setDriverFromAdmin(false);
     show('admin');
-    renderAdmin();
+    if(typeof renderAdmin==='function') renderAdmin();
   } else if(getEntryMode()==='driver'){
     openDriverLogin(false);
   } else {

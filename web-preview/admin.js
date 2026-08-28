@@ -1830,6 +1830,11 @@ function renderAdminInboxBoard(orders){
   }).join('');
   return `${head}<div class="admin-cards">${cards}</div>`;
 }
+let renderAdminDebounceTimer=null;
+function renderAdminDebounced(){
+  clearTimeout(renderAdminDebounceTimer);
+  renderAdminDebounceTimer=setTimeout(()=>renderAdmin(), 100);
+}
 function renderAdmin(){
   const billBanner=$('admin-billing-banner');
   if(billBanner){

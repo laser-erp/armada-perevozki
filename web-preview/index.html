@@ -44,8 +44,8 @@
     }, 2500);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-27-entrybc21" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-27-entrybc21" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc22" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc22" />
 
 </head>
 <body>
@@ -544,15 +544,23 @@
     </div>
   </div>
 </div>
-  <script src="/store.js?v=2026-08-27-entrybc21"></script>
-<script src="/billing.js?v=2026-08-27-entrybc21"></script>
-<script src="/qrcode.min.js?v=2026-08-27-entrybc21"></script>
-<script src="/entry-share.js?v=2026-08-27-entrybc21"></script>
-<script src="/driver.js?v=2026-08-27-entrybc21"></script>
-<script src="/etrn.js?v=2026-08-27-entrybc21"></script>
-  <script src="/admin.js?v=2026-08-27-entrybc21"></script>
-  <script src="/customer.js?v=2026-08-27-entrybc21"></script>
-  <script src="/app.js?v=2026-08-27-entrybc21"></script>
-<script src="/onboarding.js?v=2026-08-27-entrybc21"></script>
+  <script>
+  (function(){
+    var v='2026-08-28-entrybc22';
+    var p=(location.pathname||'').toLowerCase();
+    var isV=/\/(v)(\/|$)/.test(p);
+    var isA=/\/(a)(\/|$)/.test(p);
+    var isZ=/\/(z)(\/|$)/.test(p);
+    var files=['store.js','billing.js'];
+    if(isV) files.push('entry-share.js','driver.js','etrn.js');
+    else if(isA) files.push('qrcode.min.js','entry-share.js','etrn.js','admin.js','onboarding.js');
+    else if(isZ) files.push('customer.js','onboarding.js');
+    else files.push('qrcode.min.js','entry-share.js','driver.js','etrn.js','admin.js','customer.js','onboarding.js');
+    files.push('app.js');
+    files.forEach(function(f){
+      document.write('<script src="/'+f+'?v='+v+'"><\/script>');
+    });
+  })();
+  </script>
 </body>
 </html>

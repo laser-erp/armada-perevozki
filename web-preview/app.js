@@ -3805,11 +3805,9 @@ try{
   if(urlEntry!=='customer'){
     initCloudSync().then(()=>{
       updateSyncHint();
-      setTimeout(()=>pullRemoteUpdates('post-init'), 800);
     }).catch(()=>updateSyncHint());
   } else {
     updateSyncHint();
-    setTimeout(()=>pullRemoteUpdates('post-init'), 800);
   }
   setTimeout(updateSyncHint, 700);
 })();
