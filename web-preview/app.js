@@ -736,13 +736,28 @@ function readOrderRequirementsFromCreate(){
     reqHeightM:numOrNull(($('create-req-h')||{}).value)
   };
 }
+/** Пространство фирмы заказа: spaceId, иначе через компанию или админа. */
+function orderSpaceId(o){
+  if(!o) return null;
+  if(o.spaceId) return o.spaceId;
+  if(o.ownCompanyId){
+    const co=findCompanyById(o.ownCompanyId);
+    if(co && co.spaceId) return co.spaceId;
+  }
+  if(o.ownerAdminId){
+    const adm=(state.admins||[]).find(a=>a.id===o.ownerAdminId);
+    if(adm && adm.spaceId) return adm.spaceId;
+  }
+  return null;
+}
 /** Фильтр супер-админа по пространству фирмы. */
 function matchesOwnerFilter(o){
   if(!isSuperAdmin()) return true;
   const f=state.adminOwnerFilter||'all';
   if(f==='all') return true;
-  if(f==='_none') return !o.spaceId;
-  return o.spaceId===f;
+  const sid=orderSpaceId(o);
+  if(f==='_none') return !sid;
+  return sid===f;
 }
 /** Парк конкретной «нашей фирмы» — то, что уходит в заявку. */
 function fleetDriversForCompany(companyId){
@@ -2352,12 +2367,27 @@ function migrateShiftOwners(){
   });
   return changed;
 }
+/** Пространство фирмы смены: spaceId, иначе через компанию или админа. */
+function shiftSpaceId(s){
+  if(!s) return null;
+  if(s.spaceId) return s.spaceId;
+  if(s.ownCompanyId){
+    const co=findCompanyById(s.ownCompanyId);
+    if(co && co.spaceId) return co.spaceId;
+  }
+  if(s.ownerAdminId){
+    const adm=(state.admins||[]).find(a=>a.id===s.ownerAdminId);
+    if(adm && adm.spaceId) return adm.spaceId;
+  }
+  return null;
+}
 function matchesShiftOwnerFilter(s){
   if(!isSuperAdmin()) return true;
   const f=state.adminOwnerFilter||'all';
   if(f==='all') return true;
-  if(f==='_none') return !s.spaceId;
-  return s.spaceId===f;
+  const sid=shiftSpaceId(s);
+  if(f==='_none') return !sid;
+  return sid===f;
 }
 /** Открытые смены водителей фирмы админа (для вкладки ЕТО). */
 function adminOpenShifts(){

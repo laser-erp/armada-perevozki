@@ -942,10 +942,7 @@ function dayKeyFromIso(iso){
 }
 function canAdminSeeShift(s){
   if(!s) return false;
-  if(isSuperAdmin()){
-    if(state.adminOwnerFilter==='all') return true;
-    return s.ownerAdminId===state.adminOwnerFilter || samePersonName(s.ownerAdminName||'', ((state.admins||[]).find(a=>a.id===state.adminOwnerFilter)||{}).name||'');
-  }
+  if(isSuperAdmin()) return true;
   const my=currentOwnCompany();
   if(my && s.ownCompanyId && s.ownCompanyId===my.id) return true;
   if(currentAdmin && s.ownerAdminId && s.ownerAdminId===currentAdmin.id) return true;
@@ -1083,9 +1080,20 @@ function ensureAdminOrderSelection(){
   }
   return state.adminSelectedOrderIds;
 }
+function currentFilteredOrderIds(){
+  return filteredOrders().map(o=>o.id).filter(Boolean);
+}
+function pruneAdminOrderSelection(visibleIds){
+  const sel=ensureAdminOrderSelection();
+  const vis=new Set(visibleIds||[]);
+  Object.keys(sel).forEach(id=>{
+    if(!vis.has(id)) delete sel[id];
+  });
+}
 function adminOrderPickCount(){
   const sel=ensureAdminOrderSelection();
-  return Object.keys(sel).filter(id=>sel[id]).length;
+  const visible=new Set(currentFilteredOrderIds());
+  return Object.keys(sel).filter(id=>sel[id] && visible.has(id)).length;
 }
 function adminOrderPickHtml(o){
   const sel=ensureAdminOrderSelection();
@@ -1141,7 +1149,8 @@ function wireAdminOrderDeleteUi(visibleOrders){
 }
 function adminDeleteSelectedOrders(){
   const sel=ensureAdminOrderSelection();
-  const ids=Object.keys(sel).filter(id=>sel[id]);
+  const visible=new Set(currentFilteredOrderIds());
+  const ids=Object.keys(sel).filter(id=>sel[id] && visible.has(id));
   if(!ids.length){ alert('Отметьте заказы галочкой'); return; }
   const orders=ids.map(id=>(state.orders||[]).find(o=>o.id===id)).filter(Boolean);
   const nums=orders.map(o=>o.sequentialNumber).sort((a,b)=>a-b);
@@ -1171,7 +1180,7 @@ function adminOrderCardHtml(o){
   const onEx=!!o.onExchange && !looksClosedOrder(o) && o.startOdometer==null;
   const st=statusText(o);
   const stCls=orderStatusClass(o);
-  const sp=findSpaceById(o.spaceId);
+  const sp=findSpaceById(orderSpaceId(o));
   const ownerLine=isSuperAdmin()
     ? `<p>Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
     : '';
@@ -1894,6 +1903,7 @@ function renderAdmin(){
     return;
   }
   const orders=filteredOrders();
+  pruneAdminOrderSelection(orders.map(o=>o.id).filter(Boolean));
   if(state.adminFilter==='exchange'){
     $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
