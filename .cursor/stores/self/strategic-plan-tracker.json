@@ -2,40 +2,40 @@
   "plan": "ARMADA_STRATEGIC_PLAN_2026",
   "branch": "cursor/compliance-p0-4317",
   "lastServerVerify": {
-    "at": "2026-08-28T12:55:00Z",
+    "at": "2026-08-28T12:58:00Z",
     "script": "scripts/run-strategic-verification.sh",
     "result": "pass",
-    "notes": "smoke PASS; APP_BUILD entrybc21; API health ok"
+    "notes": "smoke PASS + prod sync MATCH; APP_BUILD entrybc21"
   },
-  "updatedAt": "2026-08-28T12:55:00Z",
+  "updatedAt": "2026-08-28T12:58:00Z",
   "deploy": {
     "production": {
       "status": "done",
       "verified": "scripts/verify-prod-web-sync.sh",
-      "at": "2026-08-28T12:55:00Z",
-      "notes": "15 файлов MATCH; APP_BUILD 2026-08-27-entrybc21; PDF писем на /downloads/"
+      "at": "2026-08-28T12:58:00Z",
+      "notes": "15 файлов MATCH; APP_BUILD 2026-08-27-entrybc21"
     },
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "189c230",
+      "headCommit": "cf9213e",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
       "bundleHead": "189c230",
       "o02InstructionsUrl": "https://aptown1.fvds.ru/downloads/o02-github-instructions.txt",
       "deployKeyFingerprint": "SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI",
-      "notes": "GITHUB_DEPLOY_KEY ok; публичный ключ не в Deploy keys (write)"
+      "notes": "GITHUB_DEPLOY_KEY в env; публичный ключ не добавлен в Deploy keys (write)"
     }
   },
   "lastSmoke": {
-    "at": "2026-08-28T12:55:00Z",
+    "at": "2026-08-28T12:58:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass",
-    "notes": "entrybc21; S0 S1 S3 ETRN MVP PASS"
+    "notes": "S0 S1 S3 ETRN MVP PASS"
   },
   "lastProdSync": {
-    "at": "2026-08-28T12:55:00Z",
+    "at": "2026-08-28T12:58:00Z",
     "script": "scripts/verify-prod-web-sync.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "match",
@@ -57,7 +57,7 @@
     "S2": {
       "title": "Пилот 2–3 space",
       "status": "in_progress",
-      "notes": "/v /a /z + portal slug, backlog (sync, биржа, notify); ждут партнёров"
+      "notes": "/v /a /z + portal slug; ждут партнёров"
     },
     "S3": {
       "title": "ETRN MVP (2 спринта код)",
@@ -68,9 +68,9 @@
         "S3-sprint2": { "status": "done", "notes": "driver sign, API refresh, webhook" },
         "S3-1.2": {
           "status": "done",
-          "notes": "Фирменный бланк; PDF docs/operator-letters/ARMADA_Pismo_Operatoram_ETRN.pdf на проде"
+          "notes": "Фирменный бланк; PDF на проде"
         },
-        "S3-2.7": { "status": "paused", "notes": "5 живых ЭТрН; epd.configured false — нужны ключи оператора" }
+        "S3-2.7": { "status": "paused", "notes": "epd.configured false — ключи оператора" }
       }
     },
     "S4": { "title": "—", "status": "paused", "notes": "Не автозапускать без «Делай»" },
@@ -82,7 +82,7 @@
     "O-02": {
       "title": "Push GitHub",
       "status": "blocked",
-      "notes": "GITHUB_DEPLOY_KEY ok; fingerprint SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI — добавить в Deploy keys"
+      "notes": "Добавить deploy key в laser-erp/armada-perevozki → Settings → Deploy keys (Allow write)"
     }
   },
   "production": {
