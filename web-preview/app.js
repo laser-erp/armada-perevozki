@@ -815,6 +815,13 @@ function inferCustomerLongCargoFlags(draft){
   const isVeryLong=effectiveLen>=6||packaging==='oversize';
   return {isLong,isVeryLong,isOversize,effectiveLen,longKind};
 }
+/** Длинный/тяжёлый груз краном сверху, а не погрузчиком сбоку. */
+function inferCustomerCraneLiftCargo(longCtx, isPalletized, isPlatform){
+  if(!longCtx) return false;
+  if(longCtx.longKind||longCtx.isOversize) return true;
+  if(longCtx.isLong&&isPlatform&&!isPalletized) return true;
+  return false;
+}
 /** Способы загрузки/выгрузки по выбранным кузовам и параметрам груза. */
 function inferCustomerLoadUnloadMethods(vtypes, draft){
   vtypes=vtypes||[];
@@ -846,21 +853,47 @@ function inferCustomerLoadUnloadMethods(vtypes, draft){
     load=['rear'];
     unload=['rear'];
   }else if(longCtx.isLong){
-    load=['side','top'];
-    unload=['side'];
-    if(isVeryLong) load.push('side_both');
-    if(isOversize){
-      load.push('full_tent','remove_crossbars');
-      if(vtypes.includes('tent')) load.push('remove_posts');
+    const craneLift=inferCustomerCraneLiftCargo(longCtx, isPalletized, isPlatform);
+    if(craneLift){
+      load=['top'];
+      unload=['top'];
+      if(isOversize){
+        load.push('full_tent','remove_crossbars');
+        if(vtypes.includes('tent')) load.push('remove_posts');
+      }
+    }else if(isPalletized){
+      load=['side'];
+      unload=['side'];
+      if(tons>=1.5) load.push('tail_lift');
+    }else if(isOpen){
+      load=['side','boards'];
+      unload=['side','boards'];
+      if(isVeryLong) load.push('side_both');
+    }else if(isPlatform){
+      load=['top'];
+      unload=['top'];
+    }else{
+      load=['side'];
+      unload=['side'];
+      if(isVeryLong) load.push('side_both');
     }
   }else if(isPlatform||isOversize){
-    load=['side','top'];
-    unload=['side'];
-    if(isOversize){
-      load.push('full_tent','remove_crossbars');
-      if(vtypes.includes('tent')) load.push('remove_posts');
+    const craneLift=inferCustomerCraneLiftCargo(longCtx, isPalletized, isPlatform)||isOversize;
+    if(craneLift){
+      load=['top'];
+      unload=['top'];
+      if(isOversize){
+        load.push('full_tent','remove_crossbars');
+        if(vtypes.includes('tent')) load.push('remove_posts');
+      }
+    }else if(isPalletized){
+      load=['side'];
+      unload=['side'];
+      if(tons>=1.5) load.push('tail_lift');
+    }else{
+      load=['side'];
+      unload=['side'];
     }
-    if(isVeryLong) load.push('side_both');
   }else if(isOpen){
     load=['side','boards'];
     unload=['side','boards'];
@@ -882,10 +915,17 @@ function inferCustomerLoadUnloadMethods(vtypes, draft){
     unloadingMethods:[...new Set((unload.length?unload:load).filter(Boolean))]
   };
 }
-function formatCustomerLoadUnloadHint(loadingMethods, unloadingMethods){
-  const fmt=id=>typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id;
-  const loads=(loadingMethods||[]).slice(0,2).map(fmt);
-  const unloads=(unloadingMethods||[]).slice(0,2).map(fmt);
+function formatCustomerLoadUnloadHint(loadingMethods, unloadingMethods, opts){
+  opts=opts||{};
+  const primaryLoad=(loadingMethods||[]).find(id=>['top','side','rear'].includes(id));
+  const craneTop=!!opts.craneHint&&primaryLoad==='top';
+  const fmt=id=>{
+    const base=typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id;
+    if(craneTop&&id==='top') return 'верхняя (краном)';
+    return base;
+  };
+  const loads=(loadingMethods||[]).filter(id=>['top','side','rear','boards'].includes(id)).slice(0,2).map(fmt);
+  const unloads=(unloadingMethods||[]).filter(id=>['top','side','rear','boards'].includes(id)).slice(0,2).map(fmt);
   const bits=[];
   if(loads.length) bits.push('загр.: '+loads.join(', '));
   if(unloads.length) bits.push('выгр.: '+unloads.join(', '));
@@ -972,13 +1012,15 @@ function inferCustomerVehicleRecommendation(draft){
   const loadUnload=inferCustomerLoadUnloadMethods(vtypes, draft);
   const loadingMethods=loadUnload.loadingMethods;
   const unloadingMethods=loadUnload.unloadingMethods;
+  const isPalletized=packaging==='pallets'||packaging==='boxes';
+  const craneHint=inferCustomerCraneLiftCargo(longCtx, isPalletized, vtypes.includes('platform'));
   if(!rearLoad&&loadingMethods.length===1&&loadingMethods[0]==='rear'&&unloadingMethods.length===1&&unloadingMethods[0]==='rear'){
     rearLoad=true;
   }
 
   const labelName=typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtypes[0]):vtypes[0];
   const tDisp=tons>=1?(tons%1===0?tons:tons.toFixed(1)):tons.toFixed(2);
-  const label=`Рекомендуем: ${String(labelName).toLowerCase()}, до ${tDisp} т${formatCustomerLoadUnloadHint(loadingMethods, unloadingMethods)}${fleetHint}`;
+  const label=`Рекомендуем: ${String(labelName).toLowerCase()}, до ${tDisp} т${formatCustomerLoadUnloadHint(loadingMethods, unloadingMethods, {craneHint})}${fleetHint}`;
 
   return {vehicleTypeIds:vtypes, rearLoad, loadingMethods, unloadingMethods, label, minPayloadTons:minPayload};
 }
