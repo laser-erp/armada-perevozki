@@ -1631,7 +1631,7 @@ function customerSubmitSuccessMessage(invoice, order){
   html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (раздел выше)':'будет подготовлен'}</li>`;
   html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
   html+=`<li><strong>Акт</strong> — после закрытия заказа</li>`;
-  html+=`<li><strong>ЭТрН</strong> — QR у водителя во время перевозки (для инспектора), после назначения ТС</li>`;
+  html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке, QR у водителя в пути</li>`;
   html+=`</ul>`;
   if(invoice){
     html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
