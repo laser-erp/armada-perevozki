@@ -283,8 +283,10 @@ const CUST_CLOSED_VTYPE_IDS=['tent','container','van','metal'];
 const CUST_ISOTHERM_VTYPE_ID='isotherm';
 const CUST_MASTER_VTYPE_IDS=['tent','container','van','metal'];
 const CUST_REFR_VTYPE_IDS=['reefer','reefer_partition','reefer_multimode'];
+const CUST_OPEN_VTYPE_IDS=['board','open','dump','platform','shalanda'];
 const CUST_CLOSED_MASTER_IDS=[...CUST_MASTER_VTYPE_IDS, CUST_ISOTHERM_VTYPE_ID];
 const CUST_REFR_MASTER_IDS=[...CUST_REFR_VTYPE_IDS, CUST_ISOTHERM_VTYPE_ID];
+const CUST_OPEN_MASTER_IDS=[...CUST_OPEN_VTYPE_IDS];
 const CUST_REAR_AUTO_VTYPE_IDS=new Set(['container','van','metal','reefer','reefer_partition','reefer_multimode']);
 
 function customerLoadMatchAll(){
@@ -378,6 +380,20 @@ function setCustomerRefrVehicleTypes(on){
     });
     if(!anyClosed) setCustomerIsotherm(false);
   }
+}
+function syncCustomerOpenAllCheckbox(){
+  const master=$('cust-vtype-open-all');
+  if(!master) return;
+  master.checked=CUST_OPEN_MASTER_IDS.every(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    return el&&el.checked;
+  });
+}
+function setCustomerOpenVehicleTypes(on){
+  CUST_OPEN_VTYPE_IDS.forEach(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    if(el) el.checked=!!on;
+  });
 }
 function paintCustomerIsothermHighlight(){
   const el=document.querySelector(`#cust-vehicle-types [data-vtype="${CUST_ISOTHERM_VTYPE_ID}"]`);
@@ -527,6 +543,8 @@ function customerPrimaryBodyType(types){
   types=types||customerSelectedVehicleTypes();
   if(types.some(id=>CUST_REFR_VTYPE_IDS.includes(id))) return 'reefer';
   if(types.includes('isotherm') && !types.some(id=>CUST_CLOSED_VTYPE_IDS.includes(id))) return 'reefer';
+  if(types.includes('dump')) return 'dump';
+  if(types.some(id=>CUST_OPEN_VTYPE_IDS.includes(id))) return 'board';
   if(types.length) return 'tent';
   return 'tent';
 }
@@ -545,6 +563,7 @@ function syncCustomerVehicleTypeUi(){
   setCustomerLoadUnloadEnabled(types.length>0);
   syncCustomerClosedAllCheckbox();
   syncCustomerRefrAllCheckbox();
+  syncCustomerOpenAllCheckbox();
   paintCustomerIsothermHighlight();
   paintCustomerFormChecklist();
 }
@@ -559,6 +578,8 @@ function resetCustomerVehicleTypes(){
   if(master) master.checked=false;
   const refrMaster=$('cust-vtype-refr-all');
   if(refrMaster) refrMaster.checked=false;
+  const openMaster=$('cust-vtype-open-all');
+  if(openMaster) openMaster.checked=false;
   ['cust-load-match-all','cust-unload-match-all'].forEach(id=>{
     const el=$(id); if(el){ el.checked=false; el.disabled=true; }
   });
@@ -590,12 +611,23 @@ function wireCustomerVehicleTypes(){
       paintCustomerFleetOptions();
     };
   }
+  const openMaster=$('cust-vtype-open-all');
+  if(openMaster){
+    openMaster.onchange=()=>{
+      setCustomerOpenVehicleTypes(openMaster.checked);
+      if(!openMaster.checked) clearCustomerLoadUnloadMethods();
+      syncCustomerVehicleTypeUi();
+      updateCustomerPricePreview();
+      paintCustomerFleetOptions();
+    };
+  }
   document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{
     el.onchange=()=>{
       if(!el.checked) clearCustomerLoadUnloadMethods();
       else if(CUST_REAR_AUTO_VTYPE_IDS.has(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
       if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerClosedAllCheckbox();
       if(CUST_REFR_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerRefrAllCheckbox();
+      if(CUST_OPEN_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerOpenAllCheckbox();
       syncCustomerVehicleTypeUi();
       updateCustomerPricePreview();
       paintCustomerFleetOptions();

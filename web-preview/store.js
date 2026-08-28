@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-cal4317";
+const APP_BUILD="2026-08-28-open4317";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -406,8 +406,9 @@ const BODY_TYPES=[
 const ATI_BODY_TYPES=[
   {id:'tent', ati:'Тентованный', label:'Тент / фургон', mapTo:'tent', keywords:['тент','фургон','тентован','штора']},
   {id:'board', ati:'Бортовой', label:'Бортовой', mapTo:'board', keywords:['борт','бортов']},
-  {id:'open', ati:'Открытый', label:'Открытый', mapTo:'board', keywords:['открыт']},
+  {id:'open', ati:'Открытый конт.', label:'Открытый конт.', mapTo:'board', keywords:['открыт','конт']},
   {id:'platform', ati:'Площадка', label:'Площадка', mapTo:'board', keywords:['площад']},
+  {id:'shalanda', ati:'Шаланда', label:'Шаланда', mapTo:'board', keywords:['шаланд']},
   {id:'reefer', ati:'Рефрижератор', label:'Рефрижератор', mapTo:'reefer', keywords:['реф','рефриж','холод']},
   {id:'isotherm', ati:'Изотермический', label:'Изотермический', mapTo:'reefer', keywords:['изотерм','изотермич','термос']},
   {id:'van', ati:'Фургон', label:'Фургон', mapTo:'tent', keywords:['фург']},
@@ -449,6 +450,13 @@ const CUST_REFR_VEHICLE_TYPES=[
   {id:'reefer_partition', label:'Реф. с перегородкой'},
   {id:'reefer_multimode', label:'Реф. мультирежимный'}
 ];
+const CUST_OPEN_VEHICLE_TYPES=[
+  {id:'board', label:'Бортовой'},
+  {id:'open', label:'Открытый конт.'},
+  {id:'dump', label:'Самосвал'},
+  {id:'platform', label:'Площадка'},
+  {id:'shalanda', label:'Шаланда'}
+];
 const CUST_REAR_ONLY_VEHICLE_TYPES=new Set(['container','van','metal','reefer','reefer_partition','reefer_multimode']);
 const CUST_LOAD_METHODS=[
   {id:'top', label:'верхняя'},
@@ -480,6 +488,8 @@ function custVehicleTypeLabel(id){
   if(hit) return hit.label;
   const refr=CUST_REFR_VEHICLE_TYPES.find(x=>x.id===id);
   if(refr) return refr.label;
+  const open=CUST_OPEN_VEHICLE_TYPES.find(x=>x.id===id);
+  if(open) return open.label;
   if(id===CUST_ISOTHERM_VEHICLE_TYPE.id) return CUST_ISOTHERM_VEHICLE_TYPE.label;
   return bodyTypeInputLabel(id)||id;
 }

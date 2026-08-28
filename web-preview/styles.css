@@ -801,6 +801,7 @@
       border:1px solid var(--border);border-radius:10px;background:var(--surface,#fff);
       display:flex;flex-direction:column;min-height:200px;max-height:280px;overflow:hidden;
     }
+    .cust-vtype-cols > .cust-vtype-col:first-child{max-height:320px}
     .cust-vtype-col-head{
       display:flex;align-items:center;justify-content:space-between;gap:6px;
       padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface2,#f8faf9);
