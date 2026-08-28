@@ -483,7 +483,8 @@ function ensureSuperAdminPinRecovery(){
     state.settings.superPinRecoveryNotice=superPinRecoveryNoticeText();
   }
 }
-function mergeAdminAuthFromRemote(p){
+function mergeAdminAuthFromRemote(p, opts){
+  const remoteWinsAuth=!!(opts&&opts.remoteWinsAuth);
   const remoteAdmins=(Array.isArray(p.admins)?p.admins:[]).map(normalizeAdmin).filter(Boolean)
     .filter(a=>!RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has((a.name||'').trim().toLowerCase()));
   if(remoteAdmins.length){
@@ -493,7 +494,8 @@ function mergeAdminAuthFromRemote(p){
       if(!loc) return r;
       const locPin=String(loc.pin||'').trim();
       const remPin=String(r.pin||'').trim();
-      if(locPin && locPin!==remPin && !isRecoveryOrWeakAdminPin(locPin)){
+      // На другом устройстве в localStorage мог остаться старый PIN — при загрузке с сервера берём серверный.
+      if(!remoteWinsAuth && locPin && locPin!==remPin && !isRecoveryOrWeakAdminPin(locPin)){
         const out={...r, pin:locPin};
         if(loc.mustChangePin) out.mustChangePin=true;
         else delete out.mustChangePin;

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc31";
+const APP_BUILD="2026-08-28-entrybc32";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -797,7 +797,7 @@ function applyPayload(p, opts){
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
   state.dataEpoch=Number(p.dataEpoch)||0;
-  mergeAdminAuthFromRemote(p);
+  mergeAdminAuthFromRemote(p, opts);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -1611,7 +1611,7 @@ async function mergeRemoteAheadOnPush(remote){
   const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
   const localOrders=(state.orders||[]).map(o=>structuredClone(o));
   const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
-  applyPayload(remote, {remoteSeq:true});
+  applyPayload(remote, {remoteSeq:true, remoteWinsAuth:true});
   let merged=false;
   if(mergeLocalShifts(localShifts)) merged=true;
   if(liveShift && mergeLocalShifts([liveShift])) merged=true;
@@ -1709,7 +1709,7 @@ async function initCloudSync(){
       if(remoteEpoch>=localEpoch || !localEpoch){
         const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
         const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true});
+        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true, remoteWinsAuth:true});
         healOrphanOrdersIntoShifts();
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
@@ -1759,7 +1759,7 @@ async function pullRemoteUpdates(reason){
     const keepUiStep=state.step;
     const ordersOpen=!!document.querySelector('#orders-panel.show');
     const cabinetOpen=!!document.querySelector('#cabinet-panel.show');
-    applyPayload(remote, {remoteSeq:true});
+    applyPayload(remote, {remoteSeq:true, remoteWinsAuth:true});
     mergeLocalShifts(localShifts);
     if(liveShift) mergeLocalShifts([liveShift]);
     mergeLocalOrders(localOrders);

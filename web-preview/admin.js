@@ -196,13 +196,30 @@ function restoreAdminSession(){
   updateAdminChrome();
   return true;
 }
-function loginAdmin(){
+async function loginAdmin(){
   migrateAdmins();
+  const pinErr=$('pin-error');
+  if(pinErr) pinErr.textContent='';
+  const btn=$('pin-ok');
+  if(btn) btn.disabled=true;
+  try{
+    if(navigator.onLine!==false && typeof fetchServerState==='function'){
+      const rec=await fetchServerState(3500);
+      if(rec&&rec.payload){
+        pbRecordId=rec.id;
+        mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
+        migrateAdmins();
+        persistLocalOnly();
+        fillAdminLoginSelect();
+      }
+    }
+  }catch(_){}
+  finally{ if(btn) btn.disabled=false; }
   const id=(($('admin-name-select')||{}).value||'').trim();
   const pin=(($('pin-input')||{}).value||'').trim();
   const adm=state.admins.find(a=>a.id===id);
-  if(!adm){ $('pin-error').textContent='Выберите администратора'; return; }
-  if(pin!==String(adm.pin)){ $('pin-error').textContent='Неверный PIN'; return; }
+  if(!adm){ if(pinErr) pinErr.textContent='Выберите администратора'; return; }
+  if(pin!==String(adm.pin)){ if(pinErr) pinErr.textContent='Неверный PIN'; return; }
   if(adm.mustChangePin){
     alert('Смените PIN: «Активность» → блок администраторов. Слабый или устаревший PIN из истории проекта.');
   }
