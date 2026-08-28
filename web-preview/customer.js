@@ -279,22 +279,98 @@ function paintCustomerVehicleDateCal(){
   };
 }
 
-function paintCustomerBodyTypeList(){
-  const list=$('cust-body-type-list');
-  if(!list || typeof atiBodyTypeOptions!=='function') return;
-  list.innerHTML=atiBodyTypeOptions().map(x=>`<option value="${esc(x.ati)}">${esc(x.label)}</option>`).join('');
-  const inp=$('cust-body-type-input');
-  const hid=$('cust-body-type');
-  if(inp && hid && !inp.value){
-    inp.value=bodyTypeInputLabel(hid.value||'tent')||'Тентованный';
+const CUST_CLOSED_VTYPE_IDS=['tent','container','van','metal'];
+
+function customerSelectedVehicleTypes(){
+  return [...document.querySelectorAll('#cust-vehicle-types [data-vtype]:checked')].map(el=>el.dataset.vtype).filter(Boolean);
+}
+function customerSelectedLoadMethods(){
+  return [...document.querySelectorAll('#cust-load-methods [data-load]:checked')].map(el=>el.dataset.load).filter(Boolean);
+}
+function customerSelectedUnloadMethods(){
+  return [...document.querySelectorAll('#cust-unload-methods [data-unload]:checked')].map(el=>el.dataset.unload).filter(Boolean);
+}
+function setCustomerLoadMethod(id, on){
+  const el=document.querySelector(`#cust-load-methods [data-load="${id}"]`);
+  if(el) el.checked=!!on;
+}
+function setCustomerUnloadMethod(id, on){
+  const el=document.querySelector(`#cust-unload-methods [data-unload="${id}"]`);
+  if(el) el.checked=!!on;
+}
+function syncCustomerClosedAllCheckbox(){
+  const master=$('cust-vtype-closed-all');
+  if(!master) return;
+  const all=CUST_CLOSED_VTYPE_IDS.every(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    return el&&el.checked;
+  });
+  master.checked=all;
+}
+function setCustomerClosedVehicleTypes(on){
+  CUST_CLOSED_VTYPE_IDS.forEach(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    if(el) el.checked=!!on;
+  });
+}
+function applyRearOnlyVehicleTypeRules(){
+  const types=customerSelectedVehicleTypes();
+  const needRear=types.some(id=>typeof CUST_REAR_ONLY_VEHICLE_TYPES!=='undefined' && CUST_REAR_ONLY_VEHICLE_TYPES.has(id));
+  if(needRear){
+    setCustomerLoadMethod('rear', true);
+    setCustomerUnloadMethod('rear', true);
   }
 }
-function syncCustomerBodyType(){
-  const inp=$('cust-body-type-input');
+function syncCustomerVehicleTypeUi(){
+  const types=customerSelectedVehicleTypes();
   const hid=$('cust-body-type');
-  if(!hid) return;
-  const raw=inp?inp.value:'';
-  hid.value=typeof resolveBodyTypeFromInput==='function'?resolveBodyTypeFromInput(raw):'tent';
+  if(hid){
+    if(types.includes('isotherm') && !types.some(id=>CUST_CLOSED_VTYPE_IDS.includes(id))) hid.value='reefer';
+    else if(types.length) hid.value='tent';
+    else hid.value='tent';
+  }
+  const wrap=$('cust-load-methods-wrap');
+  if(wrap) wrap.hidden=!types.includes('tent');
+  syncCustomerClosedAllCheckbox();
+}
+function syncCustomerBodyType(){
+  syncCustomerVehicleTypeUi();
+}
+function resetCustomerVehicleTypes(){
+  document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{ el.checked=false; });
+  document.querySelectorAll('#cust-load-methods [data-load]').forEach(el=>{ el.checked=false; });
+  document.querySelectorAll('#cust-unload-methods [data-unload]').forEach(el=>{ el.checked=false; });
+  const master=$('cust-vtype-closed-all');
+  if(master) master.checked=false;
+  const hid=$('cust-body-type');
+  if(hid) hid.value='tent';
+  syncCustomerVehicleTypeUi();
+}
+function wireCustomerVehicleTypes(){
+  const master=$('cust-vtype-closed-all');
+  if(master){
+    master.onchange=()=>{
+      setCustomerClosedVehicleTypes(master.checked);
+      applyRearOnlyVehicleTypeRules();
+      syncCustomerVehicleTypeUi();
+      updateCustomerPricePreview();
+      paintCustomerFleetOptions();
+    };
+  }
+  document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{
+    el.onchange=()=>{
+      if(CUST_CLOSED_VTYPE_IDS.includes(el.dataset.vtype)){
+        if(['container','van','metal'].includes(el.dataset.vtype) && el.checked) applyRearOnlyVehicleTypeRules();
+        syncCustomerClosedAllCheckbox();
+      }
+      syncCustomerVehicleTypeUi();
+      updateCustomerPricePreview();
+      paintCustomerFleetOptions();
+    };
+  });
+  document.querySelectorAll('#cust-load-methods [data-load], #cust-unload-methods [data-unload]').forEach(el=>{
+    el.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); };
+  });
 }
 function inferCargoKindFromText(text){
   const q=String(text||'').toLowerCase();
@@ -308,10 +384,10 @@ function syncCustomerCargoKind(){
   const hid=$('cust-cargo-kind');
   if(hid) hid.value=inferCargoKindFromText(text);
   const body=customerSelectedBodyType();
-  if(text && inferCargoKindFromText(text)==='food' && body!=='reefer'){
-    const inp=$('cust-body-type-input');
-    const h=$('cust-body-type');
-    if(inp && h){ h.value='reefer'; inp.value=bodyTypeInputLabel('reefer')||'Рефрижератор'; }
+  if(text && inferCargoKindFromText(text)==='food'){
+    const iso=document.querySelector('#cust-vehicle-types [data-vtype="isotherm"]');
+    if(iso && !iso.checked) iso.checked=true;
+    syncCustomerVehicleTypeUi();
   }
 }
 function customerWeightTons(){
@@ -410,6 +486,9 @@ function buildCustomerDraftFromForm(){
     tripMode:trip,
     fulfillment:customerSelectedFulfillment(),
     reqBodyType:customerSelectedBodyType(),
+    vehicleTypeIds:customerSelectedVehicleTypes(),
+    loadingMethods:customerSelectedLoadMethods(),
+    unloadingMethods:customerSelectedUnloadMethods(),
     cargoKind:customerSelectedCargoKind(),
     reqPayloadTons:payloadTons>0?payloadTons:null,
     estimateWorkHours:fin.minWorkHours||4,
@@ -552,6 +631,9 @@ function updateCustomerPricePreview(){
   const bits=[];
   if(draft.tripMode) bits.push(tripModeLabel(draft.tripMode));
   if(draft.reqBodyType) bits.push(bodyTypeLabel(draft.reqBodyType));
+  if(draft.vehicleTypeIds&&draft.vehicleTypeIds.length){
+    bits.push(draft.vehicleTypeIds.map(id=>custVehicleTypeLabel(id)).join(', '));
+  }
   if(draft.cargoKind) bits.push(cargoKindLabel(draft.cargoKind));
   if(draft.reqPayloadTons) bits.push(draft.reqPayloadTons+' т');
   const s=suggestCustomerOrderPrice(draft);
@@ -593,7 +675,7 @@ function renderCustomerPortal(){
   const unloadEl=$('cust-unload');
   if(loadEl && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
   if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
-  paintCustomerBodyTypeList();
+  syncCustomerVehicleTypeUi();
   syncCustomerVehicleDateCalVisibility();
   if(typeof wireVehicleAtHint==='function') wireVehicleAtHint('cust', ()=>{
     if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
@@ -669,6 +751,8 @@ function submitCustomerOrder(){
   if(!vehicleAt){ if(err) err.textContent='Укажите дату и время подачи ТС'; return; }
   if(!(payloadTons>0)){ if(err) err.textContent='Укажите вес груза'; return; }
   if(!cargoText){ if(err) err.textContent='Укажите, что за груз'; return; }
+  const vtypes=customerSelectedVehicleTypes();
+  if(!vtypes.length){ if(err) err.textContent='Выберите хотя бы один тип ТС'; return; }
   const cargo=customerSelectedCargoKind();
   const body=customerSelectedBodyType();
   if(cargo==='food' && body!=='reefer'){
@@ -726,6 +810,9 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     partnerSpaceId:null,
     reqPayloadTons:payloadTons,
     reqBodyType:draft.reqBodyType||null,
+    vehicleTypeIds:draft.vehicleTypeIds||[],
+    loadingMethods:draft.loadingMethods||[],
+    unloadingMethods:draft.unloadingMethods||[],
     cargoKind:draft.cargoKind||null,
     tripMode:draft.tripMode||null,
     routeKm:draft.routeKm||null,
@@ -767,9 +854,10 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     ?' Заявка в свой парк, без срочного подбора.'
     :' Диспетчеру: закрыть как можно скорее.';
   alert(`Заявка №${seqNo} отправлена.${rushBit}${bookBit} ${priceBit}`);
-  ['cust-load','cust-unload','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-body-type-input'].forEach(id=>{
+  ['cust-load','cust-unload','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
+  resetCustomerVehicleTypes();
   customerRouteKm=null;
   customerRouteGeometry=null;
   renderCustomerRouteMap(null);
@@ -780,7 +868,6 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   if(calToggle) calToggle.checked=false;
   syncCustomerVehicleDateCalVisibility();
   if($('cust-body-type')) $('cust-body-type').value='tent';
-  paintCustomerBodyTypeList();
   if($('cust-book-plate')) $('cust-book-plate').value='';
   renderCustomerPortal();
 }
@@ -814,14 +901,6 @@ function wireCustomerPortal(){
   });
   const weightUnit=$('cust-weight-unit');
   if(weightUnit) weightUnit.onchange=()=>{ syncCustomerPayloadTons(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
-  const bodyInp=$('cust-body-type-input');
-  if(bodyInp){
-    bodyInp.oninput=bodyInp.onchange=()=>{
-      syncCustomerBodyType();
-      updateCustomerPricePreview();
-      paintCustomerFleetOptions();
-    };
-  }
   const cargoInp=$('cust-cargo-text');
   if(cargoInp) cargoInp.oninput=()=>{ syncCustomerCargoKind(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
   const fulfillEl=$('cust-fulfillment');
@@ -832,7 +911,7 @@ function wireCustomerPortal(){
   });
   const calToggle=$('cust-vehicle-date-cal-toggle');
   if(calToggle) calToggle.onchange=()=>syncCustomerVehicleDateCalVisibility();
-  paintCustomerBodyTypeList();
+  wireCustomerVehicleTypes();
   syncCustomerVehicleDateCalVisibility();
 }
 

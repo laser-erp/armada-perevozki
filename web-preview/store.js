@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc36";
+const APP_BUILD="2026-08-28-entrybc37";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -435,6 +435,46 @@ function resolveBodyTypeFromInput(raw){
 function bodyTypeInputLabel(id){
   const hit=ATI_BODY_TYPES.find(x=>x.id===id)||BODY_TYPES.find(x=>x.id===id);
   return hit?(hit.ati||hit.label):'';
+}
+/** Типы ТС в форме заказчика (группа «все закрытые»). */
+const CUST_CLOSED_VEHICLE_TYPES=[
+  {id:'tent', label:'Тентованный'},
+  {id:'container', label:'Контейнер'},
+  {id:'van', label:'Фургон'},
+  {id:'metal', label:'Цельнометаллический'}
+];
+const CUST_ISOTHERM_VEHICLE_TYPE={id:'isotherm', label:'Изотерм'};
+const CUST_REAR_ONLY_VEHICLE_TYPES=new Set(['container','van','metal']);
+const CUST_LOAD_METHODS=[
+  {id:'top', label:'верхняя'},
+  {id:'side', label:'боковая'},
+  {id:'rear', label:'задняя'},
+  {id:'full_tent', label:'с полной растентовкой'},
+  {id:'remove_crossbars', label:'со снятием поперечных перекладин'},
+  {id:'remove_posts', label:'со снятием стоек'},
+  {id:'no_gates', label:'без ворот'},
+  {id:'tail_lift', label:'гидроборт'},
+  {id:'ramps', label:'аппарели'},
+  {id:'crate', label:'с обрешеткой'},
+  {id:'boards', label:'с бортами'},
+  {id:'side_both', label:'боковая с двух сторон'}
+];
+const CUST_UNLOAD_METHODS=[
+  {id:'top', label:'верхняя'},
+  {id:'side', label:'боковая'},
+  {id:'rear', label:'задняя'}
+];
+function custVehicleTypeLabel(id){
+  const hit=CUST_CLOSED_VEHICLE_TYPES.find(x=>x.id===id);
+  if(hit) return hit.label;
+  if(id===CUST_ISOTHERM_VEHICLE_TYPE.id) return CUST_ISOTHERM_VEHICLE_TYPE.label;
+  return bodyTypeInputLabel(id)||id;
+}
+function custLoadMethodLabel(id){
+  return (CUST_LOAD_METHODS.find(x=>x.id===id)||{}).label||id;
+}
+function custUnloadMethodLabel(id){
+  return (CUST_UNLOAD_METHODS.find(x=>x.id===id)||{}).label||id;
 }
 const CARGO_KINDS=[
   {id:'general', label:'Обычный груз'},

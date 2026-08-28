@@ -705,7 +705,17 @@ function orderReqText(o){
   const bits=[];
   if(o.tripMode) bits.push(tripModeLabel(o.tripMode));
   if(o.reqBodyType) bits.push(bodyTypeLabel(o.reqBodyType)||o.reqBodyType);
+  if(Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds.length){
+    bits.push(o.vehicleTypeIds.map(id=>typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(id):id).join(', '));
+  }
+  if(Array.isArray(o.loadingMethods)&&o.loadingMethods.length){
+    bits.push('загр.: '+o.loadingMethods.map(id=>typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id).join(', '));
+  }
+  if(Array.isArray(o.unloadingMethods)&&o.unloadingMethods.length){
+    bits.push('выгр.: '+o.unloadingMethods.map(id=>typeof custUnloadMethodLabel==='function'?custUnloadMethodLabel(id):id).join(', '));
+  }
   if(o.cargoKind) bits.push(cargoKindLabel(o.cargoKind)||o.cargoKind);
+  if(o.cargoDescription) bits.push(o.cargoDescription);
   if(o.reqPayloadTons>0) bits.push('от '+o.reqPayloadTons+'т');
   if(o.routeKm>0) bits.push('~'+o.routeKm+' км');
   if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0))
