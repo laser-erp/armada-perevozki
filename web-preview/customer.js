@@ -1246,7 +1246,426 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   syncCustomerVehicleDateCalVisibility();
   if($('cust-body-type')) $('cust-body-type').value='tent';
   if($('cust-book-plate')) $('cust-book-plate').value='';
+  if(customerOrderMode()==='chat') initCustomerChatWizard(true);
   renderCustomerPortal();
+}
+
+/* --- Чат-помощник (гибрид форма + чат, MVP без ИИ) --- */
+const CUST_CHAT_MODE_KEY='armada_customer_order_mode_v1';
+const CUST_CHAT_STEPS=[
+  {id:'cargo', title:'Груз'},
+  {id:'weight', title:'Вес'},
+  {id:'when', title:'Когда'},
+  {id:'load', title:'Загрузка'},
+  {id:'unload', title:'Выгрузка'},
+  {id:'body', title:'Кузов'},
+  {id:'summary', title:'Подтверждение'}
+];
+const CUST_CHAT_BODY_CHIPS=[
+  {id:'tent', label:'Тент', vtype:'tent'},
+  {id:'van', label:'Фургон', vtype:'van'},
+  {id:'reefer', label:'Реф', vtype:'reefer'},
+  {id:'platform', label:'Площадка', vtype:'platform'},
+  {id:'other', label:'Другое → форма', vtype:null}
+];
+let customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
+
+function customerOrderMode(){
+  try{ return localStorage.getItem(CUST_CHAT_MODE_KEY)==='chat'?'chat':'form'; }catch(_){ return 'form'; }
+}
+function setCustomerOrderMode(mode){
+  try{ localStorage.setItem(CUST_CHAT_MODE_KEY, mode==='chat'?'chat':'form'); }catch(_){}
+  syncCustomerOrderModeUi();
+}
+function syncCustomerOrderModeUi(){
+  const mode=customerOrderMode();
+  const formPanel=$('cust-form-panel');
+  const chatPanel=$('cust-chat-panel');
+  document.querySelectorAll('.cust-order-mode-tab').forEach(btn=>{
+    const on=btn.dataset.custMode===mode;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-selected', on?'true':'false');
+  });
+  if(formPanel) formPanel.hidden=mode==='chat';
+  if(chatPanel){
+    if(mode==='chat') chatPanel.removeAttribute('hidden');
+    else chatPanel.hidden=true;
+  }
+  if(mode==='form' && customerChat.data && Object.keys(customerChat.data).length) customerChatApplyToForm();
+  if(mode==='chat') initCustomerChatWizard(false);
+}
+function customerChatOffsetDate(days){
+  const d=new Date();
+  d.setDate(d.getDate()+days);
+  const pad=n=>String(n).padStart(2,'0');
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`;
+}
+function customerChatWhenLabel(){
+  const d=customerChat.data.date||'';
+  const t=customerChat.data.time||'';
+  return d?(t?`${d}, ${t}`:d):'';
+}
+function customerChatBodyLabel(vtype){
+  const hit=CUST_CHAT_BODY_CHIPS.find(c=>c.vtype===vtype);
+  return hit?hit.label:(typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtype):vtype);
+}
+function resetCustomerChat(){
+  customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
+}
+function customerChatBotPrompt(stepId){
+  if(stepId==='cargo') return 'Здравствуйте! Оформим заявку на перевозку. <strong>Что нужно перевезти?</strong>';
+  if(stepId==='weight') return '<strong>Сколько весит груз?</strong> Укажите число — тонны или килограммы.';
+  if(stepId==='when') return '<strong>Когда подать машину?</strong>';
+  if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Укажите адрес загрузки.';
+  if(stepId==='unload') return '<strong>Куда везём?</strong>';
+  if(stepId==='body') return '<strong>Какой кузов нужен?</strong>';
+  if(stepId==='summary') return 'Проверьте заявку перед отправкой:';
+  return '';
+}
+function customerChatAddBot(stepId){
+  customerChat.messages.push({role:'bot', html:customerChatBotPrompt(stepId), stepId});
+}
+function customerChatAddUser(text){
+  customerChat.messages.push({role:'user', text:String(text||'').trim()});
+}
+function customerChatStepMeta(){
+  const total=CUST_CHAT_STEPS.length;
+  const cur=Math.min(customerChat.stepIndex+1, total);
+  const step=CUST_CHAT_STEPS[customerChat.stepIndex]||CUST_CHAT_STEPS[total-1];
+  return {cur, total, title:step&&step.title||''};
+}
+function customerChatUpdateProgress(){
+  const meta=customerChatStepMeta();
+  const pct=Math.round((meta.cur/meta.total)*100);
+  const fill=$('cust-chat-progress');
+  const hint=$('cust-chat-step-hint');
+  if(fill) fill.style.width=pct+'%';
+  if(hint) hint.textContent=`Шаг ${meta.cur} из ${meta.total} · ${meta.title}`;
+}
+function customerChatScrollBottom(){
+  const thread=$('cust-chat-thread');
+  if(thread) requestAnimationFrame(()=>{ thread.scrollTop=thread.scrollHeight; });
+}
+function customerChatSetVehicleType(vtype){
+  resetCustomerVehicleTypes();
+  const el=document.querySelector(`#cust-vehicle-types [data-vtype="${vtype}"]`);
+  if(el){
+    el.checked=true;
+    if(CUST_REAR_AUTO_VTYPE_IDS.has(vtype)) applyRearOnlyVehicleTypeRules();
+    syncCustomerVehicleTypeUi();
+  }
+}
+function customerChatApplyToForm(){
+  const d=customerChat.data;
+  const cargoEl=$('cust-cargo-text');
+  if(cargoEl && d.cargoText!=null) cargoEl.value=d.cargoText;
+  const wEl=$('cust-weight-value');
+  const wUnit=$('cust-weight-unit');
+  if(wEl && d.weightValue!=null) wEl.value=String(d.weightValue);
+  if(wUnit && d.weightUnit) wUnit.value=d.weightUnit;
+  syncCustomerPayloadTons();
+  syncCustomerCargoKind();
+  const dateEl=$('cust-vehicle-date');
+  const timeEl=$('cust-vehicle-time');
+  if(dateEl && d.date) dateEl.value=d.date;
+  if(timeEl && d.time) timeEl.value=d.time;
+  const loadEl=$('cust-load');
+  const unloadEl=$('cust-unload');
+  if(loadEl && d.load) loadEl.value=d.load;
+  if(unloadEl && d.unload) unloadEl.value=d.unload;
+  if(d.bodyVtype) customerChatSetVehicleType(d.bodyVtype);
+  updateCustomerPricePreview();
+  paintCustomerFleetOptions();
+}
+async function customerChatRefreshRouteHint(){
+  customerChatApplyToForm();
+  await refreshCustomerRouteKm();
+  updateCustomerPricePreview();
+}
+function customerChatPriceHint(){
+  const draft=buildCustomerDraftFromForm();
+  const carrier=customerCarrierForForm();
+  const s=typeof suggestCustomerOrderPrice==='function'?suggestCustomerOrderPrice(draft):null;
+  if(!s) return null;
+  const amount=typeof customerCarrierPriceAmount==='function'?customerCarrierPriceAmount(s, carrier):Math.round(s.minimumCash);
+  return amount>0?Math.round(amount):null;
+}
+function customerChatSummaryHtml(){
+  const d=customerChat.data;
+  const km=customerRouteKm>0?`≈ ${customerRouteKm} км`:null;
+  const weight=d.weightValue?(d.weightUnit==='kg'?`${d.weightValue} кг`:`${d.weightValue} т`):'—';
+  const price=customerChatPriceHint();
+  const rows=[
+    {id:'cargo', label:'Груз', val:d.cargoText||'—', html:false},
+    {id:'weight', label:'Вес', val:weight, html:false},
+    {id:'when', label:'Когда', val:customerChatWhenLabel()||'—', html:false},
+    {id:'load', label:'Загрузка', val:d.load||'—', html:false},
+    {id:'unload', label:'Выгрузка', val:d.unload||'—', html:false},
+    {id:'body', label:'Кузов', val:d.bodyVtype?customerChatBodyLabel(d.bodyVtype):'—', html:false},
+    {id:'price', label:'Ориентир', val:price?`<strong>${fmt(price)} ₽</strong>`:'уточнит перевозчик', html:true}
+  ];
+  return `<div class="chat-summary"><b>Сводка</b>${
+    rows.map(r=>`<div class="chat-summary-row"><span>${esc(r.label)}</span><span>${r.html?r.val:esc(r.val)}${r.id!=='price'?`<button type="button" class="chat-summary-edit" data-chat-edit="${r.id}">Изменить</button>`:''}</span></div>`).join('')
+  }</div>`;
+}
+function customerChatRenderMessages(){
+  const thread=$('cust-chat-thread');
+  if(!thread) return;
+  thread.innerHTML=customerChat.messages.map(m=>{
+    if(m.role==='user'){
+      return `<div class="chat-msg user"><span class="chat-avatar">Вы</span><div class="chat-bubble">${esc(m.text)}</div></div>`;
+    }
+    let html=`<div class="chat-msg bot"><span class="chat-avatar">А</span><div class="chat-bubble">${m.html}`;
+    if(m.stepId==='summary' && customerChat.summaryReady) html+=customerChatSummaryHtml();
+    html+='</div></div>';
+    return html;
+  }).join('');
+  customerChatUpdateProgress();
+}
+function customerChatRenderWidgets(){
+  const thread=$('cust-chat-thread');
+  if(!thread) return;
+  const step=CUST_CHAT_STEPS[customerChat.stepIndex];
+  if(!step) return;
+  if(step.id!=='summary' && customerChat.summaryReady) return;
+  let widget='';
+  if(step.id==='when'){
+    widget=`<div class="chat-chips" id="cust-chat-chips">
+      <button type="button" class="chat-chip muted" data-chat-when="1">Завтра</button>
+      <button type="button" class="chat-chip muted" data-chat-when="2">Послезавтра</button>
+      <button type="button" class="chat-chip" data-chat-when="pick">Выбрать дату…</button>
+    </div>
+    <div class="chat-widget" id="cust-chat-when-pick" hidden>
+      <div class="chat-widget-row">
+        <input id="cust-chat-date" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" aria-label="Дата" />
+        <input id="cust-chat-time" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" aria-label="Время" value="09:00" style="max-width:5.5rem" />
+      </div>
+      <div class="chat-chips" style="padding-left:0;margin-top:8px">
+        <button type="button" class="chat-chip primary" id="cust-chat-when-ok">Готово</button>
+      </div>
+    </div>`;
+  }else if(step.id==='load' || step.id==='unload'){
+    const val=step.id==='load'?(customerChat.data.load||''):'';
+    widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" aria-label="Адрес" /></div>
+    <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-addr-ok">Далее →</button></div>`;
+  }else if(step.id==='body'){
+    widget=`<div class="chat-chips" id="cust-chat-chips">${
+      CUST_CHAT_BODY_CHIPS.map((c,i)=>`<button type="button" class="chat-chip ${i===0?'primary':'muted'}" data-chat-body="${c.id}">${esc(c.label)}</button>`).join('')
+    }</div>`;
+  }else if(step.id==='summary' && customerChat.summaryReady){
+    widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
+  }
+  if(widget){
+    const wrap=document.createElement('div');
+    wrap.innerHTML=widget;
+    while(wrap.firstChild) thread.appendChild(wrap.firstChild);
+  }
+  customerChatWireWidgets(step.id);
+  customerChatScrollBottom();
+}
+function customerChatWireWidgets(stepId){
+  if(stepId==='when'){
+    document.querySelectorAll('[data-chat-when]').forEach(btn=>{
+      btn.onclick=()=>{
+        const mode=btn.getAttribute('data-chat-when');
+        const pick=$('cust-chat-when-pick');
+        if(mode==='pick'){
+          if(pick) pick.hidden=false;
+          const de=$('cust-chat-date');
+          if(de) de.focus();
+          return;
+        }
+        const days=+mode||1;
+        customerChat.data.date=customerChatOffsetDate(days);
+        customerChat.data.time='09:00';
+        customerChatAdvance(customerChatWhenLabel());
+      };
+    });
+    const ok=$('cust-chat-when-ok');
+    if(ok) ok.onclick=()=>{
+      const de=$('cust-chat-date');
+      const te=$('cust-chat-time');
+      let date=(de&&de.value||'').trim();
+      let time=(te&&te.value||'').trim()||'09:00';
+      if(typeof formatRuDateInput==='function') date=formatRuDateInput(date);
+      if(typeof formatTimeHmInput==='function') time=formatTimeHmInput(time);
+      if(!date || typeof parseRuDate==='function' && !parseRuDate(date)){
+        const err=$('cust-chat-error'); if(err) err.textContent='Укажите дату в формате ДД.ММ.ГГГГ';
+        return;
+      }
+      customerChat.data.date=date;
+      customerChat.data.time=time;
+      customerChatAdvance(customerChatWhenLabel());
+    };
+    const de=$('cust-chat-date');
+    if(de && typeof maskRuDateInput==='function'){
+      de.oninput=()=>{ de.value=maskRuDateInput(de.value); };
+      de.onblur=()=>{ const f=formatRuDateInput(de.value); if(f) de.value=f; };
+    }
+    const te=$('cust-chat-time');
+    if(te && typeof maskTimeHmInput==='function'){
+      te.oninput=()=>{ te.value=maskTimeHmInput(te.value); };
+      te.onblur=()=>{ const f=formatTimeHmInput(te.value); if(f) te.value=f; };
+    }
+  }
+  if(stepId==='load' || stepId==='unload'){
+    const ok=$('cust-chat-addr-ok');
+    const inp=$('cust-chat-addr');
+    const submit=()=>{
+      const addr=(inp&&inp.value||'').trim();
+      if(addr.length<4){
+        const err=$('cust-chat-error'); if(err) err.textContent='Укажите адрес (минимум 4 символа)';
+        return;
+      }
+      const err=$('cust-chat-error'); if(err) err.textContent='';
+      if(stepId==='load') customerChat.data.load=addr;
+      else customerChat.data.unload=addr;
+      customerChatAdvance(addr);
+    };
+    if(ok) ok.onclick=submit;
+    if(inp){
+      inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } };
+      setTimeout(()=>inp.focus(), 80);
+    }
+  }
+  if(stepId==='body'){
+    document.querySelectorAll('[data-chat-body]').forEach(btn=>{
+      btn.onclick=()=>{
+        const id=btn.getAttribute('data-chat-body');
+        const chip=CUST_CHAT_BODY_CHIPS.find(c=>c.id===id);
+        if(!chip) return;
+        if(id==='other'){
+          setCustomerOrderMode('form');
+          const block=document.querySelector('.cust-form-block[data-cust-step="transport"]');
+          if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
+          return;
+        }
+        customerChat.data.bodyVtype=chip.vtype;
+        customerChatAdvance(chip.label);
+      };
+    });
+  }
+  if(stepId==='summary'){
+    const sub=$('cust-chat-submit');
+    if(sub) sub.onclick=()=>{
+      customerChatApplyToForm();
+      submitCustomerOrder();
+    };
+    const thread=$('cust-chat-thread');
+    if(thread) thread.querySelectorAll('[data-chat-edit]').forEach(btn=>{
+      btn.onclick=()=>{
+        const sid=btn.getAttribute('data-chat-edit');
+        const idx=CUST_CHAT_STEPS.findIndex(s=>s.id===sid);
+        if(idx<0) return;
+        customerChat.stepIndex=idx;
+        customerChat.summaryReady=false;
+        customerChat.messages=customerChat.messages.filter(m=>!(m.role==='bot' && m.stepId==='summary'));
+        customerChatAddBot(sid);
+        customerChatRenderAll();
+      };
+    });
+  }
+}
+function customerChatRenderAll(){
+  customerChatRenderMessages();
+  customerChatRenderWidgets();
+  customerChatUpdateCompose();
+}
+function customerChatUpdateCompose(){
+  const compose=$('cust-chat-compose');
+  const step=CUST_CHAT_STEPS[customerChat.stepIndex];
+  const textSteps=['cargo','weight'];
+  const show=step && textSteps.includes(step.id) && !customerChat.summaryReady;
+  if(compose) compose.style.display=show?'flex':'none';
+}
+function customerChatAdvance(userText){
+  const err=$('cust-chat-error'); if(err) err.textContent='';
+  if(userText) customerChatAddUser(userText);
+  customerChat.stepIndex++;
+  const step=CUST_CHAT_STEPS[customerChat.stepIndex];
+  if(!step){
+    customerChatRenderAll();
+    return;
+  }
+  if(step.id==='summary'){
+    customerChatAddBot('summary');
+    customerChat.summaryReady=false;
+    customerChatRenderAll();
+    customerChatRefreshRouteHint().then(()=>{
+      customerChat.summaryReady=true;
+      if(customerChatPriceHint()){
+        const p=customerChatPriceHint();
+        const priceEl=$('cust-price');
+        if(priceEl && !priceEl.value) priceEl.value=String(p);
+      }
+      customerChatRenderAll();
+    });
+    return;
+  }
+  customerChatAddBot(step.id);
+  customerChatRenderAll();
+}
+function customerChatHandleTextInput(){
+  const inp=$('cust-chat-input');
+  const raw=(inp&&inp.value||'').trim();
+  if(!raw) return;
+  const step=CUST_CHAT_STEPS[customerChat.stepIndex];
+  if(!step) return;
+  const err=$('cust-chat-error');
+  if(step.id==='cargo'){
+    customerChat.data.cargoText=raw;
+    if(inp) inp.value='';
+    customerChatAdvance(raw);
+    return;
+  }
+  if(step.id==='weight'){
+    const m=raw.match(/^([\d.,]+)\s*(кг|kg|т|t|тонн|тонны)?/i);
+    if(!m){
+      if(err) err.textContent='Укажите число, например 3 или 5000 кг';
+      return;
+    }
+    const num=+(m[1].replace(',','.'));
+    if(!(num>0)){ if(err) err.textContent='Укажите положительное число'; return; }
+    const unitRaw=(m[2]||'').toLowerCase();
+    let unit='t';
+    if(/кг|kg/.test(unitRaw)) unit='kg';
+    else if(/т|t|тонн/.test(unitRaw)) unit='t';
+    else if(num>=500) unit='kg';
+    customerChat.data.weightValue=num;
+    customerChat.data.weightUnit=unit;
+    if(inp) inp.value='';
+    const label=unit==='kg'?`${num} кг`:`${num} т`;
+    customerChatAdvance(label);
+  }
+}
+function initCustomerChatWizard(forceReset){
+  if(forceReset || !customerChat.messages.length){
+    resetCustomerChat();
+    customerChatAddBot('cargo');
+  }
+  customerChatRenderAll();
+  const send=$('cust-chat-send');
+  const inp=$('cust-chat-input');
+  if(send && !send.dataset.wired){
+    send.dataset.wired='1';
+    send.onclick=customerChatHandleTextInput;
+  }
+  if(inp && !inp.dataset.wired){
+    inp.dataset.wired='1';
+    inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); customerChatHandleTextInput(); } };
+  }
+}
+function wireCustomerOrderMode(){
+  document.querySelectorAll('.cust-order-mode-tab').forEach(btn=>{
+    if(btn.dataset.wired) return;
+    btn.dataset.wired='1';
+    btn.onclick=()=>{
+      const mode=btn.dataset.custMode||'form';
+      if(mode==='chat') initCustomerChatWizard(true);
+      setCustomerOrderMode(mode);
+    };
+  });
+  syncCustomerOrderModeUi();
 }
 
 function wireCustomerPortal(){
@@ -1305,6 +1724,7 @@ function wireCustomerPortal(){
   if(calToggle) calToggle.onchange=()=>syncCustomerVehicleDateCalVisibility();
   wireCustomerVehicleTypes();
   wireCustomerFormChecklist();
+  wireCustomerOrderMode();
   syncCustomerVehicleDateCalVisibility();
   syncCustomerTempField();
   const orderForm=$('cust-order-form');

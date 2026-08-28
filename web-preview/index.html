@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc41" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc41" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-28-hybrid-chat4317" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-28-hybrid-chat4317" />
 
 </head>
 <body>
@@ -129,7 +129,15 @@
       <div class="admin-form-scroll">
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
         <section class="form-section" id="cust-order-form">
-          <h2 class="form-section-title">Новая заявка</h2>
+          <div class="cust-order-head">
+            <h2 class="form-section-title">Новая заявка</h2>
+            <div class="cust-order-mode-tabs" role="tablist" aria-label="Способ оформления">
+              <button type="button" class="cust-order-mode-tab on" data-cust-mode="form" role="tab" aria-selected="true">Форма</button>
+              <button type="button" class="cust-order-mode-tab" data-cust-mode="chat" role="tab" aria-selected="false">Чат</button>
+            </div>
+            <a href="/customer-form-chat-preview.html" class="cust-chat-preview-link" target="_blank" rel="noopener" title="Статичный макет для обсуждения">Превью макета</a>
+          </div>
+          <div id="cust-form-panel">
           <div class="cust-form-layout">
             <div class="cust-form-main">
           <div class="cust-form-blocks">
@@ -409,6 +417,17 @@
               </div>
               <button type="button" class="primary cust-checklist-submit" id="cust-checklist-submit" disabled>Отправить заявку</button>
             </aside>
+          </div>
+          </div>
+          <div id="cust-chat-panel" class="cust-chat-shell" hidden>
+            <div class="chat-progress" aria-hidden="true"><div class="chat-progress-fill" id="cust-chat-progress"></div></div>
+            <p class="chat-step-hint" id="cust-chat-step-hint"></p>
+            <div class="chat-thread" id="cust-chat-thread" role="log" aria-live="polite"></div>
+            <div class="chat-compose" id="cust-chat-compose">
+              <input id="cust-chat-input" placeholder="Напишите ответ…" aria-label="Сообщение" autocomplete="off" />
+              <button type="button" id="cust-chat-send" aria-label="Отправить">→</button>
+            </div>
+            <div class="error" id="cust-chat-error"></div>
           </div>
         </section>
         <section class="form-section">
@@ -748,6 +767,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-28-entrybc41"></script>
+  <script src="/boot-loader.js?v=2026-08-28-hybrid-chat4317"></script>
 </body>
 </html>
