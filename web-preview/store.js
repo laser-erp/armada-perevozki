@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-close-trip-price4317";
+const APP_BUILD="2026-08-28-chat-body-search4317";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -402,36 +402,84 @@ const BODY_TYPES=[
   {id:'reefer', label:'Рефрижератор'},
   {id:'dump', label:'Самосвал'}
 ];
-/** Типы кузова как на ATI (подсказки в форме заказчика). mapTo — внутренний id для тарифа. */
+/** Типы кузова ATI (61) — поиск в форме заказчика. mapTo — id для тарифа. */
 const ATI_BODY_TYPES=[
-  {id:'tent', ati:'Тентованный', label:'Тент / фургон', mapTo:'tent', keywords:['тент','фургон','тентован','штора']},
-  {id:'board', ati:'Бортовой', label:'Бортовой', mapTo:'board', keywords:['борт','бортов']},
-  {id:'open', ati:'Открытый конт.', label:'Открытый конт.', mapTo:'board', keywords:['открыт','конт']},
-  {id:'platform', ati:'Площадка', label:'Площадка', mapTo:'board', keywords:['площад']},
-  {id:'shalanda', ati:'Шаланда', label:'Шаланда', mapTo:'board', keywords:['шаланд']},
-  {id:'reefer', ati:'Рефрижератор', label:'Рефрижератор', mapTo:'reefer', keywords:['реф','рефриж','холод']},
-  {id:'isotherm', ati:'Изотермический', label:'Изотермический', mapTo:'reefer', keywords:['изотерм','изотермич','термос']},
-  {id:'van', ati:'Фургон', label:'Фургон', mapTo:'tent', keywords:['фург']},
-  {id:'metal', ati:'Цельнометалл', label:'Цельнометалл', mapTo:'tent', keywords:['цельномет','металл']},
-  {id:'container', ati:'Контейнер', label:'Контейнер', mapTo:'tent', keywords:['контейн','20','40']},
-  {id:'dump', ati:'Самосвал', label:'Самосвал', mapTo:'dump', keywords:['самосвал','сыпуч']},
-  {id:'tank', ati:'Цистерна', label:'Цистерна', mapTo:'tent', keywords:['цистерн','налив']},
-  {id:'grain', ati:'Зерновоз', label:'Зерновоз', mapTo:'dump', keywords:['зерно']},
-  {id:'car_carrier', ati:'Автовоз', label:'Автовоз', mapTo:'board', keywords:['автовоз','авто']},
-  {id:'lowbed', ati:'Низкорамник', label:'Низкорамник', mapTo:'board', keywords:['низкорам','трал']},
-  {id:'timber', ati:'Лесовоз', label:'Лесовоз', mapTo:'board', keywords:['лес']},
-  {id:'manipulator', ati:'Манипулятор', label:'Манипулятор', mapTo:'board', keywords:['манипулят','кму']}
+  {id:"tent",ati:"тентованный",label:"тентованный",mapTo:"tent",keywords:["тент.","tent truck","тентованный"]},
+  {id:"container",ati:"контейнер",label:"контейнер",mapTo:"tent",keywords:["конт.","container","контейнер"]},
+  {id:"van",ati:"фургон",label:"фургон",mapTo:"tent",keywords:["фург.","van","фургон"]},
+  {id:"metal",ati:"цельнометалл.",label:"цельнометалл.",mapTo:"tent",keywords:["цмет.","all-metal","цельнометалл."]},
+  {id:"isotherm",ati:"изотермический",label:"изотермический",mapTo:"reefer",keywords:["изотерм","isothermal","изотермический"]},
+  {id:"reefer",ati:"рефрижератор",label:"рефрижератор",mapTo:"reefer",keywords:["реф.","refrigerator","рефрижератор"]},
+  {id:"reefer_multimode",ati:"реф. мультирежимный",label:"реф. мультирежимный",mapTo:"reefer",keywords:["реф.мульт.","refrigerator mult.","реф. мультирежимный"]},
+  {id:"reefer_partition",ati:"реф. с перегородкой",label:"реф. с перегородкой",mapTo:"reefer",keywords:["реф.с перег.","bulkhead refr.","реф. с перегородкой"]},
+  {id:"reefer_meat",ati:"реф.-тушевоз",label:"реф.-тушевоз",mapTo:"reefer",keywords:["р-туш.","meat rails ref.","реф.-тушевоз"]},
+  {id:"board",ati:"бортовой",label:"бортовой",mapTo:"board",keywords:["борт.","flatbed","бортовой"]},
+  {id:"open",ati:"открытый конт.",label:"открытый конт.",mapTo:"board",keywords:["откр.конт.","opentop","открытый конт."]},
+  {id:"platform",ati:"площадка без бортов",label:"площадка без бортов",mapTo:"board",keywords:["безборт.","opentrailer","площадка без бортов"]},
+  {id:"dump",ati:"самосвал",label:"самосвал",mapTo:"dump",keywords:["ссвл.","dump truck","самосвал"]},
+  {id:"shalanda",ati:"шаланда",label:"шаланда",mapTo:"board",keywords:["шал.","barge","шаланда"]},
+  {id:"oversize",ati:"негабарит",label:"негабарит",mapTo:"board",keywords:["негаб.","outsize","негабарит"]},
+  {id:"lowbed",ati:"низкорамный",label:"низкорамный",mapTo:"board",keywords:["рамн.","dolly","низкорамный"]},
+  {id:"lowbed_platform",ati:"низкорам.платф.",label:"низкорам.платф.",mapTo:"board",keywords:["нпл.","dolly plat.","низкорам.платф."]},
+  {id:"telescopic",ati:"телескопический",label:"телескопический",mapTo:"board",keywords:["телскп.","adjustable","телескопический"]},
+  {id:"tral",ati:"трал",label:"трал",mapTo:"board",keywords:["трал","tral"]},
+  {id:"beam_truck",ati:"балковоз(негабарит)",label:"балковоз(негабарит)",mapTo:"board",keywords:["балк.","beam truck(ngb)","балковоз(негабарит)"]},
+  {id:"bus",ati:"автобус",label:"автобус",mapTo:"board",keywords:["авт.","bus","автобус"]},
+  {id:"car_carrier",ati:"автовоз",label:"автовоз",mapTo:"board",keywords:["автв.","autocart","автовоз"]},
+  {id:"aerial_lift",ati:"автовышка",label:"автовышка",mapTo:"board",keywords:["вышк.","autotower","автовышка"]},
+  {id:"car_transporter",ati:"автотранспортер",label:"автотранспортер",mapTo:"board",keywords:["автт.","auto carrier","автотранспортер"]},
+  {id:"concrete_mixer",ati:"бетоновоз",label:"бетоновоз",mapTo:"board",keywords:["бет.","сoncrete truck","бетоновоз"]},
+  {id:"bitumen_truck",ati:"битумовоз",label:"битумовоз",mapTo:"board",keywords:["битум","bitumen truck","битумовоз"]},
+  {id:"fuel_tank",ati:"бензовоз",label:"бензовоз",mapTo:"board",keywords:["бенз.","fuel tank","бензовоз"]},
+  {id:"offroader",ati:"вездеход",label:"вездеход",mapTo:"board",keywords:["вздхд.","off-roader","вездеход"]},
+  {id:"gas_tank",ati:"газовоз",label:"газовоз",mapTo:"board",keywords:["газ.","gas","газовоз"]},
+  {id:"grain",ati:"зерновоз",label:"зерновоз",mapTo:"dump",keywords:["зерн.","grain truck","зерновоз"]},
+  {id:"horse_carrier",ati:"коневоз",label:"коневоз",mapTo:"board",keywords:["кони.","horse truck","коневоз"]},
+  {id:"container_carrier",ati:"контейнеровоз",label:"контейнеровоз",mapTo:"board",keywords:["конт-воз","container trail.","контейнеровоз"]},
+  {id:"feed_truck",ati:"кормовоз",label:"кормовоз",mapTo:"board",keywords:["корм.","furage tuck","кормовоз"]},
+  {id:"crane_truck",ati:"кран",label:"кран",mapTo:"board",keywords:["кран","crane"]},
+  {id:"timber",ati:"лесовоз",label:"лесовоз",mapTo:"board",keywords:["лесв.","timber truck","лесовоз"]},
+  {id:"scrap_truck",ati:"ломовоз",label:"ломовоз",mapTo:"board",keywords:["лом.","scrap truck","ломовоз"]},
+  {id:"manipulator",ati:"манипулятор",label:"манипулятор",mapTo:"board",keywords:["манип","manipulator","манипулятор"]},
+  {id:"minibus",ati:"микроавтобус",label:"микроавтобус",mapTo:"board",keywords:["микр.","microbus","микроавтобус"]},
+  {id:"flour_truck",ati:"муковоз",label:"муковоз",mapTo:"board",keywords:["мук.","flour truck","муковоз"]},
+  {id:"panel_truck",ati:"панелевоз",label:"панелевоз",mapTo:"board",keywords:["панв.","panels truck","панелевоз"]},
+  {id:"pickup",ati:"пикап",label:"пикап",mapTo:"board",keywords:["пикап","pickup"]},
+  {id:"coil_truck",ati:"пухтовоз",label:"пухтовоз",mapTo:"board",keywords:["пухта","ripetruck","пухтовоз"]},
+  {id:"pyramid",ati:"пирамида",label:"пирамида",mapTo:"board",keywords:["пирам.","pyramid","пирамида"]},
+  {id:"roll_truck",ati:"рулоновоз",label:"рулоновоз",mapTo:"board",keywords:["рул.","roll truck","рулоновоз"]},
+  {id:"tractor",ati:"седельный тягач",label:"седельный тягач",mapTo:"board",keywords:["тягач","tractor","седельный тягач"]},
+  {id:"cattle_truck",ati:"скотовоз",label:"скотовоз",mapTo:"board",keywords:["скот.","cattle","скотовоз"]},
+  {id:"glass_truck",ati:"стекловоз",label:"стекловоз",mapTo:"board",keywords:["сткл.","innloader","стекловоз"]},
+  {id:"pipe_carrier",ati:"трубовоз",label:"трубовоз",mapTo:"board",keywords:["труб.","pipe truck","трубовоз"]},
+  {id:"cement_truck",ati:"цементовоз",label:"цементовоз",mapTo:"board",keywords:["цем.","cement truck","цементовоз"]},
+  {id:"tank",ati:"автоцистерна",label:"автоцистерна",mapTo:"tent",keywords:["автоцист.","tanker truck","автоцистерна"]},
+  {id:"chip_truck",ati:"щеповоз",label:"щеповоз",mapTo:"board",keywords:["щеп.","chip truck","щеповоз"]},
+  {id:"tow_truck",ati:"эвакуатор",label:"эвакуатор",mapTo:"board",keywords:["эвак.","wrecker","эвакуатор"]},
+  {id:"cargo_passenger",ati:"грузопассажирский",label:"грузопассажирский",mapTo:"board",keywords:["грузпас.","dual-purpose","грузопассажирский"]},
+  {id:"pole_truck",ati:"клюшковоз",label:"клюшковоз",mapTo:"board",keywords:["клюшк.","klyushkovoz","клюшковоз"]},
+  {id:"garbage_truck",ati:"мусоровоз",label:"мусоровоз",mapTo:"board",keywords:["мусор.","garbage truck","мусоровоз"]},
+  {id:"jumbo",ati:"jumbo",label:"jumbo",mapTo:"board",keywords:["jumbo"]},
+  {id:"tank_cont_20",ati:"20' танк-контейнер",label:"20' танк-контейнер",mapTo:"board",keywords:["20' танк-конт.","20' tank-container","20' танк-контейнер"]},
+  {id:"tank_cont_40",ati:"40' танк-контейнер",label:"40' танк-контейнер",mapTo:"board",keywords:["40' танк-конт.","40' tank-container","40' танк-контейнер"]},
+  {id:"mega_truck",ati:"мега фура",label:"мега фура",mapTo:"board",keywords:["мега","mega","мега фура"]},
+  {id:"doppelstock",ati:"допельшток",label:"допельшток",mapTo:"board",keywords:["допельшток","doppelstock"]},
+  {id:"extendable_semi",ati:"Раздвижной полуприцеп 20'/40'",label:"Раздвижной полуприцеп 20'/40'",mapTo:"board",keywords:["раздв. полу. 20'/40'","sliding semi-trailer 20'/40'","раздвижной полуприцеп 20'/40'"]},
 ];
-function atiBodyTypeOptions(){
-  return ATI_BODY_TYPES.slice().sort((a,b)=>String(a.ati).localeCompare(String(b.ati),'ru'));
+const CUST_FORM_VTYPE_IDS=new Set(["tent","container","van","metal","isotherm","reefer","reefer_partition","reefer_multimode","board","open","dump","platform","shalanda"]);
+function custExtraVehicleTypes(){return ATI_BODY_TYPES.filter(x=>!CUST_FORM_VTYPE_IDS.has(x.id));}
+function custVehicleTypeMeta(id){return ATI_BODY_TYPES.find(x=>x.id===id)||null;}
+function custVtypeMatchesQuery(type,q){
+  const nq=String(q||'').trim().toLowerCase();
+  if(!nq) return true;
+  const hay=((type.ati||'')+' '+(type.label||'')+' '+(type.keywords||[]).join(' ')).toLowerCase();
+  if(hay.includes(nq)) return true;
+  return hay.split(/[\s,./()+'\-]+/).filter(Boolean).some(w=>w.startsWith(nq));
 }
-function resolveBodyTypeFromInput(raw){
-  const q=String(raw||'').trim().toLowerCase();
-  if(!q) return 'tent';
-  const exact=ATI_BODY_TYPES.find(x=>x.ati.toLowerCase()===q || x.label.toLowerCase()===q || x.id===q);
-  if(exact) return exact.mapTo||exact.id;
-  const hit=ATI_BODY_TYPES.find(x=>(x.keywords||[]).some(k=>q.includes(k)) || x.ati.toLowerCase().includes(q) || x.label.toLowerCase().includes(q));
-  return hit?(hit.mapTo||hit.id):'tent';
+function filterCustVehicleTypesByQuery(q){
+  const nq=String(q||'').trim().toLowerCase();
+  if(!nq) return [];
+  return ATI_BODY_TYPES.filter(t=>custVtypeMatchesQuery(t,nq));
 }
 function bodyTypeInputLabel(id){
   const hit=ATI_BODY_TYPES.find(x=>x.id===id)||BODY_TYPES.find(x=>x.id===id);

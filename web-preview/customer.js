@@ -543,10 +543,14 @@ function wireCustomerFormChecklist(){
 }
 function customerPrimaryBodyType(types){
   types=types||customerSelectedVehicleTypes();
-  if(types.some(id=>CUST_REFR_VTYPE_IDS.includes(id))) return 'reefer';
+  if(types.some(id=>CUST_REFR_VTYPE_IDS.includes(id)||id==='reefer_meat')) return 'reefer';
   if(types.includes('isotherm') && !types.some(id=>CUST_CLOSED_VTYPE_IDS.includes(id))) return 'reefer';
-  if(types.includes('dump')) return 'dump';
+  if(types.includes('dump')||types.includes('grain')) return 'dump';
   if(types.some(id=>CUST_OPEN_VTYPE_IDS.includes(id))) return 'board';
+  for(const id of types){
+    const meta=typeof custVehicleTypeMeta==='function'?custVehicleTypeMeta(id):null;
+    if(meta&&meta.mapTo) return meta.mapTo;
+  }
   if(types.length) return 'tent';
   return 'tent';
 }
@@ -590,6 +594,64 @@ function resetCustomerVehicleTypes(){
   if(hid) hid.value='tent';
   syncCustomerVehicleTypeUi();
 }
+function wireCustomerVehicleTypeChange(el){
+  if(!el.checked) clearCustomerLoadUnloadMethods();
+  else if(CUST_REAR_AUTO_VTYPE_IDS.has(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
+  if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerClosedAllCheckbox();
+  if(CUST_REFR_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID||el.dataset.vtype==='reefer_meat') syncCustomerRefrAllCheckbox();
+  if(CUST_OPEN_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerOpenAllCheckbox();
+  syncCustomerVehicleTypeUi();
+  customerChatSyncFromForm();
+  updateCustomerPricePreview();
+  paintCustomerFleetOptions();
+  filterCustomerVtypeSearch(($('cust-vtype-search')||{}).value||'');
+}
+function initCustomerVtypeExtraList(){
+  const box=$('cust-vtype-extra-list');
+  if(!box||box.dataset.ready) return;
+  box.dataset.ready='1';
+  const extras=typeof custExtraVehicleTypes==='function'?custExtraVehicleTypes():[];
+  box.innerHTML=`<div class="cust-vtype-extra-head">Другие типы кузова</div>${
+    extras.map(t=>`<label class="cust-vtype-item cust-vtype-extra"><input type="checkbox" data-vtype="${esc(t.id)}" /> ${esc(t.ati)}</label>`).join('')
+  }`;
+  box.querySelectorAll('[data-vtype]').forEach(el=>{ el.onchange=()=>wireCustomerVehicleTypeChange(el); });
+}
+function filterCustomerVtypeSearch(raw){
+  const q=String(raw||'').trim().toLowerCase();
+  const bodyList=$('cust-vtype-body-list');
+  const extraBox=$('cust-vtype-extra-list');
+  if(!bodyList) return;
+  const searching=!!q;
+  bodyList.querySelectorAll('.cust-vtype-master, .cust-vtype-tree, .cust-vtype-isotherm').forEach(el=>{
+    if(el.closest('#cust-vtype-extra-list')) return;
+    el.hidden=searching;
+  });
+  bodyList.querySelectorAll('.cust-vtype-item').forEach(lbl=>{
+    if(lbl.closest('#cust-vtype-extra-list')) return;
+    const inp=lbl.querySelector('[data-vtype]');
+    const meta=typeof custVehicleTypeMeta==='function'?custVehicleTypeMeta(inp&&inp.dataset.vtype):null;
+    const match=!searching||(meta&&typeof custVtypeMatchesQuery==='function'?custVtypeMatchesQuery(meta,q):lbl.textContent.toLowerCase().includes(q));
+    lbl.hidden=!match;
+  });
+  if(extraBox){
+    extraBox.hidden=!searching;
+    if(searching){
+      extraBox.querySelectorAll('.cust-vtype-item').forEach(lbl=>{
+        const inp=lbl.querySelector('[data-vtype]');
+        const meta=typeof custVehicleTypeMeta==='function'?custVehicleTypeMeta(inp&&inp.dataset.vtype):null;
+        lbl.hidden=!(meta&&typeof custVtypeMatchesQuery==='function'&&custVtypeMatchesQuery(meta,q));
+      });
+    }
+  }
+}
+function wireCustomerVtypeSearch(){
+  initCustomerVtypeExtraList();
+  const inp=$('cust-vtype-search');
+  if(!inp||inp.dataset.wired) return;
+  inp.dataset.wired='1';
+  inp.oninput=()=>filterCustomerVtypeSearch(inp.value);
+  inp.onsearch=()=>filterCustomerVtypeSearch(inp.value);
+}
 function wireCustomerVehicleTypes(){
   const master=$('cust-vtype-closed-all');
   if(master){
@@ -624,16 +686,7 @@ function wireCustomerVehicleTypes(){
     };
   }
   document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{
-    el.onchange=()=>{
-      if(!el.checked) clearCustomerLoadUnloadMethods();
-      else if(CUST_REAR_AUTO_VTYPE_IDS.has(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
-      if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerClosedAllCheckbox();
-      if(CUST_REFR_VTYPE_IDS.includes(el.dataset.vtype)||el.dataset.vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerRefrAllCheckbox();
-      if(CUST_OPEN_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerOpenAllCheckbox();
-      syncCustomerVehicleTypeUi();
-      updateCustomerPricePreview();
-      paintCustomerFleetOptions();
-    };
+    el.onchange=()=>wireCustomerVehicleTypeChange(el);
   });
   document.querySelectorAll('#cust-load-methods [data-load], #cust-unload-methods [data-unload]').forEach(el=>{
     el.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); };
@@ -1094,12 +1147,20 @@ function readCustomerVehicleAt(){
   return Number.isNaN(dt.getTime())?null:dt.toISOString();
 }
 
+function showCustomerSubmitError(msg){
+  const text=String(msg||'').trim();
+  const formErr=$('cust-form-error');
+  const chatErr=$('cust-chat-error');
+  if(formErr) formErr.textContent=text;
+  if(chatErr&&customerOrderMode()==='chat') chatErr.textContent=text;
+}
 function submitCustomerOrder(){
   const err=$('cust-form-error');
-  if(!currentCustomer){ if(err) err.textContent='Войдите снова'; return; }
+  if(customerChat.data&&Object.keys(customerChat.data).length) customerChatApplyToForm();
+  if(!currentCustomer){ showCustomerSubmitError('Войдите снова'); return; }
   const co=findCompanyById(currentCustomer.companyId);
   const carrier=carrierOwnCompanyForSpace(co&&co.spaceId);
-  if(!carrier){ if(err) err.textContent='Перевозчик не найден'; return; }
+  if(!carrier){ showCustomerSubmitError('Перевозчик не найден'); return; }
   const load=(($('cust-load')||{}).value||'').trim();
   const unload=(($('cust-unload')||{}).value||'').trim();
   const loadingContactName=(($('cust-loading-contact-name')||{}).value||'').trim();
@@ -1112,12 +1173,12 @@ function submitCustomerOrder(){
   syncCustomerPayloadTons();
   const payloadTons=customerWeightTons();
   const vehicleAt=readCustomerVehicleAt();
-  if(!load||!unload){ if(err) err.textContent='Укажите адреса загрузки и выгрузки'; return; }
-  if(!vehicleAt){ if(err) err.textContent='Укажите дату и время подачи ТС'; return; }
-  if(!(payloadTons>0)){ if(err) err.textContent='Укажите вес груза'; return; }
-  if(!cargoText){ if(err) err.textContent='Укажите, что за груз'; return; }
+  if(!load||!unload){ showCustomerSubmitError('Укажите адреса загрузки и выгрузки'); return; }
+  if(!vehicleAt){ showCustomerSubmitError('Укажите дату и время подачи ТС'); return; }
+  if(!(payloadTons>0)){ showCustomerSubmitError('Укажите вес груза'); return; }
+  if(!cargoText){ showCustomerSubmitError('Укажите, что за груз'); return; }
   const vtypes=customerSelectedVehicleTypes();
-  if(!vtypes.length){ if(err) err.textContent='Выберите хотя бы один тип ТС'; return; }
+  if(!vtypes.length){ showCustomerSubmitError('Выберите хотя бы один тип ТС'); return; }
   const cargo=customerSelectedCargoKind();
   if(cargo==='food' && !vtypes.some(id=>CUST_REFR_VTYPE_IDS.includes(id)||id==='isotherm')){
     if(!confirm('Для продуктов обычно нужен изотермический кузов или рефрижератор. Отправить как есть?')) return;
@@ -1130,20 +1191,20 @@ function submitCustomerOrder(){
   let offered=draft.priceOffer!=null?Math.round(draft.priceOffer):min;
   if(min!=null && offered!=null && offered<min){
     const payLabel=typeof customerCarrierPriceLabel==='function'?customerCarrierPriceLabel(carrier):'';
-    if(err) err.textContent=`Цена не может быть ниже ориентира (${fmt(min)} ₽${payLabel?`, ${payLabel}`:''})`;
+    if(err) showCustomerSubmitError(`Цена не может быть ниже ориентира (${fmt(min)} ₽${payLabel?`, ${payLabel}`:''})`);
     updateCustomerPricePreview();
     return;
   }
   const bookedPlate=(($('cust-book-plate')||{}).value||'').trim();
   if(bookedPlate && typeof vehicleBusyAt==='function' && vehicleBusyAt(bookedPlate, vehicleAt)){
-    if(err) err.textContent='Эта машина уже занята на это время. Выберите другую или не бронируйте.';
+    if(err) showCustomerSubmitError('Эта машина уже занята на это время. Выберите другую или не бронируйте.');
     paintCustomerFleetOptions();
     return;
   }
   const spaceId=co.spaceId||carrier.spaceId||null;
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
   Promise.resolve(guardFn(spaceId,'create_order')).then(g=>{
-    if(!g.ok){ if(err) err.textContent=g.message; return; }
+    if(!g.ok){ showCustomerSubmitError(g.message); return; }
     submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
   });
 }
@@ -1225,7 +1286,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   bumpDataEpoch('customer-portal-order');
   upsertOrder(order);
   persist();
-  if(err) err.textContent='';
+  if(err) showCustomerSubmitError('');
+  const chatErr=$('cust-chat-error'); if(chatErr) chatErr.textContent='';
   const priceBit=order.pricePending
     ?'Цену уточнит диспетчер.'
     :`Ориентир ${fmt(min||offered)} ₽${typeof customerCarrierPriceLabel==='function'&&carrier?' ('+customerCarrierPriceLabel(carrier)+')':''}${order.fulfillment==='direct'?'':' (ставка логиста в цене)'}.`;
@@ -1279,7 +1341,52 @@ const CUST_CHAT_BODY_CHIPS=[
   {id:'platform', label:'Площадка', vtype:'platform'},
   {id:'other', label:'Другое → форма', vtype:null}
 ];
+const CUST_CHAT_STATE_KEY='armada_customer_chat_state_v1';
 let customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
+
+function saveCustomerChatState(){
+  try{
+    if(!customerChat.messages.length) return;
+    sessionStorage.setItem(CUST_CHAT_STATE_KEY, JSON.stringify({
+      messages:customerChat.messages, stepIndex:customerChat.stepIndex,
+      data:customerChat.data, summaryReady:customerChat.summaryReady
+    }));
+  }catch(_){}
+}
+function restoreCustomerChatState(){
+  try{
+    const raw=JSON.parse(sessionStorage.getItem(CUST_CHAT_STATE_KEY)||'null');
+    if(!raw||!Array.isArray(raw.messages)||!raw.messages.length) return false;
+    customerChat={messages:raw.messages, stepIndex:+raw.stepIndex||0, data:raw.data||{}, summaryReady:!!raw.summaryReady};
+    return true;
+  }catch(_){ return false; }
+}
+function clearCustomerChatState(){
+  try{ sessionStorage.removeItem(CUST_CHAT_STATE_KEY); }catch(_){}
+}
+function customerChatSyncFromForm(){
+  if(!customerChat.messages.length&&!Object.keys(customerChat.data).length) return;
+  const d=customerChat.data;
+  const cargo=(($('cust-cargo-text')||{}).value||'').trim();
+  if(cargo) d.cargoText=cargo;
+  const wRaw=(($('cust-weight-value')||{}).value||'').replace(',','.');
+  const w=+wRaw;
+  if(w>0){
+    d.weightValue=w;
+    d.weightUnit=(($('cust-weight-unit')||{}).value||'t').trim()||'t';
+  }
+  const date=(($('cust-vehicle-date')||{}).value||'').trim();
+  const time=(($('cust-vehicle-time')||{}).value||'').trim();
+  if(date) d.date=date;
+  if(time) d.time=time;
+  const load=(($('cust-load')||{}).value||'').trim();
+  const unload=(($('cust-unload')||{}).value||'').trim();
+  if(load) d.load=load;
+  if(unload) d.unload=unload;
+  const types=customerSelectedVehicleTypes();
+  if(types.length) d.bodyVtype=types[0];
+  saveCustomerChatState();
+}
 
 function customerOrderMode(){
   try{ return localStorage.getItem(CUST_CHAT_MODE_KEY)==='chat'?'chat':'form'; }catch(_){ return 'form'; }
@@ -1303,7 +1410,10 @@ function syncCustomerOrderModeUi(){
     else chatPanel.hidden=true;
   }
   if(mode==='form' && customerChat.data && Object.keys(customerChat.data).length) customerChatApplyToForm();
-  if(mode==='chat') initCustomerChatWizard(false);
+  if(mode==='chat'){
+    customerChatSyncFromForm();
+    initCustomerChatWizard(false);
+  }
 }
 function customerChatOffsetDate(days){
   const d=new Date();
@@ -1322,6 +1432,7 @@ function customerChatBodyLabel(vtype){
 }
 function resetCustomerChat(){
   customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
+  clearCustomerChatState();
 }
 function customerChatBotPrompt(stepId){
   if(stepId==='cargo') return 'Здравствуйте! Оформим заявку на перевозку. <strong>Что нужно перевезти?</strong>';
@@ -1548,9 +1659,13 @@ function customerChatWireWidgets(stepId){
         const chip=CUST_CHAT_BODY_CHIPS.find(c=>c.id===id);
         if(!chip) return;
         if(id==='other'){
+          saveCustomerChatState();
           setCustomerOrderMode('form');
+          customerChatApplyToForm();
           const block=document.querySelector('.cust-form-block[data-cust-step="transport"]');
           if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
+          const search=$('cust-vtype-search');
+          if(search){ search.focus(); filterCustomerVtypeSearch(''); }
           return;
         }
         customerChat.data.bodyVtype=chip.vtype;
@@ -1561,6 +1676,7 @@ function customerChatWireWidgets(stepId){
   if(stepId==='summary'){
     const sub=$('cust-chat-submit');
     if(sub) sub.onclick=()=>{
+      showCustomerSubmitError('');
       customerChatApplyToForm();
       submitCustomerOrder();
     };
@@ -1574,6 +1690,7 @@ function customerChatWireWidgets(stepId){
         customerChat.summaryReady=false;
         customerChat.messages=customerChat.messages.filter(m=>!(m.role==='bot' && m.stepId==='summary'));
         customerChatAddBot(sid);
+        saveCustomerChatState();
         customerChatRenderAll();
       };
     });
@@ -1595,6 +1712,7 @@ function customerChatAdvance(userText){
   const err=$('cust-chat-error'); if(err) err.textContent='';
   if(userText) customerChatAddUser(userText);
   customerChat.stepIndex++;
+  saveCustomerChatState();
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
   if(!step){
     customerChatRenderAll();
@@ -1606,6 +1724,7 @@ function customerChatAdvance(userText){
     customerChatRenderAll();
     customerChatRefreshRouteHint().then(()=>{
       customerChat.summaryReady=true;
+      saveCustomerChatState();
       if(customerChatPriceHint()){
         const p=customerChatPriceHint();
         const priceEl=$('cust-price');
@@ -1631,6 +1750,7 @@ function customerChatHandleTextInput(){
   if(step.id==='cargo'){
     customerChat.data.cargoText=raw;
     if(inp) inp.value='';
+    saveCustomerChatState();
     customerChatAdvance(raw);
     return;
   }
@@ -1650,14 +1770,20 @@ function customerChatHandleTextInput(){
     customerChat.data.weightValue=num;
     customerChat.data.weightUnit=unit;
     if(inp) inp.value='';
+    saveCustomerChatState();
     const label=unit==='kg'?`${num} кг`:`${num} т`;
     customerChatAdvance(label);
   }
 }
 function initCustomerChatWizard(forceReset){
-  if(forceReset || !customerChat.messages.length){
+  if(forceReset){
     resetCustomerChat();
     customerChatAddBot('cargo');
+  }else if(!customerChat.messages.length){
+    if(!restoreCustomerChatState()){
+      resetCustomerChat();
+      customerChatAddBot('cargo');
+    }
   }
   customerChatRenderAll();
   const send=$('cust-chat-send');
@@ -1677,7 +1803,6 @@ function wireCustomerOrderMode(){
     btn.dataset.wired='1';
     btn.onclick=()=>{
       const mode=btn.dataset.custMode||'form';
-      if(mode==='chat') initCustomerChatWizard(true);
       setCustomerOrderMode(mode);
     };
   });
@@ -1740,6 +1865,7 @@ function wireCustomerPortal(){
   const calToggle=$('cust-vehicle-date-cal-toggle');
   if(calToggle) calToggle.onchange=()=>syncCustomerVehicleDateCalVisibility();
   wireCustomerVehicleTypes();
+  wireCustomerVtypeSearch();
   wireCustomerFormChecklist();
   wireCustomerOrderMode();
   syncCustomerVehicleDateCalVisibility();

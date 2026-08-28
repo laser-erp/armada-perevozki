@@ -894,6 +894,15 @@
     }
     .cust-vtype-col-title{font-size:.76rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
     .cust-vtype-col-title .req{color:var(--accent)}
+    .cust-vtype-search-wrap{padding:6px 8px 4px;border-bottom:1px solid var(--border)}
+    .cust-vtype-search{
+      width:100%;box-sizing:border-box;padding:6px 8px;font-size:.82rem;border:1px solid var(--border);
+      border-radius:6px;background:var(--bg);color:inherit
+    }
+    .cust-vtype-search:focus{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);border-color:var(--accent)}
+    .cust-vtype-extra-list{margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)}
+    .cust-vtype-extra-list .cust-vtype-extra-head{font-size:.72rem;font-weight:600;color:var(--muted);padding:2px 0 6px;text-transform:uppercase;letter-spacing:.03em}
+    .cust-vtype-item[hidden],.cust-vtype-master[hidden],.cust-vtype-tree[hidden],.cust-vtype-isotherm[hidden]{display:none!important}
     .cust-vtype-col.is-disabled{opacity:.55}
     .cust-vtype-col.is-disabled .cust-check-item,.cust-vtype-col.is-disabled .cust-vtype-match-all{color:var(--muted)}
     .cust-vtype-col-body{overflow-y:auto;padding:6px 8px 8px;flex:1;min-height:0}
