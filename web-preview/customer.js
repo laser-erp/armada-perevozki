@@ -1357,6 +1357,8 @@ const CUST_CHAT_STEPS=[
   {id:'when', title:'Когда'},
   {id:'load', title:'Загрузка'},
   {id:'unload', title:'Выгрузка'},
+  {id:'loadContact', title:'Контакт загрузки'},
+  {id:'unloadContact', title:'Контакт выгрузки'},
   {id:'body', title:'Кузов'},
   {id:'summary', title:'Подтверждение'}
 ];
@@ -1648,6 +1650,14 @@ function customerChatSyncFromForm(){
   if(unload) d.unload=unload;
   const types=customerSelectedVehicleTypes();
   if(types.length) d.bodyVtype=types[0];
+  const loadName=(($('cust-loading-contact-name')||{}).value||'').trim();
+  const loadPhone=formatPhone((($('cust-loading-contact-phone')||{}).value||'').trim());
+  const unloadName=(($('cust-unloading-contact-name')||{}).value||'').trim();
+  const unloadPhone=formatPhone((($('cust-unloading-contact-phone')||{}).value||'').trim());
+  if(loadName) d.loadingContactName=loadName;
+  if(loadPhone) d.loadingContactPhone=loadPhone;
+  if(unloadName) d.unloadingContactName=unloadName;
+  if(unloadPhone) d.unloadingContactPhone=unloadPhone;
   saveCustomerChatState();
 }
 
@@ -1750,6 +1760,8 @@ function customerChatBotPrompt(stepId){
   if(stepId==='when') return '<strong>Когда подать машину?</strong>';
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Укажите адрес загрузки.';
   if(stepId==='unload') return '<strong>Куда везём?</strong>';
+  if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — чтобы водитель мог связаться на месте.';
+  if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Имя и телефон (можно пропустить, если тот же).';
   if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
   if(stepId==='summary') return 'Проверьте заявку перед отправкой:';
   return '';
@@ -1809,9 +1821,49 @@ function customerChatApplyToForm(){
   const unloadEl=$('cust-unload');
   if(loadEl && d.load) loadEl.value=d.load;
   if(unloadEl && d.unload) unloadEl.value=d.unload;
+  const loadNameEl=$('cust-loading-contact-name');
+  const loadPhoneEl=$('cust-loading-contact-phone');
+  const unloadNameEl=$('cust-unloading-contact-name');
+  const unloadPhoneEl=$('cust-unloading-contact-phone');
+  if(loadNameEl && d.loadingContactName!=null) loadNameEl.value=d.loadingContactName;
+  if(loadPhoneEl && d.loadingContactPhone!=null) loadPhoneEl.value=d.loadingContactPhone;
+  if(unloadNameEl && d.unloadingContactName!=null) unloadNameEl.value=d.unloadingContactName;
+  if(unloadPhoneEl && d.unloadingContactPhone!=null) unloadPhoneEl.value=d.unloadingContactPhone;
   if(d.bodyVtype) customerChatSetVehicleType(d.bodyVtype);
   updateCustomerPricePreview();
   paintCustomerFleetOptions();
+}
+function customerChatContactLine(name, phone){
+  const n=String(name||'').trim();
+  const p=formatPhone(String(phone||'').trim());
+  if(n&&p) return `${n}, ${p}`;
+  if(p) return p;
+  if(n) return n;
+  return '—';
+}
+function customerChatParseContactInput(raw){
+  const s=String(raw||'').trim();
+  if(!s) return {name:'', phone:''};
+  const phoneMatch=s.match(/(?:\+?\d[\d\s\-()]{8,}\d|\d{10,11})/);
+  if(!phoneMatch) return {name:s, phone:''};
+  const phone=formatPhone(phoneMatch[0]);
+  let name=s.slice(0, phoneMatch.index).replace(/[,;:\-–—]+$/,'').trim();
+  if(!name) name=s.slice(phoneMatch.index+phoneMatch[0].length).replace(/^[,;:\-–—\s]+/,'').trim();
+  return {name, phone};
+}
+function customerChatSaveContact(stepId, name, phone){
+  const n=String(name||'').trim();
+  const p=formatPhone(String(phone||'').trim());
+  if(stepId==='loadContact'){
+    customerChat.data.loadingContactName=n;
+    customerChat.data.loadingContactPhone=p;
+  }else{
+    customerChat.data.unloadingContactName=n;
+    customerChat.data.unloadingContactPhone=p;
+  }
+  customerChatApplyToForm();
+  saveCustomerChatState();
+  scheduleCustomerOrderDraftSave();
 }
 async function customerChatRefreshRouteHint(){
   customerChatApplyToForm();
@@ -1839,6 +1891,8 @@ function customerChatSummaryHtml(){
     {id:'when', label:'Когда', val:customerChatWhenLabel()||'—', html:false},
     {id:'load', label:'Загрузка', val:d.load||'—', html:false},
     {id:'unload', label:'Выгрузка', val:d.unload||'—', html:false},
+    {id:'loadContact', label:'Контакт загрузки', val:customerChatContactLine(d.loadingContactName, d.loadingContactPhone), html:false},
+    {id:'unloadContact', label:'Контакт выгрузки', val:customerChatContactLine(d.unloadingContactName, d.unloadingContactPhone), html:false},
     {id:'body', label:'Кузов', val:d.bodyVtype?customerChatBodyLabel(d.bodyVtype):'—', html:false},
     {id:'price', label:'Ориентир', val:price?`<strong>${fmt(price)} ₽</strong>`:'уточнит перевозчик', html:true}
   ];
@@ -1886,6 +1940,21 @@ function customerChatRenderWidgets(){
     const val=step.id==='load'?(customerChat.data.load||''):(customerChat.data.unload||'');
     widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" autocomplete="off" aria-label="Адрес" /></div>
     <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-addr-ok">Далее →</button></div>`;
+  }else if(step.id==='loadContact' || step.id==='unloadContact'){
+    const isLoad=step.id==='loadContact';
+    const cName=isLoad?(customerChat.data.loadingContactName||''):(customerChat.data.unloadingContactName||'');
+    const cPhone=isLoad?(customerChat.data.loadingContactPhone||''):(customerChat.data.unloadingContactPhone||'');
+    widget=`<div class="chat-widget">
+      <div class="chat-widget-row">
+        <input id="cust-chat-contact-name" placeholder="ФИО" value="${esc(cName)}" autocomplete="name" aria-label="Имя контакта" />
+        <input id="cust-chat-contact-phone" placeholder="+7…" value="${esc(cPhone)}" inputmode="tel" autocomplete="tel" aria-label="Телефон" style="max-width:9.5rem" />
+      </div>
+    </div>
+    <div class="chat-chips">
+      <button type="button" class="chat-chip primary" id="cust-chat-contact-ok">Далее →</button>${
+        !isLoad?`<button type="button" class="chat-chip muted" id="cust-chat-contact-skip">Пропустить</button>
+      <button type="button" class="chat-chip muted" id="cust-chat-contact-same">Как на загрузке</button>`:''
+      }</div>`;
   }else if(step.id==='body'){
     widget=`<div class="chat-widget chat-vtype-widget">
       <input type="search" id="cust-chat-vtype-search" placeholder="тр, тент, трал…" autocomplete="off" aria-label="Поиск типа кузова" />
@@ -1972,6 +2041,45 @@ function customerChatWireWidgets(stepId){
       if(typeof wireAddressAutocomplete==='function') wireAddressAutocomplete(inp);
       setTimeout(()=>inp.focus(), 80);
     }
+  }
+  if(stepId==='loadContact' || stepId==='unloadContact'){
+    const ok=$('cust-chat-contact-ok');
+    const nameInp=$('cust-chat-contact-name');
+    const phoneInp=$('cust-chat-contact-phone');
+    const submit=()=>{
+      const name=(nameInp&&nameInp.value||'').trim();
+      const phone=formatPhone((phoneInp&&phoneInp.value||'').trim());
+      const err=$('cust-chat-error');
+      if(stepId==='loadContact' && !phone){
+        if(err) err.textContent='Укажите телефон контакта на погрузке';
+        if(phoneInp) phoneInp.focus();
+        return;
+      }
+      if(err) err.textContent='';
+      customerChatSaveContact(stepId, name, phone);
+      customerChatAdvance(customerChatContactLine(name, phone));
+    };
+    if(ok) ok.onclick=submit;
+    const skip=$('cust-chat-contact-skip');
+    if(skip) skip.onclick=()=>{
+      customerChat.data.unloadingContactName='';
+      customerChat.data.unloadingContactPhone='';
+      customerChatApplyToForm();
+      saveCustomerChatState();
+      customerChatAdvance('Без отдельного контакта');
+    };
+    const same=$('cust-chat-contact-same');
+    if(same) same.onclick=()=>{
+      const n=customerChat.data.loadingContactName||'';
+      const p=customerChat.data.loadingContactPhone||'';
+      customerChatSaveContact('unloadContact', n, p);
+      customerChatAdvance(n||p?`Как на загрузке: ${customerChatContactLine(n, p)}`:'Как на загрузке');
+    };
+    [nameInp, phoneInp].forEach(el=>{
+      if(!el) return;
+      el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } };
+    });
+    setTimeout(()=>{(phoneInp||nameInp).focus();}, 80);
   }
   if(stepId==='body'){
     document.querySelectorAll('[data-chat-body]').forEach(btn=>{
@@ -2067,10 +2175,14 @@ function customerChatRenderAll(){
 function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
-  const textSteps=['cargo','weight'];
+  const textSteps=['cargo','weight','loadContact','unloadContact'];
   const show=step && textSteps.includes(step.id) && !customerChat.summaryReady;
   const inp=$('cust-chat-input');
   if(inp) inp.placeholder='Напишите ответ…';
+  if(compose && step){
+    if(step.id==='loadContact') inp.placeholder='Иван +79001234567';
+    else if(step.id==='unloadContact') inp.placeholder='Имя и телефон или «пропустить»';
+  }
   if(compose) compose.style.display=show?'flex':'none';
 }
 function customerChatAdvance(userText){
@@ -2138,6 +2250,43 @@ function customerChatHandleTextInput(){
     saveCustomerChatState();
     const label=unit==='kg'?`${num} кг`:`${num} т`;
     customerChatAdvance(label);
+    return;
+  }
+  if(step.id==='loadContact' || step.id==='unloadContact'){
+    if(/^пропуст/i.test(raw) && step.id==='unloadContact'){
+      customerChat.data.unloadingContactName='';
+      customerChat.data.unloadingContactPhone='';
+      customerChatApplyToForm();
+      if(inp) inp.value='';
+      saveCustomerChatState();
+      customerChatAdvance('Без отдельного контакта');
+      return;
+    }
+    if(/^как на/i.test(raw) && step.id==='unloadContact'){
+      const n=customerChat.data.loadingContactName||'';
+      const p=customerChat.data.loadingContactPhone||'';
+      customerChatSaveContact('unloadContact', n, p);
+      if(inp) inp.value='';
+      customerChatAdvance(n||p?`Как на загрузке: ${customerChatContactLine(n, p)}`:'Как на загрузке');
+      return;
+    }
+    const parsed=customerChatParseContactInput(raw);
+    if(step.id==='loadContact' && !parsed.phone){
+      if(err) err.textContent='Укажите телефон, например: Иван +79001234567';
+      return;
+    }
+    if(step.id==='unloadContact' && !parsed.phone && !parsed.name){
+      customerChat.data.unloadingContactName='';
+      customerChat.data.unloadingContactPhone='';
+      customerChatApplyToForm();
+      if(inp) inp.value='';
+      saveCustomerChatState();
+      customerChatAdvance('Без отдельного контакта');
+      return;
+    }
+    customerChatSaveContact(step.id, parsed.name, parsed.phone);
+    if(inp) inp.value='';
+    customerChatAdvance(customerChatContactLine(parsed.name, parsed.phone));
     return;
   }
   if(step.id==='body'){
