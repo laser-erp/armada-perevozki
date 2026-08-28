@@ -1559,11 +1559,35 @@ function applyCustomerOrderDraft(draft){
     customerDraftApplying=false;
   }
 }
+function customerPortalFormIsEmpty(){
+  const fields={};
+  CUST_ORDER_DRAFT_FIELD_IDS.forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    fields[id]=el.value;
+  });
+  CUST_ORDER_DRAFT_CHECK_IDS.forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    fields[id]=!!el.checked;
+  });
+  return !customerOrderDraftHasContent({
+    fields,
+    vehicleTypes:customerSelectedVehicleTypes(),
+    loadMethods:customerSelectedLoadMethods(),
+    unloadMethods:customerSelectedUnloadMethods(),
+    chat:customerChat
+  });
+}
 function maybePromptCustomerOrderDraft(){
   if(!currentCustomer) return;
   const draft=loadCustomerOrderDraftRaw();
   if(!draft || !customerOrderDraftHasContent(draft)) return;
   if(customerDraftPromptLoaded && customerDraftPromptLoaded===draft.savedAt) return;
+  if(customerPortalFormIsEmpty()){
+    applyCustomerOrderDraft(draft);
+    return;
+  }
   showCustomerDraftBanner(draft);
 }
 
