@@ -22,21 +22,26 @@ function orderEtrnTransportActive(o){
 function orderEtrnSectionHtml(o){
   if(!o || !orderEtrnEligible(o)) return '';
   const et=o.etrn;
-  const tituls=et&&et.tituls?Object.entries(et.tituls).map(([k,v])=>
-    `<div class="calc-row"><span>${esc(etrnTitulLabel(k))}</span><span>${esc(etrnTitulStatusLabel(v))}</span></div>`
-  ).join(''):'';
+  const tituls=et&&et.tituls?Object.entries(et.tituls).map(([k,v])=>{
+    const canSign=et.sandbox&&v!=='signed';
+    const btn=canSign?`<button type="button" class="secondary etrn-titul-sign" data-order-id="${esc(o.id)}" data-titul="${esc(k)}" style="margin-left:6px;font-size:.72rem;padding:2px 6px">Подписать</button>`:'';
+    return `<div class="calc-row etrn-titul-row"><span>${esc(etrnTitulLabel(k))}</span><span>${esc(etrnTitulStatusLabel(v))}${btn}</span></div>`;
+  }).join(''):'';
+  const epd=state.settings&&state.settings.epdOperator?String(state.settings.epdOperator):'';
   const head=et
-    ? `<p class="hint">Оператор: <strong>${esc(et.operatorId||'—')}</strong> · ID: ${esc(et.externalId||'—')}${et.sandbox?' · sandbox':''}</p>
+    ? `<p class="hint">Оператор: <strong>${esc(et.operatorId||epd||'—')}</strong> · ID: ${esc(et.externalId||'—')}${et.sandbox?' · sandbox':''} · ${esc(et.status||'draft')}</p>
        ${et.createdAt?`<p class="hint">Создан: ${esc(dateTime(et.createdAt))}</p>`:''}
        ${tituls?`<div class="calc" style="margin-top:8px">${tituls}</div>`:''}
        ${et.lastError?`<p class="error">${esc(et.lastError)}</p>`:''}`
-    : `<p class="hint">Электронная транспортная накладная (ЭТрН) — после назначения ТС и водителя, до/во время рейса. QR у водителя для инспектора. Sandbox до подключения оператора.</p>`;
+    : `<p class="hint">Электронная транспортная накладная (ЭТрН) — после назначения ТС и водителя. QR у водителя во время рейса для инспектора.${epd?` Оператор: ${esc(epd)}.`:''}</p>`;
+  const printBtn=et?`<button type="button" class="secondary" id="etrn-print" data-order-id="${esc(o.id)}">Печать / PDF</button>`:'';
   return `
     <section class="form-section" id="etrn-section">
       <h2 class="form-section-title">ЭТрН</h2>
       ${head}
-      <div class="row" style="margin-top:8px;gap:8px">
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
         <button type="button" class="secondary" id="etrn-create" ${et?'disabled':''}>${et?'ЭТрН создан':'Создать ЭТрН'}</button>
+        ${printBtn}
         <span class="hint" id="etrn-status"></span>
       </div>
     </section>`;
@@ -138,15 +143,103 @@ function driverActiveEtrnOrders(){
 function sandboxCreateEtrnLocal(o){
   const extId=`local-${o.id}-${Date.now()}`;
   applyEtrnToOrder(o, {
-    operatorId:'local-stub',
+    operatorId:(state.settings&&state.settings.epdOperator)||'local-stub',
     externalId:extId,
     createdAt:new Date().toISOString(),
     status:'draft',
-    tituls:{ t1:'pending', t2:'pending', t3:'pending', t4:'pending' },
+    tituls:{ t1:'signed', t2:'signed', t3:'pending', t4:'pending' },
     sandbox:true,
     driverSignUrl:`sandbox://etrn/sign/${extId}`
   });
   return o.etrn;
+}
+function etrnAllTitulsSigned(et){
+  const t=et&&et.tituls||{};
+  return ['t1','t2','t3','t4'].every(k=>t[k]==='signed');
+}
+function refreshEtrnOrderStatus(o){
+  if(!o||!o.etrn) return;
+  o.etrn.status=etrnAllTitulsSigned(o.etrn)?'signed':'draft';
+}
+function signEtrnTitul(orderId, titulKey, signedBy){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o||!o.etrn||!o.etrn.tituls) return false;
+  if(!['t1','t2','t3','t4'].includes(titulKey)) return false;
+  o.etrn.tituls[titulKey]='signed';
+  o.etrn.titulsSignedAt=o.etrn.titulsSignedAt||{};
+  o.etrn.titulsSignedAt[titulKey]=new Date().toISOString();
+  if(signedBy) o.etrn.titulsSignedBy=o.etrn.titulsSignedBy||{}, o.etrn.titulsSignedBy[titulKey]=signedBy;
+  refreshEtrnOrderStatus(o);
+  upsertOrder(o);
+  persist();
+  if(typeof logOpsEvent==='function') logOpsEvent('etrn',`Подписан ${titulKey} заказ ${o.sequentialNumber}`,{ orderId, titulKey });
+  return true;
+}
+function signEtrnTitulSandboxAuto(orderId, titulKey, signedBy){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o||!o.etrn||!o.etrn.sandbox) return false;
+  if(o.etrn.tituls&&o.etrn.tituls[titulKey]==='signed') return true;
+  return signEtrnTitul(orderId, titulKey, signedBy);
+}
+function applyEpdWebhook(payload){
+  const p=payload||{};
+  const extId=String(p.externalId||p.documentId||'').trim();
+  if(!extId) return {ok:false, error:'externalId required'};
+  const o=(state.orders||[]).find(x=>x.etrn&&String(x.etrn.externalId)===extId);
+  if(!o) return {ok:false, error:'order not found'};
+  const et=o.etrn;
+  if(p.status) et.status=p.status;
+  if(p.tituls&&typeof p.tituls==='object') Object.assign(et.tituls, p.tituls);
+  if(p.titul&&['t1','t2','t3','t4'].includes(p.titul)) et.tituls[p.titul]=p.titulStatus||'signed';
+  if(p.signUrl) et.signUrl=p.signUrl;
+  if(p.driverSignUrl) et.driverSignUrl=p.driverSignUrl;
+  et.lastWebhookAt=new Date().toISOString();
+  refreshEtrnOrderStatus(o);
+  upsertOrder(o);
+  persist();
+  if(typeof logOpsEvent==='function') logOpsEvent('etrn-webhook',`ЭТрН ${extId}`,{ orderId:o.id, payload:p });
+  return {ok:true, orderId:o.id};
+}
+function buildEtrnPrintBody(o){
+  const et=o.etrn||{};
+  const titRows=['t1','t2','t3','t4'].map(k=>
+    `<tr><td>${esc(etrnTitulLabel(k))}</td><td>${esc(etrnTitulStatusLabel((et.tituls||{})[k]))}</td></tr>`
+  ).join('');
+  const qrNote=typeof drawEtrnQrCanvas==='function'?'Отсканируйте QR — данные для проверки инспектором.':'';
+  return `
+    <div class="doc-head">
+      <div class="brand">АРМАДА</div>
+      <h1>Электронная транспортная накладная (ЭТрН)</h1>
+      <div class="muted">заказ № ${esc(o.sequentialNumber||'—')} · ${esc(dayOnly(o.vehicleAt||o.createdAt)||'—')}</div>
+    </div>
+    <p>Оператор ЭПД: <strong>${esc(et.operatorId||'—')}</strong><br>
+    ID документа: <strong>${esc(et.externalId||'—')}</strong><br>
+    Статус: <strong>${esc(et.status||'draft')}</strong></p>
+    <h2>Маршрут и перевозка</h2>
+    <p>Маршрут: <strong>${esc(routeText(o)||'—')}</strong><br>
+    ${typeof orderDriverDetailLines==='function'?orderDriverDetailLines(o):''}</p>
+    <h2>Титулы (подписи)</h2>
+    <table><thead><tr><th>Титул</th><th>Статус</th></tr></thead><tbody>${titRows}</tbody></table>
+    <div id="etrn-qr-slot" style="margin:16px 0;text-align:center"></div>
+    <p class="muted">${esc(qrNote)}</p>
+    <p class="muted">Полная юридическая сила — после подключения оператора ЭПД (СБИС, Контур, Диадoc).</p>`;
+}
+function openEtrnPrint(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o) return;
+  if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+  if(!o.etrn){ alert('ЭТрН ещё не создан'); return; }
+  const title=`ЭТрН · заявка №${o.sequentialNumber||'—'}`;
+  const w=window.open('', '_blank');
+  if(!w){ alert('Разрешите всплывающие окна'); return; }
+  w.document.open();
+  w.document.write(typeof orderDocPrintHtml==='function'?orderDocPrintHtml(title, buildEtrnPrintBody(o)):buildEtrnPrintBody(o));
+  w.document.close();
+  const canvas=drawEtrnQrCanvas(etrnQrPayload(o), 180);
+  if(canvas){
+    const slot=w.document.getElementById('etrn-qr-slot');
+    if(slot) slot.appendChild(canvas);
+  }
 }
 async function fetchEtrnFromApi(orderId){
   if(!API_BASE) return null;
@@ -210,6 +303,15 @@ async function createEtrnForOrder(orderId){
 function wireOrderEtrn(orderId){
   const btn=$('etrn-create');
   if(btn && !btn.disabled) btn.onclick=()=>createEtrnForOrder(orderId);
+  const print=$('etrn-print');
+  if(print) print.onclick=()=>openEtrnPrint(orderId);
+  document.querySelectorAll('.etrn-titul-sign').forEach(b=>{
+    b.onclick=()=>{
+      if(signEtrnTitul(b.dataset.orderId, b.dataset.titul, 'admin')){
+        if(typeof openDetail==='function') openDetail(orderId);
+      }
+    };
+  });
 }
 function driverEtrnPendingOrders(){
   if(typeof DRIVER==='undefined' || !DRIVER) return [];
@@ -249,9 +351,13 @@ async function openDriverEtrnSign(orderId){
   if(url){
     try{ window.open(url, '_blank', 'noopener'); return; }catch(_){}
   }
+  const pending=driverEtrnTitulsPending(o);
+  if(o.etrn.sandbox){
+    if((o.etrn.tituls||{}).t3==='pending'){ signEtrnTitulSandboxAuto(o.id,'t3',DRIVER||'driver'); renderDriverBanner(); alert(`ЭТрН: подписан T3 (приём груза) · заказ №${o.sequentialNumber}`); return; }
+    if((o.etrn.tituls||{}).t4==='pending'){ signEtrnTitulSandboxAuto(o.id,'t4',DRIVER||'driver'); renderDriverBanner(); alert(`ЭТрН: подписан T4 (выдача) · заказ №${o.sequentialNumber}`); return; }
+  }
   const et=o.etrn||{};
-  const tit=driverEtrnTitulsPending(o);
-  alert(`ЭТрН (sandbox): заказ №${o.sequentialNumber||'—'}\nОператор: ${et.operatorId||'stub'}\nID: ${et.externalId||'—'}\nПодпись: ${tit}\n\nПосле подключения оператора откроется ссылка или QR для подписи T3/T4.`);
+  alert(`ЭТрН (sandbox): заказ №${o.sequentialNumber||'—'}\nОператор: ${et.operatorId||'stub'}\nID: ${et.externalId||'—'}\nПодпись: ${pending||'все подписаны'}\n\nQR для инспектора — кнопка «Показать QR ЭТрН».`);
 }
 function driverEtrnBannerHtml(){
   let html='';

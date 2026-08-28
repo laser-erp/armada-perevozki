@@ -360,6 +360,8 @@
     .cust-order-docs-wrap summary{cursor:pointer;font-weight:600;color:var(--accent)}
     .cust-order-docs{display:flex;flex-direction:column;gap:6px;margin-top:8px}
     .cust-doc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+    .cust-doc-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .cust-doc-email-hint{margin:0 0 6px;font-size:.75rem}
     .cust-doc-name{display:block;font-weight:600;font-size:.82rem;margin-bottom:4px}
     .cust-doc-row .doc-status{margin-top:0}
     .cust-doc-row button{width:auto;flex:0 0 auto;padding:6px 10px;font-size:.78rem}

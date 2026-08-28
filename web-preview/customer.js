@@ -1623,10 +1623,14 @@ function customerSubmitSuccessMessage(invoice, order){
   const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(co):'none';
   html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (раздел выше)':'будет подготовлен'}</li>`;
   html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
+  html+=`<li><strong>Акт</strong> — после закрытия заказа</li>`;
   html+=`<li><strong>ЭТрН</strong> — QR у водителя во время перевозки (для инспектора), после назначения ТС</li>`;
   html+=`</ul>`;
   if(invoice){
     html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
+  }
+  if(order&&customerContactEmail(order)){
+    html+=`<button type="button" class="secondary cust-doc-email-all" data-order-id="${esc(order.id)}" style="margin-top:6px">Отправить документы на email</button>`;
   }
   if(order&&typeof customerOrderDocumentsHtml==='function'){
     html+=`<details class="cust-order-docs-wrap" style="margin-top:8px"><summary>Документы по заявке №${esc(order.sequentialNumber)}</summary>${customerOrderDocumentsHtml(order)}</details>`;

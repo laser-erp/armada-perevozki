@@ -527,6 +527,23 @@ function renderAdminActivity(){
         <input id="dadata-token" type="password" placeholder="Token DaData" value="${esc((state.settings&&state.settings.dadataToken)||'')}" style="flex:1" />
         <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
       </div>
+      <h2 class="form-section-title" style="margin-top:12px">Оператор ЭПД (ЭТрН)</h2>
+      <p class="cat-panel-hint">Оператор электронных перевозочных документов: СБИС, Контур, Диадoc. Ключ API — следующий этап; сейчас sandbox с QR у водителя.</p>
+      <label>Оператор</label>
+      <div class="row">
+        <select id="epd-operator" style="flex:1">
+          <option value="">— sandbox (локально) —</option>
+          <option value="sbis" ${(state.settings&&state.settings.epdOperator)==='sbis'?'selected':''}>СБИС</option>
+          <option value="kontur" ${(state.settings&&state.settings.epdOperator)==='kontur'?'selected':''}>Контур</option>
+          <option value="diadoc" ${(state.settings&&state.settings.epdOperator)==='diadoc'?'selected':''}>Диадoc</option>
+        </select>
+        <button type="button" class="primary" id="epd-operator-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
+      </div>
+      <label>Webhook token (для POST /epd/webhook)</label>
+      <div class="row">
+        <input id="epd-webhook-token" type="password" placeholder="Секрет webhook" value="${esc((state.settings&&state.settings.epdWebhookToken)||'')}" style="flex:1" />
+        <button type="button" class="primary" id="epd-webhook-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
+      </div>
       <h2 class="form-section-title" style="margin-top:12px">Карта маршрута (Яндекс)</h2>
       <p class="cat-panel-hint">Ключ JavaScript API и Static API Яндекс.Карт — для схемы Яндекса на форме заказчика. Без ключа — OpenStreetMap.</p>
       <label>API-ключ Яндекс.Карт</label>
@@ -572,10 +589,22 @@ function renderAdminActivity(){
     alert(state.settings.dadataToken?'Токен DaData сохранён':'Токен очищен');
   });
   $('yandex-maps-save')&&($('yandex-maps-save').onclick=()=>{
-    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:'',epdOperator:'',epdWebhookToken:''}, state.settings||{});
     state.settings.yandexMapsApiKey=(($('yandex-maps-key')||{}).value||'').trim();
     persist();
     alert(state.settings.yandexMapsApiKey?'Ключ Яндекс.Карт сохранён':'Ключ Яндекс.Карт очищен — карта OSM');
+  });
+  $('epd-operator-save')&&($('epd-operator-save').onclick=()=>{
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:'',epdOperator:'',epdWebhookToken:''}, state.settings||{});
+    state.settings.epdOperator=(($('epd-operator')||{}).value||'').trim();
+    persist();
+    alert(state.settings.epdOperator?`Оператор ЭПД: ${state.settings.epdOperator}`:'Оператор: sandbox (локально)');
+  });
+  $('epd-webhook-save')&&($('epd-webhook-save').onclick=()=>{
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:'',epdOperator:'',epdWebhookToken:''}, state.settings||{});
+    state.settings.epdWebhookToken=(($('epd-webhook-token')||{}).value||'').trim();
+    persist();
+    alert(state.settings.epdWebhookToken?'Webhook token сохранён':'Webhook token очищен');
   });
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{
     const st=$('new-firm-inn-status');
@@ -2865,6 +2894,7 @@ function openCatalogs(){
       <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
+      <input class="drv-license" id="drv-license-${i}" value="${esc(d.licenseNo||'')}" placeholder="ВУ" title="Водительское удостоверение" />
       <input class="drv-pin" id="drv-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(d.pin||resolveDriverPin(d)||'')}" placeholder="PIN" title="PIN водителя" />
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
       <button type="button" class="icon-btn secondary" data-drv-invite="${i}" title="Ссылка 7 дн.">🔗</button>
@@ -3400,6 +3430,7 @@ function openCatalogs(){
     if(!d) return;
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     state.drivers[i].phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
+    state.drivers[i].licenseNo=String((($('drv-license-'+i)||{}).value||'').trim());
     const pin=(($('drv-pin-'+i)||{}).value||'').trim();
     if(pin && pin.length<4){ alert('PIN водителя — от 4 цифр'); return; }
     if(pin) state.drivers[i].pin=pin;

@@ -463,6 +463,10 @@ function customerOrderDocStatus(kind, o){
     const st=customerFrameworkContractStatus(co);
     return {label:customerFrameworkContractLabel(st), cls:st==='signed'?'signed':st==='pending'?'sent':'draft', available:true};
   }
+  if(kind==='act'){
+    if(!looksClosedOrder(o)) return {label:'После закрытия заказа', cls:'draft', available:false};
+    return {label:'Готов', cls:'ready', available:true};
+  }
   if(kind==='etrn'){
     const et=o.etrn;
     if(!orderHasDriverVehicleAssigned(o)) return {label:'После назначения ТС', cls:'draft', available:false};
@@ -493,20 +497,112 @@ function customerOrderDocumentsHtml(o){
     {id:'framework', title:'Рамочный договор'},
     {id:'application', title:'Заявка на перевозку'},
     {id:'transportApp', title:'Договор‑заявка'},
-    {id:'etrn', title:'ЭТрН'}
+    {id:'etrn', title:'ЭТрН'},
+    {id:'act', title:'Акт выполненных работ'}
   ];
+  const email=customerContactEmail(o);
   const rows=items.map(it=>{
     const st=customerOrderDocStatus(it.id, o);
-    const btn=st.available
+    const openBtn=st.available
       ?`<button type="button" class="secondary cust-doc-open" data-order-id="${esc(o.id)}" data-doc-kind="${esc(it.id)}">Открыть</button>`
       :`<span class="hint">—</span>`;
+    const mailBtn=email&&documentEmailCanSend(it.id, o)
+      ?`<button type="button" class="secondary cust-doc-email" data-order-id="${esc(o.id)}" data-doc-kind="${esc(it.id)}">На email</button>`
+      :'';
     return `<div class="cust-doc-row">
       <div><span class="cust-doc-name">${esc(it.title)}</span>
       <span class="doc-status ${esc(st.cls)}">${esc(st.label)}</span></div>
-      ${btn}
+      <div class="cust-doc-actions">${openBtn}${mailBtn}</div>
     </div>`;
   }).join('');
-  return `<div class="cust-order-docs">${rows}</div>`;
+  const emailHint=email?`<p class="hint cust-doc-email-hint">Документы можно отправить на ${esc(email)}</p>`:'';
+  return `<div class="cust-order-docs">${emailHint}${rows}</div>`;
+}
+function customerContactEmail(o){
+  const co=o&&findCompanyById(o.customerId);
+  if(!co) return '';
+  const contacts=Array.isArray(co.contacts)?co.contacts:[];
+  const portalPhone=currentCustomer&&currentCustomer.phone;
+  let c=contacts.find(x=>portalPhone&&x.phone&&samePhone(x.phone, portalPhone));
+  if(!c) c=contacts.find(x=>x.isPrimary)||contacts[0];
+  const fromContact=c&&(c.email||c.mail);
+  if(fromContact&&String(fromContact).includes('@')) return String(fromContact).trim();
+  if(co.email&&String(co.email).includes('@')) return String(co.email).trim();
+  return '';
+}
+function samePhone(a,b){
+  const da=String(a||'').replace(/\D/g,'').slice(-10);
+  const db=String(b||'').replace(/\D/g,'').slice(-10);
+  return da&&db&&da===db;
+}
+function documentEmailCanSend(kind, o){
+  if(!customerContactEmail(o)) return false;
+  if(kind==='invoice') return !!(typeof findInvoiceByOrderId==='function'&&findInvoiceByOrderId(o.id));
+  if(kind==='framework') return true;
+  if(kind==='etrn') return !!o.etrn;
+  if(kind==='act') return looksClosedOrder(o);
+  if(kind==='application'||kind==='transportApp') return orderHasDriverVehicleAssigned(o);
+  return false;
+}
+function documentEmailSubject(kind, o){
+  const titles={invoice:'Счёт',framework:'Договор',application:'Заявка',transportApp:'Договор-заявка',etrn:'ЭТрН',act:'Акт'};
+  return `АРМАДА: ${titles[kind]||'Документ'} по заявке №${o.sequentialNumber||'—'}`;
+}
+function documentEmailBody(kind, o){
+  const base=(typeof location!=='undefined'&&location.origin)?location.origin:'https://app.armada.sx';
+  const portal=`${base}/z/`;
+  const lines=[
+    `Здравствуйте!`,
+    ``,
+    `По заявке №${o.sequentialNumber||'—'} (${routeText(o)||'маршрут'}) подготовлен документ: ${documentEmailSubject(kind,o).replace(/^АРМАДА: /,'')}.`,
+    ``,
+    `Скачать в личном кабинете: ${portal}`,
+    `Раздел «Мои заявки» → документы по заявке.`,
+    ``,
+    `С уважением, АРМАДА`
+  ];
+  if(kind==='invoice'){
+    const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
+    if(inv) lines.splice(4,0,`Счёт №${inv.number} на сумму ${fmt(inv.amountRub||0)} ₽.`);
+  }
+  return lines.join('\n');
+}
+function logDocumentEmailSent(orderId, kind, email){
+  if(!Array.isArray(state.documentEmailLog)) state.documentEmailLog=[];
+  state.documentEmailLog.push({ id:uuid(), orderId, kind, email, at:new Date().toISOString() });
+  if(state.documentEmailLog.length>200) state.documentEmailLog=state.documentEmailLog.slice(-200);
+  if(typeof persist==='function') persist();
+}
+function sendCustomerDocumentEmail(orderId, kind){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o) return;
+  const email=customerContactEmail(o);
+  if(!email){ alert('Укажите email контакта в карточке заказчика'); return; }
+  if(!documentEmailCanSend(kind,o)){ alert('Документ ещё не готов для отправки'); return; }
+  const subject=encodeURIComponent(documentEmailSubject(kind,o));
+  const body=encodeURIComponent(documentEmailBody(kind,o));
+  logDocumentEmailSent(orderId, kind, email);
+  window.location.href=`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+}
+function sendCustomerAllReadyDocumentsEmail(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o) return;
+  const email=customerContactEmail(o);
+  if(!email){ alert('Укажите email контакта в карточке заказчика'); return; }
+  const kinds=['invoice','framework','application','transportApp','etrn','act'].filter(k=>documentEmailCanSend(k,o));
+  if(!kinds.length){ alert('Пока нет готовых документов для отправки'); return; }
+  const subject=encodeURIComponent(`АРМАДА: документы по заявке №${o.sequentialNumber||'—'}`);
+  const body=encodeURIComponent([
+    'Здравствуйте!',
+    '',
+    `По заявке №${o.sequentialNumber||'—'} доступны документы: ${kinds.join(', ')}.`,
+    '',
+    'Скачайте в личном кабинете: https://app.armada.sx/z/',
+    '',
+    'С уважением, АРМАДА'
+  ].join('\n'));
+  kinds.forEach(k=>logDocumentEmailSent(orderId, k, email));
+  window.location.href=`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
 }
 function openCustomerOrderDocument(orderId, kind){
   const o=(state.orders||[]).find(x=>x.id===orderId);
@@ -524,9 +620,19 @@ function openCustomerOrderDocument(orderId, kind){
     return;
   }
   if(kind==='etrn'){
-    if(!o.etrn){ alert('ЭТрН будет доступен после создания перевозчиком (интеграция с оператором ЭПД — в разработке).'); return; }
-    const et=o.etrn;
-    alert(`ЭТрН · заказ №${o.sequentialNumber||'—'}\nСтатус: ${et.status||'draft'}\nОператор: ${et.operatorId||'stub'}\nID: ${et.externalId||'—'}\n\nПолная подпись через оператора (СБИС / Контур) — после подключения API.`);
+    if(!o.etrn){ alert('ЭТрН будет создан перед выездом или перевозчиком после назначения ТС и водителя.'); return; }
+    if(typeof openEtrnPrint==='function') openEtrnPrint(orderId);
+    return;
+  }
+  if(kind==='act'){
+    if(!looksClosedOrder(o)){ alert('Акт будет доступен после закрытия заказа перевозчиком.'); return; }
+    ensureOrderDocs(o);
+    o.docs.act.status='ready';
+    o.docs.act.updatedAt=new Date().toISOString();
+    upsertOrder(o);
+    persist();
+    const title=`Акт · заявка №${o.sequentialNumber}`;
+    openPrintHtml(title, buildOrderDocBody('act', o));
     return;
   }
   ensureOrderDocs(o);
@@ -542,6 +648,18 @@ function wireCustomerOrderDocuments(root){
     btn.onclick=e=>{
       e.preventDefault();
       openCustomerOrderDocument(btn.getAttribute('data-order-id'), btn.getAttribute('data-doc-kind'));
+    };
+  });
+  (root||document).querySelectorAll('.cust-doc-email').forEach(btn=>{
+    btn.onclick=e=>{
+      e.preventDefault();
+      sendCustomerDocumentEmail(btn.getAttribute('data-order-id'), btn.getAttribute('data-doc-kind'));
+    };
+  });
+  (root||document).querySelectorAll('.cust-doc-email-all').forEach(btn=>{
+    btn.onclick=e=>{
+      e.preventDefault();
+      sendCustomerAllReadyDocumentsEmail(btn.getAttribute('data-order-id'));
     };
   });
 }
