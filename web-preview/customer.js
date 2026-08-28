@@ -1092,6 +1092,7 @@ function renderCustomerPortal(){
   if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
   syncCustomerVehicleTypeUi();
   syncCustomerVehicleDateCalVisibility();
+  syncCustomerTempField();
   if(typeof wireVehicleAtHint==='function') wireVehicleAtHint('cust', ()=>{
     if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
     paintCustomerFleetOptions();
@@ -1369,6 +1370,7 @@ function wireCustomerPortal(){
   wireCustomerVehicleTypes();
   wireCustomerFormChecklist();
   syncCustomerVehicleDateCalVisibility();
+  syncCustomerTempField();
   const orderForm=$('cust-order-form');
   if(orderForm&&!orderForm.dataset.checklistLive){
     orderForm.dataset.checklistLive='1';

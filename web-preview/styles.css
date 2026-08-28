@@ -784,6 +784,7 @@
     .cust-cargo-temp-wrap{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 10px;max-width:100%}
     .cust-cargo-temp-check{flex:0 1 auto}
     .cust-cargo-temp-range{display:inline-flex;align-items:center;gap:4px 5px;flex-wrap:nowrap;max-width:100%}
+    .cust-cargo-temp-range[hidden]{display:none!important}
     .cust-temp-label{font-size:.72rem;font-weight:600;color:var(--muted,#64748b);white-space:nowrap;line-height:1}
     .cust-temp-unit{font-size:.78rem;font-weight:600;color:var(--muted,#64748b);white-space:nowrap;line-height:1;margin-left:1px}
     .cust-cargo-temp-input{
