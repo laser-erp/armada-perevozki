@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>АРМАДА — превью формы заказчика</title>
-  <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc34" />
-  <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc34" />
+  <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc42" />
+  <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc42" />
   <style>
     body{margin:0;background:#eef1ef;display:flex;justify-content:center;padding:24px 12px}
     .phone{max-width:420px;width:100%}
@@ -25,6 +25,10 @@
           <p class="cat-panel-hint">Перевозчик: ООО «Армада»</p>
           <section class="form-section" id="cust-order-form">
             <h2 class="form-section-title">Новая заявка</h2>
+            <div class="cust-form-blocks">
+              <div class="cust-form-block">
+                <div class="cust-form-block-head">1. Подача ТС</div>
+                <div class="cust-form-block-body">
             <div class="form-pair">
               <div class="cust-date-field-wrap">
                 <label for="cust-vehicle-date">Дата</label>
@@ -53,7 +57,13 @@
                 <label for="cust-vehicle-time">Время</label>
                 <input id="cust-vehicle-time" value="09:00" readonly />
               </div>
+              </div>
             </div>
+                </div>
+              </div>
+              <div class="cust-form-block">
+                <div class="cust-form-block-head">2. Маршрут</div>
+                <div class="cust-form-block-body">
             <label>Адрес загрузки</label>
             <input value="Москва, ул. Складская, 12" readonly />
             <label>Контактное лицо на загрузке</label>
@@ -68,13 +78,27 @@
               <div><input value="Петров П.П." readonly /></div>
               <div><label>Телефон</label><input value="+7 926 987-65-43" readonly /></div>
             </div>
-            <label>Тип ТС</label>
-            <input value="Тентованный" readonly />
-            <p class="hint">Основные типы как на ATI — подсказки появятся при наборе.</p>
             <div class="cust-route-map-wrap has-route">
               <div class="cust-route-map" id="cust-route-map"></div>
               <p class="hint">≈ 42 км · Пригород. Маршрут для грузовиков (ориентир).</p>
             </div>
+            <div class="cust-trip-row">
+              <span class="cust-trip-label">Тип перевозки</span>
+              <span class="cust-trip-badge">Пригород</span>
+            </div>
+                </div>
+              </div>
+              <div class="cust-form-block">
+                <div class="cust-form-block-head">3. Транспорт</div>
+                <div class="cust-form-block-body">
+            <label>Тип ТС</label>
+            <input value="Тентованный" readonly />
+            <p class="hint">Кузов, загрузка и выгрузка — как на ATI.</p>
+                </div>
+              </div>
+              <div class="cust-form-block">
+                <div class="cust-form-block-head">4. Груз</div>
+                <div class="cust-form-block-body">
             <label>Груз</label>
             <input value="Паллеты с оборудованием, 8 мест" readonly />
             <label>Габариты груза, м (Д × Ш × В)</label>
@@ -86,10 +110,11 @@
               <div><input value="3.2" readonly /></div>
               <div><label>Единица</label><select disabled><option selected>т</option></select></div>
             </div>
-            <div class="cust-trip-row">
-              <span class="cust-trip-label">Тип перевозки</span>
-              <span class="cust-trip-badge">Пригород</span>
-            </div>
+                </div>
+              </div>
+              <div class="cust-form-block">
+                <div class="cust-form-block-head">5. Условия и цена</div>
+                <div class="cust-form-block-body">
             <label>Как закрыть рейс</label>
             <select disabled><option>Логисту / диспетчеру</option></select>
             <div id="cust-price-preview" class="schedule-box">
@@ -99,6 +124,9 @@
             <label>Ваша цена, ₽</label>
             <input value="18500" readonly />
             <button type="button" class="primary" disabled>Отправить заявку</button>
+                </div>
+              </div>
+            </div>
           </section>
         </div>
       </div>

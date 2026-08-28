@@ -130,43 +130,66 @@
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
         <section class="form-section" id="cust-order-form">
           <h2 class="form-section-title">Новая заявка</h2>
-          <div class="form-pair">
-            <div class="cust-date-field-wrap" id="cust-date-field-wrap">
-              <label for="cust-vehicle-date">Дата</label>
-              <input id="cust-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
-              <label class="cust-date-cal-toggle" for="cust-vehicle-date-cal-toggle">
-                <input type="checkbox" id="cust-vehicle-date-cal-toggle" />
-                Календарь
-              </label>
-              <div id="cust-vehicle-date-cal" class="cust-date-cal cust-date-cal-drop" hidden></div>
+          <div class="cust-form-blocks">
+            <div class="cust-form-block">
+              <div class="cust-form-block-head">1. Подача ТС</div>
+              <div class="cust-form-block-body">
+                <div class="form-pair">
+                  <div class="cust-date-field-wrap" id="cust-date-field-wrap">
+                    <label for="cust-vehicle-date">Дата</label>
+                    <input id="cust-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
+                    <label class="cust-date-cal-toggle" for="cust-vehicle-date-cal-toggle">
+                      <input type="checkbox" id="cust-vehicle-date-cal-toggle" />
+                      Календарь
+                    </label>
+                    <div id="cust-vehicle-date-cal" class="cust-date-cal cust-date-cal-drop" hidden></div>
+                  </div>
+                  <div>
+                    <label for="cust-vehicle-time">Время</label>
+                    <input id="cust-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+                  </div>
+                </div>
+              </div>
             </div>
-            <div>
-              <label for="cust-vehicle-time">Время</label>
-              <input id="cust-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+            <div class="cust-form-block">
+              <div class="cust-form-block-head">2. Маршрут</div>
+              <div class="cust-form-block-body">
+                <label for="cust-load">Адрес загрузки</label>
+                <input id="cust-load" placeholder="Город, улица, дом" autocomplete="street-address" />
+                <label for="cust-loading-contact-name">Контактное лицо на загрузке</label>
+                <div class="form-pair">
+                  <div><input id="cust-loading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
+                  <div>
+                    <label for="cust-loading-contact-phone">Телефон</label>
+                    <input id="cust-loading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+                  </div>
+                </div>
+                <label for="cust-unload">Адрес выгрузки</label>
+                <input id="cust-unload" placeholder="Город, улица, дом" autocomplete="street-address" />
+                <label for="cust-unloading-contact-name">Контактное лицо на выгрузке</label>
+                <div class="form-pair">
+                  <div><input id="cust-unloading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
+                  <div>
+                    <label for="cust-unloading-contact-phone">Телефон</label>
+                    <input id="cust-unloading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+                  </div>
+                </div>
+                <div class="cust-route-map-wrap" id="cust-route-map-wrap">
+                  <div class="cust-route-map" id="cust-route-map" aria-hidden="true"></div>
+                  <p class="hint" id="cust-route-km-hint">Укажите адреса — построим маршрут для грузового транспорта.</p>
+                </div>
+                <div class="cust-trip-row">
+                  <span class="cust-trip-label">Тип перевозки</span>
+                  <span class="cust-trip-badge" id="cust-trip-mode-display">—</span>
+                </div>
+                <input type="hidden" id="cust-trip-mode" value="auto" />
+              </div>
             </div>
-          </div>
-          <label for="cust-load">Адрес загрузки</label>
-          <input id="cust-load" placeholder="Город, улица, дом" autocomplete="street-address" />
-          <label for="cust-loading-contact-name">Контактное лицо на загрузке</label>
-          <div class="form-pair">
-            <div><input id="cust-loading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
-            <div>
-              <label for="cust-loading-contact-phone">Телефон</label>
-              <input id="cust-loading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
-            </div>
-          </div>
-          <label for="cust-unload">Адрес выгрузки</label>
-          <input id="cust-unload" placeholder="Город, улица, дом" autocomplete="street-address" />
-          <label for="cust-unloading-contact-name">Контактное лицо на выгрузке</label>
-          <div class="form-pair">
-            <div><input id="cust-unloading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
-            <div>
-              <label for="cust-unloading-contact-phone">Телефон</label>
-              <input id="cust-unloading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
-            </div>
-          </div>
-          <div id="cust-vehicle-types" class="cust-vtype-panel">
-            <div class="cust-vtype-cols">
+            <div class="cust-form-block">
+              <div class="cust-form-block-head">3. Транспорт</div>
+              <div class="cust-form-block-body cust-form-block-body-flush">
+                <div id="cust-vehicle-types" class="cust-vtype-panel">
+                  <div class="cust-vtype-cols">
               <div class="cust-vtype-col">
                 <div class="cust-vtype-col-head">
                   <span class="cust-vtype-col-title">Кузов <span class="req">*</span></span>
@@ -241,52 +264,56 @@
                   <label class="cust-check-item"><input type="checkbox" data-unload="side_both" disabled /> боковая с двух сторон</label>
                 </div>
               </div>
+                  </div>
+                </div>
+                <input type="hidden" id="cust-body-type" value="tent" />
+              </div>
+            </div>
+            <div class="cust-form-block">
+              <div class="cust-form-block-head">4. Груз</div>
+              <div class="cust-form-block-body">
+                <label for="cust-cargo-text">Что везём</label>
+                <input id="cust-cargo-text" placeholder="Паллеты, оборудование, продукты…" />
+                <input type="hidden" id="cust-cargo-kind" value="general" />
+                <label>Габариты, м (Д × Ш × В)</label>
+                <div class="form-triple">
+                  <input id="cust-req-l" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
+                  <input id="cust-req-w" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
+                  <input id="cust-req-h" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
+                </div>
+                <label>Вес груза</label>
+                <div class="form-pair">
+                  <div><input id="cust-weight-value" inputmode="decimal" placeholder="например 5000 или 5" /></div>
+                  <div>
+                    <label for="cust-weight-unit">Единица</label>
+                    <select id="cust-weight-unit"><option value="kg">кг</option><option value="t" selected>т</option></select>
+                  </div>
+                </div>
+                <input type="hidden" id="cust-req-pay" />
+              </div>
+            </div>
+            <div class="cust-form-block">
+              <div class="cust-form-block-head">5. Условия и цена</div>
+              <div class="cust-form-block-body">
+                <label for="cust-fulfillment">Как закрыть рейс</label>
+                <select id="cust-fulfillment">
+                  <option value="logist">Логисту / диспетчеру — как можно скорее (ставка в цене)</option>
+                  <option value="direct">Свой парк перевозчика — заранее, без срочного подбора</option>
+                </select>
+                <p class="hint" id="cust-fulfill-hint">Вы говорите диспетчеру: закройте заказ как можно быстрее и готовы оплатить его работу по ставке. Свободную машину можно запросить — бронь подтвердит перевозчик.</p>
+                <div id="cust-fleet-box">
+                  <label for="cust-book-plate">Свободные машины</label>
+                  <select id="cust-book-plate"></select>
+                  <p class="hint" id="cust-fleet-hint">Запрос брони подтвердит перевозчик. После подтверждения дата подачи появится в календаре у вас и у него.</p>
+                </div>
+                <div id="cust-price-preview" class="schedule-box"></div>
+                <label for="cust-price">Ваша цена, ₽ (не ниже минимума, если он есть)</label>
+                <input id="cust-price" inputmode="decimal" placeholder="из расчёта или уточнит перевозчик" />
+                <div class="error" id="cust-form-error"></div>
+                <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
+              </div>
             </div>
           </div>
-          <input type="hidden" id="cust-body-type" value="tent" />
-          <div class="cust-route-map-wrap" id="cust-route-map-wrap">
-            <div class="cust-route-map" id="cust-route-map" aria-hidden="true"></div>
-            <p class="hint" id="cust-route-km-hint">Укажите адреса — построим маршрут для грузового транспорта.</p>
-          </div>
-          <label for="cust-cargo-text">Груз</label>
-          <input id="cust-cargo-text" placeholder="Что везём: паллеты, оборудование, продукты…" />
-          <input type="hidden" id="cust-cargo-kind" value="general" />
-          <label>Габариты груза, м (Д × Ш × В)</label>
-          <div class="form-triple">
-            <input id="cust-req-l" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
-            <input id="cust-req-w" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
-            <input id="cust-req-h" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
-          </div>
-          <label>Вес груза</label>
-          <div class="form-pair">
-            <div><input id="cust-weight-value" inputmode="decimal" placeholder="например 5000 или 5" /></div>
-            <div>
-              <label for="cust-weight-unit">Единица</label>
-              <select id="cust-weight-unit"><option value="kg">кг</option><option value="t" selected>т</option></select>
-            </div>
-          </div>
-          <input type="hidden" id="cust-req-pay" />
-          <div class="cust-trip-row">
-            <span class="cust-trip-label">Тип перевозки</span>
-            <span class="cust-trip-badge" id="cust-trip-mode-display">—</span>
-          </div>
-          <input type="hidden" id="cust-trip-mode" value="auto" />
-          <label for="cust-fulfillment">Как закрыть рейс</label>
-          <select id="cust-fulfillment">
-            <option value="logist">Логисту / диспетчеру — как можно скорее (ставка в цене)</option>
-            <option value="direct">Свой парк перевозчика — заранее, без срочного подбора</option>
-          </select>
-          <p class="hint" id="cust-fulfill-hint">Вы говорите диспетчеру: закройте заказ как можно быстрее и готовы оплатить его работу по ставке. Свободную машину можно запросить — бронь подтвердит перевозчик.</p>
-          <div id="cust-fleet-box">
-            <label for="cust-book-plate">Свободные машины</label>
-            <select id="cust-book-plate"></select>
-            <p class="hint" id="cust-fleet-hint">Запрос брони подтвердит перевозчик. После подтверждения дата подачи появится в календаре у вас и у него.</p>
-          </div>
-          <div id="cust-price-preview" class="schedule-box"></div>
-          <label for="cust-price">Ваша цена, ₽ (не ниже минимума, если он есть)</label>
-          <input id="cust-price" inputmode="decimal" placeholder="из расчёта или уточнит перевозчик" />
-          <div class="error" id="cust-form-error"></div>
-          <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
         </section>
         <section class="form-section">
           <h2 class="form-section-title">Календарь броней</h2>

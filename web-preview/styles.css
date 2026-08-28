@@ -733,6 +733,17 @@
       box-shadow:0 10px 28px rgba(15,23,42,.14);
     }
     .cust-date-field-wrap.cal-open{z-index:31}
+    .cust-form-blocks{display:flex;flex-direction:column;gap:12px;margin:6px 0 2px}
+    .cust-form-block{
+      border:1px solid var(--border);border-radius:14px;background:var(--surface,#fff);overflow:hidden;
+    }
+    .cust-form-block-head{
+      padding:10px 14px;font-size:.82rem;font-weight:800;color:var(--text,#1a1f1c);
+      background:var(--surface2,#f4f6f5);border-bottom:1px solid var(--border);
+    }
+    .cust-form-block-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px}
+    .cust-form-block-body-flush{padding:0}
+    .cust-form-block-body-flush .cust-vtype-panel{margin:0}
     .cust-vtype-panel{margin:4px 0 10px}
     .cust-vtype-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
     .cust-vtype-col{

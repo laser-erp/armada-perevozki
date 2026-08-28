@@ -337,6 +337,12 @@ function syncCustomerClosedAllCheckbox(){
   });
   master.checked=all;
 }
+function setCustomerClosedVehicleTypes(on){
+  CUST_MASTER_VTYPE_IDS.forEach(id=>{
+    const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
+    if(el) el.checked=!!on;
+  });
+}
 function syncCustomerRefrAllCheckbox(){
   const master=$('cust-vtype-refr-all');
   if(!master) return;
