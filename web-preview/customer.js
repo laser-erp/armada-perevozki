@@ -652,6 +652,7 @@ function inferCargoKindFromText(text){
   const q=String(text||'').toLowerCase();
   if(/продукт|молок|мяс|рыб|овощ|фрукт|холод|замороз/.test(q)) return 'food';
   if(/сып|навал|песок|щеб|зер|уголь|руда/.test(q)) return 'bulk';
+  if(/гидроцилинд|гидро.?цилинд|труб(?:а|ы)?|балк|металлопрокат|негабарит|длинномер/.test(q)) return 'other';
   if(/другое|проч/.test(q)) return 'other';
   return 'general';
 }

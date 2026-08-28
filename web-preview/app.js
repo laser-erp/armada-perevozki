@@ -794,12 +794,32 @@ function vehicleFitsOrder(v, o){
   if(!anyReq) return true;
   return true;
 }
+/** Длинномерный груз: ≥4 м, негабарит или тип (трубы, балки, гидроцилиндры). */
+function inferCustomerLongCargoFlags(draft){
+  draft=draft||{};
+  const l=+(draft.reqLengthM||0);
+  const w=+(draft.reqWidthM||0);
+  const h=+(draft.reqHeightM||0);
+  const packaging=String(draft.cargoPackaging||'');
+  const cargoText=String(draft.cargoText||'').toLowerCase();
+  const dims=[l,w,h].filter(d=>d>0);
+  const maxDim=dims.length?Math.max(...dims):0;
+  const lenFromText=(()=>{
+    const m=cargoText.match(/(\d+[.,]?\d*)\s*(?:м(?:\.|етр(?:ов)?)?|m\b)/i);
+    return m?parseFloat(m[1].replace(',','.')):0;
+  })();
+  const effectiveLen=Math.max(l, maxDim, lenFromText);
+  const longKind=/гидроцилинд|гидро.?цилинд|цилиндр|труб(?:а|ы|опровод)?|балк|штанг|рельс|металлопрокат|прокат|брус|длинномер|негабарит|ферм|конструкц/i.test(cargoText);
+  const isOversize=packaging==='oversize'||effectiveLen>13.6;
+  const isLong=effectiveLen>=4||packaging==='oversize'||longKind;
+  const isVeryLong=effectiveLen>=6||packaging==='oversize';
+  return {isLong,isVeryLong,isOversize,effectiveLen,longKind};
+}
 /** Способы загрузки/выгрузки по выбранным кузовам и параметрам груза. */
 function inferCustomerLoadUnloadMethods(vtypes, draft){
   vtypes=vtypes||[];
   draft=draft||{};
   const tons=+(draft.reqPayloadTons||0);
-  const l=+(draft.reqLengthM||0);
   const kind=String(draft.cargoKind||'general');
   const packaging=String(draft.cargoPackaging||'');
   const fragile=!!draft.cargoFragile;
@@ -807,13 +827,14 @@ function inferCustomerLoadUnloadMethods(vtypes, draft){
   let effectiveKind=kind;
   if(packaging==='bulk') effectiveKind='bulk';
 
+  const longCtx=inferCustomerLongCargoFlags(draft);
   const isDump=vtypes.includes('dump');
   const isPlatform=vtypes.includes('platform');
   const isOpen=vtypes.some(id=>['board','open','shalanda'].includes(id));
   const isClosed=vtypes.some(id=>['tent','container','van','metal'].includes(id));
   const isRefr=vtypes.some(id=>['reefer','reefer_partition','reefer_multimode','isotherm'].includes(id));
-  const isOversize=packaging==='oversize'||(l>0&&l>13.6);
-  const isLong=l>6.2;
+  const isOversize=longCtx.isOversize;
+  const isVeryLong=longCtx.isVeryLong;
   const isPalletized=packaging==='pallets'||packaging==='boxes';
 
   let load=[], unload=[];
@@ -824,6 +845,14 @@ function inferCustomerLoadUnloadMethods(vtypes, draft){
   }else if(isRefr||hasTemp||effectiveKind==='food'){
     load=['rear'];
     unload=['rear'];
+  }else if(longCtx.isLong){
+    load=['side','top'];
+    unload=['side'];
+    if(isVeryLong) load.push('side_both');
+    if(isOversize){
+      load.push('full_tent','remove_crossbars');
+      if(vtypes.includes('tent')) load.push('remove_posts');
+    }
   }else if(isPlatform||isOversize){
     load=['side','top'];
     unload=['side'];
@@ -831,11 +860,11 @@ function inferCustomerLoadUnloadMethods(vtypes, draft){
       load.push('full_tent','remove_crossbars');
       if(vtypes.includes('tent')) load.push('remove_posts');
     }
-    if(isLong) load.push('side_both');
+    if(isVeryLong) load.push('side_both');
   }else if(isOpen){
     load=['side','boards'];
     unload=['side','boards'];
-    if(isLong) load.push('side_both');
+    if(isVeryLong) load.push('side_both');
   }else if(isPalletized||fragile){
     load=['rear'];
     unload=['rear'];
@@ -910,6 +939,17 @@ function inferCustomerVehicleRecommendation(draft){
       if(vtypes.includes('board')||vtypes.includes('dump')) vtypes=['tent'];
     }else if(tons<=3&&!fragile&&!hasDims&&packaging!=='oversize'){
       vtypes=['board'];
+    }
+  }
+
+  const longCtx=inferCustomerLongCargoFlags(draft);
+  if(longCtx.isLong&&!hasTemp&&effectiveKind!=='food'&&effectiveKind!=='bulk'){
+    if(longCtx.isOversize||tons>10){
+      vtypes=['platform'];
+    }else if(longCtx.isVeryLong){
+      vtypes=['platform','board'];
+    }else{
+      vtypes=['board','platform'];
     }
   }
 
