@@ -162,13 +162,16 @@
                 </div>
                 <div class="cust-cargo-flags">
                   <label class="cust-check-item"><input type="checkbox" id="cust-cargo-fragile" /> хрупкий</label>
-                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
-                  <span id="cust-cargo-temp-range" class="cust-cargo-temp-range" hidden>
-                    <span class="cust-temp-label">от</span>
-                    <input id="cust-cargo-temp-from" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура от, °C" />
-                    <span class="cust-temp-label">до</span>
-                    <input id="cust-cargo-temp-to" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура до, °C" />
-                  </span>
+                  <div class="cust-cargo-temp-wrap">
+                    <label class="cust-check-item cust-cargo-temp-check"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
+                    <span id="cust-cargo-temp-range" class="cust-cargo-temp-range" hidden>
+                      <span class="cust-temp-label">от</span>
+                      <input id="cust-cargo-temp-from" inputmode="decimal" placeholder="-18" class="cust-cargo-temp-input" aria-label="Температура от, °C" />
+                      <span class="cust-temp-label">до</span>
+                      <input id="cust-cargo-temp-to" inputmode="decimal" placeholder="+25" class="cust-cargo-temp-input" aria-label="Температура до, °C" />
+                      <span class="cust-temp-unit" aria-hidden="true">°C</span>
+                    </span>
+                  </div>
                 </div>
                 <label>Габариты, м (Д × Ш × В)</label>
                 <div class="form-triple">

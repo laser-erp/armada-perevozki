@@ -781,9 +781,15 @@
     .cust-checklist-submit:disabled{opacity:.45;cursor:not-allowed}
     .cust-cargo-meta-row{margin-top:0}
     .cust-cargo-flags{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:2px 0 4px}
-    .cust-cargo-temp-range{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
-    .cust-temp-label{font-size:.78rem;font-weight:700;color:var(--muted,#64748b)}
-    .cust-cargo-temp-input{max-width:72px;flex:0 0 72px}
+    .cust-cargo-temp-wrap{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 10px;max-width:100%}
+    .cust-cargo-temp-check{flex:0 1 auto}
+    .cust-cargo-temp-range{display:inline-flex;align-items:center;gap:4px 5px;flex-wrap:nowrap;max-width:100%}
+    .cust-temp-label{font-size:.72rem;font-weight:600;color:var(--muted,#64748b);white-space:nowrap;line-height:1}
+    .cust-temp-unit{font-size:.78rem;font-weight:600;color:var(--muted,#64748b);white-space:nowrap;line-height:1;margin-left:1px}
+    .cust-cargo-temp-input{
+      width:3.25rem!important;max-width:3.25rem!important;min-width:0!important;flex:0 0 3.25rem!important;
+      align-self:center!important;padding:4px 4px!important;text-align:center;font-size:16px;min-height:36px
+    }
     #customer-portal .admin-form-shell{max-width:980px}
     .cust-form-block{
       border:1px solid var(--border);border-radius:14px;background:var(--surface,#fff);overflow:hidden;
