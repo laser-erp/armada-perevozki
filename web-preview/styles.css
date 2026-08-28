@@ -301,10 +301,14 @@
     .form-pair.cust-datetime-pair > .cust-time-field input{max-width:9.5rem}
     .cust-date-field-wrap{position:relative}
     .cust-date-input-row{display:flex;align-items:center;gap:8px;min-width:0}
-    .cust-date-input-row > input{flex:1;min-width:0;width:auto}
-    .cust-date-cal-toggle{
-      display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;margin:0;
-      font-size:.72rem;color:var(--muted);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap;
+    .cust-date-input-row > input{
+      flex:1 1 auto;min-width:6.75rem;max-width:none;width:auto;
+    }
+    .admin-form-scroll label.cust-date-cal-toggle,
+    .cust-date-input-row .cust-date-cal-toggle{
+      display:inline-flex!important;align-items:center;gap:5px;flex:0 0 auto;margin:0;
+      width:auto!important;max-width:none;font-size:.72rem;color:var(--muted);font-weight:600;
+      cursor:pointer;user-select:none;white-space:nowrap;
     }
     .cust-date-cal-toggle input{width:15px;height:15px;margin:0;cursor:pointer;accent-color:var(--accent)}
     .cust-date-cal{margin:0}

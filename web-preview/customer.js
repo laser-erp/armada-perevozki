@@ -212,6 +212,8 @@ function setCustomerVehicleDateFromKey(key, closeCal){
   if(dateEl){
     const pad=n=>String(n).padStart(2,'0');
     dateEl.value=`${pad(d)}.${pad(m)}.${y}`;
+    dateEl.dispatchEvent(new Event('input',{bubbles:true}));
+    dateEl.dispatchEvent(new Event('change',{bubbles:true}));
   }
   customerVehicleDateCal.from=key;
   customerVehicleDateCal.year=y;
