@@ -3742,7 +3742,7 @@ try{
   }
 }catch(_){}
 (async function boot(){
-  window.__armadaBootDone=true;
+  try{
   if(typeof initShareSheet==='function') initShareSheet();
   initEntryFromPage();
   initPortalScopeFromPage();
@@ -3811,6 +3811,15 @@ try{
     updateSyncHint();
   }
   setTimeout(updateSyncHint, 700);
+  }catch(err){
+    console.error('АРМАДА boot', err);
+    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show') && !document.querySelector('#customer-portal.show')){
+      if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
+      else if(typeof showDefaultAfterSplash==='function') showDefaultAfterSplash();
+    }
+  }finally{
+    window.__armadaBootDone=true;
+  }
 })();
 $('role-driver').onclick=()=>{ setEntryMode('driver'); openDriverLogin(false); };
 $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
