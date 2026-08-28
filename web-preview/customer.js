@@ -290,13 +290,22 @@ function customerUnloadMatchAll(){
   const el=$('cust-unload-match-all');
   return !!(el&&el.checked);
 }
-function filterCustomerVtypeList(inputId, itemSelector, attrName){
-  const inp=$(inputId);
-  if(!inp) return;
-  const q=String(inp.value||'').trim().toLowerCase();
-  document.querySelectorAll(itemSelector).forEach(el=>{
-    const label=(el.getAttribute(attrName)||el.textContent||'').toLowerCase();
-    el.style.display=!q || label.includes(q)?'':'none';
+function clearCustomerLoadUnloadMethods(){
+  document.querySelectorAll('#cust-load-methods [data-load]').forEach(el=>{ el.checked=false; });
+  document.querySelectorAll('#cust-unload-methods [data-unload]').forEach(el=>{ el.checked=false; });
+}
+function setCustomerLoadUnloadEnabled(on){
+  document.querySelectorAll('#cust-load-methods [data-load], #cust-unload-methods [data-unload]').forEach(el=>{ el.disabled=!on; });
+  ['cust-load-match-all','cust-unload-match-all'].forEach(id=>{
+    const el=$(id);
+    if(el){
+      el.disabled=!on;
+      if(!on) el.checked=false;
+    }
+  });
+  ['cust-load-col','cust-unload-col'].forEach(id=>{
+    const col=$(id);
+    if(col) col.classList.toggle('is-disabled', !on);
   });
 }
 
@@ -348,6 +357,7 @@ function syncCustomerVehicleTypeUi(){
     else if(types.length) hid.value='tent';
     else hid.value='tent';
   }
+  setCustomerLoadUnloadEnabled(types.length>0);
   syncCustomerClosedAllCheckbox();
 }
 function syncCustomerBodyType(){
@@ -359,10 +369,10 @@ function resetCustomerVehicleTypes(){
   document.querySelectorAll('#cust-unload-methods [data-unload]').forEach(el=>{ el.checked=false; });
   const master=$('cust-vtype-closed-all');
   if(master) master.checked=false;
-  ['cust-load-match-all','cust-unload-match-all','cust-vtype-filter','cust-load-filter','cust-unload-filter'].forEach(id=>{
-    const el=$(id); if(el){ el.checked=false; el.value=''; }
+  ['cust-load-match-all','cust-unload-match-all'].forEach(id=>{
+    const el=$(id); if(el){ el.checked=false; el.disabled=true; }
   });
-  document.querySelectorAll('.cust-vtype-child, #cust-load-methods .cust-check-item, #cust-unload-methods .cust-check-item').forEach(el=>{ el.style.display=''; });
+  setCustomerLoadUnloadEnabled(false);
   const hid=$('cust-body-type');
   if(hid) hid.value='tent';
   syncCustomerVehicleTypeUi();
@@ -372,7 +382,8 @@ function wireCustomerVehicleTypes(){
   if(master){
     master.onchange=()=>{
       setCustomerClosedVehicleTypes(master.checked);
-      applyRearOnlyVehicleTypeRules();
+      if(!master.checked) clearCustomerLoadUnloadMethods();
+      else applyRearOnlyVehicleTypeRules();
       syncCustomerVehicleTypeUi();
       updateCustomerPricePreview();
       paintCustomerFleetOptions();
@@ -380,10 +391,9 @@ function wireCustomerVehicleTypes(){
   }
   document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{
     el.onchange=()=>{
-      if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)){
-        if(['container','van','metal'].includes(el.dataset.vtype) && el.checked) applyRearOnlyVehicleTypeRules();
-        syncCustomerClosedAllCheckbox();
-      }
+      if(!el.checked) clearCustomerLoadUnloadMethods();
+      else if(['container','van','metal'].includes(el.dataset.vtype)) applyRearOnlyVehicleTypeRules();
+      if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)) syncCustomerClosedAllCheckbox();
       syncCustomerVehicleTypeUi();
       updateCustomerPricePreview();
       paintCustomerFleetOptions();
@@ -392,12 +402,7 @@ function wireCustomerVehicleTypes(){
   document.querySelectorAll('#cust-load-methods [data-load], #cust-unload-methods [data-unload]').forEach(el=>{
     el.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); };
   });
-  const vf=$('cust-vtype-filter');
-  if(vf) vf.oninput=()=>filterCustomerVtypeList('cust-vtype-filter', '.cust-vtype-child', 'data-vtype-label');
-  const lf=$('cust-load-filter');
-  if(lf) lf.oninput=()=>filterCustomerVtypeList('cust-load-filter', '#cust-load-methods .cust-check-item', 'data-load-label');
-  const uf=$('cust-unload-filter');
-  if(uf) uf.oninput=()=>filterCustomerVtypeList('cust-unload-filter', '#cust-unload-methods .cust-check-item', 'data-unload-label');
+  setCustomerLoadUnloadEnabled(false);
 }
 function inferCargoKindFromText(text){
   const q=String(text||'').toLowerCase();

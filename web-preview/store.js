@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc38";
+const APP_BUILD="2026-08-28-entrybc39";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -460,6 +460,15 @@ const CUST_LOAD_METHODS=[
   {id:'side_both', label:'боковая с двух сторон'}
 ];
 const CUST_UNLOAD_METHODS=CUST_LOAD_METHODS.slice();
+function custVehicleTypeLabel(id){
+  const hit=CUST_CLOSED_VEHICLE_TYPES.find(x=>x.id===id);
+  if(hit) return hit.label;
+  if(id===CUST_ISOTHERM_VEHICLE_TYPE.id) return CUST_ISOTHERM_VEHICLE_TYPE.label;
+  return bodyTypeInputLabel(id)||id;
+}
+function custLoadMethodLabel(id){
+  return (CUST_LOAD_METHODS.find(x=>x.id===id)||{}).label||id;
+}
 function custUnloadMethodLabel(id){
   return custLoadMethodLabel(id);
 }
