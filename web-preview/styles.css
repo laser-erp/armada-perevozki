@@ -828,13 +828,6 @@
     .cust-form-block-body-flush{padding:0}
     .cust-form-block-body-flush .cust-vtype-panel{margin:0}
     .cust-vtype-panel{margin:4px 0 10px}
-    .cust-vtype-recommend{
-      margin:10px 14px 0;padding:10px 12px;border-radius:10px;
-      border:1px solid rgba(37,99,235,.22);background:rgba(37,99,235,.06);
-      display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
-    }
-    .cust-vtype-recommend-text{margin:0;font-size:.8rem;line-height:1.35;flex:1;min-width:12rem}
-    .cust-vtype-recommend-apply{font-size:.76rem;padding:6px 10px;white-space:nowrap}
     .cust-vtype-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
     .cust-vtype-col{
       border:1px solid var(--border);border-radius:10px;background:var(--surface,#fff);
