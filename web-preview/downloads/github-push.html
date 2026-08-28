@@ -78,6 +78,26 @@
       color: #fff;
     }
     .muted { font-size: .85rem; color: var(--muted); margin-top: 20px; }
+    .browser-tip {
+      font-size: .88rem;
+      padding: 12px 14px;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .browser-tip strong { color: #92400e; }
+    .btn-yandex {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: .9rem;
+      text-decoration: none;
+      background: #fc3f1d;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -86,7 +106,12 @@
     <h1>Отправить ветку на GitHub</h1>
     <p class="lead">
       Ветка: <code>cursor/compliance-p0-4317</code> · репозиторий
-      <a href="https://github.com/laser-erp/armada-perevozki" target="_blank" rel="noopener">laser-erp/armada-perevozki</a>
+      <a href="https://github.com/laser-erp/armada-perevozki" data-yandex-external target="_blank" rel="noopener">laser-erp/armada-perevozki</a>
+    </p>
+
+    <p class="browser-tip">
+      <strong>Важно:</strong> ссылки на GitHub открывайте через <strong>Яндекс Браузер</strong>
+      (на Android — красные кнопки ниже).
     </p>
 
     <div class="warn">
@@ -97,11 +122,18 @@
     <div class="step">
       <h2>Шаг 1 — открыть настройки ключей</h2>
       <ol>
-        <li>Откройте в браузере:
-          <a href="https://github.com/laser-erp/armada-perevozki/settings/keys" target="_blank" rel="noopener">
-            github.com → armada-perevozki → Settings → Deploy keys
-          </a>
-        </li>
+        <li>Откройте настройки ключей в Яндекс Браузере:</li>
+      </ol>
+      <a class="btn-yandex" href="https://github.com/laser-erp/armada-perevozki/settings/keys" data-yandex-external>
+        Открыть Deploy keys в Яндекс Браузере
+      </a>
+      <p class="muted" style="margin-top:10px">
+        Или вручную:
+        <a href="https://github.com/laser-erp/armada-perevozki/settings/keys" data-yandex-external target="_blank" rel="noopener">
+          github.com → Settings → Deploy keys
+        </a>
+      </p>
+      <ol start="2">
         <li>Нажмите <strong>Add deploy key</strong>.</li>
       </ol>
     </div>
@@ -145,5 +177,6 @@ git push -u origin cursor/compliance-p0-4317</pre>
       Входы в АРМАДА: <a href="/a">администратор</a> · <a href="/v">водитель</a> · <a href="/z">заказчик</a>
     </p>
   </div>
+  <script src="yandex-links.js"></script>
 </body>
 </html>
