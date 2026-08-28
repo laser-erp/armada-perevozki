@@ -166,39 +166,64 @@
             </div>
           </div>
           <div id="cust-vehicle-types" class="cust-vtype-panel">
-            <p class="form-section-hint" style="margin:0">Тип ТС</p>
-            <label class="cust-vtype-master">
-              <input type="checkbox" id="cust-vtype-closed-all" />
-              <span>Все закрытые</span>
-            </label>
-            <div class="cust-vtype-grid">
-              <label class="cust-vtype-item"><input type="checkbox" data-vtype="tent" /> Тентованный</label>
-              <label class="cust-vtype-item"><input type="checkbox" data-vtype="container" /> Контейнер</label>
-              <label class="cust-vtype-item"><input type="checkbox" data-vtype="van" /> Фургон</label>
-              <label class="cust-vtype-item"><input type="checkbox" data-vtype="metal" /> Цельнометаллический</label>
-              <label class="cust-vtype-item"><input type="checkbox" data-vtype="isotherm" /> Изотерм</label>
-            </div>
-            <div id="cust-load-methods-wrap" class="cust-load-methods-wrap" hidden>
-              <p class="cust-vtype-sub">Загрузка</p>
-              <div class="cust-check-grid" id="cust-load-methods">
-                <label class="cust-check-item"><input type="checkbox" data-load="top" /> верхняя</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="side" /> боковая</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="rear" /> задняя</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="full_tent" /> с полной растентовкой</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="remove_crossbars" /> со снятием поперечных перекладин</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="remove_posts" /> со снятием стоек</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="no_gates" /> без ворот</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="tail_lift" /> гидроборт</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="ramps" /> аппарели</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="crate" /> с обрешеткой</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="boards" /> с бортами</label>
-                <label class="cust-check-item"><input type="checkbox" data-load="side_both" /> боковая с двух сторон</label>
+            <div class="cust-vtype-cols">
+              <div class="cust-vtype-col">
+                <div class="cust-vtype-col-head">
+                  <span class="cust-vtype-col-title">Кузов <span class="req">*</span></span>
+                  <input type="search" class="cust-vtype-filter" id="cust-vtype-filter" placeholder="⌕" aria-label="Поиск кузова" autocomplete="off" />
+                </div>
+                <div class="cust-vtype-col-body" id="cust-vtype-body-list">
+                  <label class="cust-vtype-master cust-vtype-tree-root">
+                    <input type="checkbox" id="cust-vtype-closed-all" />
+                    <span>все закр.+изотерм</span>
+                  </label>
+                  <div class="cust-vtype-tree">
+                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="тентованный"><input type="checkbox" data-vtype="tent" /> тентованный</label>
+                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="контейнер"><input type="checkbox" data-vtype="container" /> контейнер</label>
+                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="фургон"><input type="checkbox" data-vtype="van" /> фургон</label>
+                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="цельнометалл"><input type="checkbox" data-vtype="metal" /> цельнометалл.</label>
+                    <label class="cust-vtype-item cust-vtype-child" data-vtype-label="изотерм"><input type="checkbox" data-vtype="isotherm" /> изотерм</label>
+                  </div>
+                </div>
               </div>
-              <p class="cust-vtype-sub">Выгрузка</p>
-              <div class="cust-check-grid" id="cust-unload-methods">
-                <label class="cust-check-item"><input type="checkbox" data-unload="top" /> верхняя</label>
-                <label class="cust-check-item"><input type="checkbox" data-unload="side" /> боковая</label>
-                <label class="cust-check-item"><input type="checkbox" data-unload="rear" /> задняя</label>
+              <div class="cust-vtype-col">
+                <div class="cust-vtype-col-head">
+                  <span class="cust-vtype-col-title">Загрузка</span>
+                  <input type="search" class="cust-vtype-filter" id="cust-load-filter" placeholder="⌕" aria-label="Поиск способа загрузки" autocomplete="off" />
+                </div>
+                <label class="cust-vtype-match-all">
+                  <input type="checkbox" id="cust-load-match-all" />
+                  <span>учитывать все выбранные</span>
+                </label>
+                <div class="cust-vtype-col-body cust-check-grid" id="cust-load-methods">
+                  <label class="cust-check-item" data-load-label="верхняя"><input type="checkbox" data-load="top" /> верхняя</label>
+                  <label class="cust-check-item" data-load-label="боковая"><input type="checkbox" data-load="side" /> боковая</label>
+                  <label class="cust-check-item" data-load-label="задняя"><input type="checkbox" data-load="rear" /> задняя</label>
+                  <label class="cust-check-item" data-load-label="растентовка"><input type="checkbox" data-load="full_tent" /> с полной растентовкой</label>
+                  <label class="cust-check-item" data-load-label="перекладины"><input type="checkbox" data-load="remove_crossbars" /> со снятием поперечных перекладин</label>
+                  <label class="cust-check-item" data-load-label="стойки"><input type="checkbox" data-load="remove_posts" /> со снятием стоек</label>
+                  <label class="cust-check-item" data-load-label="ворота"><input type="checkbox" data-load="no_gates" /> без ворот</label>
+                  <label class="cust-check-item" data-load-label="гидроборт"><input type="checkbox" data-load="tail_lift" /> гидроборт</label>
+                  <label class="cust-check-item" data-load-label="аппарели"><input type="checkbox" data-load="ramps" /> аппарели</label>
+                  <label class="cust-check-item" data-load-label="обрешетка"><input type="checkbox" data-load="crate" /> с обрешеткой</label>
+                  <label class="cust-check-item" data-load-label="борта"><input type="checkbox" data-load="boards" /> с бортами</label>
+                  <label class="cust-check-item" data-load-label="боковая двух"><input type="checkbox" data-load="side_both" /> боковая с двух сторон</label>
+                </div>
+              </div>
+              <div class="cust-vtype-col">
+                <div class="cust-vtype-col-head">
+                  <span class="cust-vtype-col-title">Выгрузка</span>
+                  <input type="search" class="cust-vtype-filter" id="cust-unload-filter" placeholder="⌕" aria-label="Поиск способа выгрузки" autocomplete="off" />
+                </div>
+                <label class="cust-vtype-match-all">
+                  <input type="checkbox" id="cust-unload-match-all" />
+                  <span>учитывать все выбранные</span>
+                </label>
+                <div class="cust-vtype-col-body cust-check-grid" id="cust-unload-methods">
+                  <label class="cust-check-item" data-unload-label="верхняя"><input type="checkbox" data-unload="top" /> верхняя</label>
+                  <label class="cust-check-item" data-unload-label="боковая"><input type="checkbox" data-unload="side" /> боковая</label>
+                  <label class="cust-check-item" data-unload-label="задняя"><input type="checkbox" data-unload="rear" /> задняя</label>
+                </div>
               </div>
             </div>
           </div>

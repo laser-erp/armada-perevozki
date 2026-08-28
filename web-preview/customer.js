@@ -280,6 +280,25 @@ function paintCustomerVehicleDateCal(){
 }
 
 const CUST_CLOSED_VTYPE_IDS=['tent','container','van','metal'];
+const CUST_MASTER_VTYPE_IDS=['tent','container','van','metal','isotherm'];
+
+function customerLoadMatchAll(){
+  const el=$('cust-load-match-all');
+  return !!(el&&el.checked);
+}
+function customerUnloadMatchAll(){
+  const el=$('cust-unload-match-all');
+  return !!(el&&el.checked);
+}
+function filterCustomerVtypeList(inputId, itemSelector, attrName){
+  const inp=$(inputId);
+  if(!inp) return;
+  const q=String(inp.value||'').trim().toLowerCase();
+  document.querySelectorAll(itemSelector).forEach(el=>{
+    const label=(el.getAttribute(attrName)||el.textContent||'').toLowerCase();
+    el.style.display=!q || label.includes(q)?'':'none';
+  });
+}
 
 function customerSelectedVehicleTypes(){
   return [...document.querySelectorAll('#cust-vehicle-types [data-vtype]:checked')].map(el=>el.dataset.vtype).filter(Boolean);
@@ -301,14 +320,14 @@ function setCustomerUnloadMethod(id, on){
 function syncCustomerClosedAllCheckbox(){
   const master=$('cust-vtype-closed-all');
   if(!master) return;
-  const all=CUST_CLOSED_VTYPE_IDS.every(id=>{
+  const all=CUST_MASTER_VTYPE_IDS.every(id=>{
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     return el&&el.checked;
   });
   master.checked=all;
 }
 function setCustomerClosedVehicleTypes(on){
-  CUST_CLOSED_VTYPE_IDS.forEach(id=>{
+  CUST_MASTER_VTYPE_IDS.forEach(id=>{
     const el=document.querySelector(`#cust-vehicle-types [data-vtype="${id}"]`);
     if(el) el.checked=!!on;
   });
@@ -329,8 +348,6 @@ function syncCustomerVehicleTypeUi(){
     else if(types.length) hid.value='tent';
     else hid.value='tent';
   }
-  const wrap=$('cust-load-methods-wrap');
-  if(wrap) wrap.hidden=!types.includes('tent');
   syncCustomerClosedAllCheckbox();
 }
 function syncCustomerBodyType(){
@@ -342,6 +359,10 @@ function resetCustomerVehicleTypes(){
   document.querySelectorAll('#cust-unload-methods [data-unload]').forEach(el=>{ el.checked=false; });
   const master=$('cust-vtype-closed-all');
   if(master) master.checked=false;
+  ['cust-load-match-all','cust-unload-match-all','cust-vtype-filter','cust-load-filter','cust-unload-filter'].forEach(id=>{
+    const el=$(id); if(el){ el.checked=false; el.value=''; }
+  });
+  document.querySelectorAll('.cust-vtype-child, #cust-load-methods .cust-check-item, #cust-unload-methods .cust-check-item').forEach(el=>{ el.style.display=''; });
   const hid=$('cust-body-type');
   if(hid) hid.value='tent';
   syncCustomerVehicleTypeUi();
@@ -359,7 +380,7 @@ function wireCustomerVehicleTypes(){
   }
   document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(el=>{
     el.onchange=()=>{
-      if(CUST_CLOSED_VTYPE_IDS.includes(el.dataset.vtype)){
+      if(CUST_MASTER_VTYPE_IDS.includes(el.dataset.vtype)){
         if(['container','van','metal'].includes(el.dataset.vtype) && el.checked) applyRearOnlyVehicleTypeRules();
         syncCustomerClosedAllCheckbox();
       }
@@ -371,6 +392,12 @@ function wireCustomerVehicleTypes(){
   document.querySelectorAll('#cust-load-methods [data-load], #cust-unload-methods [data-unload]').forEach(el=>{
     el.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); };
   });
+  const vf=$('cust-vtype-filter');
+  if(vf) vf.oninput=()=>filterCustomerVtypeList('cust-vtype-filter', '.cust-vtype-child', 'data-vtype-label');
+  const lf=$('cust-load-filter');
+  if(lf) lf.oninput=()=>filterCustomerVtypeList('cust-load-filter', '#cust-load-methods .cust-check-item', 'data-load-label');
+  const uf=$('cust-unload-filter');
+  if(uf) uf.oninput=()=>filterCustomerVtypeList('cust-unload-filter', '#cust-unload-methods .cust-check-item', 'data-unload-label');
 }
 function inferCargoKindFromText(text){
   const q=String(text||'').toLowerCase();
@@ -489,6 +516,8 @@ function buildCustomerDraftFromForm(){
     vehicleTypeIds:customerSelectedVehicleTypes(),
     loadingMethods:customerSelectedLoadMethods(),
     unloadingMethods:customerSelectedUnloadMethods(),
+    loadMatchAll:customerLoadMatchAll(),
+    unloadMatchAll:customerUnloadMatchAll(),
     cargoKind:customerSelectedCargoKind(),
     reqPayloadTons:payloadTons>0?payloadTons:null,
     estimateWorkHours:fin.minWorkHours||4,
@@ -754,9 +783,8 @@ function submitCustomerOrder(){
   const vtypes=customerSelectedVehicleTypes();
   if(!vtypes.length){ if(err) err.textContent='Выберите хотя бы один тип ТС'; return; }
   const cargo=customerSelectedCargoKind();
-  const body=customerSelectedBodyType();
-  if(cargo==='food' && body!=='reefer'){
-    if(!confirm('Для продуктов обычно нужен рефрижератор. Отправить как есть?')) return;
+  if(cargo==='food' && !vtypes.includes('isotherm')){
+    if(!confirm('Для продуктов обычно нужен изотерм или рефрижератор. Отправить как есть?')) return;
   }
   const draft=buildCustomerDraftFromForm();
   const quote=suggestCustomerOrderPrice(draft);
@@ -813,6 +841,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     vehicleTypeIds:draft.vehicleTypeIds||[],
     loadingMethods:draft.loadingMethods||[],
     unloadingMethods:draft.unloadingMethods||[],
+    loadMatchAll:!!draft.loadMatchAll,
+    unloadMatchAll:!!draft.unloadMatchAll,
     cargoKind:draft.cargoKind||null,
     tripMode:draft.tripMode||null,
     routeKm:draft.routeKm||null,
