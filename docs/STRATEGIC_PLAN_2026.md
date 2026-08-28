@@ -1,6 +1,6 @@
 # ARMADA — стратегический план 2026
 
-Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `2944a40`, ahead of `main`)
+Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `189c230`, ahead of `main`)
 
 Продакшен: https://aptown1.fvds.ru · API: https://aptown1.fvds.ru/armada-api
 
