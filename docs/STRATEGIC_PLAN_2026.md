@@ -17,7 +17,7 @@
 | S3-1.2 письма операторам | ✅ done | Фирменный бланк, PDF на проде (`docs/operator-letters/`) |
 | S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false`, нужны ключи оператора |
 | S4–S7 | ⏸ paused | только по явному «Делай» |
-| O-02 Push GitHub | ⏸ blocked | `docs/PUSH_COMPLIANCE_BRANCH.md`, `./scripts/sync-o02-github-status.sh` |
+| O-02 Push GitHub | ⏸ отложен | Репозиторий **сейчас публичный** — сначала сделать Private; push не блокирует прод (деплой на VPS) |
 
 JSON-трекер: `.cursor/stores/self/strategic-plan-tracker.json`
 
@@ -40,12 +40,11 @@ BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
 | S1 driverInvites | smoke + verify-prod-web-sync | ✅ |
 | S3 ETRN MVP 2 спринта | `COMPETITIVE_ANALYSIS_2026.md` чеклист + smoke | ✅ |
 | Деплой ветки на aptown1 | verify-prod-web-sync 15 файлов MATCH | ✅ |
-| Push ветки на GitHub (O-02) | `check-github-remote-branch.sh` → HTTP 404 | ❌ |
+| Push ветки на GitHub (O-02) | отложен | репозиторий публичный — закрыть; прод через VPS |
 | Трекер §4 + JSON | этот файл + `.cursor/stores/self/` | ✅ |
 
-**Objective (текст):** S0 + S1 + S3 (2 спринта) + deploy на aptown1 + трекер — **выполнено**.  
-**Блокер закрытия:** push `cursor/compliance-p0-4317` на `origin` (O-02) — нужен Deploy key в GitHub.  
-S2, S3-2.7, S4–S7 — вне scope objective-текста.
+**Рабочий режим:** правки → `deploy-fvds.sh` → aptown1.fvds.ru (GitHub не обязателен).  
+**Срочно:** `laser-erp/armada-perevozki` на GitHub **публичный** — владельцу: Settings → Danger zone → Change visibility → **Make private**.
 
 
 | План | ₽/мес | Биржа | ЭТрН |

@@ -1,7 +1,14 @@
-ARMADA O-02 — push ветки cursor/compliance-p0-4317 на GitHub
-============================================================
+ARMADA — GitHub (опционально, не блокирует прод)
+================================================
 
-Откройте в Яндекс Браузере (страница с кнопками):
+СЕЙЧАС: репозиторий laser-erp/armada-perevozki ПУБЛИЧНЫЙ — закройте!
+1. https://github.com/laser-erp/armada-perevozki/settings
+2. Danger zone → Change visibility → Make private
+
+Рабочий деплой: только на aptown1.fvds.ru (scripts/deploy-fvds.sh).
+Push на GitHub не обязателен.
+
+Инструкция (если понадобится позже):
   https://aptown1.fvds.ru/downloads/github-push.html
 
 Статус: блокер — Deploy key не добавлен в репозиторий (или без Allow write).

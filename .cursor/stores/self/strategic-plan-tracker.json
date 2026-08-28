@@ -16,15 +16,13 @@
       "notes": "15 файлов MATCH; APP_BUILD 2026-08-27-entrybc21"
     },
     "githubRemote": {
-      "status": "blocked",
+      "status": "paused",
       "branch": "cursor/compliance-p0-4317",
       "headCommit": "cf9213e",
-      "githubApi": "404",
+      "githubApi": "public",
+      "repoPrivate": false,
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "189c230",
-      "o02InstructionsUrl": "https://aptown1.fvds.ru/downloads/o02-github-instructions.txt",
-      "deployKeyFingerprint": "SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI",
-      "notes": "GITHUB_DEPLOY_KEY в env; публичный ключ не добавлен в Deploy keys (write)"
+      "notes": "Репозиторий ПУБЛИЧНЫЙ — закрыть (Private). Push отложен; прод через VPS"
     }
   },
   "lastSmoke": {
@@ -80,9 +78,9 @@
   },
   "ops": {
     "O-02": {
-      "title": "Push GitHub",
-      "status": "blocked",
-      "notes": "Добавить deploy key в laser-erp/armada-perevozki → Settings → Deploy keys (Allow write)"
+      "title": "GitHub (опционально)",
+      "status": "paused",
+      "notes": "Сначала Settings → Danger zone → Make private. Деплой только на VPS aptown1"
     }
   },
   "production": {
