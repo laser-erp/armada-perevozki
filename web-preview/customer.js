@@ -449,8 +449,8 @@ function customerCargoChecklistDetail(){
   if(pack&&typeof custPackagingLabel==='function') parts.push(custPackagingLabel(pack));
   if(cargo) parts.push(customerChecklistShortText(cargo,24));
   if(customerCargoFragile()) parts.push('хрупкий');
-  const temp=customerCargoTempC();
-  if(temp!=null) parts.push(temp+'°C');
+  const tempRange=formatCustomerTempRangeC(customerCargoTempFromC(), customerCargoTempToC());
+  if(tempRange) parts.push(tempRange);
   return parts.length?parts.join(' · '):'не заполнено';
 }
 function customerTermsChecklistDetail(){
@@ -663,18 +663,41 @@ function customerCargoFragile(){
   const el=$('cust-cargo-fragile');
   return !!(el&&el.checked);
 }
-function customerCargoTempC(){
+function customerTempInputC(id){
+  const raw=+(($(id)||{}).value||'').replace(',','.');
+  return Number.isFinite(raw)?raw:null;
+}
+function customerCargoTempFromC(){
   const on=$('cust-cargo-temp')&&$('cust-cargo-temp').checked;
   if(!on) return null;
-  const raw=+(($('cust-cargo-temp-c')||{}).value||'').replace(',','.');
-  return Number.isFinite(raw)?raw:null;
+  return customerTempInputC('cust-cargo-temp-from');
+}
+function customerCargoTempToC(){
+  const on=$('cust-cargo-temp')&&$('cust-cargo-temp').checked;
+  if(!on) return null;
+  return customerTempInputC('cust-cargo-temp-to');
+}
+function formatCustomerTempC(v){
+  const n=+v;
+  if(!Number.isFinite(n)) return '';
+  return (n>0?'+':'')+n;
+}
+function formatCustomerTempRangeC(from, to){
+  const f=from!=null?formatCustomerTempC(from):'';
+  const t=to!=null?formatCustomerTempC(to):'';
+  if(f&&t) return f+'…'+t+'°C';
+  if(f) return f+'°C';
+  if(t) return 'до '+t+'°C';
+  return null;
 }
 function syncCustomerTempField(){
   const on=$('cust-cargo-temp')&&$('cust-cargo-temp').checked;
-  const inp=$('cust-cargo-temp-c');
-  if(inp){
-    inp.hidden=!on;
-    if(!on) inp.value='';
+  const wrap=$('cust-cargo-temp-range');
+  if(wrap) wrap.hidden=!on;
+  if(!on){
+    ['cust-cargo-temp-from','cust-cargo-temp-to'].forEach(id=>{
+      const inp=$(id); if(inp) inp.value='';
+    });
   }
 }
 function customerCarrierForForm(){
@@ -779,7 +802,8 @@ function buildCustomerDraftFromForm(){
     cargoVolumeM3:customerCargoVolumeM3(),
     cargoPackaging:customerCargoPackaging(),
     cargoFragile:customerCargoFragile(),
-    cargoTempC:customerCargoTempC(),
+    cargoTempFromC:customerCargoTempFromC(),
+    cargoTempToC:customerCargoTempToC(),
     estimateWorkHours:fin.minWorkHours||4,
     emptyKmBefore:0,
     loadedKm:null,
@@ -1104,7 +1128,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     cargoVolumeM3:draft.cargoVolumeM3||null,
     cargoPackaging:draft.cargoPackaging||null,
     cargoFragile:!!draft.cargoFragile,
-    cargoTempC:draft.cargoTempC,
+    cargoTempFromC:draft.cargoTempFromC,
+    cargoTempToC:draft.cargoTempToC,
     loadingAddressNote:loadingNote||'',
     unloadingAddressNote:unloadingNote||'',
     loadingAddress:load, unloadingAddress:unload,
@@ -1169,7 +1194,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     ?' Заявка в свой парк, без срочного подбора.'
     :' Диспетчеру: закрыть как можно скорее.';
   alert(`Заявка №${seqNo} отправлена.${rushBit}${bookBit} ${priceBit}`);
-  ['cust-load','cust-unload','cust-load-note','cust-unload-note','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-cargo-places','cust-cargo-volume','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-temp-c'].forEach(id=>{
+  ['cust-load','cust-unload','cust-load-note','cust-unload-note','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-cargo-places','cust-cargo-volume','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-temp-from','cust-cargo-temp-to'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
   const packEl=$('cust-cargo-packaging'); if(packEl) packEl.value='';
@@ -1225,6 +1250,11 @@ function wireCustomerPortal(){
   if(volEl) volEl.onchange=()=>{ if(volEl.value) volEl.dataset.manual='1'; updateCustomerPricePreview(); };
   const tempToggle=$('cust-cargo-temp');
   if(tempToggle) tempToggle.onchange=()=>{ syncCustomerTempField(); updateCustomerPricePreview(); };
+  ['cust-cargo-temp-from','cust-cargo-temp-to'].forEach(id=>{
+    const el=$(id);
+    if(!el) return;
+    el.oninput=()=>updateCustomerPricePreview();
+  });
   const fragileEl=$('cust-cargo-fragile');
   if(fragileEl) fragileEl.onchange=()=>updateCustomerPricePreview();
   const packEl=$('cust-cargo-packaging');

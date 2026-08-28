@@ -727,6 +727,25 @@ function vehicleSpecText(v){
     bits.push(`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`);
   return bits.join(' · ');
 }
+function orderTempRangeText(o){
+  if(!o) return null;
+  const fmt=v=>{
+    const n=+v;
+    if(!Number.isFinite(n)) return '';
+    return (n>0?'+':'')+n;
+  };
+  const from=o.cargoTempFromC;
+  const to=o.cargoTempToC;
+  if(from!=null || to!=null){
+    const f=from!=null?fmt(from):'';
+    const t=to!=null?fmt(to):'';
+    if(f&&t) return f+'…'+t+'°C';
+    if(f) return f+'°C';
+    if(t) return 'до '+t+'°C';
+  }
+  if(o.cargoTempC!=null && o.cargoTempC!=='') return o.cargoTempC+'°C';
+  return null;
+}
 function orderReqText(o){
   if(!o) return '';
   const bits=[];
@@ -747,7 +766,8 @@ function orderReqText(o){
   if(o.cargoVolumeM3>0) bits.push(o.cargoVolumeM3+' м³');
   if(o.cargoPackaging && typeof custPackagingLabel==='function') bits.push(custPackagingLabel(o.cargoPackaging));
   if(o.cargoFragile) bits.push('хрупкий');
-  if(o.cargoTempC!=null && o.cargoTempC!=='') bits.push(o.cargoTempC+'°C');
+  const tempBit=orderTempRangeText(o);
+  if(tempBit) bits.push(tempBit);
   if(o.reqPayloadTons>0) bits.push('от '+o.reqPayloadTons+'т');
   if(o.routeKm>0) bits.push('~'+o.routeKm+' км');
   if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0))

@@ -304,7 +304,12 @@
                 <div class="cust-cargo-flags">
                   <label class="cust-check-item"><input type="checkbox" id="cust-cargo-fragile" /> хрупкий</label>
                   <label class="cust-check-item"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
-                  <input id="cust-cargo-temp-c" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" hidden aria-label="Температура, °C" />
+                  <span id="cust-cargo-temp-range" class="cust-cargo-temp-range" hidden>
+                    <span class="cust-temp-label">от</span>
+                    <input id="cust-cargo-temp-from" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура от, °C" />
+                    <span class="cust-temp-label">до</span>
+                    <input id="cust-cargo-temp-to" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" aria-label="Температура до, °C" />
+                  </span>
                 </div>
                 <label>Габариты, м (Д × Ш × В)</label>
                 <div class="form-triple">
