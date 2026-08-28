@@ -18,10 +18,10 @@
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "fc3c652",
+      "headCommit": "2944a40",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "fc3c652",
+      "bundleHead": "2944a40",
       "o02InstructionsUrl": "https://aptown1.fvds.ru/downloads/o02-github-instructions.txt",
       "deployKeyFingerprint": "SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI",
       "notes": "GITHUB_DEPLOY_KEY ok; публичный ключ не в Deploy keys (write)"
