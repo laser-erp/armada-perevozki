@@ -174,10 +174,12 @@
                   </div>
                 </div>
                 <label>Габариты, м (Д × Ш × В)</label>
-                <div class="form-triple">
-                  <input id="cust-req-l" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
-                  <input id="cust-req-w" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
-                  <input id="cust-req-h" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
+                <div class="form-triple cust-cargo-dims-row">
+                  <input id="cust-req-l" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
+                  <span class="cust-dim-sep" aria-hidden="true">×</span>
+                  <input id="cust-req-w" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
+                  <span class="cust-dim-sep" aria-hidden="true">×</span>
+                  <input id="cust-req-h" class="cust-cargo-dim-input" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
                 </div>
                 <label>Вес груза</label>
                 <div class="form-pair">
