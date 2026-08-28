@@ -767,6 +767,9 @@
     .cust-checklist-detail{font-size:.7rem;line-height:1.35;color:var(--muted);word-break:break-word}
     .cust-checklist-submit{width:100%;margin-top:12px}
     .cust-checklist-submit:disabled{opacity:.45;cursor:not-allowed}
+    .cust-cargo-meta-row{margin-top:0}
+    .cust-cargo-flags{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:2px 0 4px}
+    .cust-cargo-temp-input{max-width:72px;flex:0 0 72px}
     #customer-portal .admin-form-shell{max-width:980px}
     .cust-form-block{
       border:1px solid var(--border);border-radius:14px;background:var(--surface,#fff);overflow:hidden;

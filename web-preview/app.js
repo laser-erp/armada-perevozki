@@ -134,7 +134,34 @@ function normalizeCompany(c){
   out.portalEnabled=!!c.portalEnabled;
   out.portalPhone=formatPhone(String(c.portalPhone||'').trim());
   out.portalPin=String(c.portalPin||'').trim();
+  out.vatPayer=(c.vatPayer==='vat')?'vat':'none';
   return out;
+}
+/** Перевозчик на ОСН с НДС или без (УСН и т.п.) */
+function companyVatPayer(co){
+  return co&&co.vatPayer==='vat'?'vat':'none';
+}
+function companyVatPayerLabel(co){
+  return companyVatPayer(co)==='vat'?'с НДС':'без НДС';
+}
+/** Форма оплаты перевозчику для заявки заказчика */
+function customerCarrierPaymentForm(carrier){
+  return companyVatPayer(carrier)==='vat'?'withVat':'withoutVat';
+}
+function customerCarrierPriceAmount(quote, carrier){
+  if(!quote) return null;
+  const form=customerCarrierPaymentForm(carrier);
+  if(form==='withVat') return quote.withVat;
+  if(form==='withoutVat') return quote.withoutVat;
+  return quote.cash||quote.minimumCash;
+}
+function customerCarrierPriceLabel(carrier){
+  return companyVatPayer(carrier)==='vat'?'с НДС':'без НДС';
+}
+function customerCarrierPriceHint(carrier){
+  return companyVatPayer(carrier)==='vat'
+    ?'Перевозчик работает с НДС — сумма по счёту перевозчика с НДС.'
+    :'Перевозчик работает без НДС — НДС перевозчику не передаётся.';
 }
 /** «Наша фирма» кабинета перевозчика для тарифа заказчика */
 function companyLogistKind(co){
@@ -716,6 +743,11 @@ function orderReqText(o){
   }
   if(o.cargoKind) bits.push(cargoKindLabel(o.cargoKind)||o.cargoKind);
   if(o.cargoDescription) bits.push(o.cargoDescription);
+  if(o.cargoPlaces>0) bits.push(o.cargoPlaces+' мест');
+  if(o.cargoVolumeM3>0) bits.push(o.cargoVolumeM3+' м³');
+  if(o.cargoPackaging && typeof custPackagingLabel==='function') bits.push(custPackagingLabel(o.cargoPackaging));
+  if(o.cargoFragile) bits.push('хрупкий');
+  if(o.cargoTempC!=null && o.cargoTempC!=='') bits.push(o.cargoTempC+'°C');
   if(o.reqPayloadTons>0) bits.push('от '+o.reqPayloadTons+'т');
   if(o.routeKm>0) bits.push('~'+o.routeKm+' км');
   if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0))

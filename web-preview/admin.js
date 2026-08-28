@@ -3300,6 +3300,12 @@ function openCatalogs(){
       <div id="co-own-kind" style="display:${isOwn?'block':'none'}">
         <label class="role-tog"><input type="checkbox" id="co-dispatcher" ${(typeof isDispatcherCompany==='function'?isDispatcherCompany(c):c.logistKind==='broker')?'checked':''}/> Диспетчер — кнопка «Биржа»</label>
         <p class="hint">Логист и диспетчер — одна должность. Парк как обычно. Если включить диспетчера, появится Биржа (остаток партнёрам). Биржа уже в тарифе «Бизнес».</p>
+        <label for="co-vat-payer">НДС перевозчика (для портала заказчика)</label>
+        <select id="co-vat-payer">
+          <option value="none" ${(typeof companyVatPayer==='function'?companyVatPayer(c):'none')==='none'?'selected':''}>Без НДС — заказчик платит перевозчику без НДС</option>
+          <option value="vat" ${(typeof companyVatPayer==='function'?companyVatPayer(c):'none')==='vat'?'selected':''}>С НДС — счёт перевозчика с НДС</option>
+        </select>
+        <p class="hint">Если перевозчик на УСН, заказчик с НДС не передаёт НДС перевозчику — в портале одна сумма без НДС.</p>
       </div>
       <div id="co-own-fleet" style="display:${isOwn?'block':'none'}">
         <h4>Водители фирмы (телефоны)</h4>
@@ -3497,6 +3503,7 @@ function openCatalogs(){
         phones:c.phones||[],
         spaceId:c.spaceId||currentSpaceId(),
         logistKind:roles.includes('own')?(($('co-dispatcher')||{}).checked?'broker':'staff'):null,
+        vatPayer:roles.includes('own')?(($('co-vat-payer')||{}).value==='vat'?'vat':'none'):null,
         portalEnabled:roles.includes('customer')&&!!($('co-portal-enabled')&&$('co-portal-enabled').checked),
         portalPhone:formatPhone((($('co-portal-phone')||{}).value||'').trim()),
         portalPin:(($('co-portal-pin')||{}).value||'').trim()

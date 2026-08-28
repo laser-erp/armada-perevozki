@@ -158,6 +158,8 @@
               <div class="cust-form-block-body">
                 <label for="cust-load">Адрес загрузки</label>
                 <input id="cust-load" placeholder="Город, улица, дом" autocomplete="street-address" />
+                <label for="cust-load-note">Комментарий к загрузке</label>
+                <input id="cust-load-note" placeholder="Пропуск, въезд, погрузчик, время окна…" />
                 <label for="cust-loading-contact-name">Контактное лицо на загрузке</label>
                 <div class="form-pair">
                   <div><input id="cust-loading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
@@ -168,6 +170,8 @@
                 </div>
                 <label for="cust-unload">Адрес выгрузки</label>
                 <input id="cust-unload" placeholder="Город, улица, дом" autocomplete="street-address" />
+                <label for="cust-unload-note">Комментарий к выгрузке</label>
+                <input id="cust-unload-note" placeholder="Пропуск, ворота, разгрузка с …" />
                 <label for="cust-unloading-contact-name">Контактное лицо на выгрузке</label>
                 <div class="form-pair">
                   <div><input id="cust-unloading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
@@ -276,6 +280,32 @@
                 <label for="cust-cargo-text">Что везём</label>
                 <input id="cust-cargo-text" placeholder="Паллеты, оборудование, продукты…" />
                 <input type="hidden" id="cust-cargo-kind" value="general" />
+                <div class="form-triple cust-cargo-meta-row">
+                  <div>
+                    <label for="cust-cargo-places">Мест</label>
+                    <input id="cust-cargo-places" inputmode="numeric" placeholder="8" aria-label="Количество мест" />
+                  </div>
+                  <div>
+                    <label for="cust-cargo-volume">Объём, м³</label>
+                    <input id="cust-cargo-volume" inputmode="decimal" placeholder="авто" aria-label="Объём, м³" />
+                  </div>
+                  <div>
+                    <label for="cust-cargo-packaging">Упаковка</label>
+                    <select id="cust-cargo-packaging">
+                      <option value="">—</option>
+                      <option value="pallets">Паллеты</option>
+                      <option value="boxes">Короба / места</option>
+                      <option value="bulk">Россыпь / навал</option>
+                      <option value="oversize">Негабарит</option>
+                      <option value="other">Другое</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="cust-cargo-flags">
+                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-fragile" /> хрупкий</label>
+                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
+                  <input id="cust-cargo-temp-c" inputmode="decimal" placeholder="°C" class="cust-cargo-temp-input" hidden aria-label="Температура, °C" />
+                </div>
                 <label>Габариты, м (Д × Ш × В)</label>
                 <div class="form-triple">
                   <input id="cust-req-l" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />

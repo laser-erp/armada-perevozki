@@ -409,6 +409,9 @@ function customerRouteChecklistDetail(){
   if(!load&&!unload) return 'не заполнено';
   if(!load||!unload) return load?`загрузка: ${customerChecklistShortText(load)}`:`выгрузка: ${customerChecklistShortText(unload)}`;
   let s=`${customerChecklistShortText(load,22)} → ${customerChecklistShortText(unload,22)}`;
+  const loadNote=(($('cust-load-note')||{}).value||'').trim();
+  const unloadNote=(($('cust-unload-note')||{}).value||'').trim();
+  if(loadNote||unloadNote) s+=' · есть комментарии';
   if(customerRouteKm>0) s+=` · ≈${Math.round(customerRouteKm)} км`;
   const modeEl=$('cust-trip-mode-display');
   if(modeEl&&modeEl.textContent&&modeEl.textContent!=='—') s+=` · ${modeEl.textContent}`;
@@ -432,18 +435,31 @@ function customerTransportChecklistSummary(){
 function customerCargoChecklistDetail(){
   const cargo=(($('cust-cargo-text')||{}).value||'').trim();
   const tons=customerWeightTons();
-  if(cargo&&tons>0){
+  const parts=[];
+  if(tons>0){
     const t=tons>=1?(tons%1===0?tons:tons.toFixed(1)):tons.toFixed(2);
     const unit=(($('cust-weight-unit')||{}).value||'t')==='kg'?'кг':'т';
-    return `${t} ${unit} · ${customerChecklistShortText(cargo,24)}`;
+    parts.push(`${t} ${unit}`);
   }
-  if(cargo) return customerChecklistShortText(cargo);
-  if(tons>0) return `${tons} т`;
-  return 'не заполнено';
+  const places=customerCargoPlaces();
+  if(places) parts.push(places+' мест');
+  const vol=customerCargoVolumeM3();
+  if(vol) parts.push(vol+' м³');
+  const pack=customerCargoPackaging();
+  if(pack&&typeof custPackagingLabel==='function') parts.push(custPackagingLabel(pack));
+  if(cargo) parts.push(customerChecklistShortText(cargo,24));
+  if(customerCargoFragile()) parts.push('хрупкий');
+  const temp=customerCargoTempC();
+  if(temp!=null) parts.push(temp+'°C');
+  return parts.length?parts.join(' · '):'не заполнено';
 }
 function customerTermsChecklistDetail(){
+  const carrier=customerCarrierForForm();
   const parts=[];
   parts.push(customerSelectedFulfillment()==='direct'?'свой парк':'логисту');
+  if(typeof customerCarrierPriceLabel==='function'&&carrier){
+    parts.push(customerCarrierPriceLabel(carrier));
+  }
   const priceRaw=(($('cust-price')||{}).value||'').replace(/\s/g,'').replace(',','.');
   const price=priceRaw?+priceRaw:null;
   parts.push(price>0?`${fmt(Math.round(price))} ₽`:'без цены');
@@ -620,6 +636,51 @@ function syncCustomerPayloadTons(){
   const hid=$('cust-req-pay');
   if(hid) hid.value=tons!=null?String(tons):'';
 }
+function syncCustomerCargoVolume(force){
+  const volEl=$('cust-cargo-volume');
+  if(!volEl) return;
+  if(!force && volEl.dataset.manual==='1') return;
+  const l=+(($('cust-req-l')||{}).value||'').replace(',','.');
+  const w=+(($('cust-req-w')||{}).value||'').replace(',','.');
+  const h=+(($('cust-req-h')||{}).value||'').replace(',','.');
+  if(l>0&&w>0&&h>0){
+    volEl.value=String(Math.round(l*w*h*10)/10);
+    volEl.dataset.manual='0';
+  }
+}
+function customerCargoPlaces(){
+  const n=+($('cust-cargo-places')||{}).value;
+  return n>0?Math.round(n):null;
+}
+function customerCargoVolumeM3(){
+  const raw=+(($('cust-cargo-volume')||{}).value||'').replace(',','.');
+  return raw>0?Math.round(raw*10)/10:null;
+}
+function customerCargoPackaging(){
+  return (($('cust-cargo-packaging')||{}).value||'').trim()||null;
+}
+function customerCargoFragile(){
+  const el=$('cust-cargo-fragile');
+  return !!(el&&el.checked);
+}
+function customerCargoTempC(){
+  const on=$('cust-cargo-temp')&&$('cust-cargo-temp').checked;
+  if(!on) return null;
+  const raw=+(($('cust-cargo-temp-c')||{}).value||'').replace(',','.');
+  return Number.isFinite(raw)?raw:null;
+}
+function syncCustomerTempField(){
+  const on=$('cust-cargo-temp')&&$('cust-cargo-temp').checked;
+  const inp=$('cust-cargo-temp-c');
+  if(inp){
+    inp.hidden=!on;
+    if(!on) inp.value='';
+  }
+}
+function customerCarrierForForm(){
+  const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
+  return carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
+}
 function customerSelectedBodyType(){
   syncCustomerBodyType();
   return (($('cust-body-type')||{}).value||'tent');
@@ -714,6 +775,11 @@ function buildCustomerDraftFromForm(){
     unloadMatchAll:customerUnloadMatchAll(),
     cargoKind:customerSelectedCargoKind(),
     reqPayloadTons:payloadTons>0?payloadTons:null,
+    cargoPlaces:customerCargoPlaces(),
+    cargoVolumeM3:customerCargoVolumeM3(),
+    cargoPackaging:customerCargoPackaging(),
+    cargoFragile:customerCargoFragile(),
+    cargoTempC:customerCargoTempC(),
     estimateWorkHours:fin.minWorkHours||4,
     emptyKmBefore:0,
     loadedKm:null,
@@ -860,6 +926,10 @@ function updateCustomerPricePreview(){
   }
   if(draft.cargoKind) bits.push(cargoKindLabel(draft.cargoKind));
   if(draft.reqPayloadTons) bits.push(draft.reqPayloadTons+' т');
+  if(draft.cargoPlaces) bits.push(draft.cargoPlaces+' мест');
+  if(draft.cargoVolumeM3) bits.push(draft.cargoVolumeM3+' м³');
+  if(draft.cargoPackaging&&typeof custPackagingLabel==='function') bits.push(custPackagingLabel(draft.cargoPackaging));
+  const carrier=customerCarrierForForm();
   const s=suggestCustomerOrderPrice(draft);
   if(!s){
     box.innerHTML=`
@@ -868,15 +938,15 @@ function updateCustomerPricePreview(){
     paintCustomerFormChecklist();
     return;
   }
-  const min=Math.round(s.minimumCash);
+  const amount=typeof customerCarrierPriceAmount==='function'?customerCarrierPriceAmount(s, carrier):Math.round(s.minimumCash);
+  const payLabel=typeof customerCarrierPriceLabel==='function'&&carrier?customerCarrierPriceLabel(carrier):'';
+  const payHint=typeof customerCarrierPriceHint==='function'&&carrier?customerCarrierPriceHint(carrier):'';
   box.innerHTML=`
-    <div class="calc-row"><span>Ориентир / минимум</span><span><b>${fmt(min)} ₽</b> (нал)</span></div>
-    <div class="calc-row"><span>Без НДС</span><span>${fmt(s.withoutVat)} ₽</span></div>
-    <div class="calc-row"><span>С НДС</span><span>${fmt(s.withVat)} ₽</span></div>
+    <div class="calc-row"><span>К оплате перевозчику</span><span><b>${fmt(Math.round(amount))} ₽</b>${payLabel?` (${payLabel})`:''}</span></div>
     <div class="hint">${esc(bits.concat([s.summary||'']).filter(Boolean).join(' · '))}</div>
-    <div class="hint">Это ориентир. Через логиста в сумму входит его ставка за срочный подбор. Ниже минимума — только если диспетчер согласится.</div>`;
+    <div class="hint">${esc(payHint||'Это ориентир. Через логиста в сумму входит его ставка за срочный подбор.')}</div>`;
   const priceEl=$('cust-price');
-  if(priceEl && !priceEl.value) priceEl.value=String(min);
+  if(priceEl && !priceEl.value) priceEl.value=String(Math.round(amount));
   paintCustomerFormChecklist();
 }
 
@@ -896,7 +966,9 @@ function renderCustomerPortal(){
   const head=$('cust-portal-head');
   if(head) head.textContent=co?co.name:'Заказчик';
   const sub=$('cust-portal-sub');
-  if(sub) sub.textContent=carrier?`Перевозчик: ${carrier.name}`:'';
+  if(sub) sub.textContent=carrier
+    ?`Перевозчик: ${carrier.name}${typeof companyVatPayerLabel==='function'?' · '+companyVatPayerLabel(carrier):''}`
+    :'';
   const loadEl=$('cust-load');
   const unloadEl=$('cust-unload');
   if(loadEl && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
@@ -986,10 +1058,13 @@ function submitCustomerOrder(){
   }
   const draft=buildCustomerDraftFromForm();
   const quote=suggestCustomerOrderPrice(draft);
-  const min=quote?Math.round(quote.minimumCash):null;
+  const min=quote&&typeof customerCarrierPriceAmount==='function'
+    ?Math.round(customerCarrierPriceAmount(quote, carrier))
+    :(quote?Math.round(quote.minimumCash):null);
   let offered=draft.priceOffer!=null?Math.round(draft.priceOffer):min;
   if(min!=null && offered!=null && offered<min){
-    if(err) err.textContent=`Цена не может быть ниже ориентира (${fmt(min)} ₽)`;
+    const payLabel=typeof customerCarrierPriceLabel==='function'?customerCarrierPriceLabel(carrier):'';
+    if(err) err.textContent=`Цена не может быть ниже ориентира (${fmt(min)} ₽${payLabel?`, ${payLabel}`:''})`;
     updateCustomerPricePreview();
     return;
   }
@@ -1010,6 +1085,8 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
+  const loadingNote=(($('cust-load-note')||{}).value||'').trim();
+  const unloadingNote=(($('cust-unload-note')||{}).value||'').trim();
   const order={
     id:uuid(), sequentialNumber:seqNo, dayNumber:1,
     createdAt:now, source:'customer_portal', customerSubmitted:true,
@@ -1023,6 +1100,13 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     loadingContactName, loadingContactPhone,
     unloadingContactName, unloadingContactPhone,
     cargoDescription:cargoText||'',
+    cargoPlaces:draft.cargoPlaces||null,
+    cargoVolumeM3:draft.cargoVolumeM3||null,
+    cargoPackaging:draft.cargoPackaging||null,
+    cargoFragile:!!draft.cargoFragile,
+    cargoTempC:draft.cargoTempC,
+    loadingAddressNote:loadingNote||'',
+    unloadingAddressNote:unloadingNote||'',
     loadingAddress:load, unloadingAddress:unload,
     routePoints:defaultRoutePoints(load, unload),
     vehicleAt,
@@ -1053,14 +1137,17 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     pricePending:!!pricePending || offered==null,
     priceForClient:offered||null,
     rateCash:offered||null,
-    paymentForm:'cash',
+    paymentForm:typeof customerCarrierPaymentForm==='function'?customerCarrierPaymentForm(carrier):'withoutVat',
     transportApp:null
   };
   if(offered){
-    const t=fillRatesFrom('cash', offered);
+    const payForm=typeof customerCarrierPaymentForm==='function'?customerCarrierPaymentForm(carrier):'withoutVat';
+    const t=fillRatesFrom(payForm, offered);
+    order.paymentForm=payForm;
     order.rateWithoutVat=t.withoutVat;
     order.rateWithVat=t.withVat;
-    order.freight=offered;
+    order.rateCash=t.cash;
+    order.freight=payForm==='withVat'?t.withVat:(payForm==='withoutVat'?t.withoutVat:t.cash);
     const feePct=quote&&quote.logistFeePercent>0?+quote.logistFeePercent:0;
     if(draft.fulfillment!=='direct' && feePct>0){
       order.priceForCarrier=Math.round(offered/(1+feePct/100));
@@ -1074,7 +1161,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   if(err) err.textContent='';
   const priceBit=order.pricePending
     ?'Цену уточнит диспетчер.'
-    :`Ориентир ${fmt(min||offered)} ₽${order.fulfillment==='direct'?'':' (ставка логиста в цене)'}.`;
+    :`Ориентир ${fmt(min||offered)} ₽${typeof customerCarrierPriceLabel==='function'&&carrier?' ('+customerCarrierPriceLabel(carrier)+')':''}${order.fulfillment==='direct'?'':' (ставка логиста в цене)'}.`;
   const bookBit=order.bookedPlate
     ?` Запрос брони ${order.bookedPlate}: перевозчик подтвердит — тогда дата подачи появится в календаре.`
     :' Диспетчер подберёт машину.';
@@ -1082,9 +1169,14 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     ?' Заявка в свой парк, без срочного подбора.'
     :' Диспетчеру: закрыть как можно скорее.';
   alert(`Заявка №${seqNo} отправлена.${rushBit}${bookBit} ${priceBit}`);
-  ['cust-load','cust-unload','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h'].forEach(id=>{
+  ['cust-load','cust-unload','cust-load-note','cust-unload-note','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-cargo-places','cust-cargo-volume','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-temp-c'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
+  const packEl=$('cust-cargo-packaging'); if(packEl) packEl.value='';
+  const fragileEl=$('cust-cargo-fragile'); if(fragileEl) fragileEl.checked=false;
+  const tempEl=$('cust-cargo-temp'); if(tempEl) tempEl.checked=false;
+  syncCustomerTempField();
+  const volEl=$('cust-cargo-volume'); if(volEl) volEl.dataset.manual='0';
   resetCustomerVehicleTypes();
   customerRouteKm=null;
   customerRouteGeometry=null;
@@ -1118,15 +1210,25 @@ function wireCustomerPortal(){
     el.oninput=bumpRoute;
     el.onblur=()=>refreshCustomerRouteKm();
   });
-  ['cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h'].forEach(id=>{
+  ['cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-places','cust-cargo-volume','cust-load-note','cust-unload-note'].forEach(id=>{
     const el=$(id);
     if(!el) return;
     el.oninput=()=>{
+      if(id==='cust-req-l'||id==='cust-req-w'||id==='cust-req-h') syncCustomerCargoVolume(false);
+      if(id==='cust-cargo-volume') el.dataset.manual='1';
       syncCustomerPayloadTons();
       updateCustomerPricePreview();
       if(id==='cust-weight-value') paintCustomerFleetOptions();
     };
   });
+  const volEl=$('cust-cargo-volume');
+  if(volEl) volEl.onchange=()=>{ if(volEl.value) volEl.dataset.manual='1'; updateCustomerPricePreview(); };
+  const tempToggle=$('cust-cargo-temp');
+  if(tempToggle) tempToggle.onchange=()=>{ syncCustomerTempField(); updateCustomerPricePreview(); };
+  const fragileEl=$('cust-cargo-fragile');
+  if(fragileEl) fragileEl.onchange=()=>updateCustomerPricePreview();
+  const packEl=$('cust-cargo-packaging');
+  if(packEl) packEl.onchange=()=>updateCustomerPricePreview();
   const weightUnit=$('cust-weight-unit');
   if(weightUnit) weightUnit.onchange=()=>{ syncCustomerPayloadTons(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
   const cargoInp=$('cust-cargo-text');
