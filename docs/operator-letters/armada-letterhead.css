@@ -1,0 +1,176 @@
+/* Фирменный бланк ООО «АРМАДА» — печать A4 */
+@page {
+  size: A4;
+  margin: 18mm 20mm 22mm 25mm;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Times New Roman", Times, serif;
+  font-size: 12pt;
+  line-height: 1.45;
+  color: #111;
+  background: #fff;
+}
+
+.letter-page {
+  page-break-after: always;
+  min-height: 255mm;
+  position: relative;
+}
+
+.letter-page:last-child {
+  page-break-after: auto;
+}
+
+.letterhead {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 14px 16px;
+  align-items: start;
+  padding-bottom: 10px;
+  border-bottom: 2.5px solid #1e5aa8;
+  margin-bottom: 18px;
+}
+
+.letterhead__logo {
+  width: 68px;
+  height: auto;
+}
+
+.letterhead__brand {
+  font-family: Inter, Arial, sans-serif;
+}
+
+.letterhead__name {
+  font-size: 15pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1e5aa8;
+  margin: 0 0 2px;
+}
+
+.letterhead__full {
+  font-size: 8.5pt;
+  color: #334155;
+  margin: 0 0 6px;
+}
+
+.letterhead__req {
+  font-size: 8.5pt;
+  color: #475569;
+  margin: 0;
+  line-height: 1.35;
+}
+
+.letterhead__contacts {
+  font-size: 8.5pt;
+  color: #475569;
+  margin: 4px 0 0;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 22px;
+}
+
+.meta-row__out {
+  text-align: right;
+  font-size: 11pt;
+}
+
+.recipient-block {
+  margin: 0 0 18px;
+  font-size: 12pt;
+}
+
+.recipient-block p {
+  margin: 0 0 4px;
+}
+
+.subject {
+  text-align: center;
+  font-weight: 700;
+  margin: 0 0 16px;
+  font-size: 12pt;
+}
+
+.body-text p {
+  margin: 0 0 10px;
+  text-align: justify;
+  text-indent: 1.25cm;
+}
+
+.body-text p.no-indent {
+  text-indent: 0;
+}
+
+.closing {
+  margin-top: 22px;
+}
+
+.closing__respect {
+  margin: 0 0 28px;
+  text-indent: 1.25cm;
+}
+
+.signature {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr;
+  align-items: end;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11pt;
+}
+
+.signature__role {
+  margin: 0;
+}
+
+.signature__line {
+  border-bottom: 1px solid #111;
+  height: 1px;
+}
+
+.signature__name {
+  margin: 0;
+  text-align: right;
+}
+
+.letter-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-top: 1px solid #cbd5e1;
+  padding-top: 6px;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 7.5pt;
+  color: #64748b;
+  text-align: center;
+}
+
+@media screen {
+  body {
+    background: #e8edf3;
+    padding: 24px 16px 48px;
+  }
+
+  .letter-page {
+    max-width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto 24px;
+    padding: 18mm 20mm 22mm 25mm;
+    background: #fff;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  }
+}
