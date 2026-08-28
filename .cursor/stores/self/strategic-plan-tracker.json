@@ -2,40 +2,40 @@
   "plan": "ARMADA_STRATEGIC_PLAN_2026",
   "branch": "cursor/compliance-p0-4317",
   "lastServerVerify": {
-    "at": "2026-08-27T20:15:00Z",
-    "script": "scripts/ssh-verify-fvds.sh",
+    "at": "2026-08-28T12:55:00Z",
+    "script": "scripts/run-strategic-verification.sh",
     "result": "pass",
-    "notes": "caddy /v /a /z rewrite → index.html + entry.css"
+    "notes": "smoke PASS; APP_BUILD entrybc21; API health ok"
   },
-  "updatedAt": "2026-08-27T20:15:00Z",
+  "updatedAt": "2026-08-28T12:55:00Z",
   "deploy": {
     "production": {
       "status": "done",
       "verified": "scripts/verify-prod-web-sync.sh",
-      "at": "2026-08-27T20:13:00Z",
-      "notes": "15 файлов MATCH; APP_BUILD 2026-08-27-entryui1"
+      "at": "2026-08-28T12:55:00Z",
+      "notes": "15 файлов MATCH; APP_BUILD 2026-08-27-entrybc21; PDF писем на /downloads/"
     },
     "githubRemote": {
       "status": "blocked",
       "branch": "cursor/compliance-p0-4317",
-      "headCommit": "fa68622",
+      "headCommit": "fc3c652",
       "githubApi": "404",
       "bundleUrl": "https://aptown1.fvds.ru/downloads/armada-compliance-4317.bundle",
-      "bundleHead": "fa68622",
+      "bundleHead": "fc3c652",
       "o02InstructionsUrl": "https://aptown1.fvds.ru/downloads/o02-github-instructions.txt",
       "deployKeyFingerprint": "SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI",
       "notes": "GITHUB_DEPLOY_KEY ok; публичный ключ не в Deploy keys (write)"
     }
   },
   "lastSmoke": {
-    "at": "2026-08-27T20:14:00Z",
+    "at": "2026-08-28T12:55:00Z",
     "script": "scripts/smoke-strategic-plan.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "pass",
-    "notes": "entryui1; /v /a /z + entry.css OK"
+    "notes": "entrybc21; S0 S1 S3 ETRN MVP PASS"
   },
   "lastProdSync": {
-    "at": "2026-08-27T20:13:00Z",
+    "at": "2026-08-28T12:55:00Z",
     "script": "scripts/verify-prod-web-sync.sh",
     "baseUrl": "https://aptown1.fvds.ru",
     "result": "match",
@@ -66,8 +66,11 @@
       "subtasks": {
         "S3-sprint1": { "status": "done", "notes": "admin create, billing guard" },
         "S3-sprint2": { "status": "done", "notes": "driver sign, API refresh, webhook" },
-        "S3-1.2": { "status": "ready_to_send", "notes": "PDF: docs/operator-letters/ARMADA_Pismo_Operatoram_ETRN.pdf" },
-        "S3-2.7": { "status": "paused", "notes": "5 живых ЭТрН; epd.configured false" }
+        "S3-1.2": {
+          "status": "done",
+          "notes": "Фирменный бланк; PDF docs/operator-letters/ARMADA_Pismo_Operatoram_ETRN.pdf на проде"
+        },
+        "S3-2.7": { "status": "paused", "notes": "5 живых ЭТрН; epd.configured false — нужны ключи оператора" }
       }
     },
     "S4": { "title": "—", "status": "paused", "notes": "Не автозапускать без «Делай»" },
@@ -85,7 +88,7 @@
   "production": {
     "url": "https://aptown1.fvds.ru",
     "api": "https://aptown1.fvds.ru/armada-api",
-    "build": "2026-08-27-entryui1",
+    "build": "2026-08-27-entrybc21",
     "sw": "armada-shell-v29",
     "epdConfigured": false,
     "onboarding": "welcome + tours + help.html",

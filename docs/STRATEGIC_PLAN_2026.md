@@ -1,6 +1,6 @@
 # ARMADA — стратегический план 2026
 
-Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `fa68622`, ahead of `main`)
+Ветка работы: `cursor/compliance-p0-4317` (локальный HEAD `fc3c652`, ahead of `main`)
 
 Продакшен: https://aptown1.fvds.ru · API: https://aptown1.fvds.ru/armada-api
 
@@ -14,7 +14,7 @@
 | S1 driverInvites | ✅ done | invite.html, KEY в store.js, smoke OK |
 | S2 пилот 2–3 space | 🔄 in_progress | `/v` `/a` `/z/{slug}`, backlog §11, kp + help |
 | S3 ETRN MVP (код 2 спринта) | ✅ done | UI + API + webhook; smoke OK |
-| S3-1.2 письма операторам | 📤 ready_to_send | PDF на проде, `docs/PISMO_OPERATORAM_ETRN.md` |
+| S3-1.2 письма операторам | ✅ done | Фирменный бланк, PDF на проде (`docs/operator-letters/`) |
 | S3-2.7 5 живых ЭТрН | ⏸ paused | `epd.configured: false`, нужны ключи оператора |
 | S4–S7 | ⏸ paused | только по явному «Делай» |
 | O-02 Push GitHub | ⏸ blocked | `docs/PUSH_COMPLIANCE_BRANCH.md`, `./scripts/sync-o02-github-status.sh` |
@@ -42,6 +42,7 @@ BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
 | Деплой ветки на aptown1 | verify-prod-web-sync 15 файлов MATCH | ✅ |
 | Ветка `cursor/compliance-p0-4317` на GitHub | `check-github-remote-branch.sh` → HTTP 404 | ❌ |
 | Трекер §4 + JSON | этот файл + `.cursor/stores/self/` | ✅ |
+| S3-1.2 письма операторам | PDF на проде, фирменный бланк | ✅ |
 
 Цель **не закрыта** до push ветки на `origin` (O-02). S2 партнёры и S3-2.7 живые ЭТрН — вне текущего objective-кода.
 
@@ -57,7 +58,7 @@ BASE_URL=https://aptown1.fvds.ru ./scripts/run-strategic-verification.sh
 
 ## Сборка на проде
 
-- `APP_BUILD`: `2026-08-27-entryui1`
+- `APP_BUILD`: `2026-08-27-entrybc21`
 - Service Worker: `armada-shell-v29`
 - Входы: `/a` `/v` `/z` и `/z/{portalSlug}` (Caddy → index.html)
 - Backlog §11 на проде: portal slug, sync tabs, return exchange, customer notify, phone login
