@@ -29,11 +29,13 @@
               <div class="cust-form-block">
                 <div class="cust-form-block-head">1. Подача ТС</div>
                 <div class="cust-form-block-body">
-            <div class="form-pair">
-              <div class="cust-date-field-wrap">
+            <div class="form-pair cust-datetime-pair">
+              <div class="cust-date-field-wrap cal-open">
                 <label for="cust-vehicle-date">Дата</label>
-                <input id="cust-vehicle-date" value="29.08.2026" readonly />
-                <label class="cust-date-cal-toggle"><input type="checkbox" checked disabled /> Календарь</label>
+                <div class="cust-date-input-row">
+                  <input id="cust-vehicle-date" value="29.08.2026" readonly />
+                  <label class="cust-date-cal-toggle"><input type="checkbox" checked disabled /> Календарь</label>
+                </div>
                 <div class="cust-date-cal cust-date-cal-drop">
               <div class="drv-cal" style="padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:var(--surface2,#f4f6f5)">
                 <div class="drv-cal-head">
@@ -53,7 +55,7 @@
               </div>
                 </div>
               </div>
-              <div>
+              <div class="cust-time-field">
                 <label for="cust-vehicle-time">Время</label>
                 <input id="cust-vehicle-time" value="09:00" readonly />
               </div>

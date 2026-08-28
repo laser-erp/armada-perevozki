@@ -298,6 +298,23 @@
     .form-fields{display:flex;flex-direction:column;gap:8px}
     .form-pair{display:grid;grid-template-columns:1fr;gap:8px}
     .form-pair > div{display:flex;flex-direction:column;gap:5px;min-width:0}
+    .form-pair.cust-datetime-pair > .cust-time-field input{max-width:9.5rem}
+    .cust-date-field-wrap{position:relative}
+    .cust-date-input-row{display:flex;align-items:center;gap:8px;min-width:0}
+    .cust-date-input-row > input{flex:1;min-width:0;width:auto}
+    .cust-date-cal-toggle{
+      display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;margin:0;
+      font-size:.72rem;color:var(--muted);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap;
+    }
+    .cust-date-cal-toggle input{width:15px;height:15px;margin:0;cursor:pointer;accent-color:var(--accent)}
+    .cust-date-cal{margin:0}
+    .cust-date-cal-drop{
+      position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:50;
+      box-shadow:0 10px 28px rgba(15,23,42,.14);
+    }
+    .cust-date-field-wrap.cal-open{z-index:51}
+    .cust-form-block:has(.cal-open){overflow:visible;position:relative;z-index:2}
+    .cust-form-block-body:has(.cal-open){overflow:visible}
     .metric-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
     .metric-strip .m{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px}
     .metric-strip .m span{display:block;font-size:.68rem;color:var(--muted);font-weight:500}
@@ -715,6 +732,7 @@
       .phone.wide{max-width:min(1100px,100%)}
       .admin-form-shell{max-width:720px}
       .form-pair{grid-template-columns:1fr 1fr}
+      .form-pair.cust-datetime-pair{grid-template-columns:minmax(0,1.65fr) minmax(72px,0.85fr)}
     .form-triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
     .cust-route-map-wrap{margin:4px 0 2px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface2,#f4f6f5)}
     .cust-route-map-wrap:not(.has-route){display:none}
@@ -724,15 +742,9 @@
     .cust-trip-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface2,#f4f6f5);border:1px solid var(--border)}
     .cust-trip-label{font-size:var(--fs-sm);color:var(--muted);font-weight:600}
     .cust-trip-badge{font-weight:800;font-size:.95rem;color:var(--accent);padding:4px 10px;border-radius:999px;background:rgba(37,99,235,.08)}
-    .cust-date-field-wrap{position:relative}
-    .cust-date-cal-toggle{display:inline-flex;align-items:center;gap:6px;font-size:.74rem;margin-top:5px;color:var(--muted);font-weight:600;cursor:pointer;user-select:none}
-    .cust-date-cal-toggle input{width:15px;height:15px;margin:0;cursor:pointer;accent-color:var(--accent)}
-    .cust-date-cal{margin:0}
-    .cust-date-cal-drop{
-      position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:30;
-      box-shadow:0 10px 28px rgba(15,23,42,.14);
-    }
-    .cust-date-field-wrap.cal-open{z-index:31}
+    .cust-date-cal .drv-cal{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:var(--surface,#fff)}
+    .cust-date-cal .drv-cal-meta .period{font-size:.72rem}
+    .cust-date-cal .drv-cal-grid button.past{opacity:.35;cursor:not-allowed}
     .cust-form-blocks{display:flex;flex-direction:column;gap:12px;margin:6px 0 2px}
     .cust-form-layout{display:flex;align-items:flex-start;gap:16px}
     .cust-form-main{flex:1;min-width:0}
