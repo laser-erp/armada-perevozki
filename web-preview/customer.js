@@ -652,7 +652,21 @@ function filterCustomerVtypeSearch(raw){
 }
 function wireCustomerVtypeSearch(){
   initCustomerVtypeExtraList();
+  const wrap=$('cust-vtype-search-wrap');
+  const toggle=$('cust-vtype-search-toggle');
   const inp=$('cust-vtype-search');
+  if(toggle&&wrap&&!toggle.dataset.wired){
+    toggle.dataset.wired='1';
+    toggle.onclick=()=>{
+      wrap.classList.remove('cust-vtype-search-collapsed');
+      toggle.setAttribute('aria-expanded','true');
+      if(inp){
+        inp.hidden=false;
+        inp.focus();
+        filterCustomerVtypeSearch(inp.value);
+      }
+    };
+  }
   if(!inp||inp.dataset.wired) return;
   inp.dataset.wired='1';
   inp.oninput=()=>filterCustomerVtypeSearch(inp.value);
@@ -1350,9 +1364,9 @@ const CUST_CHAT_BODY_CHIPS=[
   {id:'tent', label:'Тент', vtype:'tent'},
   {id:'van', label:'Фургон', vtype:'van'},
   {id:'reefer', label:'Реф', vtype:'reefer'},
-  {id:'platform', label:'Площадка', vtype:'platform'},
-  {id:'other', label:'Другое → форма', vtype:null}
+  {id:'platform', label:'Площадка', vtype:'platform'}
 ];
+const CUST_CHAT_BODY_FORM_FALLBACK={id:'form', label:'Способ погрузки → форма', vtype:null};
 const CUST_CHAT_STATE_KEY='armada_customer_chat_state_v1';
 const CUST_ORDER_DRAFT_PREFIX='armada_customer_order_draft_v1';
 const CUST_ORDER_DRAFT_TTL_MS=7*24*60*60*1000;
@@ -1678,7 +1692,51 @@ function customerChatWhenLabel(){
 }
 function customerChatBodyLabel(vtype){
   const hit=CUST_CHAT_BODY_CHIPS.find(c=>c.vtype===vtype);
-  return hit?hit.label:(typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtype):vtype);
+  if(hit) return hit.label;
+  const meta=typeof custVehicleTypeMeta==='function'?custVehicleTypeMeta(vtype):null;
+  if(meta) return meta.ati||meta.label||vtype;
+  return typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtype):vtype;
+}
+function customerChatFilterVtypeSuggest(raw){
+  const list=$('cust-chat-vtype-suggest');
+  if(!list) return [];
+  const q=String(raw||'').trim();
+  const matches=(q&&typeof filterCustVehicleTypesByQuery==='function')
+    ?filterCustVehicleTypesByQuery(q).slice(0,12)
+    :[];
+  list.innerHTML='';
+  if(!matches.length){
+    list.hidden=true;
+    return matches;
+  }
+  matches.forEach((t,i)=>{
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='addr-suggest-item chat-vtype-suggest-item';
+    btn.setAttribute('role','option');
+    btn.dataset.vtype=t.id;
+    btn.dataset.idx=String(i);
+    btn.textContent=t.ati||t.label||t.id;
+    btn.onmousedown=e=>{ e.preventDefault(); customerChatSelectBody(t.id, t.ati||t.label||t.id); };
+    list.appendChild(btn);
+  });
+  list.hidden=false;
+  return matches;
+}
+function customerChatSelectBody(vtype, label){
+  if(!vtype) return;
+  customerChat.data.bodyVtype=vtype;
+  customerChatSetVehicleType(vtype);
+  saveCustomerChatState();
+  scheduleCustomerOrderDraftSave();
+  customerChatAdvance(label||customerChatBodyLabel(vtype));
+}
+function customerChatOpenFormTransport(){
+  saveCustomerChatState();
+  setCustomerOrderMode('form');
+  customerChatApplyToForm();
+  const block=document.querySelector('.cust-form-block[data-cust-step="transport"]');
+  if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
 }
 function resetCustomerChat(){
   customerChat={messages:[], stepIndex:0, data:{}, summaryReady:false};
@@ -1720,10 +1778,14 @@ function customerChatScrollBottom(){
 }
 function customerChatSetVehicleType(vtype){
   resetCustomerVehicleTypes();
+  initCustomerVtypeExtraList();
   const el=document.querySelector(`#cust-vehicle-types [data-vtype="${vtype}"]`);
   if(el){
     el.checked=true;
     if(CUST_REAR_AUTO_VTYPE_IDS.has(vtype)) applyRearOnlyVehicleTypeRules();
+    if(CUST_MASTER_VTYPE_IDS.includes(vtype)||vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerClosedAllCheckbox();
+    if(CUST_REFR_VTYPE_IDS.includes(vtype)||vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerRefrAllCheckbox();
+    if(CUST_OPEN_VTYPE_IDS.includes(vtype)) syncCustomerOpenAllCheckbox();
     syncCustomerVehicleTypeUi();
   }
 }
@@ -1823,9 +1885,14 @@ function customerChatRenderWidgets(){
     widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" autocomplete="off" aria-label="Адрес" /></div>
     <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-addr-ok">Далее →</button></div>`;
   }else if(step.id==='body'){
-    widget=`<div class="chat-chips" id="cust-chat-chips">${
+    widget=`<div class="chat-chips" id="cust-chat-body-chips">${
       CUST_CHAT_BODY_CHIPS.map((c,i)=>`<button type="button" class="chat-chip ${i===0?'primary':'muted'}" data-chat-body="${c.id}">${esc(c.label)}</button>`).join('')
-    }</div>`;
+    }</div>
+    <div class="chat-widget chat-vtype-widget">
+      <input type="search" id="cust-chat-vtype-search" placeholder="Поиск: трал, гидро, танк…" autocomplete="off" aria-label="Поиск типа кузова" />
+      <div id="cust-chat-vtype-suggest" class="addr-suggest-list chat-vtype-suggest" hidden role="listbox"></div>
+    </div>
+    <div class="chat-chips"><button type="button" class="chat-chip muted" data-chat-body="${CUST_CHAT_BODY_FORM_FALLBACK.id}">${esc(CUST_CHAT_BODY_FORM_FALLBACK.label)}</button></div>`;
   }else if(step.id==='summary' && customerChat.summaryReady){
     widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
   }
@@ -1907,22 +1974,64 @@ function customerChatWireWidgets(stepId){
     document.querySelectorAll('[data-chat-body]').forEach(btn=>{
       btn.onclick=()=>{
         const id=btn.getAttribute('data-chat-body');
-        const chip=CUST_CHAT_BODY_CHIPS.find(c=>c.id===id);
-        if(!chip) return;
-        if(id==='other'){
-          saveCustomerChatState();
-          setCustomerOrderMode('form');
-          customerChatApplyToForm();
-          const block=document.querySelector('.cust-form-block[data-cust-step="transport"]');
-          if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
-          const search=$('cust-vtype-search');
-          if(search){ search.focus(); filterCustomerVtypeSearch(''); }
+        if(id===CUST_CHAT_BODY_FORM_FALLBACK.id){
+          customerChatOpenFormTransport();
           return;
         }
-        customerChat.data.bodyVtype=chip.vtype;
-        customerChatAdvance(chip.label);
+        const chip=CUST_CHAT_BODY_CHIPS.find(c=>c.id===id);
+        if(!chip||!chip.vtype) return;
+        customerChatSelectBody(chip.vtype, chip.label);
       };
     });
+    const search=$('cust-chat-vtype-search');
+    const suggest=$('cust-chat-vtype-suggest');
+    if(search){
+      let activeIdx=-1;
+      const pickActive=()=>{
+        if(!suggest||suggest.hidden) return;
+        const btn=suggest.querySelector(`.chat-vtype-suggest-item[data-idx="${activeIdx}"]`);
+        if(!btn) return;
+        customerChatSelectBody(btn.dataset.vtype, btn.textContent);
+      };
+      search.oninput=()=>{
+        activeIdx=-1;
+        customerChatFilterVtypeSuggest(search.value);
+      };
+      search.onkeydown=e=>{
+        const items=suggest?suggest.querySelectorAll('.chat-vtype-suggest-item'):[];
+        if(e.key==='ArrowDown'&&items.length){
+          e.preventDefault();
+          activeIdx=Math.min(activeIdx+1, items.length-1);
+          items.forEach((el,i)=>el.classList.toggle('is-active', i===activeIdx));
+          if(items[activeIdx]) items[activeIdx].scrollIntoView({block:'nearest'});
+          return;
+        }
+        if(e.key==='ArrowUp'&&items.length){
+          e.preventDefault();
+          activeIdx=Math.max(activeIdx-1, 0);
+          items.forEach((el,i)=>el.classList.toggle('is-active', i===activeIdx));
+          if(items[activeIdx]) items[activeIdx].scrollIntoView({block:'nearest'});
+          return;
+        }
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(activeIdx>=0){ pickActive(); return; }
+          const q=search.value.trim();
+          const matches=typeof filterCustVehicleTypesByQuery==='function'?filterCustVehicleTypesByQuery(q):[];
+          if(matches.length===1) customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label);
+          else if(matches.length>1){
+            const err=$('cust-chat-error');
+            if(err) err.textContent='Выберите тип из списка или уточните запрос';
+          }else{
+            const err=$('cust-chat-error');
+            if(err) err.textContent='Тип не найден — попробуйте другой запрос или откройте форму';
+          }
+        }
+        if(e.key==='Escape'&&suggest){ suggest.hidden=true; activeIdx=-1; }
+      };
+      search.onblur=()=>{ setTimeout(()=>{ if(suggest) suggest.hidden=true; }, 150); };
+      setTimeout(()=>search.focus(), 80);
+    }
   }
   if(stepId==='summary'){
     const sub=$('cust-chat-submit');
@@ -1955,8 +2064,13 @@ function customerChatRenderAll(){
 function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
-  const textSteps=['cargo','weight'];
+  const textSteps=['cargo','weight','body'];
   const show=step && textSteps.includes(step.id) && !customerChat.summaryReady;
+  const inp=$('cust-chat-input');
+  if(inp){
+    if(step&&step.id==='body') inp.placeholder='Или введите тип кузова…';
+    else inp.placeholder='Напишите ответ…';
+  }
   if(compose) compose.style.display=show?'flex':'none';
 }
 function customerChatAdvance(userText){
@@ -2024,6 +2138,22 @@ function customerChatHandleTextInput(){
     saveCustomerChatState();
     const label=unit==='kg'?`${num} кг`:`${num} т`;
     customerChatAdvance(label);
+    return;
+  }
+  if(step.id==='body'){
+    if(inp) inp.value='';
+    const search=$('cust-chat-vtype-search');
+    if(search) search.value=raw;
+    const matches=customerChatFilterVtypeSuggest(raw);
+    if(matches.length===1){
+      customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label);
+      return;
+    }
+    if(matches.length>1){
+      if(err) err.textContent='Выберите тип из списка';
+      return;
+    }
+    if(err) err.textContent='Тип не найден — попробуйте «трал», «гидро» или откройте форму';
   }
 }
 function initCustomerChatWizard(forceReset){

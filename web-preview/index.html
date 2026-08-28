@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-28-address-autocomplete4317" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-28-address-autocomplete4317" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-28-chat-vtype-search4317" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-28-chat-vtype-search4317" />
 
 </head>
 <body>
@@ -277,8 +277,9 @@
                 <div class="cust-vtype-col-head">
                   <span class="cust-vtype-col-title">Кузов <span class="req">*</span></span>
                 </div>
-                <div class="cust-vtype-search-wrap">
-                  <input type="search" id="cust-vtype-search" class="cust-vtype-search" placeholder="Поиск: тр, тент, трал…" autocomplete="off" aria-label="Поиск типа кузова" />
+                <div class="cust-vtype-search-wrap cust-vtype-search-collapsed" id="cust-vtype-search-wrap">
+                  <button type="button" class="cust-vtype-search-toggle" id="cust-vtype-search-toggle" aria-expanded="false">Найти по названию</button>
+                  <input type="search" id="cust-vtype-search" class="cust-vtype-search" placeholder="Поиск: тр, тент, трал…" autocomplete="off" aria-label="Поиск типа кузова" hidden />
                 </div>
                 <div class="cust-vtype-col-body" id="cust-vtype-body-list">
                   <label class="cust-vtype-master cust-vtype-tree-root">
@@ -779,6 +780,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-28-address-autocomplete4317"></script>
+  <script src="/boot-loader.js?v=2026-08-28-chat-vtype-search4317"></script>
 </body>
 </html>
