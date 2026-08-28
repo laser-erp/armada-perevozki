@@ -1096,8 +1096,10 @@ function renderCustomerPortal(){
     :'';
   const loadEl=$('cust-load');
   const unloadEl=$('cust-unload');
-  if(loadEl && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
-  if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
+  const pendingDraft=loadCustomerOrderDraftRaw();
+  const hasPendingDraft=pendingDraft&&customerOrderDraftHasContent(pendingDraft);
+  if(loadEl && !hasPendingDraft && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
+  if(unloadEl && !hasPendingDraft && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
   syncCustomerVehicleTypeUi();
   syncCustomerVehicleDateCalVisibility();
   syncCustomerTempField();

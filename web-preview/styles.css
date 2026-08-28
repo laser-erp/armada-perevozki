@@ -774,6 +774,18 @@
       font-size:.74rem;font-weight:700;color:var(--muted,#64748b);cursor:pointer;
     }
     .cust-order-mode-tab.on{background:#fff;color:var(--accent,#2563eb);box-shadow:0 1px 4px rgba(15,23,42,.08)}
+    .cust-draft-banner{
+      margin:0 0 12px;padding:12px 14px;border-radius:var(--radius,14px);
+      background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);
+      animation:bannerIn .25s ease;
+    }
+    .cust-draft-banner[hidden]{display:none!important}
+    .cust-draft-banner strong{display:block;font-size:.92rem;margin:0 0 4px;color:var(--text)}
+    .cust-draft-banner p{margin:0;color:var(--muted);font-size:.78rem;line-height:1.35}
+    .cust-draft-banner-actions{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+    .cust-draft-banner-actions .primary{flex:1 1 auto;min-width:8rem}
+    .cust-draft-banner-actions .hint{font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer;color:var(--muted);padding:8px 10px}
+    .cust-draft-banner-actions .hint:hover{color:var(--text)}
     .cust-chat-preview-link{font-size:.68rem;font-weight:600;color:var(--muted,#64748b);text-decoration:none}
     .cust-chat-preview-link:hover{color:var(--accent,#2563eb);text-decoration:underline}
     .cust-chat-shell{
