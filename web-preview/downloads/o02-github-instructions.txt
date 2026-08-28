@@ -11,14 +11,15 @@ Push на GitHub не обязателен.
 Инструкция (если понадобится позже):
   https://aptown1.fvds.ru/downloads/github-push.html
 
-Статус: блокер — Deploy key не добавлен в репозиторий (или без Allow write).
+Статус: ключ есть, но без Allow write — только Delete и создать заново.
 
 1. Откройте: https://github.com/laser-erp/armada-perevozki/settings/keys
-2. Add deploy key
+2. Если ключ armada-o02-20260827 уже есть → Delete (Edit нет в GitHub)
+3. Add deploy key
    Title: armada-o02-20260827
-3. Key (скопируйте целиком одну строку):
+4. Key (скопируйте целиком одну строку):
    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILSyvSZRK4RizqeFuS9KLzHa02nDPoZEyuwomCwrvFQM armada-o02-20260827
-4. Включите Allow write access → Add key
+5. Сразу включите Allow write access → Add key
 
 Fingerprint: SHA256:GtLFE7XWrMJqaqyFsIQRjXei8E4oW/wK+X29JWvAxuI
 
