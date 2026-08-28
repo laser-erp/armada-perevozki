@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>АРМАДА — вход водителя</title>
   <meta name="theme-color" content="#EF4444" />
-  <link rel="stylesheet" href="styles.css?v=2026-08-24-bootfix5" />
+  <link rel="stylesheet" href="styles.css" />
   <style>
     body{background:#f0f4f8;padding:16px;font-family:Inter,system-ui,sans-serif}
     .invite-wrap{max-width:400px;margin:40px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
@@ -20,7 +20,7 @@
 </head>
 <body>
   <div class="invite-wrap">
-    <p><a href="admin.html">← Админ</a> · <a href="driver.html">Водитель</a> · <a href="zakaz.html">Заказчик</a></p>
+    <p><a href="/a/">Админ</a> · <a href="/v/">Водитель</a> · <a href="/z/">Заказчик</a></p>
     <h1>Вход водителя</h1>
     <p id="invite-status" class="muted">Загрузка…</p>
     <div id="invite-form" style="display:none">
@@ -33,9 +33,13 @@
     </div>
     <p id="invite-done" class="ok" style="display:none"></p>
   </div>
-  <script src="store.js?v=2026-08-24-bootfix5"></script>
-  <script src="billing.js?v=2026-08-24-bootfix5"></script>
-  <script src="app.js?v=2026-08-24-bootfix5"></script>
-  <script src="invite.js?v=2026-08-24-bootfix5"></script>
+  <script>
+  (function(){
+    var v='2026-08-28-entrybc24';
+    ['store.js','billing.js','app.js','driver.js','invite.js'].forEach(function(f){
+      document.write('<script src="/'+f+'?v='+v+'"><\/script>');
+    });
+  })();
+  </script>
 </body>
 </html>
