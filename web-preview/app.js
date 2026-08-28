@@ -3742,6 +3742,7 @@ try{
   }
 }catch(_){}
 (async function boot(){
+  window.__armadaBootDone=true;
   if(typeof initShareSheet==='function') initShareSheet();
   initEntryFromPage();
   initPortalScopeFromPage();
@@ -3886,6 +3887,7 @@ if('serviceWorker' in navigator){
   });
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(reloading) return;
+    if(!navigator.serviceWorker.controller) return;
     reloading=true;
     location.reload();
   });

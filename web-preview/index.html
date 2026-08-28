@@ -18,21 +18,12 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
   <script>
   (function(){
-    try{
-      if(!sessionStorage.getItem('armada-sw-v35')){
-        sessionStorage.setItem('armada-sw-v35','1');
-        if(navigator.serviceWorker){
-          navigator.serviceWorker.getRegistrations().then(function(regs){
-            regs.forEach(function(r){ r.unregister(); });
-          });
-        }
-      }
-    }catch(_){}
+    window.__armadaBootDone=false;
     setTimeout(function(){
+      if(window.__armadaBootDone) return;
       if(typeof showDefaultAfterSplash==='function'){ showAfterSplash(showDefaultAfterSplash); return; }
       if(typeof show==='function'){ show('roles'); return; }
       var sp=document.getElementById('splash');
@@ -41,11 +32,11 @@
         var roles=document.getElementById('roles');
         if(roles) roles.classList.add('show');
       }
-    }, 2500);
+    }, 5000);
   })();
   </script>
-    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc22" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc22" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc23" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc23" />
 
 </head>
 <body>
@@ -546,7 +537,7 @@
 </div>
   <script>
   (function(){
-    var v='2026-08-28-entrybc22';
+    var v='2026-08-28-entrybc23';
     var p=(location.pathname||'').toLowerCase();
     var isV=/\/(v)(\/|$)/.test(p);
     var isA=/\/(a)(\/|$)/.test(p);

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc22";
+const APP_BUILD="2026-08-28-entrybc23";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -481,8 +481,8 @@ const AUTO_SYNC_MS=55*1000;
 const AUTO_SYNC_SLOW_MS=70*1000;
 const FETCH_TIMEOUT_MS=8000;
 const FETCH_PREFLIGHT_MS=4000;
-const INIT_FETCH_MS=5000;
-const PERSIST_DEBOUNCE_MS=1800;
+const INIT_FETCH_MS=3500;
+const PERSIST_DEBOUNCE_MS=2200;
 const SYNC_BACKOFF_MAX_MS=90000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
 function uuid(){
@@ -635,7 +635,7 @@ function show(id){
   }
 }
 const SPLASH_STARTED_MS=Date.now();
-const MIN_SPLASH_MS=900;
+const MIN_SPLASH_MS=350;
 function showAfterSplash(idOrFn){
   const wait=Math.max(0, MIN_SPLASH_MS-(Date.now()-SPLASH_STARTED_MS));
   const run=()=>{
