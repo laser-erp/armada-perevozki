@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-chat-body-search4317";
+const APP_BUILD="2026-08-28-address-autocomplete4317";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -574,23 +574,137 @@ function haversineKm(a, b){
   const km=2*R*Math.asin(Math.min(1, Math.sqrt(x)));
   return km>0?km:null;
 }
+function formatNominatimAddress(hit){
+  const a=hit&&hit.address||{};
+  const city=a.city||a.town||a.village||a.municipality||a.state||'';
+  const road=a.road||a.pedestrian||a.street||a.footway||'';
+  const house=a.house_number||'';
+  const parts=[];
+  if(city) parts.push(city);
+  if(road) parts.push(road);
+  if(house) parts.push(house);
+  if(parts.length>=2) return parts.join(', ');
+  const dn=String(hit&&hit.display_name||'').trim();
+  if(!dn) return '';
+  return dn.replace(/, Россия$/,'').replace(/, \d{6}$/,'').trim();
+}
+const _suggestCache=new Map();
+async function suggestAddresses(q, limit=6){
+  const query=String(q||'').trim();
+  if(query.length<3) return [];
+  const lim=Math.max(1, Math.min(10, +limit||6));
+  const key=query.toLowerCase()+'|'+lim;
+  if(_suggestCache.has(key)) return _suggestCache.get(key);
+  try{
+    const url=`/geo-nominatim/search?format=json&limit=${lim}&addressdetails=1&countrycodes=ru&q=${encodeURIComponent(query)}`;
+    const res=await fetch(url, {headers:{Accept:'application/json'}});
+    if(!res.ok) return [];
+    const arr=await res.json();
+    const seen=new Set();
+    const out=[];
+    for(const hit of (arr||[])){
+      const label=formatNominatimAddress(hit);
+      const lat=+hit.lat, lon=+hit.lon;
+      if(!label || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const dedupe=label.toLowerCase();
+      if(seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      _geoCache.set(dedupe, {lat, lon});
+      out.push({label, lat, lon});
+    }
+    _suggestCache.set(key, out);
+    return out;
+  }catch(_){ return []; }
+}
 async function geocodeAddress(q){
   const query=String(q||'').trim();
   if(query.length<4) return null;
   const key=query.toLowerCase();
   if(_geoCache.has(key)) return _geoCache.get(key);
   try{
-    const url=`/geo-nominatim/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
-    const res=await fetch(url, {headers:{Accept:'application/json'}});
-    if(!res.ok) return null;
-    const arr=await res.json();
-    const hit=arr&&arr[0];
-    if(!hit) return null;
-    const pt={lat:+hit.lat, lon:+hit.lon};
-    if(!Number.isFinite(pt.lat) || !Number.isFinite(pt.lon)) return null;
-    _geoCache.set(key, pt);
-    return pt;
+    const sug=await suggestAddresses(query, 1);
+    if(sug[0]) return {lat:sug[0].lat, lon:sug[0].lon};
+    return null;
   }catch(_){ return null; }
+}
+function wireAddressAutocomplete(input, opts){
+  if(!input || input.dataset.addrSuggestWired) return;
+  input.dataset.addrSuggestWired='1';
+  input.setAttribute('autocomplete','off');
+  const minLen=Math.max(2, +(opts&&opts.minLen)||3);
+  const debounceMs=Math.max(150, +(opts&&opts.debounceMs)||350);
+  const wrap=document.createElement('div');
+  wrap.className='addr-suggest-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const list=document.createElement('div');
+  list.className='addr-suggest-list';
+  list.hidden=true;
+  list.setAttribute('role','listbox');
+  wrap.appendChild(list);
+  let timer=null, reqId=0, items=[], activeIdx=-1;
+  const onSelect=(item)=>{
+    if(!item) return;
+    input.value=item.label;
+    input.dataset.lat=String(item.lat);
+    input.dataset.lon=String(item.lon);
+    list.hidden=true;
+    activeIdx=-1;
+    items=[];
+    if(opts&&typeof opts.onSelect==='function') opts.onSelect(item);
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  };
+  const paintList=(suggestions)=>{
+    items=suggestions;
+    activeIdx=-1;
+    list.innerHTML='';
+    if(!suggestions.length){ list.hidden=true; return; }
+    suggestions.forEach((s,i)=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='addr-suggest-item';
+      btn.setAttribute('role','option');
+      btn.dataset.idx=String(i);
+      btn.textContent=s.label;
+      btn.onmousedown=e=>{ e.preventDefault(); onSelect(items[+btn.dataset.idx]); };
+      list.appendChild(btn);
+    });
+    list.hidden=false;
+  };
+  const highlight=()=>{
+    list.querySelectorAll('.addr-suggest-item').forEach((el,i)=>{
+      el.classList.toggle('is-active', i===activeIdx);
+      if(i===activeIdx) el.scrollIntoView({block:'nearest'});
+    });
+  };
+  const fetchSuggestions=async()=>{
+    const q=input.value.trim();
+    if(q.length<minLen){ paintList([]); return; }
+    const id=++reqId;
+    const sug=await suggestAddresses(q);
+    if(id!==reqId || input.value.trim()!==q) return;
+    paintList(sug);
+  };
+  input.addEventListener('input', ()=>{
+    delete input.dataset.lat;
+    delete input.dataset.lon;
+    clearTimeout(timer);
+    timer=setTimeout(fetchSuggestions, debounceMs);
+    if(opts&&typeof opts.onInput==='function') opts.onInput();
+  });
+  input.addEventListener('keydown', e=>{
+    if(list.hidden || !items.length) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); activeIdx=Math.min(activeIdx+1, items.length-1); highlight(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); activeIdx=Math.max(activeIdx-1, 0); highlight(); }
+    else if(e.key==='Enter' && activeIdx>=0){ e.preventDefault(); onSelect(items[activeIdx]); }
+    else if(e.key==='Escape'){ list.hidden=true; activeIdx=-1; }
+  });
+  input.addEventListener('blur', ()=>{
+    setTimeout(()=>{ list.hidden=true; if(opts&&typeof opts.onBlur==='function') opts.onBlur(); }, 160);
+  });
+  input.addEventListener('focus', ()=>{
+    if(input.value.trim().length>=minLen) fetchSuggestions();
+  });
 }
 async function estimateRouteKm(fromAddr, toAddr){
   const g=await estimateRouteGeometry(fromAddr, toAddr);

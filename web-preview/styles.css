@@ -739,6 +739,21 @@
       .form-pair.cust-datetime-pair{grid-template-columns:minmax(0,1.65fr) minmax(72px,0.85fr)}
     .form-triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
     .cust-route-map-wrap{margin:4px 0 2px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface2,#f4f6f5)}
+    .addr-suggest-wrap{position:relative}
+    .addr-suggest-list{
+      position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;
+      max-height:min(240px,42vh);overflow-y:auto;
+      border:1px solid var(--border);border-radius:12px;
+      background:var(--surface,#fff);box-shadow:0 8px 24px rgba(0,0,0,.12);
+    }
+    .addr-suggest-item{
+      display:block;width:100%;text-align:left;border:0;background:transparent;
+      padding:10px 12px;font:inherit;font-size:.84rem;line-height:1.35;color:var(--text);
+      cursor:pointer;border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent);
+    }
+    .addr-suggest-item:last-child{border-bottom:0}
+    .addr-suggest-item:hover,.addr-suggest-item.is-active{background:color-mix(in srgb,var(--accent) 10%,var(--surface,#fff))}
+    .chat-widget .addr-suggest-list{position:relative;top:0;margin-top:6px;max-height:180px;box-shadow:none}
     .cust-route-map-wrap:not(.has-route){display:none}
     .cust-route-map{min-height:160px;display:flex;align-items:center;justify-content:center}
     .cust-route-svg{width:100%;height:auto;display:block}

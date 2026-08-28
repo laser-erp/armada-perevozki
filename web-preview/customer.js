@@ -1569,8 +1569,8 @@ function customerChatRenderWidgets(){
       </div>
     </div>`;
   }else if(step.id==='load' || step.id==='unload'){
-    const val=step.id==='load'?(customerChat.data.load||''):'';
-    widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" aria-label="Адрес" /></div>
+    const val=step.id==='load'?(customerChat.data.load||''):(customerChat.data.unload||'');
+    widget=`<div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" autocomplete="off" aria-label="Адрес" /></div>
     <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-addr-ok">Далее →</button></div>`;
   }else if(step.id==='body'){
     widget=`<div class="chat-chips" id="cust-chat-chips">${
@@ -1648,7 +1648,8 @@ function customerChatWireWidgets(stepId){
     };
     if(ok) ok.onclick=submit;
     if(inp){
-      inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } };
+      inp.onkeydown=e=>{ if(e.key==='Enter' && !e.defaultPrevented){ e.preventDefault(); submit(); } };
+      if(typeof wireAddressAutocomplete==='function') wireAddressAutocomplete(inp);
       setTimeout(()=>inp.focus(), 80);
     }
   }
@@ -1809,6 +1810,21 @@ function wireCustomerOrderMode(){
   syncCustomerOrderModeUi();
 }
 
+function wireCustomerAddressFields(){
+  const bumpRoute=()=>{
+    if(typeof customerRouteBump==='function') customerRouteBump();
+  };
+  const attach=(id)=>{
+    const el=$(id);
+    if(!el || el.dataset.addrHooked) return;
+    el.dataset.addrHooked='1';
+    if(typeof wireAddressAutocomplete==='function'){
+      wireAddressAutocomplete(el, { onSelect:bumpRoute, onBlur:bumpRoute });
+    }
+  };
+  attach('cust-load');
+  attach('cust-unload');
+}
 function wireCustomerPortal(){
   $('role-customer')&&($('role-customer').onclick=()=>{ setEntryMode('customer'); openCustomerLogin(); });
   $('cust-login-ok')&&($('cust-login-ok').onclick=loginCustomer);
@@ -1817,16 +1833,17 @@ function wireCustomerPortal(){
   $('cust-notify-toggle')&&($('cust-notify-toggle').onclick=()=>enableCustomerNotifications());
   $('cust-submit')&&($('cust-submit').onclick=submitCustomerOrder);
   let routeTimer=null;
-  const bumpRoute=()=>{
+  window.customerRouteBump=()=>{
     clearTimeout(routeTimer);
     routeTimer=setTimeout(()=>refreshCustomerRouteKm(), 700);
   };
   ['cust-load','cust-unload'].forEach(id=>{
     const el=$(id);
     if(!el) return;
-    el.oninput=bumpRoute;
+    el.oninput=customerRouteBump;
     el.onblur=()=>refreshCustomerRouteKm();
   });
+  wireCustomerAddressFields();
   ['cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-places','cust-cargo-volume','cust-load-note','cust-unload-note'].forEach(id=>{
     const el=$(id);
     if(!el) return;
