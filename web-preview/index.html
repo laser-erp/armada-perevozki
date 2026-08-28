@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc37" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc37" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc38" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc38" />
 
 </head>
 <body>
@@ -170,7 +170,6 @@
               <div class="cust-vtype-col">
                 <div class="cust-vtype-col-head">
                   <span class="cust-vtype-col-title">Кузов <span class="req">*</span></span>
-                  <input type="search" class="cust-vtype-filter" id="cust-vtype-filter" placeholder="⌕" aria-label="Поиск кузова" autocomplete="off" />
                 </div>
                 <div class="cust-vtype-col-body" id="cust-vtype-body-list">
                   <label class="cust-vtype-master cust-vtype-tree-root">
@@ -186,43 +185,50 @@
                   </div>
                 </div>
               </div>
-              <div class="cust-vtype-col">
+              <div class="cust-vtype-col cust-vtype-col-load" id="cust-load-col">
                 <div class="cust-vtype-col-head">
                   <span class="cust-vtype-col-title">Загрузка</span>
-                  <input type="search" class="cust-vtype-filter" id="cust-load-filter" placeholder="⌕" aria-label="Поиск способа загрузки" autocomplete="off" />
                 </div>
                 <label class="cust-vtype-match-all">
-                  <input type="checkbox" id="cust-load-match-all" />
+                  <input type="checkbox" id="cust-load-match-all" disabled />
                   <span>учитывать все выбранные</span>
                 </label>
                 <div class="cust-vtype-col-body cust-check-grid" id="cust-load-methods">
-                  <label class="cust-check-item" data-load-label="верхняя"><input type="checkbox" data-load="top" /> верхняя</label>
-                  <label class="cust-check-item" data-load-label="боковая"><input type="checkbox" data-load="side" /> боковая</label>
-                  <label class="cust-check-item" data-load-label="задняя"><input type="checkbox" data-load="rear" /> задняя</label>
-                  <label class="cust-check-item" data-load-label="растентовка"><input type="checkbox" data-load="full_tent" /> с полной растентовкой</label>
-                  <label class="cust-check-item" data-load-label="перекладины"><input type="checkbox" data-load="remove_crossbars" /> со снятием поперечных перекладин</label>
-                  <label class="cust-check-item" data-load-label="стойки"><input type="checkbox" data-load="remove_posts" /> со снятием стоек</label>
-                  <label class="cust-check-item" data-load-label="ворота"><input type="checkbox" data-load="no_gates" /> без ворот</label>
-                  <label class="cust-check-item" data-load-label="гидроборт"><input type="checkbox" data-load="tail_lift" /> гидроборт</label>
-                  <label class="cust-check-item" data-load-label="аппарели"><input type="checkbox" data-load="ramps" /> аппарели</label>
-                  <label class="cust-check-item" data-load-label="обрешетка"><input type="checkbox" data-load="crate" /> с обрешеткой</label>
-                  <label class="cust-check-item" data-load-label="борта"><input type="checkbox" data-load="boards" /> с бортами</label>
-                  <label class="cust-check-item" data-load-label="боковая двух"><input type="checkbox" data-load="side_both" /> боковая с двух сторон</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="top" disabled /> верхняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="side" disabled /> боковая</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="rear" disabled /> задняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="full_tent" disabled /> с полной растентовкой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="remove_crossbars" disabled /> со снятием поперечных перекладин</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="remove_posts" disabled /> со снятием стоек</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="no_gates" disabled /> без ворот</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="tail_lift" disabled /> гидроборт</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="ramps" disabled /> аппарели</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="crate" disabled /> с обрешеткой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="boards" disabled /> с бортами</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="side_both" disabled /> боковая с двух сторон</label>
                 </div>
               </div>
-              <div class="cust-vtype-col">
+              <div class="cust-vtype-col cust-vtype-col-unload" id="cust-unload-col">
                 <div class="cust-vtype-col-head">
                   <span class="cust-vtype-col-title">Выгрузка</span>
-                  <input type="search" class="cust-vtype-filter" id="cust-unload-filter" placeholder="⌕" aria-label="Поиск способа выгрузки" autocomplete="off" />
                 </div>
                 <label class="cust-vtype-match-all">
-                  <input type="checkbox" id="cust-unload-match-all" />
+                  <input type="checkbox" id="cust-unload-match-all" disabled />
                   <span>учитывать все выбранные</span>
                 </label>
                 <div class="cust-vtype-col-body cust-check-grid" id="cust-unload-methods">
-                  <label class="cust-check-item" data-unload-label="верхняя"><input type="checkbox" data-unload="top" /> верхняя</label>
-                  <label class="cust-check-item" data-unload-label="боковая"><input type="checkbox" data-unload="side" /> боковая</label>
-                  <label class="cust-check-item" data-unload-label="задняя"><input type="checkbox" data-unload="rear" /> задняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="top" disabled /> верхняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="side" disabled /> боковая</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="rear" disabled /> задняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="full_tent" disabled /> с полной растентовкой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="remove_crossbars" disabled /> со снятием поперечных перекладин</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="remove_posts" disabled /> со снятием стоек</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="no_gates" disabled /> без ворот</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="tail_lift" disabled /> гидроборт</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="ramps" disabled /> аппарели</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="crate" disabled /> с обрешеткой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="boards" disabled /> с бортами</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="side_both" disabled /> боковая с двух сторон</label>
                 </div>
               </div>
             </div>
@@ -609,6 +615,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-28-entrybc37"></script>
+  <script src="/boot-loader.js?v=2026-08-28-entrybc38"></script>
 </body>
 </html>

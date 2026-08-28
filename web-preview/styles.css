@@ -939,6 +939,8 @@
       .form-meta{display:none}
       .metric-strip{grid-template-columns:repeat(2,1fr)}
       .form-pair{grid-template-columns:1fr}
+      .cust-vtype-cols{grid-template-columns:1fr}
+      .cust-vtype-col{max-height:200px}
       .center{padding:16px 14px calc(16px + env(safe-area-inset-bottom,0))}
       .pin,.stack{max-width:100%}
       button.primary:active,button.secondary:active,.nums button:active,.yesno button:active,
