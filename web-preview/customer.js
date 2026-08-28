@@ -993,15 +993,25 @@ function updateCustomerPricePreview(){
     paintCustomerFormChecklist();
     return;
   }
-  const amount=typeof customerCarrierPriceAmount==='function'?customerCarrierPriceAmount(s, carrier):Math.round(s.minimumCash);
+  const clientAmount=typeof customerOrderClientPriceAmount==='function'
+    ?Math.round(customerOrderClientPriceAmount(s))
+    :Math.round(s.minimumCash);
+  const carrierAmount=typeof customerCarrierPriceAmount==='function'
+    ?Math.round(customerCarrierPriceAmount(s, carrier))
+    :clientAmount;
   const payLabel=typeof customerCarrierPriceLabel==='function'&&carrier?customerCarrierPriceLabel(carrier):'';
   const payHint=typeof customerCarrierPriceHint==='function'&&carrier?customerCarrierPriceHint(carrier):'';
+  const feeNote=draft.fulfillment!=='direct'?' (ставка логиста в цене)':'';
   box.innerHTML=`
-    <div class="calc-row"><span>К оплате перевозчику</span><span><b>${fmt(Math.round(amount))} ₽</b>${payLabel?` (${payLabel})`:''}</span></div>
+    <div class="calc-row"><span>Ориентир / минимум</span><span><b>${fmt(clientAmount)} ₽</b>${feeNote}</span></div>
+    <div class="calc-row"><span>К оплате перевозчику</span><span><b>${fmt(carrierAmount)} ₽</b>${payLabel?` (${payLabel})`:''}</span></div>
     <div class="hint">${esc(bits.concat([s.summary||'']).filter(Boolean).join(' · '))}</div>
     <div class="hint">${esc(payHint||'Это ориентир. Через логиста в сумму входит его ставка за срочный подбор.')}</div>`;
   const priceEl=$('cust-price');
-  if(priceEl && !priceEl.value) priceEl.value=String(Math.round(amount));
+  if(priceEl && priceEl.dataset.auto!=='0'){
+    priceEl.value=String(clientAmount);
+    priceEl.dataset.auto='1';
+  }
   paintCustomerFormChecklist();
 }
 
@@ -1114,8 +1124,8 @@ function submitCustomerOrder(){
   }
   const draft=buildCustomerDraftFromForm();
   const quote=suggestCustomerOrderPrice(draft);
-  const min=quote&&typeof customerCarrierPriceAmount==='function'
-    ?Math.round(customerCarrierPriceAmount(quote, carrier))
+  const min=quote&&typeof customerOrderClientPriceAmount==='function'
+    ?Math.round(customerOrderClientPriceAmount(quote))
     :(quote?Math.round(quote.minimumCash):null);
   let offered=draft.priceOffer!=null?Math.round(draft.priceOffer):min;
   if(min!=null && offered!=null && offered<min){
@@ -1229,6 +1239,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   ['cust-load','cust-unload','cust-load-note','cust-unload-note','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-cargo-places','cust-cargo-volume','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-cargo-temp-from','cust-cargo-temp-to'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
+  const priceReset=$('cust-price'); if(priceReset) delete priceReset.dataset.auto;
   const packEl=$('cust-cargo-packaging'); if(packEl) packEl.value='';
   const fragileEl=$('cust-cargo-fragile'); if(fragileEl) fragileEl.checked=false;
   const tempEl=$('cust-cargo-temp'); if(tempEl) tempEl.checked=false;
@@ -1387,7 +1398,9 @@ function customerChatPriceHint(){
   const carrier=customerCarrierForForm();
   const s=typeof suggestCustomerOrderPrice==='function'?suggestCustomerOrderPrice(draft):null;
   if(!s) return null;
-  const amount=typeof customerCarrierPriceAmount==='function'?customerCarrierPriceAmount(s, carrier):Math.round(s.minimumCash);
+  const amount=typeof customerOrderClientPriceAmount==='function'
+    ?customerOrderClientPriceAmount(s)
+    :(typeof customerCarrierPriceAmount==='function'?customerCarrierPriceAmount(s, carrier):Math.round(s.minimumCash));
   return amount>0?Math.round(amount):null;
 }
 function customerChatSummaryHtml(){
@@ -1596,7 +1609,10 @@ function customerChatAdvance(userText){
       if(customerChatPriceHint()){
         const p=customerChatPriceHint();
         const priceEl=$('cust-price');
-        if(priceEl && !priceEl.value) priceEl.value=String(p);
+        if(priceEl && priceEl.dataset.auto!=='0'){
+          priceEl.value=String(p);
+          priceEl.dataset.auto='1';
+        }
       }
       customerChatRenderAll();
     });
@@ -1690,6 +1706,7 @@ function wireCustomerPortal(){
     const el=$(id);
     if(!el) return;
     el.oninput=()=>{
+      if(id==='cust-price') el.dataset.auto='0';
       if(id==='cust-req-l'||id==='cust-req-w'||id==='cust-req-h') syncCustomerCargoVolume(false);
       if(id==='cust-cargo-volume') el.dataset.manual='1';
       syncCustomerPayloadTons();

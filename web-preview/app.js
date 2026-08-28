@@ -148,12 +148,26 @@ function companyVatPayerLabel(co){
 function customerCarrierPaymentForm(carrier){
   return companyVatPayer(carrier)==='vat'?'withVat':'withoutVat';
 }
-function customerCarrierPriceAmount(quote, carrier){
+/** База перевозчика без ставки логиста (из расчёта заказчика). */
+function customerCarrierBaseCash(quote){
+  if(!quote||!(quote.minimumCash>0)) return null;
+  const feePct=+(quote.logistFeePercent||0);
+  if(feePct>0) return round2(quote.minimumCash/(1+feePct/100));
+  return quote.minimumCash;
+}
+/** Ориентир / минимум для заказчика (со ставкой логиста, если «логисту»). */
+function customerOrderClientPriceAmount(quote){
   if(!quote) return null;
+  return quote.minimumCash;
+}
+function customerCarrierPriceAmount(quote, carrier){
+  const base=customerCarrierBaseCash(quote);
+  if(base==null) return null;
   const form=customerCarrierPaymentForm(carrier);
-  if(form==='withVat') return quote.withVat;
-  if(form==='withoutVat') return quote.withoutVat;
-  return quote.cash||quote.minimumCash;
+  const t=fillRatesFrom('cash', base);
+  if(form==='withVat') return t.withVat;
+  if(form==='withoutVat') return t.withoutVat;
+  return t.cash;
 }
 function customerCarrierPriceLabel(carrier){
   return companyVatPayer(carrier)==='vat'?'с НДС':'без НДС';
