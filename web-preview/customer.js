@@ -177,19 +177,120 @@ function customerOrders(){
 }
 
 let customerRouteKm=null;
+let customerRouteGeometry=null;
 let customerRouteBusy=false;
 let customerCal={year:new Date().getFullYear(), month:new Date().getMonth(), from:null};
 
+function paintCustomerBodyTypeList(){
+  const list=$('cust-body-type-list');
+  if(!list || typeof atiBodyTypeOptions!=='function') return;
+  list.innerHTML=atiBodyTypeOptions().map(x=>`<option value="${esc(x.ati)}">${esc(x.label)}</option>`).join('');
+  const inp=$('cust-body-type-input');
+  const hid=$('cust-body-type');
+  if(inp && hid && !inp.value){
+    inp.value=bodyTypeInputLabel(hid.value||'tent')||'Тентованный';
+  }
+}
+function syncCustomerBodyType(){
+  const inp=$('cust-body-type-input');
+  const hid=$('cust-body-type');
+  if(!hid) return;
+  const raw=inp?inp.value:'';
+  hid.value=typeof resolveBodyTypeFromInput==='function'?resolveBodyTypeFromInput(raw):'tent';
+}
+function inferCargoKindFromText(text){
+  const q=String(text||'').toLowerCase();
+  if(/продукт|молок|мяс|рыб|овощ|фрукт|холод|замороз/.test(q)) return 'food';
+  if(/сып|навал|песок|щеб|зер|уголь|руда/.test(q)) return 'bulk';
+  if(/другое|проч/.test(q)) return 'other';
+  return 'general';
+}
+function syncCustomerCargoKind(){
+  const text=(($('cust-cargo-text')||{}).value||'').trim();
+  const hid=$('cust-cargo-kind');
+  if(hid) hid.value=inferCargoKindFromText(text);
+  const body=customerSelectedBodyType();
+  if(text && inferCargoKindFromText(text)==='food' && body!=='reefer'){
+    const inp=$('cust-body-type-input');
+    const h=$('cust-body-type');
+    if(inp && h){ h.value='reefer'; inp.value=bodyTypeInputLabel('reefer')||'Рефрижератор'; }
+  }
+}
+function customerWeightTons(){
+  const raw=+(($('cust-weight-value')||{}).value||'').replace(',','.');
+  if(!(raw>0)) return null;
+  const unit=(($('cust-weight-unit')||{}).value||'t').trim();
+  return unit==='kg'?raw/1000:raw;
+}
+function syncCustomerPayloadTons(){
+  const tons=customerWeightTons();
+  const hid=$('cust-req-pay');
+  if(hid) hid.value=tons!=null?String(tons):'';
+}
 function customerSelectedBodyType(){
+  syncCustomerBodyType();
   return (($('cust-body-type')||{}).value||'tent');
 }
 function customerSelectedCargoKind(){
+  syncCustomerCargoKind();
   return (($('cust-cargo-kind')||{}).value||'general');
 }
 function customerSelectedTripMode(fin){
-  const raw=(($('cust-trip-mode')||{}).value||'auto');
-  if(raw==='city'||raw==='intercity') return raw;
   return inferTripMode(customerRouteKm, fin);
+}
+function updateCustomerTripModeDisplay(fin){
+  const badge=$('cust-trip-mode-display');
+  const hid=$('cust-trip-mode');
+  if(!badge) return;
+  const km=customerRouteKm;
+  if(!(km>0)){
+    badge.textContent='—';
+    badge.dataset.mode='';
+    if(hid) hid.value='auto';
+    return;
+  }
+  const mode=inferTripMode(km, fin||normalizeFinance(state.finance));
+  badge.textContent=tripModeLabel(mode);
+  badge.dataset.mode=mode;
+  if(hid) hid.value=mode;
+}
+function renderCustomerRouteMap(geom){
+  const box=$('cust-route-map');
+  const wrap=$('cust-route-map-wrap');
+  if(!box) return;
+  if(!geom || !geom.from || !geom.to){
+    box.innerHTML='';
+    if(wrap) wrap.classList.remove('has-route');
+    return;
+  }
+  if(wrap) wrap.classList.add('has-route');
+  const coords=(geom.coordinates||[]).map(c=>({lon:+c[0], lat:+c[1]})).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+  const pts=coords.length?coords:[geom.from, geom.to].map(p=>({lon:p.lon, lat:p.lat}));
+  let minLon=Infinity, maxLon=-Infinity, minLat=Infinity, maxLat=-Infinity;
+  pts.forEach(p=>{
+    minLon=Math.min(minLon, p.lon); maxLon=Math.max(maxLon, p.lon);
+    minLat=Math.min(minLat, p.lat); maxLat=Math.max(maxLat, p.lat);
+  });
+  const padLon=(maxLon-minLon)*0.08||0.02;
+  const padLat=(maxLat-minLat)*0.08||0.02;
+  minLon-=padLon; maxLon+=padLon; minLat-=padLat; maxLat+=padLat;
+  const w=320, h=160;
+  const proj=p=>{
+    const x=((p.lon-minLon)/(maxLon-minLon||1))*w;
+    const y=h-((p.lat-minLat)/(maxLat-minLat||1))*h;
+    return {x,y};
+  };
+  const line=pts.map(p=>{ const q=proj(p); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(' ');
+  const a=proj(geom.from); const b=proj(geom.to);
+  box.innerHTML=`<svg viewBox="0 0 ${w} ${h}" class="cust-route-svg" role="img" aria-label="Маршрут на карте">
+    <defs><linearGradient id="custMapBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8f0ea"/><stop offset="100%" stop-color="#dce8e0"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#custMapBg)" rx="12"/>
+    <polyline points="${line}" fill="none" stroke="var(--accent,#2563eb)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="7" fill="#16a34a" stroke="#fff" stroke-width="2"/>
+    <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="7" fill="#dc2626" stroke="#fff" stroke-width="2"/>
+    <text x="12" y="18" class="cust-map-tag">A · загрузка</text>
+    <text x="12" y="${h-8}" class="cust-map-tag">B · выгрузка</text>
+  </svg>`;
 }
 
 function customerSelectedFulfillment(){
@@ -200,7 +301,7 @@ function buildCustomerDraftFromForm(){
   const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
   const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
   const payRaw=(($('cust-price')||{}).value||'').replace(/\s/g,'').replace(',','.');
-  const payloadTons=+(($('cust-req-pay')||{}).value||'').replace(',','.');
+  const payloadTons=customerWeightTons();
   const fin=carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance);
   const km=customerRouteKm>0?customerRouteKm:null;
   const trip=customerSelectedTripMode(fin);
@@ -248,7 +349,7 @@ function paintCustomerFleetOptions(){
   }
   if(box) box.style.display=hasPark?'':'none';
   if(!hasPark || !sel) return;
-  const payloadTons=+(($('cust-req-pay')||{}).value||'').replace(',','.');
+  const payloadTons=customerWeightTons();
   const reqs={reqPayloadTons:payloadTons>0?payloadTons:null, reqBodyType:customerSelectedBodyType()};
   const at=typeof readCustomerVehicleAt==='function'?readCustomerVehicleAt():null;
   const list=(carrier && typeof availableFleetForCustomer==='function')
@@ -305,26 +406,38 @@ async function refreshCustomerRouteKm(){
   const load=(($('cust-load')||{}).value||'').trim();
   const unload=(($('cust-unload')||{}).value||'').trim();
   const hint=$('cust-route-km-hint');
+  const co=findCompanyById(currentCustomer&&currentCustomer.companyId);
+  const carrier=carrierOwnCompanyForSpace(co&&co.spaceId||currentCustomer&&currentCustomer.spaceId);
+  const fin=carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance);
   if(load.length<4 || unload.length<4){
     customerRouteKm=null;
-    if(hint) hint.textContent='Укажите адреса — километраж посчитаем сами.';
+    customerRouteGeometry=null;
+    renderCustomerRouteMap(null);
+    updateCustomerTripModeDisplay(fin);
+    if(hint) hint.textContent='Укажите адреса — построим маршрут для грузового транспорта.';
     updateCustomerPricePreview();
     return;
   }
   if(customerRouteBusy) return;
   customerRouteBusy=true;
-  if(hint) hint.textContent='Считаем расстояние по дороге…';
+  if(hint) hint.textContent='Строим маршрут для грузового транспорта…';
   try{
-    const km=typeof estimateRouteKm==='function'?await estimateRouteKm(load, unload):null;
-    customerRouteKm=km;
+    const geom=typeof estimateRouteGeometry==='function'?await estimateRouteGeometry(load, unload):null;
+    customerRouteGeometry=geom;
+    customerRouteKm=geom&&geom.km>0?geom.km:null;
+    renderCustomerRouteMap(geom);
+    updateCustomerTripModeDisplay(fin);
     if(hint){
-      hint.textContent=km
-        ?`По дороге ориентир ${km} км. «Груз + после» вписывать не нужно.`
-        :'Расстояние не определилось — заявку можно отправить, цену уточнит перевозчик.';
+      hint.textContent=customerRouteKm
+        ?`≈ ${customerRouteKm} км · ${tripModeLabel(inferTripMode(customerRouteKm, fin))}. Маршрут для грузовиков (ориентир; знаки 3,5т и габариты учитываются при уточнении диспетчером).`
+        :'Маршрут не определился — заявку можно отправить, детали уточнит перевозчик.';
     }
   }catch(_){
     customerRouteKm=null;
-    if(hint) hint.textContent='Расстояние не определилось — заявку можно отправить, цену уточнит перевозчик.';
+    customerRouteGeometry=null;
+    renderCustomerRouteMap(null);
+    updateCustomerTripModeDisplay(fin);
+    if(hint) hint.textContent='Маршрут не определился — заявку можно отправить, детали уточнит перевозчик.';
   }
   customerRouteBusy=false;
   updateCustomerPricePreview();
@@ -382,7 +495,10 @@ function renderCustomerPortal(){
   const unloadEl=$('cust-unload');
   if(loadEl && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
   if(unloadEl && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
+  paintCustomerBodyTypeList();
+  if(typeof wireVehicleAtHint==='function') wireVehicleAtHint('cust');
   if((loadEl&&loadEl.value) && (unloadEl&&unloadEl.value)) refreshCustomerRouteKm();
+  else updateCustomerTripModeDisplay(carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance));
   paintCustomerFleetOptions();
   paintCustomerBookingCal();
   const list=$('cust-orders-list');
@@ -419,9 +535,11 @@ function renderCustomerPortal(){
 }
 
 function readCustomerVehicleAt(){
+  if(typeof readVehicleAtFromDom==='function') return readVehicleAtFromDom('cust');
   const d=(($('cust-vehicle-date')||{}).value||'').trim();
   const t=(($('cust-vehicle-time')||{}).value||'').trim();
   if(!d) return null;
+  if(typeof fromRuDateTimeParts==='function') return fromRuDateTimeParts(d, t||'08:00');
   const iso=`${d}T${t||'08:00'}:00`;
   const dt=new Date(iso);
   return Number.isNaN(dt.getTime())?null:dt.toISOString();
@@ -435,13 +553,20 @@ function submitCustomerOrder(){
   if(!carrier){ if(err) err.textContent='Перевозчик не найден'; return; }
   const load=(($('cust-load')||{}).value||'').trim();
   const unload=(($('cust-unload')||{}).value||'').trim();
-  const contactName=(($('cust-contact-name')||{}).value||'').trim();
-  const contactPhone=formatPhone((($('cust-contact-phone')||{}).value||'').trim());
-  const payloadTons=+(($('cust-req-pay')||{}).value||'').replace(',','.');
+  const loadingContactName=(($('cust-loading-contact-name')||{}).value||'').trim();
+  const loadingContactPhone=formatPhone((($('cust-loading-contact-phone')||{}).value||'').trim());
+  const unloadingContactName=(($('cust-unloading-contact-name')||{}).value||'').trim();
+  const unloadingContactPhone=formatPhone((($('cust-unloading-contact-phone')||{}).value||'').trim());
+  const contactName=loadingContactName||loadingContactPhone||'';
+  const contactPhone=loadingContactPhone||'';
+  const cargoText=(($('cust-cargo-text')||{}).value||'').trim();
+  syncCustomerPayloadTons();
+  const payloadTons=customerWeightTons();
   const vehicleAt=readCustomerVehicleAt();
   if(!load||!unload){ if(err) err.textContent='Укажите адреса загрузки и выгрузки'; return; }
   if(!vehicleAt){ if(err) err.textContent='Укажите дату и время подачи ТС'; return; }
-  if(!(payloadTons>0)){ if(err) err.textContent='Укажите грузоподъёмность (т)'; return; }
+  if(!(payloadTons>0)){ if(err) err.textContent='Укажите вес груза'; return; }
+  if(!cargoText){ if(err) err.textContent='Укажите, что за груз'; return; }
   const cargo=customerSelectedCargoKind();
   const body=customerSelectedBodyType();
   if(cargo==='food' && body!=='reefer'){
@@ -466,10 +591,10 @@ function submitCustomerOrder(){
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
   Promise.resolve(guardFn(spaceId,'create_order')).then(g=>{
     if(!g.ok){ if(err) err.textContent=g.message; return; }
-    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
+    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
   });
 }
-function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
+function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, cargoText, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
@@ -483,6 +608,9 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     ownCompanyId:carrier.id, ownCompanyName:carrier.name,
     contactName:contactName||contactPhone||'',
     contactPhone:contactPhone||co.portalPhone||'',
+    loadingContactName, loadingContactPhone,
+    unloadingContactName, unloadingContactPhone,
+    cargoDescription:cargoText||'',
     loadingAddress:load, unloadingAddress:unload,
     routePoints:defaultRoutePoints(load, unload),
     vehicleAt,
@@ -537,12 +665,16 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     ?' Заявка в свой парк, без срочного подбора.'
     :' Диспетчеру: закрыть как можно скорее.';
   alert(`Заявка №${seqNo} отправлена.${rushBit}${bookBit} ${priceBit}`);
-  ['cust-load','cust-unload','cust-contact-name','cust-contact-phone','cust-price','cust-req-pay'].forEach(id=>{
+  ['cust-load','cust-unload','cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone','cust-cargo-text','cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h','cust-body-type-input'].forEach(id=>{
     const el=$(id); if(el) el.value='';
   });
   customerRouteKm=null;
+  customerRouteGeometry=null;
+  renderCustomerRouteMap(null);
   if($('cust-vehicle-date')) $('cust-vehicle-date').value='';
   if($('cust-vehicle-time')) $('cust-vehicle-time').value='';
+  if($('cust-body-type')) $('cust-body-type').value='tent';
+  paintCustomerBodyTypeList();
   if($('cust-book-plate')) $('cust-book-plate').value='';
   renderCustomerPortal();
 }
@@ -565,26 +697,31 @@ function wireCustomerPortal(){
     el.oninput=bumpRoute;
     el.onblur=()=>refreshCustomerRouteKm();
   });
-  ['cust-req-pay','cust-price'].forEach(id=>{
-    const el=$(id); if(el) el.oninput=()=>{ updateCustomerPricePreview(); if(id==='cust-req-pay') paintCustomerFleetOptions(); };
-  });
-  ['cust-body-type','cust-cargo-kind','cust-trip-mode','cust-fulfillment'].forEach(id=>{
+  ['cust-weight-value','cust-price','cust-req-l','cust-req-w','cust-req-h'].forEach(id=>{
     const el=$(id);
     if(!el) return;
-    el.onchange=()=>{
-      if(id==='cust-cargo-kind' && el.value==='food' && $('cust-body-type') && $('cust-body-type').value!=='reefer'){
-        $('cust-body-type').value='reefer';
-      }
-      if(id==='cust-cargo-kind' && el.value==='bulk' && $('cust-body-type') && $('cust-body-type').value==='tent'){
-        $('cust-body-type').value='dump';
-      }
+    el.oninput=()=>{
+      syncCustomerPayloadTons();
+      updateCustomerPricePreview();
+      if(id==='cust-weight-value') paintCustomerFleetOptions();
+    };
+  });
+  const weightUnit=$('cust-weight-unit');
+  if(weightUnit) weightUnit.onchange=()=>{ syncCustomerPayloadTons(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
+  const bodyInp=$('cust-body-type-input');
+  if(bodyInp){
+    bodyInp.oninput=bodyInp.onchange=()=>{
+      syncCustomerBodyType();
       updateCustomerPricePreview();
       paintCustomerFleetOptions();
     };
-  });
-  ['cust-vehicle-date','cust-vehicle-time'].forEach(id=>{
-    const el=$(id); if(el) el.onchange=()=>paintCustomerFleetOptions();
-  });
+  }
+  const cargoInp=$('cust-cargo-text');
+  if(cargoInp) cargoInp.oninput=()=>{ syncCustomerCargoKind(); updateCustomerPricePreview(); paintCustomerFleetOptions(); };
+  const fulfillEl=$('cust-fulfillment');
+  if(fulfillEl) fulfillEl.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); };
+  if(typeof wireVehicleAtHint==='function') wireVehicleAtHint('cust', ()=>paintCustomerFleetOptions());
+  paintCustomerBodyTypeList();
 }
 
 wireCustomerPortal();

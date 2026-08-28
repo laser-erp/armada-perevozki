@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc33";
+const APP_BUILD="2026-08-28-entrybc34";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -402,6 +402,40 @@ const BODY_TYPES=[
   {id:'reefer', label:'Рефрижератор'},
   {id:'dump', label:'Самосвал'}
 ];
+/** Типы кузова как на ATI (подсказки в форме заказчика). mapTo — внутренний id для тарифа. */
+const ATI_BODY_TYPES=[
+  {id:'tent', ati:'Тентованный', label:'Тент / фургон', mapTo:'tent', keywords:['тент','фургон','тентован','штора']},
+  {id:'board', ati:'Бортовой', label:'Бортовой', mapTo:'board', keywords:['борт','бортов']},
+  {id:'open', ati:'Открытый', label:'Открытый', mapTo:'board', keywords:['открыт']},
+  {id:'platform', ati:'Площадка', label:'Площадка', mapTo:'board', keywords:['площад']},
+  {id:'reefer', ati:'Рефрижератор', label:'Рефрижератор', mapTo:'reefer', keywords:['реф','рефриж','холод']},
+  {id:'isotherm', ati:'Изотерм', label:'Изотерм', mapTo:'reefer', keywords:['изотерм']},
+  {id:'van', ati:'Фургон', label:'Фургон', mapTo:'tent', keywords:['фург']},
+  {id:'metal', ati:'Цельнометалл', label:'Цельнометалл', mapTo:'tent', keywords:['цельномет','металл']},
+  {id:'container', ati:'Контейнер', label:'Контейнер', mapTo:'tent', keywords:['контейн','20','40']},
+  {id:'dump', ati:'Самосвал', label:'Самосвал', mapTo:'dump', keywords:['самосвал','сыпуч']},
+  {id:'tank', ati:'Цистерна', label:'Цистерна', mapTo:'tent', keywords:['цистерн','налив']},
+  {id:'grain', ati:'Зерновоз', label:'Зерновоз', mapTo:'dump', keywords:['зерно']},
+  {id:'car_carrier', ati:'Автовоз', label:'Автовоз', mapTo:'board', keywords:['автовоз','авто']},
+  {id:'lowbed', ati:'Низкорамник', label:'Низкорамник', mapTo:'board', keywords:['низкорам','трал']},
+  {id:'timber', ati:'Лесовоз', label:'Лесовоз', mapTo:'board', keywords:['лес']},
+  {id:'manipulator', ati:'Манипулятор', label:'Манипулятор', mapTo:'board', keywords:['манипулят','кму']}
+];
+function atiBodyTypeOptions(){
+  return ATI_BODY_TYPES.slice().sort((a,b)=>String(a.ati).localeCompare(String(b.ati),'ru'));
+}
+function resolveBodyTypeFromInput(raw){
+  const q=String(raw||'').trim().toLowerCase();
+  if(!q) return 'tent';
+  const exact=ATI_BODY_TYPES.find(x=>x.ati.toLowerCase()===q || x.label.toLowerCase()===q || x.id===q);
+  if(exact) return exact.mapTo||exact.id;
+  const hit=ATI_BODY_TYPES.find(x=>(x.keywords||[]).some(k=>q.includes(k)) || x.ati.toLowerCase().includes(q) || x.label.toLowerCase().includes(q));
+  return hit?(hit.mapTo||hit.id):'tent';
+}
+function bodyTypeInputLabel(id){
+  const hit=ATI_BODY_TYPES.find(x=>x.id===id)||BODY_TYPES.find(x=>x.id===id);
+  return hit?(hit.ati||hit.label):'';
+}
 const CARGO_KINDS=[
   {id:'general', label:'Обычный груз'},
   {id:'food', label:'Продукты'},
@@ -415,7 +449,9 @@ function cargoKindLabel(id){
   return (CARGO_KINDS.find(x=>x.id===id)||{}).label||'';
 }
 function tripModeLabel(id){
-  return id==='intercity'?'Межгород':'Город';
+  if(id==='intercity') return 'Межгород';
+  if(id==='suburb') return 'Пригород';
+  return 'Город';
 }
 const _geoCache=new Map();
 function haversineKm(a, b){
@@ -446,21 +482,37 @@ async function geocodeAddress(q){
   }catch(_){ return null; }
 }
 async function estimateRouteKm(fromAddr, toAddr){
+  const g=await estimateRouteGeometry(fromAddr, toAddr);
+  return g&&g.km>0?g.km:null;
+}
+async function estimateRouteGeometry(fromAddr, toAddr){
   const a=await geocodeAddress(fromAddr);
   const b=await geocodeAddress(toAddr);
   if(!a||!b) return null;
   try{
-    const url=`/osrm-route/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`;
+    const url=`/osrm-route/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson&steps=false`;
     const res=await fetch(url, {headers:{Accept:'application/json'}});
     if(res.ok){
       const data=await res.json();
-      const m=data&&data.routes&&data.routes[0]&&data.routes[0].distance;
-      if(m>50) return Math.max(1, Math.round(m/1000));
+      const route=data&&data.routes&&data.routes[0];
+      const m=route&&route.distance;
+      const coords=route&&route.geometry&&route.geometry.coordinates;
+      if(m>50){
+        return {
+          km:Math.max(1, Math.round(m/1000)),
+          from:a, to:b,
+          coordinates:Array.isArray(coords)?coords:[]
+        };
+      }
     }
   }catch(_){}
   const straight=haversineKm(a,b);
   if(!(straight>0)) return null;
-  return Math.max(1, Math.round(straight*1.35));
+  return {
+    km:Math.max(1, Math.round(straight*1.35)),
+    from:a, to:b,
+    coordinates:[[a.lon,a.lat],[b.lon,b.lat]]
+  };
 }
 const DEFAULT_OWN_COMPANIES=[
   {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
@@ -512,7 +564,7 @@ const PB_BASE=(function(){
 })();
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
-const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80,bodyMultReefer:1.25,bodyMultDump:1.15,heavyTonsFrom:20,heavyMult:1.15,logistFeePercent:10};
+const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,suburbKmThreshold:30,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80,bodyMultReefer:1.25,bodyMultDump:1.15,heavyTonsFrom:20,heavyMult:1.15,logistFeePercent:10};
 function clampMult(v, fallback){
   const n=+v;
   if(!(n>0) || Number.isNaN(n)) return fallback;
@@ -523,6 +575,7 @@ function normalizeFinance(f){
   let markup=+s.markupPercent; if(Number.isNaN(markup)) markup=15;
   s.markupPercent=Math.min(80, Math.max(0, markup));
   s.cityKmThreshold=(+s.cityKmThreshold>0)?+s.cityKmThreshold:100;
+  s.suburbKmThreshold=(+s.suburbKmThreshold>0)?+s.suburbKmThreshold:30;
   s.minWorkHours=(+s.minWorkHours>=0)?+s.minWorkHours:4;
   s.podachaHours=(+s.podachaHours>=0)?+s.podachaHours:1;
   s.podachaEmptyKmLimit=(+s.podachaEmptyKmLimit>0)?+s.podachaEmptyKmLimit:20;

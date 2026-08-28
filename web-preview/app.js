@@ -175,7 +175,11 @@ function quoteBodyCargoMultiplier(draft, fin){
 function inferTripMode(km, fin){
   const s=normalizeFinance(fin||{});
   if(!(km>0)) return 'city';
-  return km>(s.cityKmThreshold||100)?'intercity':'city';
+  const suburb=+(s.suburbKmThreshold||30);
+  const city=+(s.cityKmThreshold||100);
+  if(km>city) return 'intercity';
+  if(km>suburb) return 'suburb';
+  return 'city';
 }
 function suggestCustomerOrderPrice(draft){
   if(!draft||!draft.ownCompanyId) return null;

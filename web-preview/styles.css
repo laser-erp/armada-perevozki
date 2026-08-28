@@ -715,6 +715,15 @@
       .phone.wide{max-width:min(1100px,100%)}
       .admin-form-shell{max-width:720px}
       .form-pair{grid-template-columns:1fr 1fr}
+    .form-triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .cust-route-map-wrap{margin:4px 0 2px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface2,#f4f6f5)}
+    .cust-route-map-wrap:not(.has-route){display:none}
+    .cust-route-map{min-height:160px;display:flex;align-items:center;justify-content:center}
+    .cust-route-svg{width:100%;height:auto;display:block}
+    .cust-map-tag{font:600 10px/1.2 system-ui,sans-serif;fill:var(--muted,#667)}
+    .cust-trip-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface2,#f4f6f5);border:1px solid var(--border)}
+    .cust-trip-label{font-size:var(--fs-sm);color:var(--muted);font-weight:600}
+    .cust-trip-badge{font-weight:800;font-size:.95rem;color:var(--accent);padding:4px 10px;border-radius:999px;background:rgba(37,99,235,.08)}
       .metric-strip{grid-template-columns:repeat(4,1fr)}
       .logo{width:100px}
       .brand{font-size:1.75rem}

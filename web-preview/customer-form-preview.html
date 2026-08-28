@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>АРМАДА — превью формы заказчика</title>
+  <link rel="stylesheet" href="/styles.css?v=2026-08-28-entrybc34" />
+  <link rel="stylesheet" href="/entry.css?v=2026-08-28-entrybc34" />
+  <style>
+    body{margin:0;background:#eef1ef;display:flex;justify-content:center;padding:24px 12px}
+    .phone{max-width:420px;width:100%}
+    .preview-banner{background:#2563eb;color:#fff;text-align:center;padding:8px 12px;font-size:.78rem;font-weight:700;border-radius:12px 12px 0 0}
+  </style>
+</head>
+<body class="entry-customer">
+  <div class="phone">
+    <div class="preview-banner">Превью — как будет выглядеть «Новая заявка» у заказчика</div>
+    <div id="customer-portal" class="screen show">
+      <div class="admin-form-shell">
+        <header class="form-topbar">
+          <button type="button" class="form-back" disabled>← Выход</button>
+          <h1>ООО «Пример Заказчик»</h1>
+        </header>
+        <div class="admin-form-scroll">
+          <p class="cat-panel-hint">Перевозчик: ООО «Армада»</p>
+          <section class="form-section" id="cust-order-form">
+            <h2 class="form-section-title">Новая заявка</h2>
+            <div class="form-pair">
+              <div>
+                <label for="cust-vehicle-date">Дата</label>
+                <input id="cust-vehicle-date" value="29.08.2026" readonly />
+              </div>
+              <div>
+                <label for="cust-vehicle-time">Время</label>
+                <input id="cust-vehicle-time" value="09:00" readonly />
+              </div>
+            </div>
+            <label>Адрес загрузки</label>
+            <input value="Москва, ул. Складская, 12" readonly />
+            <label>Контактное лицо на загрузке</label>
+            <div class="form-pair">
+              <div><input value="Иванов И.И." readonly /></div>
+              <div><label>Телефон</label><input value="+7 916 123-45-67" readonly /></div>
+            </div>
+            <label>Адрес выгрузки</label>
+            <input value="Московская обл., г. Подольск, ул. Заводская, 5" readonly />
+            <label>Контактное лицо на выгрузке</label>
+            <div class="form-pair">
+              <div><input value="Петров П.П." readonly /></div>
+              <div><label>Телефон</label><input value="+7 926 987-65-43" readonly /></div>
+            </div>
+            <label>Тип ТС</label>
+            <input value="Тентованный" readonly />
+            <p class="hint">Основные типы как на ATI — подсказки появятся при наборе.</p>
+            <div class="cust-route-map-wrap has-route">
+              <div class="cust-route-map" id="cust-route-map"></div>
+              <p class="hint">≈ 42 км · Пригород. Маршрут для грузовиков (ориентир).</p>
+            </div>
+            <label>Груз</label>
+            <input value="Паллеты с оборудованием, 8 мест" readonly />
+            <label>Габариты груза, м (Д × Ш × В)</label>
+            <div class="form-triple">
+              <input value="2.4" readonly /><input value="1.2" readonly /><input value="1.5" readonly />
+            </div>
+            <label>Вес груза</label>
+            <div class="form-pair">
+              <div><input value="3.2" readonly /></div>
+              <div><label>Единица</label><select disabled><option selected>т</option></select></div>
+            </div>
+            <div class="cust-trip-row">
+              <span class="cust-trip-label">Тип перевозки</span>
+              <span class="cust-trip-badge">Пригород</span>
+            </div>
+            <label>Как закрыть рейс</label>
+            <select disabled><option>Логисту / диспетчеру</option></select>
+            <div id="cust-price-preview" class="schedule-box">
+              <div class="calc-row"><span>Ориентир / минимум</span><span><b>18 500 ₽</b> (нал)</span></div>
+              <div class="hint">Пригород · Тент / фургон · 3.2 т</div>
+            </div>
+            <label>Ваша цена, ₽</label>
+            <input value="18500" readonly />
+            <button type="button" class="primary" disabled>Отправить заявку</button>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function(){
+      var w=320,h=160,minLon=37.4,maxLon=37.8,minLat=55.4,maxLat=55.8;
+      var pts=[[37.42,55.75],[37.52,55.72],[37.62,55.68],[37.72,55.62]];
+      var line=pts.map(function(p,i){
+        var x=((p[0]-minLon)/(maxLon-minLon))*w;
+        var y=h-((p[1]-minLat)/(maxLat-minLat))*h;
+        return x.toFixed(1)+','+y.toFixed(1);
+      }).join(' ');
+      document.getElementById('cust-route-map').innerHTML=
+        '<svg viewBox="0 0 '+w+' '+h+'" class="cust-route-svg">'+
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8f0ea"/><stop offset="100%" stop-color="#dce8e0"/></linearGradient></defs>'+
+        '<rect width="'+w+'" height="'+h+'" fill="url(#bg)" rx="12"/>'+
+        '<polyline points="'+line+'" fill="none" stroke="#2563eb" stroke-width="3.5" stroke-linecap="round"/>'+
+        '<circle cx="28" cy="42" r="7" fill="#16a34a" stroke="#fff" stroke-width="2"/>'+
+        '<circle cx="278" cy="118" r="7" fill="#dc2626" stroke="#fff" stroke-width="2"/>'+
+        '<text x="12" y="18" class="cust-map-tag">A · загрузка</text>'+
+        '<text x="12" y="'+(h-8)+'" class="cust-map-tag">B · выгрузка</text></svg>';
+    })();
+  </script>
+</body>
+</html>
