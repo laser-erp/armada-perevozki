@@ -2,14 +2,18 @@
 	email aptown1@gmail.com
 }
 
-# Редирект с IP на канонический HTTPS-хост
+# IP → канонический домен
 http://176.12.67.35 {
-	redir https://aptown1.fvds.ru{uri} permanent
+	redir https://app.armada.sx{uri} permanent
 }
 
+# Старый хост → новый (закладки aptown1 продолжат работать)
 aptown1.fvds.ru {
 	tls /etc/caddy/ssl/aptown1.crt /etc/caddy/ssl/aptown1.key
+	redir https://app.armada.sx{uri} permanent
+}
 
+(armada) {
 	encode gzip
 
 	@entry_driver path /v /v/
@@ -98,4 +102,8 @@ aptown1.fvds.ru {
 		try_files {path} /index.html
 		file_server
 	}
+}
+
+app.armada.sx {
+	import armada
 }

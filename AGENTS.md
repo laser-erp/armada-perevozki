@@ -22,7 +22,7 @@
 
 ## Код и прод
 
-- Репо `laser-erp/armada-perevozki` · live **https://aptown1.fvds.ru/**
+- Репо `laser-erp/armada-perevozki` · live **https://app.armada.sx/** (редирект с aptown1.fvds.ru)
 - Рабочая ветка: `cursor/perf-speed-4317` (или та, что в задаче)
 - **Деплой на прод:** `./scripts/deploy-fvds.sh` — **только по просьбе** пользователя
 - **GitHub push** — **только по «пуш»**; репозиторий держать **Private**. Прод не зависит от GitHub

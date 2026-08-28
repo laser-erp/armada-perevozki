@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-entrybc23";
+const APP_BUILD="2026-08-28-entrybc24";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -382,12 +382,18 @@ function backFromEntryLogin(opts){
   if(m==='admin'||m==='driver'){ location.href='/kp.html'; return; }
   if(typeof show==='function') show('roles');
 }
-/** Backend API (S0). Локально → armada-api; на aptown1 → Caddy prefix. */
+/** Прод-хосты: VPS и основной домен приложения. */
+function isArmadaProdHost(hostname){
+  const h=(hostname||'').toLowerCase();
+  return h==='app.armada.sx'||h==='aptown1.fvds.ru'||h==='176.12.67.35';
+}
+const ARMADA_LIVE_ORIGIN='https://app.armada.sx';
+/** Backend API (S0). Локально → armada-api; на проде → Caddy prefix. */
 const API_BASE=(()=>{
   if(typeof location==='undefined') return '';
   const h=location.hostname;
   if(h==='localhost'||h==='127.0.0.1') return 'http://127.0.0.1:8787';
-  if(h==='aptown1.fvds.ru') return `${location.origin}/armada-api`;
+  if(isArmadaProdHost(h)) return `${location.origin}/armada-api`;
   return '';
 })();
 const BODY_TYPES=[
@@ -501,8 +507,8 @@ function uuid(){
 /** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
 const PB_BASE=(function(){
   const h=location.hostname;
-  if(h==='aptown1.fvds.ru'||h==='176.12.67.35') return location.origin;
-  return 'http://aptown1.fvds.ru';
+  if(isArmadaProdHost(h)) return location.origin;
+  return ARMADA_LIVE_ORIGIN;
 })();
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
@@ -1342,10 +1348,9 @@ async function lookupPartyByInnDaData(inn, token){
 }
 function egrulNalogBase(){
   const h=(location.hostname||'').toLowerCase();
-  if(h==='aptown1.fvds.ru'||h==='176.12.67.35'||h==='localhost'||h==='127.0.0.1')
+  if(isArmadaProdHost(h)||h==='localhost'||h==='127.0.0.1')
     return location.origin.replace(/\/$/,'')+'/egrul-api';
-  // С любого другого URL (GitHub Pages, закладка) — прокси на live, как PB_BASE
-  return 'http://aptown1.fvds.ru/egrul-api';
+  return ARMADA_LIVE_ORIGIN+'/egrul-api';
 }
 function parseEgrulDirectorField(g){
   const s=String(g||'').trim();
