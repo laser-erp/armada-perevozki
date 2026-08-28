@@ -96,6 +96,21 @@ aptown1.fvds.ru {
 		}
 	}
 
+	handle /map-osm/* {
+		uri strip_prefix /map-osm
+		reverse_proxy https://tile.openstreetmap.org {
+			header_up Host tile.openstreetmap.org
+			header_up User-Agent "ARMADA/1.0 (aptown1@gmail.com)"
+		}
+	}
+
+	handle /map-yandex-static/* {
+		uri strip_prefix /map-yandex-static
+		reverse_proxy https://static-maps.yandex.ru {
+			header_up Host static-maps.yandex.ru
+		}
+	}
+
 	handle {
 		root * /var/www/armada
 		header Cache-Control "no-store, no-cache, must-revalidate"

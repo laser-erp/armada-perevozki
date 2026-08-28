@@ -407,13 +407,37 @@ function paintCustomerIsothermHighlight(){
   const wrap=el&&el.closest('.cust-vtype-isotherm');
   if(wrap) wrap.classList.toggle('is-highlight', !!(el&&el.checked));
 }
+function customerLoadMethodsLabel(ids){
+  return (ids||[]).map(id=>typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id).join(', ');
+}
+function paintCustomerLoadMethodOptions(){
+  const types=customerSelectedVehicleTypes();
+  const allowedLoad=new Set(typeof custLoadMethodsForVehicleTypes==='function'?custLoadMethodsForVehicleTypes(types):[]);
+  const allowedUnload=new Set(typeof custUnloadMethodsForVehicleTypes==='function'?custUnloadMethodsForVehicleTypes(types):[]);
+  document.querySelectorAll('#cust-load-methods [data-load]').forEach(el=>{
+    const id=el.dataset.load;
+    const lbl=el.closest('.cust-check-item');
+    const ok=allowedLoad.has(id);
+    if(lbl) lbl.hidden=!ok;
+    if(!ok && el.checked) el.checked=false;
+    el.disabled=!types.length||!ok;
+  });
+  document.querySelectorAll('#cust-unload-methods [data-unload]').forEach(el=>{
+    const id=el.dataset.unload;
+    const lbl=el.closest('.cust-check-item');
+    const ok=allowedUnload.has(id);
+    if(lbl) lbl.hidden=!ok;
+    if(!ok && el.checked) el.checked=false;
+    el.disabled=!types.length||!ok;
+  });
+}
 function customerChecklistShortText(s, max){
   max=max||32;
   s=String(s||'').trim();
   if(!s) return '';
   return s.length<=max?s:s.slice(0,max-1)+'…';
 }
-const CUST_METHOD_SHORT={top:'верх.',side:'бок.',rear:'задн.',full_tent:'раст.',remove_crossbars:'перекл.',remove_posts:'стоек',no_gates:'б/ ворот',tail_lift:'гидр.',ramps:'апп.',crate:'обр.',boards:'борт.',side_both:'бок×2'};
+const CUST_METHOD_SHORT={top:'верх.',side:'бок.',rear:'задн.',full_tent:'раст.',remove_crossbars:'перекл.',remove_posts:'стоек',no_gates:'б/ ворот',tail_lift:'гидр.',ramps:'апп.',crate:'обр.',boards:'борт.',side_both:'бок×2',pour:'налив',pneumatic:'пневм.',hydraulic:'гидр.',electric:'эл.',diesel_compressor:'компр.'};
 function customerChecklistMethodShort(id){
   return CUST_METHOD_SHORT[id]||id;
 }
@@ -572,6 +596,7 @@ function syncCustomerVehicleTypeUi(){
   const hid=$('cust-body-type');
   if(hid) hid.value=customerPrimaryBodyType(types);
   setCustomerLoadUnloadEnabled(types.length>0);
+  paintCustomerLoadMethodOptions();
   syncCustomerClosedAllCheckbox();
   syncCustomerRefrAllCheckbox();
   syncCustomerOpenAllCheckbox();
@@ -709,7 +734,7 @@ function wireCustomerVehicleTypes(){
     el.onchange=()=>wireCustomerVehicleTypeChange(el);
   });
   document.querySelectorAll('#cust-load-methods [data-load], #cust-unload-methods [data-unload]').forEach(el=>{
-    el.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); };
+    el.onchange=()=>{ updateCustomerPricePreview(); paintCustomerFleetOptions(); scheduleCustomerOrderDraftSave(); customerChatSyncFromForm(); };
   });
   setCustomerLoadUnloadEnabled(false);
 }
@@ -837,6 +862,98 @@ function updateCustomerTripModeDisplay(fin){
   if(hid) hid.value=mode;
   paintCustomerFormChecklist();
 }
+function customerRouteMapBounds(pts){
+  let minLon=Infinity, maxLon=-Infinity, minLat=Infinity, maxLat=-Infinity;
+  pts.forEach(p=>{
+    minLon=Math.min(minLon, p.lon); maxLon=Math.max(maxLon, p.lon);
+    minLat=Math.min(minLat, p.lat); maxLat=Math.max(maxLat, p.lat);
+  });
+  const padLon=(maxLon-minLon)*0.12||0.03;
+  const padLat=(maxLat-minLat)*0.12||0.03;
+  return {minLon:minLon-padLon, maxLon:maxLon+padLon, minLat:minLat-padLat, maxLat:maxLat+padLat};
+}
+function customerRouteMapZoom(b){
+  const dLon=Math.abs(b.maxLon-b.minLon);
+  const dLat=Math.abs(b.maxLat-b.minLat);
+  const span=Math.max(dLon, dLat);
+  if(span>8) return 5;
+  if(span>4) return 6;
+  if(span>2) return 7;
+  if(span>1) return 8;
+  if(span>0.4) return 9;
+  if(span>0.15) return 10;
+  if(span>0.06) return 11;
+  return 12;
+}
+function customerRouteMapYandexStaticUrl(geom, w, h){
+  const key=typeof yandexMapsApiKey==='function'?yandexMapsApiKey():'';
+  if(!key||!geom||!geom.from||!geom.to) return null;
+  const coords=(geom.coordinates||[]).map(c=>({lon:+c[0], lat:+c[1]})).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+  const pts=coords.length?coords:[geom.from, geom.to];
+  const b=customerRouteMapBounds(pts);
+  const z=customerRouteMapZoom(b);
+  const centerLon=((b.minLon+b.maxLon)/2).toFixed(6);
+  const centerLat=((b.minLat+b.maxLat)/2).toFixed(6);
+  const plPts=pts.map(p=>`${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join(',');
+  const pt=`${geom.from.lon.toFixed(6)},${geom.from.lat.toFixed(6)},pm2gnm~${geom.to.lon.toFixed(6)},${geom.to.lat.toFixed(6)},pm2rdm`;
+  const q=new URLSearchParams({
+    lang:'ru_RU',
+    ll:`${centerLon},${centerLat}`,
+    size:`${w},${h}`,
+    z:String(z),
+    pt,
+    pl:`c:2563ebFF,w:4,${plPts}`,
+    apikey:key
+  });
+  return `/map-yandex-static/v1?${q.toString()}`;
+}
+function customerRouteMapOsmTileUrl(z, x, y){
+  return `/map-osm/${z}/${x}/${y}.png`;
+}
+function customerRouteMapLonLatToWorld(lon, lat, z){
+  const scale=256*Math.pow(2, z);
+  const x=(lon+180)/360*scale;
+  const sin=Math.sin(lat*Math.PI/180);
+  const y=(0.5-Math.log((1+sin)/(1-sin))/Math.PI/4)*scale;
+  return {x,y};
+}
+function customerRouteMapOsmHtml(geom, w, h){
+  const coords=(geom.coordinates||[]).map(c=>({lon:+c[0], lat:+c[1]})).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+  const pts=coords.length?coords:[geom.from, geom.to];
+  const b=customerRouteMapBounds(pts);
+  const z=customerRouteMapZoom(b);
+  const nw=customerRouteMapLonLatToWorld(b.minLon, b.maxLat, z);
+  const se=customerRouteMapLonLatToWorld(b.maxLon, b.minLat, z);
+  const x0=Math.floor(nw.x/256);
+  const y0=Math.floor(nw.y/256);
+  const x1=Math.floor(se.x/256);
+  const y1=Math.floor(se.y/256);
+  let tiles='';
+  for(let tx=x0; tx<=x1; tx++){
+    for(let ty=y0; ty<=y1; ty++){
+      const left=tx*256-nw.x;
+      const top=ty*256-nw.y;
+      tiles+=`<img class="cust-map-tile" src="${customerRouteMapOsmTileUrl(z, tx, ty)}" alt="" loading="lazy" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px" />`;
+    }
+  }
+  const proj=p=>{
+    const q=customerRouteMapLonLatToWorld(p.lon, p.lat, z);
+    return {x:q.x-nw.x, y:q.y-nw.y};
+  };
+  const line=pts.map(p=>{ const q=proj(p); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(' ');
+  const a=proj(geom.from); const bpt=proj(geom.to);
+  const svgW=Math.max(1, Math.ceil(se.x-nw.x));
+  const svgH=Math.max(1, Math.ceil(se.y-nw.y));
+  return `<div class="cust-map-osm" style="width:${svgW}px;height:${svgH}px">${tiles}
+    <svg viewBox="0 0 ${svgW} ${svgH}" class="cust-route-svg cust-map-overlay" role="img" aria-label="Маршрут на карте">
+      <polyline points="${line}" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="7" fill="#16a34a" stroke="#fff" stroke-width="2"/>
+      <circle cx="${bpt.x.toFixed(1)}" cy="${bpt.y.toFixed(1)}" r="7" fill="#dc2626" stroke="#fff" stroke-width="2"/>
+    </svg>
+    <span class="cust-map-badge cust-map-badge-a">A · загрузка</span>
+    <span class="cust-map-badge cust-map-badge-b">B · выгрузка</span>
+  </div>`;
+}
 function renderCustomerRouteMap(geom){
   const box=$('cust-route-map');
   const wrap=$('cust-route-map-wrap');
@@ -847,33 +964,15 @@ function renderCustomerRouteMap(geom){
     return;
   }
   if(wrap) wrap.classList.add('has-route');
-  const coords=(geom.coordinates||[]).map(c=>({lon:+c[0], lat:+c[1]})).filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
-  const pts=coords.length?coords:[geom.from, geom.to].map(p=>({lon:p.lon, lat:p.lat}));
-  let minLon=Infinity, maxLon=-Infinity, minLat=Infinity, maxLat=-Infinity;
-  pts.forEach(p=>{
-    minLon=Math.min(minLon, p.lon); maxLon=Math.max(maxLon, p.lon);
-    minLat=Math.min(minLat, p.lat); maxLat=Math.max(maxLat, p.lat);
-  });
-  const padLon=(maxLon-minLon)*0.08||0.02;
-  const padLat=(maxLat-minLat)*0.08||0.02;
-  minLon-=padLon; maxLon+=padLon; minLat-=padLat; maxLat+=padLat;
-  const w=320, h=160;
-  const proj=p=>{
-    const x=((p.lon-minLon)/(maxLon-minLon||1))*w;
-    const y=h-((p.lat-minLat)/(maxLat-minLat||1))*h;
-    return {x,y};
-  };
-  const line=pts.map(p=>{ const q=proj(p); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(' ');
-  const a=proj(geom.from); const b=proj(geom.to);
-  box.innerHTML=`<svg viewBox="0 0 ${w} ${h}" class="cust-route-svg" role="img" aria-label="Маршрут на карте">
-    <defs><linearGradient id="custMapBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8f0ea"/><stop offset="100%" stop-color="#dce8e0"/></linearGradient></defs>
-    <rect width="${w}" height="${h}" fill="url(#custMapBg)" rx="12"/>
-    <polyline points="${line}" fill="none" stroke="var(--accent,#2563eb)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="7" fill="#16a34a" stroke="#fff" stroke-width="2"/>
-    <circle cx="${b.x.toFixed(1)}" cy="${b.y.toFixed(1)}" r="7" fill="#dc2626" stroke="#fff" stroke-width="2"/>
-    <text x="12" y="18" class="cust-map-tag">A · загрузка</text>
-    <text x="12" y="${h-8}" class="cust-map-tag">B · выгрузка</text>
-  </svg>`;
+  const w=640, h=160;
+  const yandexUrl=customerRouteMapYandexStaticUrl(geom, w, h);
+  if(yandexUrl){
+    box.innerHTML=`<img class="cust-route-yandex" src="${yandexUrl}" width="${w}" height="${h}" alt="Маршрут на карте Яндекса" loading="lazy" />
+      <span class="cust-map-badge cust-map-badge-a">A · загрузка</span>
+      <span class="cust-map-badge cust-map-badge-b">B · выгрузка</span>`;
+    return;
+  }
+  box.innerHTML=customerRouteMapOsmHtml(geom, w, h);
 }
 
 function customerSelectedFulfillment(){
@@ -1360,6 +1459,8 @@ const CUST_CHAT_STEPS=[
   {id:'loadContact', title:'Контакт загрузки'},
   {id:'unloadContact', title:'Контакт выгрузки'},
   {id:'body', title:'Кузов'},
+  {id:'loadMethod', title:'Погрузка'},
+  {id:'unloadMethod', title:'Выгрузка'},
   {id:'summary', title:'Подтверждение'}
 ];
 const CUST_CHAT_BODY_CHIPS=[
@@ -1650,6 +1751,8 @@ function customerChatSyncFromForm(){
   if(unload) d.unload=unload;
   const types=customerSelectedVehicleTypes();
   if(types.length) d.bodyVtype=types[0];
+  d.loadMethods=customerSelectedLoadMethods();
+  d.unloadMethods=customerSelectedUnloadMethods();
   const loadName=(($('cust-loading-contact-name')||{}).value||'').trim();
   const loadPhone=formatPhone((($('cust-loading-contact-phone')||{}).value||'').trim());
   const unloadName=(($('cust-unloading-contact-name')||{}).value||'').trim();
@@ -1735,9 +1838,42 @@ function customerChatFilterVtypeSuggest(raw){
   list.hidden=false;
   return matches;
 }
+function customerChatLoadMethodOptions(vtype){
+  const ids=typeof custLoadMethodsForBodyType==='function'?custLoadMethodsForBodyType(vtype):[];
+  return ids.map(id=>{
+    const hit=typeof CUST_LOAD_METHODS!=='undefined'?CUST_LOAD_METHODS.find(x=>x.id===id):null;
+    return {id, label:hit?hit.label:(typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id)};
+  });
+}
+function customerChatUnloadMethodOptions(vtype){
+  const ids=typeof custUnloadMethodsForBodyType==='function'?custUnloadMethodsForBodyType(vtype):[];
+  return ids.map(id=>{
+    const hit=typeof CUST_LOAD_METHODS!=='undefined'?CUST_LOAD_METHODS.find(x=>x.id===id):null;
+    return {id, label:hit?hit.label:(typeof custUnloadMethodLabel==='function'?custUnloadMethodLabel(id):id)};
+  });
+}
+function customerChatMethodsLabel(ids){
+  return customerLoadMethodsLabel(ids);
+}
+function customerChatSelectLoadMethods(ids, label){
+  customerChat.data.loadMethods=(ids||[]).slice();
+  customerChatApplyToForm();
+  saveCustomerChatState();
+  scheduleCustomerOrderDraftSave();
+  customerChatAdvance(label||customerChatMethodsLabel(ids));
+}
+function customerChatSelectUnloadMethods(ids, label){
+  customerChat.data.unloadMethods=(ids||[]).slice();
+  customerChatApplyToForm();
+  saveCustomerChatState();
+  scheduleCustomerOrderDraftSave();
+  customerChatAdvance(label||customerChatMethodsLabel(ids));
+}
 function customerChatSelectBody(vtype, label){
   if(!vtype) return;
   customerChat.data.bodyVtype=vtype;
+  customerChat.data.loadMethods=[];
+  customerChat.data.unloadMethods=[];
   customerChatApplyToForm();
   saveCustomerChatState();
   scheduleCustomerOrderDraftSave();
@@ -1802,6 +1938,14 @@ function customerChatBotPrompt(stepId){
   if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — чтобы водитель мог связаться на месте.';
   if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Имя и телефон (можно пропустить, если тот же).';
   if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
+  if(stepId==='loadMethod'){
+    if(who) return `${who}<strong>как будем грузить?</strong> Выберите подходящие варианты.`;
+    return '<strong>Как будем грузить?</strong> Выберите подходящие варианты.';
+  }
+  if(stepId==='unloadMethod'){
+    if(who) return `${who}<strong>как выгружаем?</strong>`;
+    return '<strong>Как выгружаем?</strong>';
+  }
   if(stepId==='summary'){
     if(who) return `${who}проверьте заявку перед отправкой:`;
     return 'Проверьте заявку перед отправкой:';
@@ -1843,6 +1987,7 @@ function customerChatSetVehicleType(vtype){
     if(CUST_REFR_VTYPE_IDS.includes(vtype)||vtype===CUST_ISOTHERM_VTYPE_ID) syncCustomerRefrAllCheckbox();
     if(CUST_OPEN_VTYPE_IDS.includes(vtype)) syncCustomerOpenAllCheckbox();
     syncCustomerVehicleTypeUi();
+    paintCustomerLoadMethodOptions();
   }
 }
 function customerChatApplyToForm(){
@@ -1872,6 +2017,12 @@ function customerChatApplyToForm(){
   if(unloadNameEl && d.unloadingContactName!=null) unloadNameEl.value=d.unloadingContactName;
   if(unloadPhoneEl && d.unloadingContactPhone!=null) unloadPhoneEl.value=d.unloadingContactPhone;
   if(d.bodyVtype) customerChatSetVehicleType(d.bodyVtype);
+  if(Array.isArray(d.loadMethods)||Array.isArray(d.unloadMethods)){
+    clearCustomerLoadUnloadMethods();
+    (d.loadMethods||[]).forEach(id=>setCustomerLoadMethod(id, true));
+    (d.unloadMethods||[]).forEach(id=>setCustomerUnloadMethod(id, true));
+    paintCustomerLoadMethodOptions();
+  }
   updateCustomerPricePreview();
   paintCustomerFleetOptions();
 }
@@ -1936,6 +2087,8 @@ function customerChatSummaryHtml(){
     {id:'loadContact', label:'Контакт загрузки', val:customerChatContactLine(d.loadingContactName, d.loadingContactPhone), html:false},
     {id:'unloadContact', label:'Контакт выгрузки', val:customerChatContactLine(d.unloadingContactName, d.unloadingContactPhone), html:false},
     {id:'body', label:'Кузов', val:d.bodyVtype?customerChatBodyLabel(d.bodyVtype):'—', html:false},
+    {id:'loadMethod', label:'Погрузка', val:(d.loadMethods||[]).length?customerChatMethodsLabel(d.loadMethods):'—', html:false},
+    {id:'unloadMethod', label:'Выгрузка', val:(d.unloadMethods||[]).length?customerChatMethodsLabel(d.unloadMethods):'—', html:false},
     {id:'price', label:'Ориентир', val:price?`<strong>${fmt(price)} ₽</strong>`:'уточнит перевозчик', html:true}
   ];
   return `<div class="chat-summary"><b>Сводка</b>${
@@ -2007,6 +2160,23 @@ function customerChatRenderWidgets(){
       CUST_CHAT_BODY_CHIPS.map(c=>`<button type="button" class="chat-chip muted" data-chat-body="${c.id}">${esc(c.label)}</button>`).join('')
     }</div>
     <div class="chat-chips"><button type="button" class="chat-chip muted" data-chat-body="${CUST_CHAT_BODY_FORM_FALLBACK.id}">${esc(CUST_CHAT_BODY_FORM_FALLBACK.label)}</button></div>`;
+  }else if(step.id==='loadMethod' || step.id==='unloadMethod'){
+    const vtype=customerChat.data.bodyVtype||'tent';
+    const selKey=step.id==='loadMethod'?'loadMethods':'unloadMethods';
+    if(!(customerChat.data[selKey]||[]).length && CUST_REAR_AUTO_VTYPE_IDS.has(vtype)){
+      customerChat.data[selKey]=['rear'];
+    }
+    const opts=step.id==='loadMethod'?customerChatLoadMethodOptions(vtype):customerChatUnloadMethodOptions(vtype);
+    const selected=new Set(customerChat.data[selKey]||[]);
+    const attr=step.id==='loadMethod'?'data-chat-load':'data-chat-unload';
+    const okId=step.id==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok';
+    widget=`<div class="chat-chips chat-load-chips">${
+      opts.map(o=>{
+        const on=selected.has(o.id);
+        return `<button type="button" class="chat-chip ${on?'primary':'muted'}" ${attr}="${esc(o.id)}">${esc(o.label)}</button>`;
+      }).join('')
+    }</div>
+    <div class="chat-chips"><button type="button" class="chat-chip primary" id="${okId}">Далее →</button></div>`;
   }else if(step.id==='summary' && customerChat.summaryReady){
     widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
   }
@@ -2185,6 +2355,32 @@ function customerChatWireWidgets(stepId){
       search.onblur=()=>{ setTimeout(()=>{ if(suggest) suggest.hidden=true; }, 150); };
       setTimeout(()=>search.focus(), 80);
     }
+  }
+  if(stepId==='loadMethod' || stepId==='unloadMethod'){
+    const key=stepId==='loadMethod'?'loadMethods':'unloadMethods';
+    const attr=stepId==='loadMethod'?'data-chat-load':'data-chat-unload';
+    const selected=new Set(customerChat.data[key]||[]);
+    document.querySelectorAll(`[${attr}]`).forEach(btn=>{
+      btn.onclick=()=>{
+        const id=btn.getAttribute(attr);
+        if(selected.has(id)) selected.delete(id);
+        else selected.add(id);
+        btn.classList.toggle('primary', selected.has(id));
+        btn.classList.toggle('muted', !selected.has(id));
+      };
+    });
+    const ok=$(stepId==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok');
+    if(ok) ok.onclick=()=>{
+      const ids=[...selected];
+      const err=$('cust-chat-error');
+      if(!ids.length){
+        if(err) err.textContent='Выберите хотя бы один вариант';
+        return;
+      }
+      if(err) err.textContent='';
+      if(stepId==='loadMethod') customerChatSelectLoadMethods(ids, customerChatMethodsLabel(ids));
+      else customerChatSelectUnloadMethods(ids, customerChatMethodsLabel(ids));
+    };
   }
   if(stepId==='summary'){
     const sub=$('cust-chat-submit');

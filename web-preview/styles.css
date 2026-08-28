@@ -759,9 +759,17 @@
     .chat-vtype-hint{margin:8px 0 0;padding-left:36px;font-size:.72rem;color:var(--muted,#64748b)}
     .chat-vtype-chips{margin-top:4px}
     .cust-route-map-wrap:not(.has-route){display:none}
-    .cust-route-map{min-height:160px;display:flex;align-items:center;justify-content:center}
+    .cust-route-map{min-height:160px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;border-radius:14px}
+    .cust-route-yandex{width:100%;height:auto;display:block;object-fit:cover;min-height:160px}
+    .cust-map-osm{position:relative;min-height:160px;margin:0 auto;max-width:100%;overflow:hidden;border-radius:14px;background:#e8ecea}
+    .cust-map-tile{position:absolute;width:256px;height:256px;pointer-events:none;user-select:none}
+    .cust-map-overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+    .cust-map-badge{position:absolute;z-index:2;font:600 10px/1.2 system-ui,sans-serif;color:#334155;background:rgba(255,255,255,.88);padding:3px 8px;border-radius:999px;box-shadow:0 1px 4px rgba(15,23,42,.12)}
+    .cust-map-badge-a{left:10px;top:8px}
+    .cust-map-badge-b{left:10px;bottom:8px}
     .cust-route-svg{width:100%;height:auto;display:block}
     .cust-map-tag{font:600 10px/1.2 system-ui,sans-serif;fill:var(--muted,#667)}
+    .chat-load-chips .chat-chip.primary{box-shadow:0 0 0 2px rgba(37,99,235,.25)}
     .cust-trip-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface2,#f4f6f5);border:1px solid var(--border)}
     .cust-trip-label{font-size:var(--fs-sm);color:var(--muted);font-weight:600}
     .cust-trip-badge{font-weight:800;font-size:.95rem;color:var(--accent);padding:4px 10px;border-radius:999px;background:rgba(37,99,235,.08)}

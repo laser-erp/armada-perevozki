@@ -527,6 +527,13 @@ function renderAdminActivity(){
         <input id="dadata-token" type="password" placeholder="Token DaData" value="${esc((state.settings&&state.settings.dadataToken)||'')}" style="flex:1" />
         <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
       </div>
+      <h2 class="form-section-title" style="margin-top:12px">Карта маршрута (Яндекс)</h2>
+      <p class="cat-panel-hint">Ключ JavaScript API и Static API Яндекс.Карт — для схемы Яндекса на форме заказчика. Без ключа — OpenStreetMap.</p>
+      <label>API-ключ Яндекс.Карт</label>
+      <div class="row">
+        <input id="yandex-maps-key" type="password" placeholder="Ключ developer.tech.yandex.ru" value="${esc((state.settings&&state.settings.yandexMapsApiKey)||'')}" style="flex:1" />
+        <button type="button" class="primary" id="yandex-maps-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
+      </div>
       <div class="toast-ok" id="adm-pin-ok" style="display:none"></div>
       <div class="cat-list" style="margin-top:8px">
         ${admins.map((a,i)=>{
@@ -553,16 +560,22 @@ function renderAdminActivity(){
   `;
   $('act-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('fns-api-save')&&($('fns-api-save').onclick=()=>{
-    state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
     state.settings.fnsApiKey=(($('fns-api-key')||{}).value||'').trim();
     persist();
     alert(state.settings.fnsApiKey?'Ключ API-ФНС сохранён':'Ключ API-ФНС очищен');
   });
   $('dadata-save')&&($('dadata-save').onclick=()=>{
-    state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
     state.settings.dadataToken=(($('dadata-token')||{}).value||'').trim();
     persist();
     alert(state.settings.dadataToken?'Токен DaData сохранён':'Токен очищен');
+  });
+  $('yandex-maps-save')&&($('yandex-maps-save').onclick=()=>{
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
+    state.settings.yandexMapsApiKey=(($('yandex-maps-key')||{}).value||'').trim();
+    persist();
+    alert(state.settings.yandexMapsApiKey?'Ключ Яндекс.Карт сохранён':'Ключ Яндекс.Карт очищен — карта OSM');
   });
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{
     const st=$('new-firm-inn-status');

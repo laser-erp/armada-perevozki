@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-chat-personal-name4317a";
+const APP_BUILD="2026-08-28-yandex-map-load-types4317a";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -518,9 +518,52 @@ const CUST_LOAD_METHODS=[
   {id:'ramps', label:'аппарели'},
   {id:'crate', label:'с обрешеткой'},
   {id:'boards', label:'с бортами'},
-  {id:'side_both', label:'боковая с двух сторон'}
+  {id:'side_both', label:'боковая с двух сторон'},
+  {id:'pour', label:'налив'},
+  {id:'pneumatic', label:'пневматический'},
+  {id:'hydraulic', label:'гидравлический'},
+  {id:'electric', label:'электрический'},
+  {id:'diesel_compressor', label:'дизельный компрессор'}
 ];
 const CUST_UNLOAD_METHODS=CUST_LOAD_METHODS.slice();
+const CUST_TENT_LOAD_IDS=['top','side','rear','full_tent','remove_crossbars','remove_posts','no_gates','tail_lift','ramps','side_both'];
+const CUST_OPEN_LOAD_IDS=['top','side','rear','full_tent','remove_crossbars','tail_lift','ramps','boards','crate','side_both'];
+const CUST_DUMP_LOAD_IDS=['top','rear'];
+const CUST_SPECIALIZED_LOAD_IDS={
+  tank:['pour'],
+  grain:['top','pour','pneumatic'],
+  timber:['top','side','rear','ramps','crate','boards'],
+  lowbed:['rear','ramps','tail_lift'],
+  car_carrier:['rear','ramps'],
+  manipulator:['rear','top','side','tail_lift']
+};
+function custLoadMethodsForBodyType(vtype){
+  const id=String(vtype||'').trim();
+  if(!id) return CUST_LOAD_METHODS.map(x=>x.id);
+  if(CUST_SPECIALIZED_LOAD_IDS[id]) return CUST_SPECIALIZED_LOAD_IDS[id].slice();
+  if(id==='tent') return CUST_TENT_LOAD_IDS.slice();
+  if(id==='dump') return CUST_DUMP_LOAD_IDS.slice();
+  if(CUST_REAR_ONLY_VEHICLE_TYPES.has(id)) return id==='van'?['rear','tail_lift']:['rear'];
+  if(id==='isotherm') return ['rear','tail_lift'];
+  if(['board','open','platform','shalanda'].includes(id)) return CUST_OPEN_LOAD_IDS.slice();
+  return ['top','side','rear','tail_lift','ramps'];
+}
+function custUnloadMethodsForBodyType(vtype){
+  return custLoadMethodsForBodyType(vtype);
+}
+function custLoadMethodsForVehicleTypes(types){
+  const ids=(types||[]).filter(Boolean);
+  if(!ids.length) return [];
+  const set=new Set();
+  ids.forEach(v=>custLoadMethodsForBodyType(v).forEach(x=>set.add(x)));
+  return CUST_LOAD_METHODS.filter(m=>set.has(m.id)).map(m=>m.id);
+}
+function custUnloadMethodsForVehicleTypes(types){
+  return custLoadMethodsForVehicleTypes(types);
+}
+function yandexMapsApiKey(){
+  return String((state.settings&&state.settings.yandexMapsApiKey)||'').trim();
+}
 const CUST_PACKAGING_TYPES=[
   {id:'pallets', label:'Паллеты'},
   {id:'boxes', label:'Короба / места'},
@@ -826,7 +869,7 @@ const state={
   adminLogins:Array.isArray(saved.adminLogins)?saved.adminLogins:[],
   adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
   spaces:Array.isArray(saved.spaces)?saved.spaces:[],
-  settings:Object.assign({fnsApiKey:'',dadataToken:''}, saved.settings||{}),
+  settings:Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
   driverInvites:Array.isArray(saved.driverInvites)?saved.driverInvites:[],
@@ -1071,7 +1114,7 @@ function applyPayload(p, opts){
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   if(typeof applyBillingPayload==='function') applyBillingPayload(p.billing);
   else if(p.billing&&typeof p.billing==='object') state.billing=p.billing;
-  state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{}, p.settings||{});
+  state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{}, p.settings||{});
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
   state.dataEpoch=Number(p.dataEpoch)||0;
@@ -1519,7 +1562,7 @@ function createSpaceForAdmin(admin, firm){
 }
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
 function migrateSpaces(){
-  state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+  state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
   let changed=false;
   const slugUsed=new Set();
