@@ -683,6 +683,101 @@ function customerFrameworkContractBannerHtml(customerCo, carrierCo){
     <p class="hint" id="cust-contract-status">${st==='pending'?'Ожидает вашей подписи':'Договор будет подготовлен при первой заявке'}</p>
   </section>`;
 }
+/** Роль фирмы space в документообороте по заявке */
+function orderDocRoleForSpace(o, spaceId){
+  if(!o||!spaceId) return null;
+  if(o.partnerSpaceId===spaceId) return 'carrier';
+  if(o.spaceId===spaceId){
+    if(o.partnerSpaceId && o.partnerSpaceId!==spaceId) return 'customer';
+    if(o.onExchange || (o.wasOnExchange && !o.partnerSpaceId)) return 'customer';
+    return 'carrier';
+  }
+  return null;
+}
+function orderDocRoleLabel(role){
+  if(role==='carrier') return 'Мы перевозчик';
+  if(role==='customer') return 'Мы заказчик';
+  return '—';
+}
+function adminOrderDocItems(){
+  return [
+    {id:'invoice', title:'Счёт на оплату'},
+    {id:'framework', title:'Рамочный договор'},
+    {id:'application', title:'Заявка на перевозку'},
+    {id:'transportApp', title:'Договор‑заявка'},
+    {id:'etrn', title:'ЭТрН'},
+    {id:'act', title:'Акт выполненных работ'}
+  ];
+}
+function adminOrdersForDocs(opts){
+  opts=opts||{};
+  const sid=opts.spaceId||null;
+  const superAll=!!opts.superAll;
+  const roleFilter=opts.roleFilter||'all';
+  const firmFilter=opts.firmFilter||'all';
+  const search=String(opts.search||'').trim().toLowerCase();
+  const deleted=typeof deletedOrderIdSet==='function'?deletedOrderIdSet():new Set();
+  return (state.orders||[]).filter(o=>{
+    if(!o||deleted.has(o.id)) return false;
+    if(superAll){
+      if(firmFilter!=='all' && o.spaceId!==firmFilter && o.partnerSpaceId!==firmFilter) return false;
+    } else if(!sid || (o.spaceId!==sid && o.partnerSpaceId!==sid)) return false;
+    const role=orderDocRoleForSpace(o, sid||(o.partnerSpaceId||o.spaceId));
+    if(roleFilter==='carrier' && role!=='carrier') return false;
+    if(roleFilter==='customer' && role!=='customer') return false;
+    if(search){
+      const hay=[o.customer,o.ownCompanyName,o.carrierCompanyName,String(o.sequentialNumber),routeText(o)].join(' ').toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const ta=new Date(b.createdAt||0).getTime();
+    const tb=new Date(a.createdAt||0).getTime();
+    return ta-tb;
+  });
+}
+function buildAdminOrderDocBundleBody(o){
+  if(!o) return '';
+  const parts=[];
+  adminOrderDocItems().forEach(kind=>{
+    const st=customerOrderDocStatus(kind.id, o);
+    if(!st.available) return;
+    let body='';
+    if(kind.id==='invoice'){
+      let inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
+      if(!inv && typeof createCustomerInvoiceForOrder==='function'){
+        const co=findCompanyById(o.customerId);
+        const carrier=findCompanyById(o.ownCompanyId)||(typeof carrierOwnCompanyForSpace==='function'?carrierOwnCompanyForSpace(o.spaceId):null);
+        inv=createCustomerInvoiceForOrder(o, co, carrier);
+      }
+      if(inv && typeof customerInvoiceDocBody==='function') body=customerInvoiceDocBody(inv);
+    } else if(kind.id==='framework'){
+      const co=findCompanyById(o.customerId);
+      const carrier=findCompanyById(o.ownCompanyId)||(typeof carrierOwnCompanyForSpace==='function'?carrierOwnCompanyForSpace(o.spaceId):null);
+      if(co) body=buildFrameworkContractBody(co, carrier);
+    } else if(kind.id==='etrn'){
+      if(typeof buildEtrnPrintBody==='function') body=buildEtrnPrintBody(o);
+    } else {
+      body=buildOrderDocBody(kind.id, o);
+    }
+    if(body){
+      parts.push(`<section class="bundle-section"><h2 style="page-break-before:${parts.length?'always':'auto'};margin:0 0 12px;font-size:16px">${esc(kind.title)}</h2>${body}</section>`);
+    }
+  });
+  return parts.join('\n');
+}
+function downloadAllAdminOrderDocs(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o) return;
+  const body=buildAdminOrderDocBundleBody(o);
+  if(!body){ alert('Пока нет готовых документов по этой заявке'); return; }
+  if(typeof openPrintHtml==='function'){
+    openPrintHtml(`Пакет документов · заявка №${o.sequentialNumber||'—'}`, body);
+  }
+}
+function openAdminOrderDocument(orderId, kind){
+  if(typeof openCustomerOrderDocument==='function') openCustomerOrderDocument(orderId, kind);
+}
 function wireCustomerFrameworkContractBanner(customerCo, carrierCo){
   const preview=$('cust-contract-preview');
   const agree=$('cust-contract-agree');

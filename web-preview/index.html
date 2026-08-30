@@ -512,6 +512,7 @@
           <button type="button" class="admin-nav-item" data-nav="exchange">Биржа</button>
           <button type="button" class="admin-nav-item" data-nav="catalogs" id="admin-catalogs">Справочники</button>
           <button type="button" class="admin-nav-item" data-nav="links" id="admin-links">Ссылки</button>
+          <button type="button" class="admin-nav-item" data-nav="documents" id="admin-documents">Документы</button>
           <button type="button" class="admin-nav-item" data-nav="activity" id="admin-activity" style="display:none">Активность</button>
           <button type="button" class="admin-nav-item" data-nav="billing" id="admin-billing" style="display:none">Тарифы</button>
           <button type="button" class="admin-nav-item" data-nav="plans" id="admin-plans" style="display:none">Планы</button>
@@ -773,6 +774,25 @@
         <h1>Входы и ссылки</h1>
       </header>
       <div class="admin-form-scroll" id="links-form"></div>
+    </div>
+  </div>
+
+  <div id="admin-docs-screen" class="screen">
+    <div class="admin-form-shell adm-docs-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="docs-back">← Назад</button>
+        <h1>Документы</h1>
+      </header>
+      <div class="adm-docs-scroll">
+        <nav class="adm-docs-tabs" id="adm-docs-tabs" role="tablist" aria-label="Разделы документов">
+          <button type="button" class="adm-docs-tab" data-adm-docs-tab="legal">Юридические</button>
+          <button type="button" class="adm-docs-tab on" data-adm-docs-tab="buh">Бух.доки</button>
+          <button type="button" class="adm-docs-tab" data-adm-docs-tab="letters">Письма</button>
+        </nav>
+        <div class="adm-docs-panel" id="adm-docs-panel-legal"></div>
+        <div class="adm-docs-panel on" id="adm-docs-panel-buh"></div>
+        <div class="adm-docs-panel" id="adm-docs-panel-letters"></div>
+      </div>
     </div>
   </div>
 

@@ -1275,6 +1275,7 @@
     .onboard-welcome-foot a{color:var(--accent)}
 
     /* Планы (супер-админ) */
+    #admin-plans-screen .admin-form-shell{max-width:920px}
     .admin-plans-shell .plans-hint{margin:0 14px 8px}
     .plans-layout{display:flex;flex-direction:column;min-height:0;flex:1}
     .plans-nav{
@@ -1320,3 +1321,63 @@
       .plans-nav-item{flex:0 0 auto;max-width:none;width:100%}
       .plans-scroll{flex:1;min-width:0}
     }
+
+    /* Документы (админ) */
+    #admin-docs-screen .admin-form-shell{max-width:920px}
+    .adm-docs-scroll{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
+    .adm-docs-tabs{
+      display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px 10px;
+      border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:2
+    }
+    .adm-docs-tab{
+      border:1px solid var(--border);border-radius:999px;padding:8px 14px;
+      background:var(--field);font-weight:600;font-size:.8rem;cursor:pointer;font-family:inherit
+    }
+    .adm-docs-tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .adm-docs-panel{display:none;padding:12px 14px 24px}
+    .adm-docs-panel.on{display:block}
+    .adm-docs-toolbar{
+      display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px
+    }
+    .adm-docs-toolbar input,.adm-docs-toolbar select{
+      flex:1;min-width:140px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);font:inherit
+    }
+    .adm-doc-card{
+      background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:14px 16px;margin-bottom:10px;display:grid;gap:8px
+    }
+    @media (min-width:640px){
+      .adm-doc-card{grid-template-columns:1fr auto;align-items:center}
+    }
+    .adm-doc-card h3{margin:0;font-size:.95rem}
+    .adm-doc-badge{
+      display:inline-block;font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:999px;
+      background:rgba(30,90,168,.12);color:#1e5aa8;margin-right:6px
+    }
+    .adm-doc-actions{display:flex;gap:6px;flex-wrap:wrap}
+    .adm-doc-actions button,.adm-doc-actions a.secondary{width:auto;flex:0 0 auto;padding:8px 12px;font-size:.78rem}
+    .adm-order-group{
+      background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:12px 14px;margin-bottom:12px
+    }
+    .adm-order-group-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .adm-order-group h4{margin:0;font-size:.9rem}
+    .adm-doc-role-tag{
+      font-size:.68rem;font-weight:700;padding:3px 8px;border-radius:999px;
+      background:rgba(239,68,68,.1);color:var(--accent);white-space:nowrap
+    }
+    .adm-order-doc-line{
+      display:flex;justify-content:space-between;align-items:center;gap:8px;
+      padding:8px 0;border-top:1px solid var(--border);font-size:.85rem
+    }
+    .adm-order-doc-line:first-of-type{border-top:0}
+    .adm-order-pack-row{margin-top:10px}
+    .adm-order-pack-row button{width:auto;padding:8px 14px;font-size:.82rem}
+    .adm-letter-page{max-width:180mm;margin:0 auto;padding:12mm 10mm;font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.45}
+    .adm-letterhead{
+      display:grid;grid-template-columns:72px 1fr;gap:14px 16px;padding-bottom:10px;
+      border-bottom:2.5px solid #1e5aa8;margin-bottom:18px;font-family:Inter,Arial,sans-serif
+    }
+    .adm-letterhead__logo{width:68px;height:auto;border-radius:8px}
+    .adm-letterhead__name{font-size:15pt;font-weight:700;color:#1e5aa8;margin:0 0 4px}
+    .adm-letterhead__req,.adm-letterhead__contacts{font-size:8.5pt;color:#475569;margin:0;line-height:1.35}

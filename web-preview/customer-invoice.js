@@ -177,6 +177,33 @@ function downloadCustomerInvoice(invoiceId){
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 5000);
 }
+function customerInvoiceDocBody(invoice){
+  const order=(state.orders||[]).find(o=>o.id===invoice.orderId)||{};
+  const carrier=findCompanyById(invoice.carrierId||order.ownCompanyId)||null;
+  const customer=findCompanyById(invoice.customerId||order.customerId)||null;
+  const bank=companyBankDetails(carrier);
+  const amount=invoice.amount||invoiceAmountForOrder(order);
+  const amtLine=amount>0?`${fmt(amount)} ₽`:(invoice.pricePending?'уточняется перевозчиком':'—');
+  const bankLines=[
+    bank.bankName?`Банк: ${esc(bank.bankName)}`:null,
+    bank.bankBik?`БИК: ${esc(bank.bankBik)}`:null,
+    bank.bankAccount?`Р/с: ${esc(bank.bankAccount)}`:null,
+    bank.bankCorrAccount?`К/с: ${esc(bank.bankCorrAccount)}`:null
+  ].filter(Boolean).join('<br>');
+  return `
+    <div class="doc-head">
+      <div class="brand">АРМАДА</div>
+      <h1>Счёт на оплату №${esc(invoice.number)}</h1>
+      <div class="muted">от ${esc(typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(invoice.createdAt):invoice.createdAt)}</div>
+    </div>
+    <table><thead><tr><th>Поле</th><th>Значение</th></tr></thead><tbody>
+      <tr><td>Получатель</td><td>${esc(invoice.carrierName||carrier&&carrier.name||'—')}${carrier&&carrier.inn?`<br>ИНН ${esc(carrier.inn)}`:''}</td></tr>
+      <tr><td>Плательщик</td><td>${esc(invoice.customerName||customer&&customer.name||'—')}${customer&&customer.inn?`<br>ИНН ${esc(customer.inn)}`:''}</td></tr>
+      <tr><td>Основание</td><td>Заявка №${esc(invoice.orderSeq||invoice.number)} · ${esc(invoice.route||routeText(order))}</td></tr>
+    </tbody></table>
+    <p><strong>К оплате: ${amtLine}</strong></p>
+    ${bankLines?`<p>${bankLines}</p>`:''}`;
+}
 function openCustomerInvoice(invoiceId){
   const inv=findInvoiceById(invoiceId);
   if(!inv){ alert('Счёт не найден'); return; }
