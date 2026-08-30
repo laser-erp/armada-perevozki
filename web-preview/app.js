@@ -1058,7 +1058,6 @@ function migrateCompanies(){
     passportNumber:String(d.passportNumber||'').trim(),
     passportIssuedBy:String(d.passportIssuedBy||'').trim(),
     passportIssuedAt:String(d.passportIssuedAt||'').trim(),
-    passportIssuedAt:String(d.passportIssuedAt||'').trim(),
     licenseIssuedAt:String(d.licenseIssuedAt||'').trim(),
     passportPhoto:docPhotoOrNull(d.passportPhoto),
     passportRegPhoto:docPhotoOrNull(d.passportRegPhoto),
