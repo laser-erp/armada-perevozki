@@ -1103,6 +1103,7 @@ function migrateCompanies(){
   state.companies=(state.companies||[]).map(normalizeCompany).filter(Boolean);
   // drivers / vehicles: seed missing defaults (Нечаев А.С., В 603 СА 47, …)
   state.drivers=(state.drivers||[]).map(d=>normalizeDriverRecord({
+    id:d.id||uuid(),
     name:d.name,
     salaryPercent:d.salaryPercent??30,
     exchangeEnabled:!!d.exchangeEnabled,
