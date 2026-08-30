@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-30-cust-drv-confirm4317j";
+const APP_BUILD="2026-08-30-vehicle-crew4317k";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -1375,6 +1375,7 @@ function ensureDriverInCompany(opts){
   if(!name||!companyId) return false;
   if(driverExistsInCompany(name, companyId)) return false;
   state.drivers.push({
+    id:uuid(),
     name,
     salaryPercent:opts.salaryPercent??30,
     exchangeEnabled:!!opts.exchangeEnabled,

@@ -86,7 +86,9 @@ function normalizeDriverRecord(d){
     passportPhoto:docPhotoOrNull(d.passportPhoto),
     passportRegPhoto:docPhotoOrNull(d.passportRegPhoto),
     licensePhotoFront:docPhotoOrNull(d.licensePhotoFront),
-    licensePhotoBack:docPhotoOrNull(d.licensePhotoBack)
+    licensePhotoBack:docPhotoOrNull(d.licensePhotoBack),
+    id:d.id||uuid(),
+    vehicleId:d.vehicleId||null
   });
 }
 function formatPassportText(src){
@@ -959,6 +961,58 @@ function fleetVehiclesForCompany(companyId){
   if(!companyId) return [];
   return (state.vehicles||[]).filter(v=>v.companyId===companyId);
 }
+function fleetDriversAssignedToVehicle(v){
+  if(!v) return [];
+  const ids=new Set((v.assignedDriverIds||[]).map(String));
+  if(!ids.size) return [];
+  return fleetDriversForCompany(v.companyId).filter(d=>d.id&&ids.has(String(d.id)));
+}
+function vehicleForDriver(d){
+  if(!d) return null;
+  if(d.vehicleId){
+    const hit=fleetVehicleById(d.vehicleId);
+    if(hit) return hit;
+  }
+  const did=d.id?String(d.id):'';
+  if(!did||!d.companyId) return null;
+  return (state.vehicles||[]).find(v=>v.companyId===d.companyId
+    && (v.assignedDriverIds||[]).map(String).includes(did))||null;
+}
+function vehicleCrewSummary(v){
+  if(!v) return '';
+  const drv=fleetDriversAssignedToVehicle(v);
+  if(!drv.length) return '';
+  const names=drv.map(d=>d.name).join(', ');
+  if(v.crewName) return `${v.crewName}: ${names}`;
+  if(drv.length===1) return names;
+  return `Экипаж: ${names}`;
+}
+function setVehicleCrew(v, driverIds, crewName){
+  if(!v||!v.id) return;
+  const ids=(driverIds||[]).map(String).filter(Boolean);
+  v.assignedDriverIds=ids;
+  v.crewName=String(crewName||'').trim();
+  fleetDriversForCompany(v.companyId).forEach(d=>{
+    if(!d.id) d.id=uuid();
+    if(ids.includes(String(d.id))) d.vehicleId=v.id;
+    else if(d.vehicleId===v.id) d.vehicleId=null;
+  });
+}
+function primaryDriverForVehicle(v){
+  return fleetDriversAssignedToVehicle(v)[0]||null;
+}
+function migrateFleetCrewLinks(){
+  (state.vehicles||[]).forEach(v=>{
+    if(!v||!v.id) return;
+    const ids=new Set((v.assignedDriverIds||[]).map(String));
+    (state.drivers||[]).forEach(d=>{
+      if(!d||d.companyId!==v.companyId||d.vehicleId!==v.id) return;
+      if(!d.id) d.id=uuid();
+      ids.add(String(d.id));
+    });
+    if(ids.size) v.assignedDriverIds=[...ids];
+  });
+}
 function vehicleBusyAt(plate, atIso, exceptOrderId){
   const want=String(plate||'').trim();
   if(!want) return false;
@@ -1063,6 +1117,8 @@ function migrateCompanies(){
     passportRegPhoto:docPhotoOrNull(d.passportRegPhoto),
     licensePhotoFront:docPhotoOrNull(d.licensePhotoFront),
     licensePhotoBack:docPhotoOrNull(d.licensePhotoBack),
+    id:d.id||uuid(),
+    vehicleId:d.vehicleId||null,
     ownerAdminId:d.ownerAdminId||null,
     ownerAdminName:d.ownerAdminName||null,
     spaceId:d.spaceId||null,
@@ -1074,6 +1130,7 @@ function migrateCompanies(){
     state.drivers=DEFAULT_DRIVERS.map(d=>({...d}));
   }
   state.vehicles=(state.vehicles||[]).map(v=>normalizeFleetVehicle(v)).filter(v=>v&&v.plate);
+  migrateFleetCrewLinks();
   if(!state.vehicles.length && !(state.spaces||[]).length){
     state.vehicles=DEFAULT_VEHICLES.map(v=>({...v}));
   }
@@ -1674,6 +1731,8 @@ function normalizeFleetVehicle(v){
     stsSeries:String(v.stsSeries||'').trim(),
     stsNumber:String(v.stsNumber||'').trim(),
     stsPhoto:docPhotoOrNull(v.stsPhoto),
+    assignedDriverIds:(Array.isArray(v.assignedDriverIds)?v.assignedDriverIds:[]).map(String).filter(Boolean),
+    crewName:String(v.crewName||'').trim(),
     serviceIntervals:(Array.isArray(v.serviceIntervals)?v.serviceIntervals:[]).map(normalizeServiceInterval).filter(Boolean),
     maintenanceLogs:(Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]).map(normalizeMaintenanceLog).filter(Boolean)
   };

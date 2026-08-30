@@ -832,11 +832,24 @@ function openVehicleCard(vehicleId){
   }).join('') || `<div class="hint">Записей пока нет</div>`;
   const ivOpts=['<option value="">— не привязывать —</option>']
     .concat((v.serviceIntervals||[]).map(iv=>`<option value="${esc(iv.id)}">${esc(iv.name)}</option>`)).join('');
+  const coDrivers=fleetDriversForCompany(v.companyId);
+  const assignedIds=new Set((v.assignedDriverIds||[]).map(String));
+  const crewHtml=coDrivers.length?`<div class="vc-crew-list">${coDrivers.map(d=>{
+    const did=String(d.id||'');
+    return `<label class="vc-crew-item check"><input type="checkbox" data-crew-drv="${esc(did)}" ${assignedIds.has(did)?'checked':''}/> <span>${esc(d.name)}${d.phone?` · ${esc(formatPhone(d.phone))}`:''}</span></label>`;
+  }).join('')}</div>`:`<div class="hint">Нет водителей в фирме — добавьте во вкладке «Водители»</div>`;
   const titleEl=$('veh-card-title');
   if(titleEl) titleEl.textContent=v.plate||'Авто';
   const box=$('vehicle-card-form');
   box.innerHTML=`
-    <p class="cat-panel-hint">${esc([firm, v.makeModel, vehicleSpecText(v)].filter(Boolean).join(' · ')||'Карточка автомобиля')}</p>
+    <p class="cat-panel-hint">${esc([firm, v.makeModel, vehicleSpecText(v), vehicleCrewSummary(v)].filter(Boolean).join(' · ')||'Карточка автомобиля')}</p>
+    <section class="form-section">
+      <h2 class="form-section-title">Экипаж / водители</h2>
+      <p class="form-section-hint">Привяжите любого своего водителя или нескольких — экипаж на это авто.</p>
+      <label>Название экипажа (необязательно)<input id="vc-crew-name" value="${esc(v.crewName||'')}" placeholder="Например: смена А" /></label>
+      ${crewHtml}
+      <button type="button" class="primary cat-add-btn" id="vc-save-crew" style="margin-top:8px">Сохранить экипаж</button>
+    </section>
     <section class="form-section">
       <h2 class="form-section-title">Документы ТС</h2>
       <div class="fin-grid">
@@ -923,6 +936,14 @@ function openVehicleCard(vehicleId){
   };
   $('log-iv')&&($('log-iv').onchange=refreshLogCheckPreview);
   $('veh-card-back').onclick=()=>{ catalogTab='vehicles'; openCatalogs(); };
+  $('vc-save-crew')&&($('vc-save-crew').onclick=()=>{
+    const ids=[...document.querySelectorAll('[data-crew-drv]')].filter(x=>x.checked).map(x=>x.dataset.crewDrv).filter(Boolean);
+    if(typeof setVehicleCrew==='function') setVehicleCrew(v, ids, ($('vc-crew-name')||{}).value||'');
+    bumpDataEpoch('veh-crew');
+    persist();
+    flashCatOk('Экипаж сохранён');
+    openVehicleCard(v.id);
+  });
   $('vc-save-head').onclick=()=>{
     v.makeModel=(($('vc-model')||{}).value||'').trim();
     v.currentOdometer=numOrNull(($('vc-odo')||{}).value);
@@ -3008,9 +3029,10 @@ function openCatalogs(){
 
   const driverCards=drivers.map(({d,i})=>{
     const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||(d.spaceId&&(findSpaceById(d.spaceId)||{}).name)||'';
+    const veh=typeof vehicleForDriver==='function'?vehicleForDriver(d):null;
     return `<div class="drv-card-wrap">
       <div class="drv-card">
-      <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}</div>
+      <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}${veh?`<span class="drv-firm">🚛 ${esc(veh.plate)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
       <input class="drv-license" id="drv-license-${i}" value="${esc(d.licenseNo||'')}" placeholder="ВУ" title="Водительское удостоверение" />
@@ -3058,7 +3080,7 @@ function openCatalogs(){
           <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
         </div>
       </div>
-      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}${v.stsPhoto?' · СТС 📄':''}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
+      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec,vehicleCrewSummary(v)].filter(Boolean).join(' · ')||'укажите т и габариты')}${v.stsPhoto?' · СТС 📄':''}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
       <div class="veh-specs">
         <input id="veh-pay-${i}" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" value="${v.payloadTons??''}" />
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
@@ -3107,7 +3129,7 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
-      <p class="cat-panel-hint">${(()=>{ const co=currentOwnCompany(); return co?`Авто «${esc(co.name)}»: тоннаж и габариты для биржи. «Ремонт и ТО» — журнал`:(isSuperAdmin()?'Авто привязаны к фирме админа. «Ремонт и ТО» — карточка обслуживания':'Сначала нужна ваша фирма'); })()}</p>
+      <p class="cat-panel-hint">${(()=>{ const co=currentOwnCompany(); return co?`Авто «${esc(co.name)}»: тоннаж, габариты, экипаж/водители — в карточке «Ремонт и ТО»`:(isSuperAdmin()?'Авто привязаны к фирме админа. Экипаж — в карточке авто':'Сначала нужна ваша фирма'); })()}</p>
       <div class="cat-quick">
         <div class="row">
           <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
@@ -3642,6 +3664,7 @@ function openCatalogs(){
     if(driverExistsInCompany(name, owner.companyId)){ alert('Такой водитель уже есть в вашей фирме'); return; }
     state.drivers.push({
       name, salaryPercent:pct, phone, pin, exchangeEnabled,
+      id:uuid(),
       ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
       spaceId:owner.spaceId||null,
       companyId:owner.companyId, companyName:owner.companyName

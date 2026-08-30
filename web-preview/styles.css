@@ -1056,6 +1056,10 @@
     .drv-docs summary{cursor:pointer;font-size:.72rem;font-weight:700;color:var(--accent);padding:4px 2px}
     .drv-docs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:4px 0 8px}
     .drv-docs-grid input{width:100%;padding:6px 8px;min-height:30px;font-size:.72rem;border-radius:var(--pill);border:0;background:var(--field);color:var(--text)}
+    .vc-crew-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+    .vc-crew-item{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;padding:6px 8px;border-radius:var(--pill);background:var(--field)}
+    .vc-crew-item input{flex:0 0 auto}
+    .vc-crew-item span{min-width:0;line-height:1.25}
     .drv-doc-photos{display:grid;grid-template-columns:1fr;gap:6px;margin:6px 0 4px}
     .doc-photo-row{display:flex;flex-direction:column;gap:4px;font-size:.68rem;color:var(--muted);font-weight:600}
     .doc-photo-row__box{display:flex;flex-wrap:wrap;gap:6px;align-items:center}

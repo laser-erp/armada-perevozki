@@ -1477,6 +1477,9 @@ function driverPayText(o){
   return 'ЗП: —';
 }
 function driverProfilePlate(){
+  const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);
+  const assigned=rec&&typeof vehicleForDriver==='function'?vehicleForDriver(rec):null;
+  if(assigned&&assigned.plate) return assigned.plate;
   const open=state.shift&&!state.shift.endedAt?state.shift:(findOpenShift()||null);
   if(open && open.vehiclePlate) return open.vehiclePlate;
   const last=(state.shifts||[])
