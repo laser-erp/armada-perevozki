@@ -3,6 +3,8 @@ let adminDocsTab = 'buh';
 let adminDocsRoleFilter = 'all';
 let adminDocsFirmFilter = 'all';
 let adminDocsSearch = '';
+let adminDocsConstructorTpl = 'application';
+let adminDocsConstructorOrderId = '';
 
 const ADMIN_LEGAL_DOCS = [
   { id: 'full', n: '📦', title: 'Полный юридический пакет', meta: 'Все 7 документов одним PDF', href: 'legal-pdf/ARMADA_Legal_Package_Full.pdf' },
@@ -41,6 +43,11 @@ function adminDocsLetterheadHtml(co, sp) {
 }
 
 function openAdminLetterBlank() {
+  const sid = adminDocsSpaceId();
+  if (typeof openDocTemplatePrint === 'function' && sid) {
+    openDocTemplatePrint('letter', sid, null);
+    return;
+  }
   const co = typeof currentOwnCompany === 'function' ? currentOwnCompany() : null;
   const sp = adminDocsSpaceId() ? findSpaceById(adminDocsSpaceId()) : null;
   const body = `${adminDocsLetterheadHtml(co, sp)}
@@ -148,7 +155,7 @@ function adminDocsBuhPanelHtml() {
 }
 
 function adminDocsLettersPanelHtml() {
-  return `<p class="cat-panel-hint">Исходящие на фирменном бланке вашей фирмы.</p>
+  return `<p class="cat-panel-hint">Исходящие на фирменном бланке вашей фирмы. Текст письма редактируется в <button type="button" class="linkish" data-adm-goto-constructor="letter">Конструкторе</button>.</p>
     <div class="adm-doc-card">
       <div><h3>Пустой фирменный бланк</h3><p class="meta">Новое письмо · реквизиты из «Наша фирма»</p></div>
       <div class="adm-doc-actions"><button type="button" class="primary" id="adm-letter-blank">Открыть</button></div>
@@ -159,13 +166,176 @@ function adminDocsLettersPanelHtml() {
     </div>`;
 }
 
+function adminDocsConstructorPanelHtml() {
+  const sid = adminDocsSpaceId();
+  if (!sid) {
+    return '<div class="empty">Нет space у администратора — шаблоны привязаны к фирме.</div>';
+  }
+  const canEdit = typeof canEditDocTemplatesForSpace === 'function' && canEditDocTemplatesForSpace(sid);
+  const sp = findSpaceById(sid);
+  const tplId = adminDocsConstructorTpl || 'application';
+  const body = typeof getDocTemplateBody === 'function' ? getDocTemplateBody(sid, tplId) : '';
+  const sample = typeof docTemplateSampleOrder === 'function' ? docTemplateSampleOrder(sid) : null;
+  let order = sample;
+  if (adminDocsConstructorOrderId) {
+    order = (state.orders || []).find(o => o.id === adminDocsConstructorOrderId) || sample;
+  }
+  const preview = typeof renderDocTemplatePreviewHtml === 'function'
+    ? renderDocTemplatePreviewHtml(tplId, body, order, sid)
+    : '';
+  const orderOpts = (state.orders || [])
+    .filter(o => o && (o.spaceId === sid || o.partnerSpaceId === sid))
+    .slice(0, 30)
+    .map(o => `<option value="${esc(o.id)}"${order && order.id === o.id ? ' selected' : ''}>№${esc(o.sequentialNumber)} · ${esc(o.customer || '—')}</option>`)
+    .join('');
+  const tplList = (typeof DOC_TEMPLATE_CATALOG !== 'undefined' ? DOC_TEMPLATE_CATALOG : []).map(t => `
+    <button type="button" class="adm-tpl-item${t.id === tplId ? ' on' : ''}" data-adm-tpl-id="${esc(t.id)}">
+      <span class="adm-tpl-item-title">${esc(t.title)}</span>
+      <span class="adm-tpl-item-hint">${esc(t.hint)}</span>
+    </button>`).join('');
+  const vars = (typeof DOC_TEMPLATE_VARS !== 'undefined' ? DOC_TEMPLATE_VARS : []).map(v =>
+    `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
+  ).join('');
+  const readOnlyHint = canEdit
+    ? `<p class="cat-panel-hint">Шаблоны фирмы «${esc(sp && sp.name || sid)}». После сохранения подстановка полей используется при печати документов.</p>`
+    : `<p class="hint">Просмотр шаблонов другой фирмы. Редактировать можно только шаблоны своего space${typeof isSuperAdmin === 'function' && isSuperAdmin() ? ' (ваш space как супер-админа)' : ''}.</p>`;
+  return `${readOnlyHint}
+    <div class="adm-tpl-layout">
+      <aside class="adm-tpl-side">
+        <h3 class="adm-tpl-side-title">Шаблоны</h3>
+        <div class="adm-tpl-list">${tplList}</div>
+        <h3 class="adm-tpl-side-title">Поля</h3>
+        <div class="adm-tpl-vars">${vars}</div>
+      </aside>
+      <div class="adm-tpl-main">
+        <div class="adm-tpl-toolbar">
+          <label class="adm-tpl-order-lbl">Пример заявки
+            <select id="adm-tpl-order"${canEdit ? '' : ' disabled'}>
+              <option value="">— демо-данные —</option>
+              ${orderOpts}
+            </select>
+          </label>
+          <div class="adm-tpl-actions">
+            ${canEdit ? `<button type="button" class="secondary" id="adm-tpl-reset">Сброс</button>
+              <button type="button" class="primary" id="adm-tpl-save">Сохранить</button>` : ''}
+            <button type="button" class="secondary" id="adm-tpl-print">Печать</button>
+          </div>
+        </div>
+        <textarea id="adm-tpl-editor" class="adm-tpl-editor" rows="14"${canEdit ? '' : ' readonly'}>${esc(body)}</textarea>
+        <h3 class="adm-tpl-preview-title">Превью на бланке</h3>
+        <div class="adm-tpl-preview-wrap" id="adm-tpl-preview">${preview}</div>
+      </div>
+    </div>`;
+}
+
+function refreshAdminDocsConstructorPreview() {
+  const sid = adminDocsSpaceId();
+  const editor = $('adm-tpl-editor');
+  const box = $('adm-tpl-preview');
+  if (!sid || !editor || !box) return;
+  const tplId = adminDocsConstructorTpl || 'application';
+  let order = null;
+  const sel = $('adm-tpl-order');
+  if (sel && sel.value) order = (state.orders || []).find(o => o.id === sel.value) || null;
+  else if (typeof docTemplateSampleOrder === 'function') order = docTemplateSampleOrder(sid);
+  if (typeof renderDocTemplatePreviewHtml === 'function') {
+    box.innerHTML = renderDocTemplatePreviewHtml(tplId, editor.value, order, sid);
+  }
+}
+
+function wireAdminDocsConstructor() {
+  document.querySelectorAll('[data-adm-tpl-id]').forEach(b => {
+    b.onclick = () => {
+      adminDocsConstructorTpl = b.dataset.admTplId;
+      renderAdminDocsBody();
+    };
+  });
+  document.querySelectorAll('[data-adm-goto-constructor]').forEach(b => {
+    b.onclick = () => {
+      adminDocsTab = 'constructor';
+      if (b.dataset.admGotoConstructor) adminDocsConstructorTpl = b.dataset.admGotoConstructor;
+      paintAdminDocsTabs();
+      renderAdminDocsBody();
+    };
+  });
+  document.querySelectorAll('[data-adm-tpl-var]').forEach(b => {
+    b.onclick = () => {
+      const ta = $('adm-tpl-editor');
+      if (!ta || ta.readOnly) return;
+      const key = b.dataset.admTplVar || '';
+      const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+      const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+      ta.value = ta.value.slice(0, start) + key + ta.value.slice(end);
+      ta.focus();
+      refreshAdminDocsConstructorPreview();
+    };
+  });
+  const editor = $('adm-tpl-editor');
+  if (editor && !editor.readOnly) {
+    editor.oninput = () => {
+      clearTimeout(wireAdminDocsConstructor._pv);
+      wireAdminDocsConstructor._pv = setTimeout(refreshAdminDocsConstructorPreview, 120);
+    };
+  }
+  const orderSel = $('adm-tpl-order');
+  if (orderSel) {
+    orderSel.onchange = () => {
+      adminDocsConstructorOrderId = orderSel.value || '';
+      refreshAdminDocsConstructorPreview();
+    };
+  }
+  const save = $('adm-tpl-save');
+  if (save) {
+    save.onclick = () => {
+      const sid = adminDocsSpaceId();
+      if (!sid || !canEditDocTemplatesForSpace(sid)) return;
+      const ta = $('adm-tpl-editor');
+      if (typeof setDocTemplateBody === 'function') setDocTemplateBody(sid, adminDocsConstructorTpl, ta ? ta.value : '');
+      if (typeof persist === 'function') persist();
+      save.textContent = 'Сохранено';
+      setTimeout(() => { save.textContent = 'Сохранить'; }, 1500);
+    };
+  }
+  const reset = $('adm-tpl-reset');
+  if (reset) {
+    reset.onclick = () => {
+      const sid = adminDocsSpaceId();
+      if (!sid || !canEditDocTemplatesForSpace(sid)) return;
+      if (!confirm('Вернуть текст шаблона по умолчанию?')) return;
+      if (state.docTemplates && state.docTemplates.spaces && state.docTemplates.spaces[sid]) {
+        delete state.docTemplates.spaces[sid][adminDocsConstructorTpl];
+      }
+      if (typeof bumpDataEpoch === 'function') bumpDataEpoch('doc-template-reset');
+      if (typeof persist === 'function') persist();
+      renderAdminDocsBody();
+    };
+  }
+  const printBtn = $('adm-tpl-print');
+  if (printBtn) {
+    printBtn.onclick = () => {
+      const sid = adminDocsSpaceId();
+      const ta = $('adm-tpl-editor');
+      const body = ta ? ta.value : '';
+      let order = null;
+      const sel = $('adm-tpl-order');
+      if (sel && sel.value) order = (state.orders || []).find(o => o.id === sel.value) || null;
+      if (typeof openPrintHtml === 'function' && typeof renderDocTemplatePreviewHtml === 'function') {
+        openPrintHtml(
+          (DOC_TEMPLATE_CATALOG.find(t => t.id === adminDocsConstructorTpl) || {}).title || 'Документ',
+          renderDocTemplatePreviewHtml(adminDocsConstructorTpl, body, order, sid)
+        );
+      }
+    };
+  }
+}
+
 function paintAdminDocsTabs() {
   const tabs = $('adm-docs-tabs');
   if (!tabs) return;
   tabs.querySelectorAll('[data-adm-docs-tab]').forEach(b => {
     b.classList.toggle('on', b.dataset.admDocsTab === adminDocsTab);
   });
-  ['legal', 'buh', 'letters'].forEach(id => {
+  ['legal', 'buh', 'letters', 'constructor'].forEach(id => {
     const panel = $('adm-docs-panel-' + id);
     if (panel) panel.classList.toggle('on', id === adminDocsTab);
   });
@@ -211,10 +381,13 @@ function renderAdminDocsBody() {
   const legal = $('adm-docs-panel-legal');
   const buh = $('adm-docs-panel-buh');
   const letters = $('adm-docs-panel-letters');
+  const ctor = $('adm-docs-panel-constructor');
   if (legal) legal.innerHTML = adminDocsLegalPanelHtml();
   if (buh) buh.innerHTML = adminDocsBuhPanelHtml();
   if (letters) letters.innerHTML = adminDocsLettersPanelHtml();
+  if (ctor) ctor.innerHTML = adminDocsConstructorPanelHtml();
   wireAdminDocsPanel();
+  if (adminDocsTab === 'constructor') wireAdminDocsConstructor();
 }
 
 function renderAdminDocuments() {

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-30-plans-sync4317c";
+const APP_BUILD="2026-08-30-doc-constructor4317d";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -912,7 +912,8 @@ const state={
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
   adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{},
   billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}},
-  invoices:Array.isArray(saved.invoices)?saved.invoices:[]
+  invoices:Array.isArray(saved.invoices)?saved.invoices:[],
+  docTemplates:(saved.docTemplates && typeof saved.docTemplates==='object')?saved.docTemplates:{spaces:{}}
 };
 let pbRecordId=null;
 let persistTimer=null;
@@ -1120,6 +1121,7 @@ function snapshot(){
     dataEpoch:Number(state.dataEpoch)||0,
     billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
     invoices:Array.isArray(state.invoices)?state.invoices:[],
+    docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
     opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
@@ -1153,6 +1155,8 @@ function applyPayload(p, opts){
   if(typeof applyBillingPayload==='function') applyBillingPayload(p.billing);
   else if(p.billing&&typeof p.billing==='object') state.billing=p.billing;
   state.invoices=Array.isArray(p.invoices)?p.invoices:[];
+  if(typeof applyDocTemplatesPayload==='function') applyDocTemplatesPayload(p.docTemplates);
+  else if(p.docTemplates&&typeof p.docTemplates==='object') state.docTemplates=p.docTemplates;
   state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{}, p.settings||{});
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];

@@ -102,6 +102,11 @@ function orderDriverDetailLines(o){
   return html;
 }
 function buildOrderDocBody(kind, o){
+  const sid=o.partnerSpaceId||o.spaceId;
+  if(typeof buildOrderDocFromTemplate==='function'){
+    const tpl=buildOrderDocFromTemplate(kind,o,sid);
+    if(tpl) return tpl;
+  }
   const own=resolveParty(o.ownCompanyId, o.ownCompanyName, o.spaceId);
   const customer=resolveParty(o.customerId, o.customer, o.spaceId);
   const carrierName=o.carrierCompanyName||(o.executorType==='partner'?'':own.name);
@@ -372,9 +377,14 @@ function signCustomerFrameworkContract(customerId, signedByName){
   return true;
 }
 function buildFrameworkContractBody(customerCo, carrierCo){
-  const customer=resolveParty(customerCo.id, customerCo.name, customerCo.spaceId);
+  const sid=(carrierCo&&carrierCo.spaceId)||(customerCo&&customerCo.spaceId)||(typeof currentSpaceId==='function'?currentSpaceId():null);
+  if(typeof buildOrderDocFromTemplate==='function'&&sid&&hasCustomDocTemplate(sid,'framework')){
+    const demoOrder={customerId:customerCo&&customerCo.id,customer:customerCo&&customerCo.name,ownCompanyId:carrierCo&&carrierCo.id,ownCompanyName:carrierCo&&carrierCo.name,spaceId:sid,sequentialNumber:'—',createdAt:new Date().toISOString()};
+    return buildOrderDocFromTemplate('framework', demoOrder, sid);
+  }
+  const customer=customerCo?resolveParty(customerCo.id, customerCo.name, customerCo.spaceId):{name:'—',inn:'',address:''};
   const carrier=resolveParty(carrierCo&&carrierCo.id, carrierCo&&carrierCo.name, carrierCo&&carrierCo.spaceId);
-  const fc=normalizeFrameworkContract(customerCo.frameworkContract);
+  const fc=normalizeFrameworkContract(customerCo&&customerCo.frameworkContract);
   const signedLine=fc.signedAt?`<p class="muted">Подписан в системе: ${esc(dateTime(fc.signedAt))}${fc.signedBy?` · ${esc(fc.signedBy)}`:''}</p>`:'';
   return `
     <div class="doc-head">
