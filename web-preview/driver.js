@@ -307,7 +307,14 @@ function continueDriverPhone(){
   showErr('');
   const phone=formatPhone((driverLoginPhoneEl()&&driverLoginPhoneEl().value||'').trim());
   if(!phone){ showErr('Введите телефон'); return; }
-  const byPhone=findDriversByPhone(phone);
+  tryDriverPhoneLogin(phone, showErr);
+}
+async function tryDriverPhoneLogin(phone, showErr){
+  let byPhone=findDriversByPhone(phone);
+  if(!byPhone.length && typeof refreshAuthFromServer==='function'){
+    await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+    byPhone=findDriversByPhone(phone);
+  }
   if(!byPhone.length){
     showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
     return;

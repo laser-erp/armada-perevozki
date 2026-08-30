@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-30-auth-sync4317a";
+const APP_BUILD="2026-08-30-api-sync4317b";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -1902,6 +1902,32 @@ function armadaApiJsonHeaders(){
   if(t) h.Authorization='Bearer '+t;
   return h;
 }
+async function refreshAuthFromServer(opts){
+  if(navigator.onLine===false || typeof fetchServerState!=='function') return false;
+  try{
+    const rec=await fetchServerState(3500, opts||{pin:'sync', meta:{role:'sync'}});
+    if(!rec||!rec.payload) return false;
+    pbRecordId=rec.id;
+    if(typeof mergeAdminAuthFromRemote==='function'){
+      mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
+    }
+    if(typeof migrateSpaces==='function') migrateSpaces();
+    if(typeof migrateDriverPins==='function') migrateDriverPins();
+    if(typeof migrateAdmins==='function') migrateAdmins();
+    persistLocalOnly();
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+async function ensureArmadaApiToken(opts){
+  if(!API_BASE) return false;
+  if(armadaApiToken()) return true;
+  if(typeof armadaApiLogin!=='function') return false;
+  const o=opts||{};
+  const token=await armadaApiLogin(o.pin||'sync', o.meta||{role:'sync'});
+  return !!token;
+}
 async function armadaApiLogin(pin, meta){
   if(!API_BASE || !pin) return null;
   try{
@@ -1929,8 +1955,9 @@ async function fetchServerStateFromPb(timeoutMs){
   const data=await res.json();
   return (data.items&&data.items[0])||null;
 }
-async function fetchServerState(timeoutMs){
+async function fetchServerState(timeoutMs, opts){
   if(API_BASE){
+    await ensureArmadaApiToken(opts);
     try{ return await fetchServerStateFromApi(timeoutMs); }
     catch(err){ console.warn('API state fetch, fallback PB', err); }
   }
@@ -2011,6 +2038,7 @@ async function mergeRemoteAheadOnPush(remote){
   return {aborted:true, reason:'remote_ahead'};
 }
 async function pushServerState(){
+  if(API_BASE) await ensureArmadaApiToken({});
   const payload=snapshot();
   localStorage.setItem(KEY, JSON.stringify(payload));
   try{

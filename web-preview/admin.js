@@ -202,30 +202,37 @@ async function loginAdmin(){
   if(pinErr) pinErr.textContent='';
   const btn=$('pin-ok');
   if(btn) btn.disabled=true;
+  const id=(($('admin-name-select')||{}).value||'').trim();
+  const pin=(($('pin-input')||{}).value||'').trim();
+  const admPre=state.admins.find(a=>a.id===id);
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
-      const rec=await fetchServerState(3500);
+      const rec=await fetchServerState(3500, {
+        pin,
+        meta: admPre ? {id: admPre.id, spaceId: admPre.spaceId, role:'admin'} : {role:'admin'}
+      });
       if(rec&&rec.payload){
         pbRecordId=rec.id;
         mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
         migrateAdmins();
+        migrateSpaces();
+        migrateDriverPins();
         persistLocalOnly();
         fillAdminLoginSelect();
       }
     }
   }catch(_){}
-  finally{ if(btn) btn.disabled=false; }
-  const id=(($('admin-name-select')||{}).value||'').trim();
-  const pin=(($('pin-input')||{}).value||'').trim();
   const adm=state.admins.find(a=>a.id===id);
   if(!adm){
     if(pinErr) pinErr.textContent=state.admins.length
       ? 'Выберите администратора'
-      : 'Нет учётных записей — попросите супер-админа восстановить доступ и дождитесь синхронизации';
+      : 'Нет учётных записей — попросите супер-админа восстановить доступ и обновите страницу';
+    if(btn) btn.disabled=false;
     return;
   }
   if(pin!==String(adm.pin)){
-    if(pinErr) pinErr.textContent='Неверный PIN. Если доступ только что восстановили — обновите страницу через минуту';
+    if(pinErr) pinErr.textContent='Неверный PIN. Если доступ только что восстановили — обновите страницу (Ctrl+F5)';
+    if(btn) btn.disabled=false;
     return;
   }
   if(adm.mustChangePin){
@@ -241,6 +248,7 @@ async function loginAdmin(){
   show('admin');
   renderAdmin();
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+  if(btn) btn.disabled=false;
 }
 function logoutAdmin(){
   if(currentAdmin){
