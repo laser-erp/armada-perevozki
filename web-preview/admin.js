@@ -134,6 +134,7 @@ function setAdminNav(nav){
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
+  if(nav==='plans'){ openAdminPlans(); return; }
   if(nav==='links'){ openAdminLinks(); return; }
   if(nav==='eto') state.adminFilter='eto';
   else if(nav==='exchange') state.adminFilter='exchange';
@@ -149,8 +150,10 @@ function setAdminNav(nav){
 function updateAdminChrome(){
   const act=$('admin-activity');
   const bill=$('admin-billing');
+  const plans=$('admin-plans');
   if(act) act.style.display=isSuperAdmin()?'':'none';
   if(bill) bill.style.display=isSuperAdmin()?'':'none';
+  if(plans) plans.style.display=isSuperAdmin()?'':'none';
   const title=$('admin-title');
   const userEl=$('admin-sidebar-user');
   if(!currentAdmin){

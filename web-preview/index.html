@@ -514,6 +514,7 @@
           <button type="button" class="admin-nav-item" data-nav="links" id="admin-links">Ссылки</button>
           <button type="button" class="admin-nav-item" data-nav="activity" id="admin-activity" style="display:none">Активность</button>
           <button type="button" class="admin-nav-item" data-nav="billing" id="admin-billing" style="display:none">Тарифы</button>
+          <button type="button" class="admin-nav-item" data-nav="plans" id="admin-plans" style="display:none">Планы</button>
         </nav>
         <div class="admin-sidebar-foot">
           <button type="button" class="admin-nav-item ghost" id="admin-help">Помощь</button>
@@ -775,6 +776,22 @@
     </div>
   </div>
 
+  <div id="admin-plans-screen" class="screen">
+    <div class="admin-form-shell admin-plans-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="plans-back">← Назад</button>
+        <h1>Планы разработки</h1>
+      </header>
+      <p class="cat-panel-hint plans-hint">Дорожные карты по ролям. ✅ готово · 🟡 в работе · ⬜ не начато. Источник: <code>docs/plans/</code></p>
+      <div class="plans-layout">
+        <nav class="plans-nav" id="plans-nav" aria-label="Разделы планов"></nav>
+        <div class="admin-form-scroll plans-scroll" id="plans-scroll">
+          <div id="plans-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="admin-vehicle-card" class="screen">
     <div class="admin-form-shell">
       <header class="form-topbar">
@@ -822,6 +839,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-30-admin-btn4317f"></script>
+  <script src="/boot-loader.js?v=2026-08-30-admin-plans4317a"></script>
 </body>
 </html>

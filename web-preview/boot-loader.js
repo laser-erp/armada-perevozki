@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-30-admin-btn4317f';
+  var APP_BUILD = '2026-08-30-admin-plans4317a';
 
   window.__armadaBootDone = false;
   setTimeout(function () {
@@ -44,7 +44,7 @@
     var isZ = /\/(z)(\/|$)/.test(p);
     var files = ['store.js', 'billing.js'];
     if (isV) files.push('qrcode.min.js', 'entry-share.js', 'etrn.js', 'driver.js');
-    else if (isA) files.push('qrcode.min.js', 'entry-share.js', 'order-documents.js', 'etrn.js', 'admin.js', 'onboarding.js');
+    else if (isA) files.push('qrcode.min.js', 'entry-share.js', 'order-documents.js', 'etrn.js', 'admin.js', 'admin-plans.js', 'onboarding.js');
     else if (isZ) files.push('qrcode.min.js', 'customer-invoice.js', 'order-documents.js', 'etrn.js', 'customer.js', 'onboarding.js');
     else {
       files.push(
@@ -55,6 +55,7 @@
         'driver.js',
         'etrn.js',
         'admin.js',
+        'admin-plans.js',
         'customer.js',
         'onboarding.js'
       );
