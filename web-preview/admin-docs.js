@@ -1,7 +1,7 @@
 /* АРМАДА — раздел «Документы» в админке */
 let adminDocsTab = 'buh';
 let adminDocsRoleFilter = 'all';
-let adminDocsFirmFilter = 'all';
+let adminDocsFirmFilter = '';
 let adminDocsSearch = '';
 let adminDocsConstructorTpl = 'application';
 let adminDocsConstructorOrderId = '';
@@ -80,12 +80,13 @@ function adminDocsLegalPanelHtml() {
 
 function adminDocsBuhToolbarHtml() {
   const superAll = typeof isSuperAdmin === 'function' && isSuperAdmin();
+  const firmFilter = adminDocsFirmFilter || adminDocsDefaultFirmFilter();
   let firmOpts = '';
   if (superAll) {
     const spaces = (state.spaces || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
     firmOpts = `<select id="adm-docs-firm" aria-label="Фирма">
-      <option value="all"${adminDocsFirmFilter === 'all' ? ' selected' : ''}>Все фирмы</option>
-      ${spaces.map(s => `<option value="${esc(s.id)}"${adminDocsFirmFilter === s.id ? ' selected' : ''}>${esc(s.name || s.id)}</option>`).join('')}
+      <option value="all"${firmFilter === 'all' ? ' selected' : ''}>Все фирмы (супер-админ)</option>
+      ${spaces.map(s => `<option value="${esc(s.id)}"${firmFilter === s.id ? ' selected' : ''}>${esc(s.name || s.id)}</option>`).join('')}
     </select>`;
   }
   return `<div class="adm-docs-toolbar">
@@ -135,21 +136,28 @@ function adminDocsOrderGroupHtml(o, viewSpaceId) {
 function adminDocsBuhPanelHtml() {
   const sid = adminDocsSpaceId();
   const superAll = typeof isSuperAdmin === 'function' && isSuperAdmin();
-  const viewSpaceId = sid || adminDocsFirmFilter;
+  const firmFilter = adminDocsFirmFilter || adminDocsDefaultFirmFilter();
+  const viewSpaceId = superAll && firmFilter !== 'all' ? firmFilter : sid;
   const orders = typeof adminOrdersForDocs === 'function'
     ? adminOrdersForDocs({
       spaceId: sid,
       superAll,
       roleFilter: adminDocsRoleFilter,
-      firmFilter: adminDocsFirmFilter,
+      firmFilter,
       search: adminDocsSearch
     })
     : [];
+  const scopeHint = superAll && firmFilter === 'all'
+    ? '<p class="hint">Супер-админ: сейчас все фирмы. Чтобы видеть только свою — выберите её в списке.</p>'
+    : superAll
+      ? `<p class="hint">Фирма: ${esc((findSpaceById(firmFilter) || {}).name || firmFilter)}</p>`
+      : `<p class="hint">Только документы вашей фирмы${sid ? '' : ' (нет space у учётки)'}</p>`;
   const list = orders.length
     ? orders.slice(0, 40).map(o => adminDocsOrderGroupHtml(o, viewSpaceId)).join('')
     : '<div class="empty">Нет заявок по выбранным фильтрам</div>';
   const more = orders.length > 40 ? `<p class="hint">Показаны последние 40 из ${orders.length}. Уточните поиск.</p>` : '';
   return `${adminDocsBuhToolbarHtml()}
+    ${scopeHint}
     <p class="cat-panel-hint">Реальные счета, договоры и акты по заявкам. «Мы заказчик» — биржа и субподряд. «Мы перевозчик» — ваш парк или забор с биржи.</p>
     ${list}${more}`;
 }
@@ -402,6 +410,7 @@ function openAdminDocuments() {
     alert('Войдите в админку');
     return;
   }
+  adminDocsFirmFilter = adminDocsDefaultFirmFilter();
   document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b => {
     b.classList.toggle('on', b.dataset.nav === 'documents');
   });

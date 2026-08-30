@@ -719,6 +719,35 @@ function adminOrderDocItems(){
     {id:'act', title:'Акт выполненных работ'}
   ];
 }
+function adminDocsDefaultFirmFilter(){
+  const sid=typeof currentSpaceId==='function'?currentSpaceId():null;
+  if(sid) return sid;
+  const owner=state.adminOwnerFilter||'all';
+  if(owner&&owner!=='all') return owner;
+  return 'all';
+}
+
+function adminOrderVisibleForDocs(o, opts){
+  if(!o||!currentAdmin) return false;
+  if(typeof deletedOrderIdSet==='function'&&deletedOrderIdSet().has(o.id)) return false;
+  const superAdm=!!(opts&&opts.superAll);
+  const firmFilter=(opts&&opts.firmFilter)||'all';
+  const sid=typeof currentSpaceId==='function'?currentSpaceId():null;
+
+  if(!superAdm){
+    const mine=typeof isMyFirmOrder==='function'&&isMyFirmOrder(o);
+    const partner=typeof isPartnerOnOrder==='function'&&isPartnerOnOrder(o);
+    if(mine||partner) return true;
+    if(typeof orderBelongsToAdmin==='function'&&orderBelongsToAdmin(o, currentAdmin.id)) return true;
+    return false;
+  }
+
+  if(firmFilter==='all') return true;
+  const osid=typeof orderSpaceId==='function'?orderSpaceId(o):o.spaceId;
+  if(firmFilter==='_none') return !osid;
+  return osid===firmFilter||o.partnerSpaceId===firmFilter;
+}
+
 function adminOrdersForDocs(opts){
   opts=opts||{};
   const sid=opts.spaceId||null;
@@ -726,13 +755,10 @@ function adminOrdersForDocs(opts){
   const roleFilter=opts.roleFilter||'all';
   const firmFilter=opts.firmFilter||'all';
   const search=String(opts.search||'').trim().toLowerCase();
-  const deleted=typeof deletedOrderIdSet==='function'?deletedOrderIdSet():new Set();
+  const roleSpace=superAll&&(firmFilter&&firmFilter!=='all')?firmFilter:sid;
   return (state.orders||[]).filter(o=>{
-    if(!o||deleted.has(o.id)) return false;
-    if(superAll){
-      if(firmFilter!=='all' && o.spaceId!==firmFilter && o.partnerSpaceId!==firmFilter) return false;
-    } else if(!sid || (o.spaceId!==sid && o.partnerSpaceId!==sid)) return false;
-    const role=orderDocRoleForSpace(o, sid||(o.partnerSpaceId||o.spaceId));
+    if(!adminOrderVisibleForDocs(o, {superAll, firmFilter})) return false;
+    const role=orderDocRoleForSpace(o, roleSpace||(o.partnerSpaceId||o.spaceId));
     if(roleFilter==='carrier' && role!=='carrier') return false;
     if(roleFilter==='customer' && role!=='customer') return false;
     if(search){
