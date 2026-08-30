@@ -3828,6 +3828,9 @@ function updateSyncHint(){
   updateDriverNetHint();
 }
 function openAdminLogin(){
+  openAdminLoginAsync().catch(err=>console.warn('openAdminLogin', err));
+}
+async function openAdminLoginAsync(){
   migrateAdmins();
   if(canAutoRestoreAdmin()){
     clearEntrySkin();
@@ -3845,6 +3848,22 @@ function openAdminLogin(){
   show('admin-pin');
   applyEntrySkin('admin-pin');
   wireAdminLoginHandlers();
+  const sel=$('admin-name-select');
+  const btn=$('pin-ok');
+  if(sel) sel.disabled=true;
+  if(btn) btn.disabled=true;
+  let synced=false;
+  if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
+    synced=await refreshAdminListForLogin();
+  }
+  fillAdminLoginSelect();
+  if(sel) sel.disabled=false;
+  if(btn) btn.disabled=false;
+  if(!synced && pinErr){
+    pinErr.textContent='Не удалось обновить список с сервера — проверьте интернет';
+  } else if(pinErr){
+    pinErr.textContent='';
+  }
 }
 function wireAdminLoginHandlers(){
   const ok=$('pin-ok');

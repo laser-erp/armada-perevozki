@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-30-admin-pin-fix4317c";
+const APP_BUILD="2026-08-30-admin-list4317d";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -1938,6 +1938,9 @@ function armadaApiJsonHeaders(){
   if(t) h.Authorization='Bearer '+t;
   return h;
 }
+async function refreshAdminListForLogin(){
+  return refreshAuthFromServer({pin:'sync', meta:{role:'admin', purpose:'login-list'}});
+}
 async function refreshAuthFromServer(opts){
   if(navigator.onLine===false || typeof fetchServerState!=='function') return false;
   try{
@@ -2161,7 +2164,14 @@ async function initCloudSync(){
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
       } else {
-        // Локальная эпоха строго выше — осознанная очистка/миграция с этого устройства.
+        // Локальная эпоха выше — заказы/смены не трогаем, но auth с сервера сохраняем.
+        if(typeof mergeAdminAuthFromRemote==='function'){
+          mergeAdminAuthFromRemote(remote, {remoteWinsAuth:true});
+        }
+        if(typeof migrateAdmins==='function') migrateAdmins();
+        if(typeof migrateSpaces==='function') migrateSpaces();
+        if(typeof migrateDriverPins==='function') migrateDriverPins();
+        persistLocalOnly();
         await pushServerState();
       }
     } else {
@@ -2238,7 +2248,8 @@ async function pullRemoteUpdates(reason){
       if(ordersOpen) showOrders();
       if(cabinetOpen) showCabinet();
     } else if(inAdmin){
-      restoreAdminSession();
+      if(typeof reconcileAdminSessionAfterSync==='function') reconcileAdminSessionAfterSync();
+      else if(typeof restoreAdminSession==='function') restoreAdminSession();
       if(detailId && (state.orders||[]).some(o=>o.id===detailId)) openDetail(detailId);
       else if(document.querySelector('#admin-vehicle-card.show') && state._vehicleCardId) openVehicleCard(state._vehicleCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();

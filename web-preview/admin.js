@@ -29,7 +29,11 @@ function fillAdminLoginSelect(){
   migrateAdmins();
   const sel=$('admin-name-select'); if(!sel) return;
   const list=state.admins.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
-  sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  if(!list.length){
+    sel.innerHTML='<option value="">— загрузка… —</option>';
+  } else {
+    sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  }
   const hint=$('pin-recovery-hint');
   if(hint){
     const msg=state.settings&&state.settings.superPinRecoveryNotice;
