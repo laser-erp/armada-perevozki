@@ -1618,7 +1618,6 @@ function normalizeFleetVehicle(v){
     stsSeries:String(v.stsSeries||'').trim(),
     stsNumber:String(v.stsNumber||'').trim(),
     stsPhoto:v.stsPhoto||null,
-    gmsNumber:String(v.gmsNumber||'').trim(),
     serviceIntervals:(Array.isArray(v.serviceIntervals)?v.serviceIntervals:[]).map(normalizeServiceInterval).filter(Boolean),
     maintenanceLogs:(Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]).map(normalizeMaintenanceLog).filter(Boolean)
   };

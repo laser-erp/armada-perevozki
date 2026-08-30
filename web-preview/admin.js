@@ -842,7 +842,6 @@ function openVehicleCard(vehicleId){
       <div class="fin-grid">
         <label>СТС серия<input id="vc-sts-ser" inputmode="numeric" value="${esc(v.stsSeries||'')}" placeholder="77 XX" /></label>
         <label>СТС номер<input id="vc-sts-num" inputmode="numeric" value="${esc(v.stsNumber||'')}" placeholder="123456" /></label>
-        <label>ГМС<input id="vc-gms" value="${esc(v.gmsNumber||'')}" placeholder="номер ГМС" /></label>
         <label class="svc-full">Скан СТС (PNG/JPG, до 200 КБ)
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px">
             ${v.stsPhoto?`<img src="${esc(v.stsPhoto)}" alt="СТС" style="max-height:64px;border-radius:8px;border:1px solid var(--border)" />`:''}
@@ -934,7 +933,6 @@ function openVehicleCard(vehicleId){
   $('vc-save-docs')&&($('vc-save-docs').onclick=()=>{
     v.stsSeries=String((($('vc-sts-ser')||{}).value||'').trim());
     v.stsNumber=String((($('vc-sts-num')||{}).value||'').trim());
-    v.gmsNumber=String((($('vc-gms')||{}).value||'').trim());
     bumpDataEpoch('veh-card-docs');
     persist();
     flashCatOk('Документы сохранены');
@@ -3066,7 +3064,6 @@ function openCatalogs(){
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
         <input id="veh-w-${i}" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
         <input id="veh-h-${i}" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
-        <input id="veh-gms-${i}" placeholder="ГМС" title="Номер ГМС" value="${esc(v.gmsNumber||'')}" />
         <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km}" />
         <span class="hint" style="margin:0">л/100</span>
       </div>
@@ -3502,7 +3499,6 @@ function openCatalogs(){
     v.bodyLengthM=numOrNull(($('veh-l-'+i)||{}).value);
     v.bodyWidthM=numOrNull(($('veh-w-'+i)||{}).value);
     v.bodyHeightM=numOrNull(($('veh-h-'+i)||{}).value);
-    v.gmsNumber=String((($('veh-gms-'+i)||{}).value||'').trim());
     bumpDataEpoch('save-vehicle');
     persist(); flashCatOk(); openCatalogs();
   });

@@ -91,11 +91,11 @@ function orderStsText(o){
   if(!veh) return '';
   return [String(veh.stsSeries||'').trim(), String(veh.stsNumber||'').trim()].filter(Boolean).join(' ');
 }
-function orderGmsNumber(o){
-  const g=String(o.vehicleGmsNumber||'').trim();
-  if(g) return g;
+function orderVehiclePlate(o){
+  const plate=String((o.transportApp&&o.transportApp.vehiclePlate)||o.vehiclePlate||'').trim();
+  if(plate&&plate!=='—') return plate;
   const veh=typeof fleetVehicleForOrder==='function'?fleetVehicleForOrder(o):null;
-  return veh&&veh.gmsNumber?String(veh.gmsNumber).trim():'';
+  return veh&&veh.plate?String(veh.plate).trim():'';
 }
 function syncOrderDriverVehicleDocs(o){
   if(!o||!orderHasDriverVehicleAssigned(o)) return false;
@@ -119,9 +119,10 @@ function syncOrderDriverVehicleDocs(o){
   if(veh){
     set('vehicleStsSeries', veh.stsSeries);
     set('vehicleStsNumber', veh.stsNumber);
-    set('vehicleGmsNumber', veh.gmsNumber);
     if(veh.stsPhoto && o.vehicleStsPhoto!==veh.stsPhoto){ o.vehicleStsPhoto=veh.stsPhoto; changed=true; }
     else if(!veh.stsPhoto && o.vehicleStsPhoto){ o.vehicleStsPhoto=null; changed=true; }
+    const plate=String(veh.plate||'').trim();
+    if(plate && o.vehiclePlate!==plate){ o.vehiclePlate=plate; changed=true; }
   }
   if(o.transportApp){
     o.transportApp.driverPassportSeries=o.driverPassportSeries||'';
@@ -129,7 +130,7 @@ function syncOrderDriverVehicleDocs(o){
     o.transportApp.driverLicenseNo=o.driverLicenseNo||'';
     o.transportApp.vehicleStsSeries=o.vehicleStsSeries||'';
     o.transportApp.vehicleStsNumber=o.vehicleStsNumber||'';
-    o.transportApp.vehicleGmsNumber=o.vehicleGmsNumber||'';
+    o.transportApp.vehiclePlate=o.vehiclePlate||'';
   }
   return changed;
 }
@@ -160,16 +161,15 @@ function orderDriverDetailLines(o){
   const passportIssued=formatPassportIssuedText(o)
     ||formatPassportIssuedText(findDriverRecord(o.driverName, firmId));
   const sts=orderStsText(o);
-  const gms=orderGmsNumber(o);
+  const plateNo=orderVehiclePlate(o)||plate;
   const spec=orderVehicleSpecLine(o);
   let html=`Водитель: <strong>${esc(driver)}</strong>`;
   if(phone) html+=` · ☎ ${esc(phone)}`;
   if(passport) html+=`<br>Паспорт: <strong>${esc(passport)}</strong>${passportIssued?` · ${esc(passportIssued)}`:''}`;
   if(license) html+=`<br>Водительское удостоверение: <strong>${esc(license)}</strong>${licenseIssued?` · выдано ${esc(licenseIssued)}`:''}`;
-  html+=`<br>ТС: <strong>${esc(plate)}</strong>`;
+  html+=`<br>Гос.номер ТС: <strong>${esc(plateNo||'—')}</strong>`;
   if(spec) html+=` · ${esc(spec)}`;
   if(sts) html+=`<br>СТС: <strong>${esc(sts)}</strong>`;
-  if(gms) html+=`<br>ГМС: <strong>${esc(gms)}</strong>`;
   if(orderReqText(o)) html+=`<br>Требования к ТС: ${esc(orderReqText(o))}`;
   return html;
 }
@@ -497,7 +497,7 @@ function orderDriverVehicleDocsSectionHtml(o){
   const license=orderLicenseNo(o);
   const licenseIssued=String(o.driverLicenseIssuedAt||'').trim();
   const sts=orderStsText(o);
-  const gms=orderGmsNumber(o);
+  const plateNo=orderVehiclePlate(o);
   const stsPhoto=o.vehicleStsPhoto||((fleetVehicleForOrder&&fleetVehicleForOrder(o)||{}).stsPhoto)||null;
   return `<section class="form-section" id="order-drv-docs">
     <h2 class="form-section-title">Водитель и ТС · документы</h2>
@@ -505,9 +505,9 @@ function orderDriverVehicleDocsSectionHtml(o){
     <div class="metric-strip" style="grid-template-columns:1fr">
       ${passport?`<div class="m"><span>Паспорт</span><b>${esc(passport)}${passportIssued?`<br><small style="font-weight:500;color:var(--muted)">${esc(passportIssued)}</small>`:''}</b></div>`:''}
       ${license?`<div class="m"><span>ВУ</span><b>${esc(license)}${licenseIssued?` · ${esc(licenseIssued)}`:''}</b></div>`:''}
+      ${plateNo?`<div class="m"><span>Гос.номер</span><b>${esc(plateNo)}</b></div>`:''}
       ${sts?`<div class="m"><span>СТС</span><b>${esc(sts)}${stsPhoto?' · скан загружен':''}</b></div>`:''}
-      ${gms?`<div class="m"><span>ГМС</span><b>${esc(gms)}</b></div>`:''}
-      ${!passport&&!license&&!sts&&!gms?`<div class="hint">Заполните паспорт и ВУ в «Справочники → Водители», СТС и ГМС — в карточке авто.</div>`:''}
+      ${!passport&&!license&&!plateNo&&!sts?`<div class="hint">Заполните паспорт и ВУ в «Справочники → Водители», госномер и СТС — в карточке авто.</div>`:''}
     </div>
     <button type="button" class="secondary" id="d-sync-drv-docs" style="width:auto;margin-top:8px">Обновить из справочника</button>
   </section>`;
@@ -539,7 +539,6 @@ function ensureOwnFleetTransportApp(o){
     driverLicenseNo:o.driverLicenseNo||'',
     vehicleStsSeries:o.vehicleStsSeries||'',
     vehicleStsNumber:o.vehicleStsNumber||'',
-    vehicleGmsNumber:o.vehicleGmsNumber||'',
     route:routeText(o),
     orderSequentialNumber:o.sequentialNumber
   };

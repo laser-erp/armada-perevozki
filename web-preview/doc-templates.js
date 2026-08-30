@@ -22,7 +22,6 @@ const DOC_TEMPLATE_VARS = [
   { key: '{{order.driverPassport}}', label: 'Паспорт водителя' },
   { key: '{{order.driverLicense}}', label: 'ВУ водителя' },
   { key: '{{order.vehicleSts}}', label: 'СТС' },
-  { key: '{{order.vehicleGms}}', label: 'ГМС' },
   { key: '{{order.vehicleAt}}', label: 'Подача ТС' },
   { key: '{{today}}', label: 'Сегодня' }
 ];
@@ -157,7 +156,6 @@ function buildDocTemplateContext(order, spaceId) {
   const passport = orderPassportText(o);
   const license = orderLicenseNo(o);
   const sts = orderStsText(o);
-  const gms = orderGmsNumber(o);
   const today = typeof dayOnly === 'function' ? dayOnly(new Date().toISOString()) : new Date().toLocaleDateString('ru-RU');
   return {
     '{{carrier.name}}': carrier.name || '—',
@@ -174,7 +172,6 @@ function buildDocTemplateContext(order, spaceId) {
     '{{order.driverPassport}}': passport || '—',
     '{{order.driverLicense}}': license || '—',
     '{{order.vehicleSts}}': sts || '—',
-    '{{order.vehicleGms}}': gms || '—',
     '{{order.vehicleAt}}': o.vehicleAt && typeof dateTime === 'function' ? dateTime(o.vehicleAt) : '—',
     '{{today}}': today
   };
