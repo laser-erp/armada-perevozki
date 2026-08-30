@@ -501,36 +501,128 @@ function openFrameworkContractPrint(customerCo, carrierCo){
   openPrintHtml(title, buildFrameworkContractBody(customerCo, carrierCo));
 }
 
+function orderDriverVehicleDocPhotos(o){
+  if(!o) return [];
+  return [
+    {src:o.driverPassportPhoto, label:'Паспорт'},
+    {src:o.driverPassportRegPhoto, label:'Прописка'},
+    {src:o.driverLicensePhotoFront, label:'ВУ лицо'},
+    {src:o.driverLicensePhotoBack, label:'ВУ оборот'},
+    {src:o.vehicleStsPhoto, label:'СТС'}
+  ].map(x=>({label:x.label, src:typeof docPhotoOrNull==='function'?docPhotoOrNull(x.src):null}))
+    .filter(x=>x.src);
+}
+function orderDriverVehicleDocsTextData(o, snap){
+  const s=snap||o||{};
+  const firmId=o&&o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o&&o.ownCompanyId;
+  const licenseIssued=String(s.driverLicenseIssuedAt||'').trim()
+    ||(snap?'':((findDriverRecord(o.driverName, firmId)||{}).licenseIssuedAt||''));
+  const passportIssued=snap&&s.passportIssued!=null?s.passportIssued
+    :formatPassportIssuedText(o)||formatPassportIssuedText(findDriverRecord(o.driverName, firmId));
+  return {
+    driverName:(snap&&s.driverName!=null?s.driverName:(o.driverName||'')).trim(),
+    driverPhone:(snap&&s.driverPhone!=null?s.driverPhone:(typeof orderDriverPhone==='function'?orderDriverPhone(o):'')).trim(),
+    passport:(snap&&s.passport!=null?s.passport:orderPassportText(o)).trim(),
+    passportIssued:String(passportIssued||'').trim(),
+    license:(snap&&s.license!=null?s.license:orderLicenseNo(o)).trim(),
+    licenseIssued,
+    plate:(snap&&s.plate!=null?s.plate:orderVehiclePlate(o)).trim(),
+    sts:(snap&&s.sts!=null?s.sts:orderStsText(o)).trim()
+  };
+}
+function buildCustomerDriverDocsTextSnapshot(o){
+  const t=orderDriverVehicleDocsTextData(o);
+  return {
+    driverName:t.driverName,
+    driverPhone:t.driverPhone,
+    passport:t.passport,
+    passportIssued:t.passportIssued,
+    license:t.license,
+    licenseIssued:t.licenseIssued,
+    plate:t.plate,
+    sts:t.sts
+  };
+}
+function publishCustomerDriverDocsConfirm(o){
+  if(!o||typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)) return false;
+  if(typeof syncOrderDriverVehicleDocs==='function') syncOrderDriverVehicleDocs(o);
+  const text=buildCustomerDriverDocsTextSnapshot(o);
+  const photos=orderDriverVehicleDocPhotos(o);
+  const hasText=Object.values(text).some(v=>String(v||'').trim());
+  if(!hasText&&!photos.length) return false;
+  const prevSnap=o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.text;
+  const prevPhotosSig=String(o.customerDriverDocsConfirmPhotosSig||'');
+  const photosSig=photos.map(p=>p.label).join('|');
+  const snapChanged=JSON.stringify(prevSnap)!==JSON.stringify(text) || prevPhotosSig!==photosSig;
+  o.customerDriverDocsConfirm={
+    at:new Date().toISOString(),
+    text
+  };
+  o.customerDriverDocsConfirmPhotosSig=photosSig;
+  if(snapChanged){
+    o.customerDriverDocsConfirmRev=(+(o.customerDriverDocsConfirmRev||0))+1;
+    if(typeof bumpDataEpoch==='function') bumpDataEpoch('customer-drv-docs-confirm');
+    return true;
+  }
+  return false;
+}
+function orderDriverVehicleDocsTextRowsHtml(t){
+  if(!t) return '';
+  const rows=[];
+  if(t.driverName) rows.push(`<div class="m"><span>Водитель</span><b>${esc(t.driverName)}${t.driverPhone?` · ☎ ${esc(t.driverPhone)}`:''}</b></div>`);
+  if(t.passport) rows.push(`<div class="m"><span>Паспорт</span><b>${esc(t.passport)}${t.passportIssued?`<br><small style="font-weight:500;color:var(--muted)">${esc(t.passportIssued)}</small>`:''}</b></div>`);
+  if(t.license) rows.push(`<div class="m"><span>ВУ</span><b>${esc(t.license)}${t.licenseIssued?` · ${esc(t.licenseIssued)}`:''}</b></div>`);
+  if(t.plate) rows.push(`<div class="m"><span>Гос.номер</span><b>${esc(t.plate)}</b></div>`);
+  if(t.sts) rows.push(`<div class="m"><span>СТС</span><b>${esc(t.sts)}</b></div>`);
+  return rows.join('');
+}
+function orderDriverVehicleDocsFilesHtml(o, opts){
+  opts=opts||{};
+  const photos=orderDriverVehicleDocPhotos(o);
+  if(!photos.length) return opts.emptyHint?`<div class="hint">${esc(opts.emptyHint)}</div>`:'';
+  const items=photos.map(p=>docPhotoThumbHtml(p.src, p.label)).join('');
+  return `<div class="doc-photo-gallery order-drv-docs-files">${items}</div>`;
+}
+function orderDriverVehicleDocsTextHtml(o, opts){
+  opts=opts||{};
+  if(!o) return '';
+  if(!opts.snapshot && typeof orderHasDriverVehicleAssigned==='function'&&!orderHasDriverVehicleAssigned(o)) return '';
+  const t=orderDriverVehicleDocsTextData(o, opts.snapshot);
+  const rows=orderDriverVehicleDocsTextRowsHtml(t);
+  if(!rows) return opts.emptyHint?`<div class="hint">${esc(opts.emptyHint)}</div>`:'';
+  return `<div class="metric-strip order-drv-docs-text" style="grid-template-columns:1fr">${rows}</div>`;
+}
 function orderDriverVehicleDocsSectionHtml(o){
   if(!o||typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)) return '';
-  const passport=orderPassportText(o);
-  const passportIssued=formatPassportIssuedText(o);
-  const license=orderLicenseNo(o);
-  const licenseIssued=String(o.driverLicenseIssuedAt||'').trim();
-  const sts=orderStsText(o);
-  const plateNo=orderVehiclePlate(o);
-  const stsPhoto=docPhotoOrNull(o.vehicleStsPhoto)||docPhotoOrNull((fleetVehicleForOrder&&fleetVehicleForOrder(o)||{}).stsPhoto);
-  const drvPhotos=typeof driverDocPhotoGalleryHtml==='function'
-    ?driverDocPhotoGalleryHtml({
-      passportPhoto:o.driverPassportPhoto||null,
-      passportRegPhoto:o.driverPassportRegPhoto||null,
-      licensePhotoFront:o.driverLicensePhotoFront||null,
-      licensePhotoBack:o.driverLicensePhotoBack||null
-    })
-    :'';
-  return `<section class="form-section" id="order-drv-docs">
-    <h2 class="form-section-title">Водитель и ТС · документы</h2>
-    <p class="form-section-hint">Данные и снимки из справочника на момент назначения. Кнопка ниже — обновить из актуальных карточек водителя и авто.</p>
-    <div class="metric-strip" style="grid-template-columns:1fr">
-      ${passport?`<div class="m"><span>Паспорт</span><b>${esc(passport)}${passportIssued?`<br><small style="font-weight:500;color:var(--muted)">${esc(passportIssued)}</small>`:''}</b></div>`:''}
-      ${license?`<div class="m"><span>ВУ</span><b>${esc(license)}${licenseIssued?` · ${esc(licenseIssued)}`:''}</b></div>`:''}
-      ${plateNo?`<div class="m"><span>Гос.номер</span><b>${esc(plateNo)}</b></div>`:''}
-      ${sts?`<div class="m"><span>СТС</span><b>${esc(sts)}</b></div>`:''}
-      ${!passport&&!license&&!plateNo&&!sts?`<div class="hint">Заполните паспорт и ВУ в «Справочники → Водители», госномер и СТС — в карточке авто.</div>`:''}
-    </div>
-    ${drvPhotos||stsPhoto?`<div class="doc-photo-gallery-wrap">${drvPhotos}${docPhotoThumbHtml(stsPhoto,'СТС')}</div>`:''}
+  const textHtml=orderDriverVehicleDocsTextHtml(o, {emptyHint:'Заполните паспорт и ВУ в «Справочники → Водители», госномер и СТС — в карточке авто.'});
+  const filesHtml=orderDriverVehicleDocsFilesHtml(o, {emptyHint:'Снимки документов не загружены — добавьте в справочниках.'});
+  const sentAt=o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.at;
+  return `<section class="form-section order-drv-docs-text-block" id="order-drv-docs-text">
+    <h2 class="form-section-title">Водитель и ТС · данные заявки</h2>
+    <p class="form-section-hint">Текстовые реквизиты для документов и заказчика.${sentAt?` Отправлено заказчику ${esc(typeof dateTime==='function'?dateTime(sentAt):sentAt)}.`:' При назначении уходит заказчику вместе со снимками.'}</p>
+    ${textHtml}
+  </section>
+  <section class="form-section order-drv-docs-files-block" id="order-drv-docs-files">
+    <h2 class="form-section-title">Водитель и ТС · снимки</h2>
+    <p class="form-section-hint">Файлы хранятся отдельно от текста и подтверждают реквизиты для заказчика.</p>
+    ${filesHtml}
     <button type="button" class="secondary" id="d-sync-drv-docs" style="width:auto;margin-top:8px">Обновить из справочника</button>
   </section>`;
+}
+function customerDriverDocsConfirmHtml(o){
+  if(!o||typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)) return '';
+  if(!o.customerDriverDocsConfirm||!o.customerDriverDocsConfirm.text) return '';
+  const t=o.customerDriverDocsConfirm.text;
+  const textHtml=orderDriverVehicleDocsTextRowsHtml(t);
+  const filesHtml=orderDriverVehicleDocsFilesHtml(o);
+  if(!textHtml&&!filesHtml) return '';
+  const when=o.customerDriverDocsConfirm.at;
+  return `<div class="cust-drv-confirm">
+    <h4 class="cust-drv-confirm__title">Водитель и ТС назначены</h4>
+    <p class="hint cust-drv-confirm__hint">Снимки документов подтверждают текст из заявки на перевозку${when?` · ${esc(typeof dateTime==='function'?dateTime(when):when)}`:''}.</p>
+    ${textHtml?`<div class="cust-drv-confirm__text"><div class="metric-strip" style="grid-template-columns:1fr">${textHtml}</div></div>`:''}
+    ${filesHtml?`<div class="cust-drv-confirm__files"><div class="cust-drv-confirm__files-label">Снимки документов</div>${filesHtml}</div>`:''}
+  </div>`;
 }
 function orderHasDriverVehicleAssigned(o){
   if(!o) return false;
@@ -566,6 +658,7 @@ function ensureOwnFleetTransportApp(o){
 function syncOrderDocsOnAssign(o){
   if(!o||!orderHasDriverVehicleAssigned(o)) return false;
   if(typeof syncOrderDriverVehicleDocs==='function') syncOrderDriverVehicleDocs(o);
+  if(typeof publishCustomerDriverDocsConfirm==='function') publishCustomerDriverDocsConfirm(o);
   ensureOwnFleetTransportApp(o);
   ensureOrderDocs(o);
   const now=new Date().toISOString();

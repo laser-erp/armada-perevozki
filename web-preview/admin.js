@@ -2557,7 +2557,6 @@ function openDetail(id){
           </div>
         </div>
         ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
-        ${typeof orderDriverVehicleDocsSectionHtml==='function'?orderDriverVehicleDocsSectionHtml(o):''}
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
         <label>Требования к ТС (т / Д×Ш×В)</label>
@@ -2637,6 +2636,7 @@ function openDetail(id){
         ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="hint">${esc(logistMarginLine(o))}</p>`:''}
       </div>
     </section>
+    ${typeof orderDriverVehicleDocsSectionHtml==='function'?orderDriverVehicleDocsSectionHtml(o):''}
     <section class="form-section">
       <h2 class="form-section-title">Маршрут</h2>
       <div class="form-fields">
@@ -2813,11 +2813,12 @@ function openDetail(id){
     const order=state.orders.find(x=>x.id===id);
     if(!order) return;
     if(typeof syncOrderDriverVehicleDocs==='function') syncOrderDriverVehicleDocs(order);
+    if(typeof publishCustomerDriverDocsConfirm==='function') publishCustomerDriverDocsConfirm(order);
     if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
     bumpDataEpoch('order-drv-docs-sync');
     persist();
     openDetail(id);
-    flashCatOk('Документы обновлены');
+    flashCatOk('Данные обновлены, заказчик получит подтверждение');
   });
   const shipSameEl=$('d-shipper-same');
   const shipBox=$('d-shipper-fields');

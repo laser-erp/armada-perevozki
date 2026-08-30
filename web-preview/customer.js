@@ -127,7 +127,19 @@ function customerOrderStatusLabel(o){
 }
 function customerOrderStatusTag(o){
   if(!o||!o.id) return '';
-  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}`;
+  const docsRev=+(o.customerDriverDocsConfirmRev||0);
+  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}|docs${docsRev}`;
+}
+function customerOrderNotifyLine(o, prevTag){
+  const tag=customerOrderStatusTag(o);
+  const num=o.sequentialNumber||'—';
+  const st=customerOrderStatusLabel(o);
+  const prevDocs=(String(prevTag||'').match(/docs(\d+)/)||[])[1];
+  const curDocs=String(o.customerDriverDocsConfirmRev||0);
+  if(prevDocs!=null && +curDocs>+prevDocs && o.customerDriverDocsConfirm){
+    return `№${num}: назначены водитель и ТС — снимки подтверждают данные заявки`;
+  }
+  return `№${num}: ${st}`;
 }
 function loadCustomerOrderSeen(){
   try{ return JSON.parse(localStorage.getItem(CUSTOMER_ORDER_SEEN_KEY)||'{}'); }catch(_){ return {}; }
@@ -164,7 +176,7 @@ function maybeNotifyCustomerOrderUpdates(){
     const tag=customerOrderStatusTag(o);
     const prev=seen[o.id];
     if(prev && prev!==tag){
-      msgs.push(`№${o.sequentialNumber||'—'}: ${customerOrderStatusLabel(o)}`);
+      msgs.push(customerOrderNotifyLine(o, prev));
     }
     seen[o.id]=tag;
   });
@@ -1267,6 +1279,7 @@ function renderCustomerPortal(){
           return inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
         })()}
         ${typeof customerEtrnT1SignHtml==='function'?customerEtrnT1SignHtml(o):''}
+        ${typeof customerDriverDocsConfirmHtml==='function'?customerDriverDocsConfirmHtml(o):''}
         ${typeof customerOrderDocumentsHtml==='function'?`<details class="cust-order-docs-wrap"><summary>Документы по заявке</summary>${customerOrderDocumentsHtml(o)}</details>`:''}
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
