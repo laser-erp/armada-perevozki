@@ -159,6 +159,167 @@ function orderVehicleSpecLine(o){
   }
   return bits.join(' · ');
 }
+function orderShipperParty(o){
+  if(!o) return {name:'—', inn:'', address:'', phone:''};
+  if(o.shipperSameAsCustomer!==false){
+    const customer=resolveParty(o.customerId, o.customer, o.spaceId);
+    return {
+      name:customer.name,
+      inn:customer.inn||String(o.customerInn||'').trim(),
+      address:customer.address||'',
+      phone:formatPhone(o.contactPhone||'')||''
+    };
+  }
+  const co=o.shipperInn?findCompanyByName(o.shipperName):null;
+  return {
+    name:String(o.shipperName||'').trim()||'—',
+    inn:String(o.shipperInn||'').trim()||(co&&co.inn)||'',
+    address:(co&&co.address)||String(o.shipperAddress||'').trim(),
+    phone:formatPhone(o.shipperPhone||'')||''
+  };
+}
+function orderConsigneeParty(o){
+  if(!o) return {name:'—', inn:'', phone:''};
+  const name=String(o.consigneeName||'').trim()||String(o.unloadingContactName||'').trim();
+  return {
+    name:name||'—',
+    inn:String(o.consigneeInn||'').trim(),
+    phone:formatPhone(o.consigneePhone||o.unloadingContactPhone||'')||''
+  };
+}
+function partyLinesWithPhoneHtml(p, phone, extra){
+  const ph=phone||'';
+  const tail=extra?`<div class="muted">${esc(extra)}</div>`:'';
+  const phoneLine=ph?`<div class="muted">Тел.: ${esc(ph)}</div>`:'';
+  return `${partyLinesHtml(p)}${phoneLine}${tail}`;
+}
+function orderCargoWeightText(o){
+  if(!o) return '';
+  if(o.cargoWeightKg>0) return `${fmt(o.cargoWeightKg)} кг`;
+  if(o.reqPayloadTons>0) return `${o.reqPayloadTons} т (ориентир по грузоподъёмности)`;
+  return '';
+}
+function orderCargoDocHtml(o){
+  if(!o) return '<p class="muted">Не указан</p>';
+  const lines=[];
+  const kind=o.cargoKind&&typeof cargoKindLabel==='function'?cargoKindLabel(o.cargoKind):o.cargoKind;
+  if(kind) lines.push(`Вид груза: <strong>${esc(kind)}</strong>`);
+  if(o.cargoDescription) lines.push(`Описание: ${esc(o.cargoDescription)}`);
+  const weight=orderCargoWeightText(o);
+  if(weight) lines.push(`Масса: <strong>${esc(weight)}</strong>`);
+  if(o.cargoPlaces>0) lines.push(`Количество мест: <strong>${esc(o.cargoPlaces)}</strong>`);
+  if(o.cargoVolumeM3>0) lines.push(`Объём: <strong>${esc(o.cargoVolumeM3)} м³</strong>`);
+  if([o.reqLengthM,o.reqWidthM,o.reqHeightM].some(x=>x>0)){
+    const dims=[o.reqLengthM,o.reqWidthM,o.reqHeightM].filter(x=>x>0).map(x=>`${x} м`).join(' × ');
+    if(dims) lines.push(`Габариты груза: ${esc(dims)}`);
+  }
+  if(o.cargoPackaging&&typeof custPackagingLabel==='function'){
+    lines.push(`Упаковка: ${esc(custPackagingLabel(o.cargoPackaging))}`);
+  }
+  if(o.cargoFragile) lines.push('Отметка: хрупкий груз');
+  const temp=typeof orderTempRangeText==='function'?orderTempRangeText(o):'';
+  if(temp) lines.push(`Температурный режим: ${esc(temp)}`);
+  return lines.length?lines.map(l=>`<p>${l}</p>`).join(''):'<p class="muted">Не указан</p>';
+}
+function orderVehicleReqDocHtml(o){
+  if(!o) return '<p class="muted">Не указаны</p>';
+  const bits=[];
+  if(o.tripMode&&typeof tripModeLabel==='function') bits.push(tripModeLabel(o.tripMode));
+  if(o.reqBodyType&&typeof bodyTypeLabel==='function') bits.push(bodyTypeLabel(o.reqBodyType)||o.reqBodyType);
+  if(Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds.length){
+    bits.push(o.vehicleTypeIds.map(id=>typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(id):id).join(', '));
+  }
+  if(Array.isArray(o.loadingMethods)&&o.loadingMethods.length){
+    bits.push('загр.: '+o.loadingMethods.map(id=>typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id).join(', '));
+  }
+  if(Array.isArray(o.unloadingMethods)&&o.unloadingMethods.length){
+    bits.push('выгр.: '+o.unloadingMethods.map(id=>typeof custUnloadMethodLabel==='function'?custUnloadMethodLabel(id):id).join(', '));
+  }
+  if(o.reqPayloadTons>0) bits.push('грузоподъёмность от '+o.reqPayloadTons+' т');
+  if(o.routeKm>0) bits.push('~'+o.routeKm+' км');
+  if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0)){
+    bits.push(`кузов ≥ ${o.reqLengthM}×${o.reqWidthM}×${o.reqHeightM} м`);
+  }else{
+    if(o.reqLengthM>0) bits.push('Д≥'+o.reqLengthM+' м');
+    if(o.reqWidthM>0) bits.push('Ш≥'+o.reqWidthM+' м');
+    if(o.reqHeightM>0) bits.push('В≥'+o.reqHeightM+' м');
+  }
+  return bits.length?`<p>${esc(bits.join(' · '))}</p>`:'<p class="muted">Не указаны</p>';
+}
+function orderDefaultPaymentTerms(o){
+  if(!o) return '';
+  if(String(o.paymentTerms||'').trim()) return String(o.paymentTerms).trim();
+  if(o.paymentForm==='withVat'||o.paymentForm==='withoutVat'){
+    return 'Оплата по счёту в течение 5 банковских дней с даты подписания акта выполненных работ.';
+  }
+  return 'Оплата наличными по факту выполнения перевозки, если иное не согласовано сторонами.';
+}
+function orderPaymentDocLines(o){
+  const base=orderDocMoneyLine(o);
+  const terms=orderDefaultPaymentTerms(o);
+  return terms?`${base} ${terms}`:base;
+}
+function orderTransportDeadlineLine(o){
+  if(!o) return '';
+  if(String(o.transportDeadline||'').trim()) return String(o.transportDeadline).trim();
+  const fin=typeof financeForOrder==='function'?financeForOrder(o):null;
+  const free=o.freeAt||(o.vehicleAt&&typeof computeFreeAt==='function'?computeFreeAt(o.vehicleAt,o,fin):null);
+  if(free&&typeof dateTime==='function') return `Ориентир завершения перевозки: ${dateTime(free)}`;
+  return '';
+}
+function orderDocRouteRowsDetailed(o){
+  const pts=ensureRoutePoints(o)||[];
+  if(!pts.length) return orderDocRouteRows(o);
+  const loadInn=String(o.loadingOwnerInn||'').trim();
+  return pts.map((p,i)=>{
+    const note=[];
+    if(p.kind==='loading'&&loadInn) note.push('ИНН владельца объекта: '+loadInn);
+    if(p.kind==='loading'&&(o.loadingContactName||o.loadingContactPhone)){
+      note.push([o.loadingContactName, formatPhone(o.loadingContactPhone||'')].filter(Boolean).join(', '));
+    }
+    if(p.kind==='unloading'&&(o.unloadingContactName||o.unloadingContactPhone)){
+      note.push([o.unloadingContactName, formatPhone(o.unloadingContactPhone||'')].filter(Boolean).join(', '));
+    }
+    const addr=p.address||'—';
+    const extra=note.length?`<div class="muted">${esc(note.join(' · '))}</div>`:'';
+    return `<tr><td>${i+1}. ${esc(kindTitle(p.kind))}</td><td>${esc(addr)}${extra}</td></tr>`;
+  }).join('');
+}
+function orderCarrierResponsibleLine(o){
+  if(!o) return '';
+  const name=String(o.carrierResponsibleName||o.ownerAdminName||'').trim();
+  const phone=formatPhone(o.carrierResponsiblePhone||'');
+  if(!name&&!phone) return '';
+  return [name, phone?`☎ ${phone}`:''].filter(Boolean).join(' · ');
+}
+function orderDocSignBlock(o, leftTitle, rightTitle, leftName, rightName){
+  return `<div class="sign">
+    <div>${esc(leftTitle)}: _______________ / ${esc(leftName||'_______________')}</div>
+    <div>${esc(rightTitle)}: _______________ / ${esc(rightName||'_______________')}</div>
+  </div>`;
+}
+function orderPartyPlain(p, phone){
+  if(!p) return '—';
+  return [p.name, p.inn?`ИНН ${p.inn}`:'', p.address, phone||p.phone?`тел. ${phone||p.phone}`:''].filter(Boolean).join(', ')||'—';
+}
+function orderCargoPlain(o){
+  if(!o) return '—';
+  const bits=[];
+  const kind=o.cargoKind&&typeof cargoKindLabel==='function'?cargoKindLabel(o.cargoKind):o.cargoKind;
+  if(kind) bits.push(kind);
+  if(o.cargoDescription) bits.push(o.cargoDescription);
+  const weight=orderCargoWeightText(o);
+  if(weight) bits.push('масса '+weight);
+  if(o.cargoPlaces>0) bits.push(o.cargoPlaces+' мест');
+  if(o.cargoVolumeM3>0) bits.push(o.cargoVolumeM3+' м³');
+  const temp=typeof orderTempRangeText==='function'?orderTempRangeText(o):'';
+  if(temp) bits.push('темп. '+temp);
+  return bits.length?bits.join('; '):'—';
+}
+function orderVehicleReqPlain(o){
+  const html=orderVehicleReqDocHtml(o);
+  return html.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||'—';
+}
 function orderDriverDetailLines(o){
   const app=o.transportApp||null;
   const driver=app&&app.driverName?app.driverName:(o.driverName||'—');
@@ -181,7 +342,6 @@ function orderDriverDetailLines(o){
   html+=`<br>Гос.номер ТС: <strong>${esc(plateNo||'—')}</strong>`;
   if(spec) html+=` · ${esc(spec)}`;
   if(sts) html+=`<br>СТС: <strong>${esc(sts)}</strong>`;
-  if(orderReqText(o)) html+=`<br>Требования к ТС: ${esc(orderReqText(o))}`;
   return html;
 }
 function buildOrderDocBody(kind, o){
@@ -211,44 +371,69 @@ function buildOrderDocBody(kind, o){
       <div class="muted">к заявке № ${esc(num)} · ${esc(when)}</div>
     </div>`;
   if(kind==='application'){
+    const shipper=orderShipperParty(o);
+    const consignee=orderConsigneeParty(o);
+    const executor=o.executorType==='partner'?carrier:own;
+    const carrierResp=orderCarrierResponsibleLine(o);
+    const deadline=orderTransportDeadlineLine(o);
     return `${commonHead}
-      <h2>1. Заказчик</h2>
-      ${partyLinesHtml(customer)}
-      <p>Контакт: ${esc(contact)}</p>
-      <h2>2. Исполнитель (перевозчик)</h2>
-      ${partyLinesHtml(o.executorType==='partner'?carrier:own)}
-      <h2>3. Подача и маршрут</h2>
+      <h2>1. Грузоотправитель</h2>
+      ${partyLinesWithPhoneHtml(shipper, shipper.phone)}
+      <h2>2. Заказчик перевозки</h2>
+      ${partyLinesWithPhoneHtml(customer, formatPhone(o.contactPhone||''), contact!=='—'?`Контакт: ${contact}`:'')}
+      <h2>3. Перевозчик</h2>
+      ${partyLinesWithPhoneHtml(executor, '')}
+      ${carrierResp?`<p>Ответственный перевозчика: ${esc(carrierResp)}</p>`:''}
+      <h2>4. Грузополучатель</h2>
+      ${partyLinesWithPhoneHtml(consignee, consignee.phone)}
+      <h2>5. Сведения о грузе</h2>
+      ${orderCargoDocHtml(o)}
+      <h2>6. Подача, маршрут и сроки</h2>
       <p>Подача ТС: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
-      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <h2>4. Транспорт и водитель</h2>
+      ${deadline?`<p>${esc(deadline)}</p>`:''}
+      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRowsDetailed(o)}</tbody></table>
+      <h2>7. Требования к ТС</h2>
+      ${orderVehicleReqDocHtml(o)}
+      <h2>8. Транспорт и водитель</h2>
       <p>${orderDriverDetailLines(o)}</p>
-      <h2>5. Стоимость</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
-      <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
-        <div>Исполнитель _______________ / _______________</div>
-      </div>`;
+      <h2>9. Стоимость и порядок расчётов</h2>
+      <p>${esc(orderPaymentDocLines(o))}</p>
+      ${orderDocSignBlock(o, 'Грузоотправитель', 'Перевозчик', o.contactName||shipper.name, o.ownerAdminName||executor.name)}`;
   }
   if(kind==='transportApp'){
     const left=app?resolveParty(app.customerCompanyId, app.customerCompanyName, null):customer;
     const right=app?resolveParty(app.carrierCompanyId, app.carrierCompanyName, null):carrier;
+    const shipper=orderShipperParty(o);
+    const consignee=orderConsigneeParty(o);
+    const carrierResp=orderCarrierResponsibleLine(o);
+    const deadline=orderTransportDeadlineLine(o);
+    const custPhone=formatPhone(o.contactPhone||'');
+    const signedNote=app&&app.signedAt?`Подписан в системе: ${dateTime(app.signedAt)}`:'Черновик договора‑заявки по данным заказа';
     return `${commonHead}
-      <p class="muted">${app&&app.signedAt?`Подписан в системе: ${esc(dateTime(app.signedAt))}`:'Черновик договора‑заявки по данным заказа'}</p>
-      <h2>1. Заказчик перевозки</h2>
-      ${partyLinesHtml(left)}
-      <h2>2. Перевозчик</h2>
-      ${partyLinesHtml(right)}
-      <h2>3. Условия перевозки</h2>
+      <p class="muted">${esc(signedNote)}</p>
+      <h2>1. Грузоотправитель</h2>
+      ${partyLinesWithPhoneHtml(shipper, shipper.phone)}
+      <h2>2. Заказчик перевозки</h2>
+      ${partyLinesWithPhoneHtml(left, custPhone, contact!=='—'?`Контакт: ${contact}`:'')}
+      <h2>3. Перевозчик</h2>
+      ${partyLinesWithPhoneHtml(right, '')}
+      ${carrierResp?`<p>Ответственный перевозчика: ${esc(carrierResp)}</p>`:''}
+      <h2>4. Грузополучатель</h2>
+      ${partyLinesWithPhoneHtml(consignee, consignee.phone)}
+      <h2>5. Сведения о грузе</h2>
+      ${orderCargoDocHtml(o)}
+      <h2>6. Условия перевозки</h2>
       <p>Маршрут: <strong>${esc((app&&app.route)||routeText(o)||'—')}</strong></p>
-      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <p>Подача: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong><br>
-      ${orderDriverDetailLines(o)}</p>
-      <h2>4. Оплата</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
-      <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
-        <div>Перевозчик _______________ / _______________</div>
-      </div>`;
+      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRowsDetailed(o)}</tbody></table>
+      <p>Подача: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
+      ${deadline?`<p>${esc(deadline)}</p>`:''}
+      <h2>7. Требования к ТС</h2>
+      ${orderVehicleReqDocHtml(o)}
+      <h2>8. Транспорт и водитель</h2>
+      <p>${orderDriverDetailLines(o)}</p>
+      <h2>9. Оплата и порядок расчётов</h2>
+      <p>${esc(orderPaymentDocLines(o))}</p>
+      ${orderDocSignBlock(o, 'Заказчик', 'Перевозчик', o.contactName||left.name, o.ownerAdminName||right.name)}`;
   }
   const driver=(app&&app.driverName)||o.driverName||'—';
   const plate=(app&&app.vehiclePlate)||o.vehiclePlate||'—';

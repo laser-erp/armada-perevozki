@@ -23,6 +23,11 @@ const DOC_TEMPLATE_VARS = [
   { key: '{{order.driverLicense}}', label: 'ВУ водителя' },
   { key: '{{order.vehicleSts}}', label: 'СТС' },
   { key: '{{order.vehicleAt}}', label: 'Подача ТС' },
+  { key: '{{order.shipper}}', label: 'Грузоотправитель' },
+  { key: '{{order.consignee}}', label: 'Грузополучатель' },
+  { key: '{{order.cargo}}', label: 'Сведения о грузе' },
+  { key: '{{order.vehicleReq}}', label: 'Требования к ТС' },
+  { key: '{{order.payment}}', label: 'Оплата и порядок расчётов' },
   { key: '{{today}}', label: 'Сегодня' }
 ];
 
@@ -55,25 +60,39 @@ function defaultDocTemplateBody(templateId) {
     application: `ЗАЯВКА НА ПЕРЕВОЗКУ № {{order.number}}
 от {{order.date}}
 
+Грузоотправитель: {{order.shipper}}
 Заказчик: {{customer.name}}, ИНН {{customer.inn}}
-Перевозчик: {{carrier.name}}
+Перевозчик: {{carrier.name}}, ИНН {{carrier.inn}}
+Грузополучатель: {{order.consignee}}
+
+{{order.cargo}}
 
 Маршрут: {{order.route}}
 Подача ТС: {{order.vehicleAt}}
-Водитель / ТС: {{order.driver}} · {{order.plate}}
+{{order.vehicleReq}}
 
-Стоимость: {{order.amount}}`,
+Водитель / ТС: {{order.driver}} · {{order.plate}}
+Паспорт: {{order.driverPassport}} · ВУ: {{order.driverLicense}} · СТС: {{order.vehicleSts}}
+
+{{order.payment}}`,
     transportApp: `ДОГОВОР‑ЗАЯВКА № {{order.number}}
 от {{order.date}}
 
-Заказчик перевозки: {{customer.name}}
-Перевозчик: {{carrier.name}}
+Грузоотправитель: {{order.shipper}}
+Заказчик перевозки: {{customer.name}}, ИНН {{customer.inn}}
+Перевозчик: {{carrier.name}}, ИНН {{carrier.inn}}
+Грузополучатель: {{order.consignee}}
+
+{{order.cargo}}
 
 Маршрут: {{order.route}}
 Подача: {{order.vehicleAt}}
-{{order.driver}} · {{order.plate}}
+{{order.vehicleReq}}
 
-Оплата: {{order.amount}}
+Водитель / ТС: {{order.driver}} · {{order.plate}}
+Паспорт: {{order.driverPassport}} · ВУ: {{order.driverLicense}} · СТС: {{order.vehicleSts}}
+
+{{order.payment}}
 
 Стороны согласовали условия перевозки по данной заявке.`,
     act: `АКТ ВЫПОЛНЕННЫХ РАБОТ № {{order.number}}
@@ -157,6 +176,9 @@ function buildDocTemplateContext(order, spaceId) {
   const license = orderLicenseNo(o);
   const sts = orderStsText(o);
   const today = typeof dayOnly === 'function' ? dayOnly(new Date().toISOString()) : new Date().toLocaleDateString('ru-RU');
+  const shipper = typeof orderShipperParty === 'function' ? orderShipperParty(o) : null;
+  const consignee = typeof orderConsigneeParty === 'function' ? orderConsigneeParty(o) : null;
+  const payment = typeof orderPaymentDocLines === 'function' ? orderPaymentDocLines(o) : amount;
   return {
     '{{carrier.name}}': carrier.name || '—',
     '{{carrier.inn}}': carrier.inn || '—',
@@ -173,6 +195,11 @@ function buildDocTemplateContext(order, spaceId) {
     '{{order.driverLicense}}': license || '—',
     '{{order.vehicleSts}}': sts || '—',
     '{{order.vehicleAt}}': o.vehicleAt && typeof dateTime === 'function' ? dateTime(o.vehicleAt) : '—',
+    '{{order.shipper}}': typeof orderPartyPlain === 'function' ? orderPartyPlain(shipper) : '—',
+    '{{order.consignee}}': typeof orderPartyPlain === 'function' ? orderPartyPlain(consignee) : '—',
+    '{{order.cargo}}': typeof orderCargoPlain === 'function' ? orderCargoPlain(o) : '—',
+    '{{order.vehicleReq}}': typeof orderVehicleReqPlain === 'function' ? orderVehicleReqPlain(o) : '—',
+    '{{order.payment}}': payment || amount,
     '{{today}}': today
   };
 }

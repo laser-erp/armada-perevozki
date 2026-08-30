@@ -2603,6 +2603,22 @@ function openDetail(id){
             </select>
           </div>
         </div>
+        <label for="d-cargo-desc">Описание груза (для документов)</label>
+        <input id="d-cargo-desc" value="${esc(o.cargoDescription||'')}" placeholder="Паллеты, оборудование…" />
+        <div class="form-triple">
+          <div>
+            <label for="d-cargo-places">Мест</label>
+            <input id="d-cargo-places" inputmode="numeric" value="${o.cargoPlaces??''}" placeholder="8" />
+          </div>
+          <div>
+            <label for="d-cargo-volume">Объём, м³</label>
+            <input id="d-cargo-volume" inputmode="decimal" value="${o.cargoVolumeM3??''}" placeholder="12" />
+          </div>
+          <div>
+            <label for="d-cargo-weight">Масса, кг</label>
+            <input id="d-cargo-weight" inputmode="decimal" value="${o.cargoWeightKg??''}" placeholder="5000" />
+          </div>
+        </div>
         <div class="form-pair">
           <div>
             <label for="d-trip-mode">Рейс</label>
@@ -2695,6 +2711,22 @@ function openDetail(id){
           <label for="d-shipper-inn">ИНН грузоотправителя</label>
           <input id="d-shipper-inn" value="${esc(o.shipperInn||'')}" placeholder="необязательно" />
         </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-consignee-name">Грузополучатель</label>
+            <input id="d-consignee-name" value="${esc(o.consigneeName||'')}" placeholder="Организация или ФИО" />
+          </div>
+          <div>
+            <label for="d-consignee-phone">Телефон</label>
+            <input id="d-consignee-phone" inputmode="tel" value="${esc(formatPhone(o.consigneePhone||''))}" placeholder="+79650730002" />
+          </div>
+        </div>
+        <label for="d-consignee-inn">ИНН грузополучателя</label>
+        <input id="d-consignee-inn" value="${esc(o.consigneeInn||'')}" placeholder="необязательно" />
+        <label for="d-loading-owner-inn">ИНН владельца объекта погрузки</label>
+        <input id="d-loading-owner-inn" inputmode="numeric" maxlength="12" value="${esc(o.loadingOwnerInn||'')}" placeholder="для договор‑заявки" />
+        <label for="d-transport-deadline">Срок перевозки (текст)</label>
+        <input id="d-transport-deadline" value="${esc(o.transportDeadline||'')}" placeholder="если нужен явный срок, иначе — по freeAt" />
         <label for="d-empty-after">Пробег до стоянки, км</label>
         <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
       </div>
@@ -2751,6 +2783,8 @@ function openDetail(id){
           <option value="withVat" ${o.paymentForm==='withVat'?'selected':''}>С НДС</option>
           <option value="withoutVat" ${o.paymentForm==='withoutVat'?'selected':''}>Без НДС</option>
         </select>
+        <label for="d-payment-terms">Порядок расчётов (для документов)</label>
+        <input id="d-payment-terms" value="${esc(o.paymentTerms||'')}" placeholder="если пусто — стандартная формулировка по форме оплаты" />
         <div class="form-pair">
           <div>
             <label for="d-vat">Ставка с НДС, руб</label>
@@ -2907,6 +2941,10 @@ function openDetail(id){
     order.reqHeightM=numOrNull(($('d-req-h')||{}).value);
     order.reqBodyType=(($('d-body-type')||{}).value||'').trim()||null;
     order.cargoKind=(($('d-cargo-kind')||{}).value||'').trim()||null;
+    order.cargoDescription=(($('d-cargo-desc')||{}).value||'').trim();
+    order.cargoPlaces=numOrNull(($('d-cargo-places')||{}).value);
+    order.cargoVolumeM3=numOrNull(($('d-cargo-volume')||{}).value);
+    order.cargoWeightKg=numOrNull(($('d-cargo-weight')||{}).value);
     order.tripMode=(($('d-trip-mode')||{}).value||'')==='intercity'?'intercity':'city';
     order.routeKm=numOrNull(($('d-route-km')||{}).value);
     if(order.priceForClient!=null) order.pricePending=false;
@@ -2923,6 +2961,11 @@ function openDetail(id){
     order.shipperName=(($('d-shipper-name')||{}).value||'').trim();
     order.shipperInn=(($('d-shipper-inn')||{}).value||'').trim();
     order.shipperPhone=formatPhone((($('d-shipper-phone')||{}).value||'').trim());
+    order.consigneeName=(($('d-consignee-name')||{}).value||'').trim();
+    order.consigneeInn=(($('d-consignee-inn')||{}).value||'').trim();
+    order.consigneePhone=formatPhone((($('d-consignee-phone')||{}).value||'').trim());
+    order.loadingOwnerInn=String((($('d-loading-owner-inn')||{}).value||'')).replace(/\D/g,'');
+    order.transportDeadline=(($('d-transport-deadline')||{}).value||'').trim();
     if(order.customer){
       const co=upsertCompany({name:order.customer, inn:custInn, roles:['customer'], spaceId:order.spaceId||currentSpaceId()});
       if(co){ order.customerId=co.id; order.customerInn=custInn||(co.inn||''); }
@@ -2945,6 +2988,7 @@ function openDetail(id){
     const nightsRaw=(($('d-overnight-nights')||{}).value||'').replace(/\D/g,'');
     order.overnightNights=nightsRaw?+nightsRaw:null;
     order.paymentForm=$('d-form').value;
+    order.paymentTerms=(($('d-payment-terms')||{}).value||'').trim();
     if(!applyClientTariff(order)){
       const form=order.paymentForm;
       const seed = form==='withVat'?num('d-vat'):form==='cash'?num('d-cash'):num('d-novat');

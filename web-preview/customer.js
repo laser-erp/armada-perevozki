@@ -772,6 +772,12 @@ function customerWeightTons(){
   const unit=(($('cust-weight-unit')||{}).value||'t').trim();
   return unit==='kg'?raw/1000:raw;
 }
+function customerCargoWeightKg(){
+  const raw=+(($('cust-weight-value')||{}).value||'').replace(',','.');
+  if(!(raw>0)) return null;
+  const unit=(($('cust-weight-unit')||{}).value||'t').trim();
+  return unit==='kg'?Math.round(raw):Math.round(raw*1000);
+}
 function syncCustomerPayloadTons(){
   const tons=customerWeightTons();
   const hid=$('cust-req-pay');
@@ -1457,6 +1463,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     cargoDescription:cargoText||'',
     cargoPlaces:draft.cargoPlaces||null,
     cargoVolumeM3:draft.cargoVolumeM3||null,
+    cargoWeightKg:customerCargoWeightKg(),
     cargoPackaging:draft.cargoPackaging||null,
     cargoFragile:!!draft.cargoFragile,
     cargoTempFromC:draft.cargoTempFromC,
