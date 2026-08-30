@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Макет — Документы (супер-админ)</title>
+  <meta name="theme-color" content="#EF4444" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2026-08-30-mock" />
+  <style>
+    body { margin: 0; background: #e5e7eb; }
+    .mock-banner {
+      background: #1e5aa8; color: #fff; text-align: center;
+      padding: 8px 12px; font-size: .78rem; font-weight: 600;
+    }
+    .mock-banner a { color: #fff; }
+    #shell.wide { max-width: 1200px; margin: 0 auto; min-height: 100vh; }
+    #admin-docs-mock { display: flex; flex-direction: column; min-height: 100vh; }
+    .docs-tabs {
+      display: flex; gap: 6px; flex-wrap: wrap; padding: 0 14px 10px;
+      border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .docs-tab {
+      border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px;
+      background: var(--field); font-weight: 600; font-size: .8rem; cursor: pointer;
+    }
+    .docs-tab.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .docs-toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 14px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .docs-toolbar input, .docs-toolbar select {
+      flex: 1; min-width: 140px; padding: 9px 12px; border-radius: 8px;
+      border: 1px solid var(--border); font: inherit;
+    }
+    .docs-panel { display: none; padding: 12px 14px 24px; overflow: auto; flex: 1; }
+    .docs-panel.on { display: block; }
+    .doc-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 10px; display: grid; gap: 8px;
+    }
+    @media (min-width: 640px) {
+      .doc-card { grid-template-columns: 1fr auto; align-items: center; }
+    }
+    .doc-card h3 { margin: 0; font-size: .95rem; }
+    .doc-card .meta { margin: 0; font-size: .78rem; color: var(--muted); }
+    .doc-card .badge {
+      display: inline-block; font-size: .7rem; font-weight: 700; padding: 3px 8px;
+      border-radius: 999px; background: rgba(30,90,168,.12); color: #1e5aa8;
+    }
+    .doc-card .badge.new { background: rgba(245,158,11,.15); color: #b45309; }
+    .doc-card .badge.ok { background: rgba(34,197,94,.12); color: #15803d; }
+    .doc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .doc-actions button {
+      border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+      background: var(--field); font-weight: 600; font-size: .78rem; cursor: pointer;
+    }
+    .doc-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .order-group {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 12px;
+    }
+    .order-group h4 { margin: 0 0 8px; font-size: .9rem; }
+    .order-doc-line {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      padding: 8px 0; border-top: 1px solid var(--border); font-size: .85rem;
+    }
+    .order-doc-line:first-of-type { border-top: 0; }
+    .preview-overlay {
+      position: fixed; inset: 0; z-index: 100; background: rgba(15,23,42,.55);
+      display: none; align-items: flex-start; justify-content: center;
+      padding: 12px; overflow: auto;
+    }
+    .preview-overlay.show { display: flex; }
+    .preview-sheet {
+      width: 100%; max-width: 820px; background: #e8edf3; border-radius: 12px;
+      overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.25);
+    }
+    .preview-bar {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+      padding: 10px 14px; background: #1e293b; color: #fff;
+    }
+    .preview-bar h2 { margin: 0; flex: 1; font-size: .9rem; font-weight: 600; }
+    .preview-bar button {
+      border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 600;
+      font-size: .78rem; cursor: pointer;
+    }
+    .preview-bar .close-btn { background: rgba(255,255,255,.15); color: #fff; }
+    .preview-bar .print-btn { background: #fff; color: #1e293b; }
+    .preview-body { padding: 16px; }
+    /* letterhead (from armada-letterhead.css, screen mode) */
+    .letter-page {
+      max-width: 210mm; min-height: 280mm; margin: 0 auto;
+      padding: 16mm 18mm 20mm 22mm; background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,.12);
+      font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.45; color: #111;
+      position: relative;
+    }
+    .letterhead {
+      display: grid; grid-template-columns: 72px 1fr; gap: 14px 16px;
+      padding-bottom: 10px; border-bottom: 2.5px solid #1e5aa8; margin-bottom: 18px;
+    }
+    .letterhead__logo { width: 68px; height: auto; }
+    .letterhead__brand { font-family: Inter, Arial, sans-serif; }
+    .letterhead__name { font-size: 15pt; font-weight: 700; color: #1e5aa8; margin: 0 0 2px; }
+    .letterhead__full { font-size: 8.5pt; color: #334155; margin: 0 0 6px; }
+    .letterhead__req, .letterhead__contacts { font-size: 8.5pt; color: #475569; margin: 0; line-height: 1.35; }
+    .letterhead__contacts { margin-top: 4px; }
+    .doc-subject {
+      text-align: center; font-weight: 700; margin: 0 0 14px; font-size: 12pt;
+    }
+    .doc-cat-line { font-family: Inter, sans-serif; font-size: 9pt; color: #64748b; margin: 0 0 12px; }
+    .body-text p { margin: 0 0 10px; text-align: justify; text-indent: 1.25cm; }
+    .body-text p.no-indent { text-indent: 0; }
+    .body-text table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 11pt; }
+    .body-text th, .body-text td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; }
+    .body-text th { background: #f8fafc; }
+    .letter-footer {
+      margin-top: 24px; border-top: 1px solid #cbd5e1; padding-top: 6px;
+      font-family: Inter, sans-serif; font-size: 7.5pt; color: #64748b; text-align: center;
+    }
+    .hint-box {
+      background: rgba(30,90,168,.08); border: 1px solid rgba(30,90,168,.25);
+      border-radius: 10px; padding: 10px 12px; font-size: .82rem; color: var(--muted); margin-bottom: 12px;
+    }
+    .admin-nav-item.docs-mock-on { background: rgba(239,68,68,.1); color: var(--accent); }
+    @media (max-width: 720px) {
+      .admin-sidebar { position: fixed; transform: translateX(-100%); }
+      .admin-sidebar.open { transform: translateX(0); }
+      .admin-menu-toggle { display: block !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mock-banner">
+    МАКЕТ (не рабочий раздел) — так будет выглядеть «Документы» у супер-админа ·
+    <a href="index.html">← в приложение</a>
+  </div>
+
+  <div class="phone wide" id="shell">
+    <div id="admin-docs-mock" class="screen show">
+      <div class="admin-layout">
+        <aside class="admin-sidebar open" id="admin-sidebar">
+          <div class="admin-sidebar-brand">
+            <img class="admin-sidebar-logo" src="icons/icon-192.png" alt="" width="28" height="28" />
+            <span>АРМАДА</span>
+          </div>
+          <div class="admin-sidebar-user">Наволоцкий Е.Н.<br>супер-админ · ООО «АРМАДА»</div>
+          <nav class="admin-sidebar-nav">
+            <button type="button" class="admin-nav-item">Парк</button>
+            <button type="button" class="admin-nav-item">ЕТО</button>
+            <button type="button" class="admin-nav-item">Биржа</button>
+            <button type="button" class="admin-nav-item">Справочники</button>
+            <button type="button" class="admin-nav-item">Ссылки</button>
+            <button type="button" class="admin-nav-item">Активность</button>
+            <button type="button" class="admin-nav-item">Тарифы</button>
+            <button type="button" class="admin-nav-item docs-mock-on">Документы</button>
+          </nav>
+          <div class="admin-sidebar-foot">
+            <button type="button" class="admin-nav-item ghost">Помощь</button>
+            <button type="button" class="admin-nav-item ghost">Выход</button>
+          </div>
+        </aside>
+
+        <div class="admin-main">
+          <header class="admin-topbar">
+            <button type="button" class="admin-menu-toggle" id="menu-toggle" aria-label="Меню">☰</button>
+            <button type="button" class="form-back" style="width:auto;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--field)">← Назад</button>
+            <h1>Документы</h1>
+          </header>
+
+          <div class="docs-tabs" role="tablist">
+            <button type="button" class="docs-tab on" data-tab="legal">Юридические</button>
+            <button type="button" class="docs-tab" data-tab="templates">Шаблоны</button>
+            <button type="button" class="docs-tab" data-tab="orders">По заявкам</button>
+            <button type="button" class="docs-tab" data-tab="letters">Письма</button>
+          </div>
+
+          <!-- Юридические -->
+          <div class="docs-panel on" id="panel-legal">
+            <div class="docs-toolbar">
+              <input type="search" placeholder="Поиск: оферта, политика…" />
+            </div>
+            <p class="hint-box">Пакет для юриста · 7 документов + полная сборка. Все на фирменном бланке ООО «АРМАДА». Перед подписанием — заполнить [___] в тексте.</p>
+            <div class="doc-card" data-preview="offer">
+              <div>
+                <span class="badge ok">01</span>
+                <h3>Публичная оферта SaaS</h3>
+                <p class="meta">Главный договор с клиентом сервиса · PDF + HTML на бланке</p>
+              </div>
+              <div class="doc-actions">
+                <button type="button" class="primary btn-preview">Открыть</button>
+                <button type="button">PDF</button>
+              </div>
+            </div>
+            <div class="doc-card" data-preview="privacy">
+              <div>
+                <span class="badge ok">02</span>
+                <h3>Политика конфиденциальности (152-ФЗ)</h3>
+                <p class="meta">Для сайта и портала заказчика · ссылка с экрана входа</p>
+              </div>
+              <div class="doc-actions">
+                <button type="button" class="primary btn-preview">Открыть</button>
+                <button type="button">PDF</button>
+              </div>
+            </div>
+            <div class="doc-card" data-preview="consent">
+              <div><span class="badge ok">03</span><h3>Согласие на обработку ПДн</h3><p class="meta">Форма при регистрации заказчика</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+            <div class="doc-card" data-preview="cookies">
+              <div><span class="badge ok">04</span><h3>Cookies / localStorage</h3><p class="meta">Техническое уведомление</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+            <div class="doc-card" data-preview="exchange">
+              <div><span class="badge ok">05</span><h3>Комиссия биржи</h3><p class="meta">Дополнение к оферте</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+            <div class="doc-card" data-preview="pilot">
+              <div><span class="badge ok">06</span><h3>Соглашение о пилоте</h3><p class="meta">Шаблон для партнёра-перевозчика</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+            <div class="doc-card" data-preview="pd-order">
+              <div><span class="badge ok">07</span><h3>Поручение на обработку ПДн</h3><p class="meta">SaaS / 152-ФЗ</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+            <div class="doc-card" data-preview="package">
+              <div><span class="badge">📦</span><h3>Полный юридический пакет</h3><p class="meta">Все 7 документов одним файлом</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+            <div class="doc-card" data-preview="kp">
+              <div><span class="badge">КП</span><h3>Коммерческое предложение</h3><p class="meta">Не юридический договор · для рассылки партнёрам</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+          </div>
+
+          <!-- Шаблоны -->
+          <div class="docs-panel" id="panel-templates">
+            <p class="hint-box">Образцы документов для заказчика по заявке. «Пример» — демо на бланке с тестовыми данными. Счёт-фактура и УПД — для фирм с НДС.</p>
+            <div class="doc-card" data-preview="invoice">
+              <div><span class="badge ok">есть</span><h3>Счёт на оплату</h3><p class="meta">QR СБП · реквизиты из «Наша фирма»</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="vat-invoice">
+              <div><span class="badge new">добавим</span><h3>Счёт-фактура</h3><p class="meta">При работе перевозчика с НДС</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="upd">
+              <div><span class="badge new">добавим</span><h3>УПД</h3><p class="meta">Вместо пары «акт + счёт-фактура»</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="framework">
+              <div><span class="badge ok">есть</span><h3>Рамочный договор на перевозку</h3><p class="meta">Подписание в портале заказчика</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="application">
+              <div><span class="badge ok">есть</span><h3>Заявка на перевозку</h3></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="transport-app">
+              <div><span class="badge ok">есть</span><h3>Договор-заявка</h3></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="act">
+              <div><span class="badge ok">есть</span><h3>Акт выполненных работ</h3><p class="meta">После закрытия заявки</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+            <div class="doc-card" data-preview="etrn">
+              <div><span class="badge ok">пилот</span><h3>ЭТрН</h3><p class="meta">Электронная транспортная накладная</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Пример</button></div>
+            </div>
+          </div>
+
+          <!-- По заявкам -->
+          <div class="docs-panel" id="panel-orders">
+            <div class="docs-toolbar">
+              <select><option>Все фирмы</option><option>ООО «АРМАДА»</option><option>ИП Нечаев</option></select>
+              <input type="search" placeholder="Заказчик…" />
+              <select><option>Август 2026</option></select>
+            </div>
+            <div class="order-group">
+              <h4>Заявка №3 · ООО «Ромашка» · 28.08.2026</h4>
+              <div class="order-doc-line"><span>Счёт №3 · 45 000 ₽</span><span><button type="button" class="btn-preview" data-preview="invoice">Открыть</button> <button type="button">Email</button></span></div>
+              <div class="order-doc-line"><span>Договор-заявка · подписан</span><span><button type="button" class="btn-preview" data-preview="transport-app">Открыть</button></span></div>
+              <div class="order-doc-line"><span>Акт · готов</span><span><button type="button" class="btn-preview" data-preview="act">Открыть</button></span></div>
+            </div>
+            <div class="order-group">
+              <h4>Заявка №5 · ИП Иванов · 29.08.2026</h4>
+              <div class="order-doc-line"><span>Счёт №5 · сумма уточняется</span><span><button type="button" class="btn-preview" data-preview="invoice">Открыть</button></span></div>
+              <div class="order-doc-line"><span>Рамочный договор · ожидает</span><span><button type="button" class="btn-preview" data-preview="framework">Открыть</button></span></div>
+            </div>
+          </div>
+
+          <!-- Письма -->
+          <div class="docs-panel" id="panel-letters">
+            <div class="doc-card" data-preview="blank">
+              <div><h3>Пустой фирменный бланк</h3><p class="meta">Новое письмо · реквизиты из ЕГРЮЛ</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">Печать</button></div>
+            </div>
+            <div class="doc-card" data-preview="etrn-letters">
+              <div><h3>Письма операторам ЭТрН</h3><p class="meta">Контур · Калуга Астрал</p></div>
+              <div class="doc-actions"><button type="button" class="primary btn-preview">Открыть</button><button type="button">PDF</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="preview-overlay" id="preview-overlay" role="dialog" aria-modal="true">
+    <div class="preview-sheet">
+      <div class="preview-bar">
+        <h2 id="preview-title">Документ</h2>
+        <button type="button" class="print-btn" onclick="window.print()">Печать / PDF</button>
+        <button type="button" class="close-btn" id="preview-close">Закрыть</button>
+      </div>
+      <div class="preview-body" id="preview-body"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var letterhead = function () {
+        return '<header class="letterhead">' +
+          '<img class="letterhead__logo" src="logo.png" alt="АРМАДА" />' +
+          '<div class="letterhead__brand">' +
+          '<p class="letterhead__name">АРМАДА</p>' +
+          '<p class="letterhead__full">Общество с ограниченной ответственностью «АРМАДА»</p>' +
+          '<p class="letterhead__req">196006, г.&nbsp;Санкт-Петербург, ул.&nbsp;Цветочная, д.&nbsp;6, литера&nbsp;Ж<br />' +
+          'ИНН&nbsp;7802655283 · КПП&nbsp;781001001 · ОГРН&nbsp;1187847037608</p>' +
+          '<p class="letterhead__contacts">тел.: +7&nbsp;(965)&nbsp;073-00-02 · aptown1@gmail.com · app.armada.sx</p>' +
+          '</div></header>';
+      };
+      var footer = '<footer class="letter-footer">ООО «АРМАДА» · ИНН 7802655283 · https://app.armada.sx</footer>';
+
+      var samples = {
+        offer: {
+          title: '01 · Публичная оферта SaaS',
+          body: '<p class="doc-cat-line">Юридические · для юриста</p>' +
+            '<p class="doc-subject">ПУБЛИЧНАЯ ОФЕРТА<br />на оказание услуг по предоставлению доступа к сервису «АРМАДА»</p>' +
+            '<div class="body-text">' +
+            '<p class="no-indent">Настоящий документ является официальным предложением ООО «АРМАДА» (далее — Исполнитель) заключить договор на условиях, изложенных ниже.</p>' +
+            '<p>1. Предмет договора — предоставление Заказчику доступа к облачному сервису учёта перевозок через сайт app.armada.sx…</p>' +
+            '<p>2. Акцепт оферты — регистрация, оплата тарифа или фактическое использование сервиса…</p>' +
+            '<p class="no-indent"><em>[___] — места для заполнения юристом перед публикацией.</em></p></div>'
+        },
+        privacy: {
+          title: '02 · Политика конфиденциальности',
+          body: '<p class="doc-cat-line">Юридические · 152-ФЗ</p>' +
+            '<p class="doc-subject">ПОЛИТИКА В ОТНОШЕНИИ ОБРАБОТКИ ПЕРСОНАЛЬНЫХ ДАННЫХ</p>' +
+            '<div class="body-text"><p class="no-indent">Оператор: ООО «АРМАДА». Цели обработки: предоставление сервиса, учёт заявок, связь с пользователями…</p></div>'
+        },
+        invoice: {
+          title: 'Счёт на оплату №3 (пример)',
+          body: '<p class="doc-cat-line">Шаблон · заявка №3</p>' +
+            '<p class="doc-subject">СЧЁТ НА ОПЛАТУ №3 от 28.08.2026</p>' +
+            '<div class="body-text"><table><tr><th>Получатель</th><td>ООО «АРМАДА», ИНН 7802655283</td></tr>' +
+            '<tr><th>Плательщик</th><td>ООО «Ромашка», ИНН 7812345678</td></tr>' +
+            '<tr><th>Основание</th><td>Перевозка г. Санкт-Петербург — г. Москва</td></tr></table>' +
+            '<p class="no-indent"><strong>К оплате: 45 000 ₽</strong></p>' +
+            '<p class="no-indent">[ QR СБП ]</p></div>'
+        },
+        'vat-invoice': {
+          title: 'Счёт-фактура (пример)',
+          body: '<p class="doc-cat-line">Шаблон · с НДС · будет добавлен</p>' +
+            '<p class="doc-subject">СЧЁТ-ФАКТУРА №___ от «___» ________ 20__ г.</p>' +
+            '<div class="body-text"><p class="no-indent">Продавец: ООО «АРМАДА» · Покупатель: ООО «Ромашка» · Ставка НДС 20%…</p></div>'
+        },
+        act: {
+          title: 'Акт выполненных работ (пример)',
+          body: '<p class="doc-subject">АКТ №3 от 28.08.2026</p>' +
+            '<div class="body-text"><p>ООО «АРМАДА» и ООО «Ромашка» составили настоящий акт о том, что услуги по заявке №3 выполнены в полном объёме…</p></div>'
+        },
+        framework: {
+          title: 'Рамочный договор (пример)',
+          body: '<p class="doc-subject">ДОГОВОР НА ОКАЗАНИЕ УСЛУГ ПО ОРГАНИЗАЦИИ ПЕРЕВОЗОК</p>' +
+            '<div class="body-text"><p class="no-indent">ООО «АРМАДА», именуемое «Перевозчик», и ООО «Ромашка», именуемое «Заказчик»…</p></div>'
+        },
+        blank: {
+          title: 'Пустой бланк',
+          body: '<p class="doc-cat-line">Письма</p>' +
+            '<div class="body-text"><p class="no-indent" style="text-align:right">Исх. № _____ от «___» __________ 20__ г.</p>' +
+            '<p class="no-indent">Кому: _______________________</p>' +
+            '<p>Уважаемые коллеги!</p><p>Текст письма…</p></div>'
+        }
+      };
+
+      function defaultSample(key) {
+        return {
+          title: 'Документ · макет',
+          body: '<p class="doc-cat-line">Макет · содержимое будет из реального файла</p>' +
+            '<p class="doc-subject">' + key.toUpperCase() + '</p>' +
+            '<div class="body-text"><p class="no-indent">Здесь откроется полный текст документа на фирменном бланке.</p></div>'
+        };
+      }
+
+      function openPreview(key) {
+        var s = samples[key] || defaultSample(key);
+        document.getElementById('preview-title').textContent = s.title;
+        document.getElementById('preview-body').innerHTML =
+          '<article class="letter-page">' + letterhead() + s.body + footer + '</article>';
+        document.getElementById('preview-overlay').classList.add('show');
+      }
+
+      document.querySelectorAll('.docs-tab').forEach(function (tab) {
+        tab.onclick = function () {
+          document.querySelectorAll('.docs-tab').forEach(function (t) { t.classList.remove('on'); });
+          document.querySelectorAll('.docs-panel').forEach(function (p) { p.classList.remove('on'); });
+          tab.classList.add('on');
+          document.getElementById('panel-' + tab.getAttribute('data-tab')).classList.add('on');
+        };
+      });
+
+      document.querySelectorAll('.btn-preview, .doc-card .primary').forEach(function (btn) {
+        btn.onclick = function (e) {
+          e.stopPropagation();
+          var card = btn.closest('[data-preview]');
+          openPreview(card ? card.getAttribute('data-preview') : 'offer');
+        };
+      });
+
+      document.getElementById('preview-close').onclick = function () {
+        document.getElementById('preview-overlay').classList.remove('show');
+      };
+      document.getElementById('preview-overlay').onclick = function (e) {
+        if (e.target === e.currentTarget) e.currentTarget.classList.remove('show');
+      };
+
+      document.getElementById('menu-toggle').onclick = function () {
+        document.getElementById('admin-sidebar').classList.toggle('open');
+      };
+    })();
+  </script>
+</body>
+</html>
