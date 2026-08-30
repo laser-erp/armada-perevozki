@@ -3850,19 +3850,27 @@ async function openAdminLoginAsync(){
   wireAdminLoginHandlers();
   const sel=$('admin-name-select');
   const btn=$('pin-ok');
-  if(sel) sel.disabled=true;
-  if(btn) btn.disabled=true;
-  let synced=false;
-  if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
-    synced=await refreshAdminListForLogin();
-  }
-  fillAdminLoginSelect();
-  if(sel) sel.disabled=false;
   if(btn) btn.disabled=false;
-  if(!synced && pinErr){
-    pinErr.textContent='Не удалось обновить список с сервера — проверьте интернет';
-  } else if(pinErr){
-    pinErr.textContent='';
+  let synced=false;
+  try{
+    if(sel) sel.disabled=true;
+    if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
+      synced=await Promise.race([
+        refreshAdminListForLogin(),
+        new Promise(resolve=>setTimeout(()=>resolve(false), 4500))
+      ]);
+    }
+    fillAdminLoginSelect();
+    if(!synced && pinErr){
+      pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
+    }
+  }catch(err){
+    console.warn('admin login list', err);
+    fillAdminLoginSelect();
+    if(pinErr) pinErr.textContent='Ошибка загрузки списка — попробуйте войти';
+  }finally{
+    if(sel) sel.disabled=false;
+    if(btn) btn.disabled=false;
   }
 }
 function wireAdminLoginHandlers(){

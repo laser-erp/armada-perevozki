@@ -206,6 +206,7 @@ async function loginAdmin(){
   if(pinErr) pinErr.textContent='';
   const btn=$('pin-ok');
   if(btn) btn.disabled=true;
+  try{
   const id=(($('admin-name-select')||{}).value||'').trim();
   const pin=(($('pin-input')||{}).value||'').trim();
   const admPre=state.admins.find(a=>a.id===id);
@@ -231,12 +232,10 @@ async function loginAdmin(){
     if(pinErr) pinErr.textContent=state.admins.length
       ? 'Выберите администратора'
       : 'Нет учётных записей — попросите супер-админа восстановить доступ и обновите страницу';
-    if(btn) btn.disabled=false;
     return;
   }
   if(pin!==String(adm.pin)){
     if(pinErr) pinErr.textContent='Неверный PIN. Если доступ только что восстановили — обновите страницу (Ctrl+F5)';
-    if(btn) btn.disabled=false;
     return;
   }
   if(adm.mustChangePin){
@@ -253,7 +252,9 @@ async function loginAdmin(){
   show('admin');
   renderAdmin();
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
-  if(btn) btn.disabled=false;
+  }finally{
+    if(btn) btn.disabled=false;
+  }
 }
 function logoutAdmin(){
   if(currentAdmin){
