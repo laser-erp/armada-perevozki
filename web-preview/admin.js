@@ -125,7 +125,7 @@ function syncAdminNav(){
   if(title) title.classList.toggle('with-park-ex', showSwitch);
 }
 function setAdminNav(nav){
-  if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
+  if(!currentAdmin && !canAutoRestoreAdmin()){ show('admin-pin'); return; }
   closeAdminSidebar();
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
@@ -240,6 +240,7 @@ async function loginAdmin(){
   }
   currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
   saveAdminSession();
+  markAdminPinOk();
   pushAdminLogin('login');
   touchAdminPresence('admin');
   startPresenceHeartbeat();
@@ -259,6 +260,7 @@ function logoutAdmin(){
   stopPresenceHeartbeat();
   currentAdmin=null;
   clearAdminSession();
+  clearAdminPinOk();
   setArmadaApiToken('');
   updateAdminChrome();
   if(getEntryMode()==='admin') goEntryLanding('admin');

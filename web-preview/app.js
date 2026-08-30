@@ -3829,13 +3829,14 @@ function updateSyncHint(){
 }
 function openAdminLogin(){
   migrateAdmins();
-  if(restoreAdminSession()){
+  if(canAutoRestoreAdmin()){
     clearEntrySkin();
     show('admin');
     renderAdmin();
     if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     return;
   }
+  if(adminEntryRequiresPin()) currentAdmin=null;
   fillAdminLoginSelect();
   const pinIn=$('pin-input');
   if(pinIn) pinIn.value='';
@@ -3941,16 +3942,15 @@ function showDefaultAfterSplash(){
   else if(entryId==='admin-pin') openAdminLogin();
   else if(entryId==='customer-login') openCustomerLogin();
 }
-// Сразу после загрузки localStorage — без PIN, если сессия была
+// Сразу после загрузки localStorage — без PIN, если сессия была (кроме /a без PIN в этой вкладке)
 try{
   const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
   if(urlEntry==='driver' && restoreDriverSession()) show('driver');
-  else if(urlEntry==='admin' && restoreAdminSession()) show('admin');
   else if(!urlEntry){
     const last=localStorage.getItem(LAST_ROLE_KEY)||'';
     if(last==='driver' && restoreDriverSession()) show('driver');
     else if(last==='customer'){ /* customer.js ниже */ }
-    else if(restoreAdminSession()) show('admin');
+    else if(canAutoRestoreAdmin()) show('admin');
     else if(restoreDriverSession()) show('driver');
   }
 }catch(_){}
@@ -4019,6 +4019,7 @@ try{
   if(urlEntry!=='customer'){
     initCloudSync().then(()=>{
       updateSyncHint();
+      if(typeof reconcileAdminSessionAfterSync==='function') reconcileAdminSessionAfterSync();
     }).catch(()=>updateSyncHint());
   } else {
     updateSyncHint();

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-30-api-sync4317b";
+const APP_BUILD="2026-08-30-admin-pin-fix4317c";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -338,6 +338,40 @@ function isDedicatedEntryUrl(){
 function dedicatedEntryMode(){
   if(!isDedicatedEntryUrl()) return null;
   return readEntryFromUrl();
+}
+function adminEntryRequiresPin(){
+  return dedicatedEntryMode()==='admin';
+}
+function markAdminPinOk(){
+  try{ sessionStorage.setItem(ADMIN_PIN_OK_KEY,'1'); }catch(_){}
+}
+function isAdminPinOk(){
+  try{ return sessionStorage.getItem(ADMIN_PIN_OK_KEY)==='1'; }catch(_){ return false; }
+}
+function clearAdminPinOk(){
+  try{ sessionStorage.removeItem(ADMIN_PIN_OK_KEY); }catch(_){}
+}
+function canAutoRestoreAdmin(){
+  if(adminEntryRequiresPin() && !isAdminPinOk()) return false;
+  return typeof restoreAdminSession==='function' && restoreAdminSession();
+}
+function reconcileAdminSessionAfterSync(){
+  if(typeof currentAdmin==='undefined' || !currentAdmin) return;
+  const adm=(state.admins||[]).find(a=>a.id===currentAdmin.id)
+    || (state.admins||[]).find(a=>samePersonName(a.name, currentAdmin.name));
+  if(!adm){
+    currentAdmin=null;
+    if(typeof clearAdminSession==='function') clearAdminSession();
+    if(adminEntryRequiresPin()) clearAdminPinOk();
+    if(document.querySelector('#admin.show') && typeof openAdminLogin==='function') openAdminLogin();
+    return;
+  }
+  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
+  if(typeof saveAdminSession==='function') saveAdminSession();
+  if(document.querySelector('#admin.show')){
+    if(typeof renderAdmin==='function') renderAdmin();
+    if(typeof updateAdminChrome==='function') updateAdminChrome();
+  }
 }
 const DRIVER_FROM_ADMIN_KEY='armada_driver_from_admin_v1';
 function setDriverFromAdmin(on){
@@ -799,6 +833,8 @@ const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
 const ADMIN_SESSION_KEY="armada_admin_session_v1";
+/** PIN подтверждён в этой вкладке (для /a — не пускать без PIN). */
+const ADMIN_PIN_OK_KEY="armada_admin_pin_ok_v1";
 const ARMADA_API_TOKEN_KEY="armada_api_token_v1";
 const LAST_ROLE_KEY="armada_last_role_v1";
 const PRESENCE_ONLINE_MS=90*1000;
