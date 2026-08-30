@@ -125,10 +125,20 @@
       border-radius: 10px; padding: 10px 12px; font-size: .82rem; color: var(--muted); margin-bottom: 12px;
     }
     .admin-nav-item.docs-mock-on { background: rgba(239,68,68,.1); color: var(--accent); }
-    @media (max-width: 720px) {
-      .admin-sidebar { position: fixed; transform: translateX(-100%); }
-      .admin-sidebar.open { transform: translateX(0); }
-      .admin-menu-toggle { display: block !important; }
+    /* Как «Активность» / «Тарифы»: отдельный экран без бокового меню */
+    .docs-mock-shell {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      width: 100%; max-width: 800px; margin: 0 auto; background: transparent;
+    }
+    .docs-mock-shell .form-topbar {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .docs-mock-shell .form-topbar h1 { margin: 0; flex: 1; font-size: 1rem; font-weight: 700; }
+    .docs-mock-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+    .docs-from-menu {
+      font-size: .72rem; color: var(--muted); padding: 6px 14px 0;
+      text-align: center;
     }
   </style>
 </head>
@@ -140,36 +150,14 @@
 
   <div class="phone wide" id="shell">
     <div id="admin-docs-mock" class="screen show">
-      <div class="admin-layout">
-        <aside class="admin-sidebar open" id="admin-sidebar">
-          <div class="admin-sidebar-brand">
-            <img class="admin-sidebar-logo" src="icons/icon-192.png" alt="" width="28" height="28" />
-            <span>АРМАДА</span>
-          </div>
-          <div class="admin-sidebar-user">Наволоцкий Е.Н.<br>супер-админ · ООО «АРМАДА»</div>
-          <nav class="admin-sidebar-nav">
-            <button type="button" class="admin-nav-item">Парк</button>
-            <button type="button" class="admin-nav-item">ЕТО</button>
-            <button type="button" class="admin-nav-item">Биржа</button>
-            <button type="button" class="admin-nav-item">Справочники</button>
-            <button type="button" class="admin-nav-item">Ссылки</button>
-            <button type="button" class="admin-nav-item">Активность</button>
-            <button type="button" class="admin-nav-item">Тарифы</button>
-            <button type="button" class="admin-nav-item docs-mock-on">Документы</button>
-          </nav>
-          <div class="admin-sidebar-foot">
-            <button type="button" class="admin-nav-item ghost">Помощь</button>
-            <button type="button" class="admin-nav-item ghost">Выход</button>
-          </div>
-        </aside>
+      <div class="docs-mock-shell">
+        <header class="form-topbar">
+          <button type="button" class="form-back">← Назад</button>
+          <h1>Документы</h1>
+        </header>
+        <p class="docs-from-menu">Макет: так выглядит экран после выбора «Документы» в меню админки (боковое меню здесь скрыто — как у «Активность»)</p>
 
-        <div class="admin-main">
-          <header class="admin-topbar">
-            <button type="button" class="admin-menu-toggle" id="menu-toggle" aria-label="Меню">☰</button>
-            <button type="button" class="form-back" style="width:auto;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--field)">← Назад</button>
-            <h1>Документы</h1>
-          </header>
-
+        <div class="docs-mock-scroll">
           <div class="docs-tabs" role="tablist">
             <button type="button" class="docs-tab on" data-tab="legal">Юридические</button>
             <button type="button" class="docs-tab" data-tab="templates">Шаблоны</button>
