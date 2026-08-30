@@ -266,6 +266,9 @@
     .claim-box{padding:10px 12px;border-radius:var(--radius);background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);margin:8px 0}
     .claim-box h3{margin:0 0 6px;font-size:.95rem}
     .claim-box p{margin:3px 0;font-size:.82rem;line-height:1.35}
+    .drv-docs-warn{background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.35)}
+    .drv-docs-warn__title{margin:0 0 6px;font-size:.88rem;font-weight:700;color:#D97706}
+    .drv-docs-warn__list{margin:0;padding-left:1.15rem;font-size:.82rem;line-height:1.4}
     .veh-specs{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
     .veh-specs input{width:48px;flex:0 0 48px;padding:4px 2px;min-height:28px;text-align:center;font-size:.72rem;border-radius:var(--pill);border:0;background:var(--field);color:var(--text)}
     .admin-form-shell{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:640px;margin:0 auto;background:transparent}

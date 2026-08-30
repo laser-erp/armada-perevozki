@@ -1730,6 +1730,8 @@ function assignExchangeToOwn(id){
   }
   if(!veh){ alert('Авто не из парка фирмы этой заявки'); return; }
   if(!vehicleFitsOrder(veh, o)){ alert('Авто не подходит по грузоподъёмности/габаритам'); return; }
+  const drvRec=findDriverRecord(driver, firmId);
+  if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)) return;
   o.onExchange=false;
   o.executorType='own';
   o.driverName=driver;
@@ -1795,10 +1797,18 @@ function openClaimExchange(id){
           </div>
         </div>
         <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}. Неподходящие скрыты.`:'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
+        <div id="claim-drv-docs-warn" hidden></div>
       </div>
     </section>
   `;
   show('admin-claim');
+  const claimDrvSel=$('claim-driver');
+  const claimWarn=$('claim-drv-docs-warn');
+  const refreshClaimDrvWarn=()=>{
+    if(typeof refreshDriverDocsWarnBox==='function') refreshDriverDocsWarnBox(claimWarn, (claimDrvSel&&claimDrvSel.value||'').trim(), myCo.id);
+  };
+  if(claimDrvSel) claimDrvSel.onchange=refreshClaimDrvWarn;
+  refreshClaimDrvWarn();
   $('claim-back').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
   $('claim-cancel').onclick=()=>{ claimOrderId=null; show('admin'); renderAdmin(); };
   $('claim-confirm').onclick=confirmClaimExchange;
@@ -1824,6 +1834,8 @@ function confirmClaimExchangeAfterGuard(o){
   const veh=fleetVehiclesForCompany(myCo.id).find(v=>v.plate===plate);
   if(!veh){ $('claim-error').textContent='Авто не из вашего парка'; return; }
   if(!vehicleFitsOrder(veh, o)){ $('claim-error').textContent='Авто не подходит по требованиям заявки'; return; }
+  const drvRec=findDriverRecord(driver, myCo.id);
+  if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)) return;
   const customerCo=findCompanyById(o.ownCompanyId);
   o.transportApp={
     id:uuid(),
@@ -2433,6 +2445,10 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
     partnerSpaceId:null,
     executorAdminId:null
   };
+  if(shouldCheckDriverDocs(driver)&&plate&&plate!=='—'){
+    const drvRec=findDriverRecord(driver, ownCo.id);
+    if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)) return;
+  }
   stampOrderDriverPhone(order);
   if(typeof syncOrderDriverVehicleDocs==='function') syncOrderDriverVehicleDocs(order);
   if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
@@ -2578,6 +2594,7 @@ function openDetail(id){
           </div>
         </div>
         ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
+        <div id="d-driver-docs-warn" hidden></div>
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
         <label>Требования к ТС (т / Д×Ш×В)</label>
@@ -2864,6 +2881,21 @@ function openDetail(id){
   wireRateAutoFill(o);
   wireOrderDocs(id);
   wireOrderEtrn(id);
+  const detailFirmId=()=>{
+    const ord=state.orders.find(x=>x.id===id);
+    if(!ord) return o.ownCompanyId;
+    const ownSel=findCompanyById((($('d-own-company')||{}).value)||'');
+    if(ownSel) return ownSel.id;
+    return ord.executorType==='partner'?(ord.carrierCompanyId||ord.ownCompanyId):ord.ownCompanyId;
+  };
+  const refreshDetailDrvWarn=()=>{
+    if(typeof refreshDriverDocsWarnBox!=='function') return;
+    const nm=(($('d-driver-name')||{}).value||'').trim();
+    refreshDriverDocsWarnBox($('d-driver-docs-warn'), nm, detailFirmId());
+  };
+  $('d-driver-name')&&($('d-driver-name').oninput=refreshDetailDrvWarn);
+  $('d-own-company')&&($('d-own-company').onchange=refreshDetailDrvWarn);
+  refreshDetailDrvWarn();
   $('d-sync-drv-docs')&&($('d-sync-drv-docs').onclick=()=>{
     const order=state.orders.find(x=>x.id===id);
     if(!order) return;
@@ -2917,6 +2949,14 @@ function openDetail(id){
     if(cleaned.length<2){ showErr('Нужны минимум 2 точки маршрута с адресом'); return; }
     if(!cleaned.some(p=>p.kind==='loading')){ showErr('Добавьте хотя бы одну точку «Загрузка»'); return; }
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
+    const drvNameEarly=(($('d-driver-name')||{}).value||'').trim();
+    const plateEarly=String(order.vehiclePlate||'').trim();
+    const willAssign=drvNameEarly&&plateEarly&&plateEarly!=='—'&&shouldCheckDriverDocs(drvNameEarly);
+    if(willAssign){
+      const firmIdEarly=order.executorType==='partner'?(order.carrierCompanyId||order.ownCompanyId):((findCompanyById((($('d-own-company')||{}).value)||'')||{}).id||order.ownCompanyId);
+      const drvRecEarly=findDriverRecord(drvNameEarly, firmIdEarly);
+      if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRecEarly, drvNameEarly)) return;
+    }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
     const custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');

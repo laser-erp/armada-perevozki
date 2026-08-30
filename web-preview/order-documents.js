@@ -779,10 +779,13 @@ function orderDriverVehicleDocsTextHtml(o, opts){
 }
 function orderDriverVehicleDocsSectionHtml(o){
   if(!o||typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)) return '';
+  const firmId=o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o.ownCompanyId;
+  const drvRec=typeof findDriverRecord==='function'?findDriverRecord(o.driverName, firmId):null;
+  const docsWarn=typeof driverDocsWarnBoxHtml==='function'?driverDocsWarnBoxHtml(drvRec, o.driverName):'';
   const textHtml=orderDriverVehicleDocsTextHtml(o, {emptyHint:'Заполните паспорт и ВУ в «Справочники → Водители», госномер и СТС — в карточке авто.'});
   const filesHtml=orderDriverVehicleDocsFilesHtml(o, {emptyHint:'Снимки документов не загружены — добавьте в справочниках.'});
   const sentAt=o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.at;
-  return `<section class="form-section order-drv-docs-text-block" id="order-drv-docs-text">
+  return `${docsWarn}<section class="form-section order-drv-docs-text-block" id="order-drv-docs-text">
     <h2 class="form-section-title">Водитель и ТС · данные заявки</h2>
     <p class="form-section-hint">Текстовые реквизиты для документов и заказчика.${sentAt?` Отправлено заказчику ${esc(typeof dateTime==='function'?dateTime(sentAt):sentAt)}.`:' При назначении уходит заказчику вместе со снимками.'}</p>
     ${textHtml}

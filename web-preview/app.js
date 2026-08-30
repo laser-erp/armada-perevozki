@@ -154,6 +154,60 @@ function driverDocPhotoGalleryHtml(d, opts){
   if(!items.length) return opts.emptyHint?`<div class="hint">${esc(opts.emptyHint)}</div>`:'';
   return `<div class="doc-photo-gallery">${items.join('')}</div>`;
 }
+function shouldCheckDriverDocs(driverName){
+  const drv=String(driverName||'').trim();
+  if(!drv||drv==='—'||drv==='Биржа'||drv==='Диспетчер') return false;
+  if(typeof waitingLogistDriver==='function'&&waitingLogistDriver(drv)) return false;
+  return true;
+}
+function driverDocsMissingItems(rec){
+  if(!rec) return ['нет карточки водителя в справочнике'];
+  const miss=[];
+  if(!String(rec.passportSeries||'').trim()||!String(rec.passportNumber||'').trim()) miss.push('паспорт: серия и номер');
+  if(!String(rec.passportIssuedBy||'').trim()) miss.push('паспорт: кем выдан');
+  if(!String(rec.passportIssuedAt||'').trim()) miss.push('паспорт: дата выдачи');
+  if(!String(rec.licenseNo||'').trim()) miss.push('номер водительского удостоверения');
+  if(!String(rec.licenseIssuedAt||'').trim()) miss.push('ВУ: дата выдачи');
+  if(!formatPhone(rec.phone||'')) miss.push('телефон');
+  if(!docPhotoOrNull(rec.passportPhoto)) miss.push('снимок паспорта (разворот)');
+  if(!docPhotoOrNull(rec.passportRegPhoto)) miss.push('снимок прописки');
+  if(!docPhotoOrNull(rec.licensePhotoFront)) miss.push('снимок ВУ (лицевая)');
+  if(!docPhotoOrNull(rec.licensePhotoBack)) miss.push('снимок ВУ (оборот)');
+  return miss;
+}
+function driverDocsComplete(rec){
+  return driverDocsMissingItems(rec).length===0;
+}
+function driverDocsWarnBoxHtml(rec, driverName){
+  const miss=driverDocsMissingItems(rec);
+  if(!miss.length) return '';
+  const who=String(driverName||(rec&&rec.name)||'водитель').trim();
+  return `<div class="drv-docs-warn claim-box">
+    <p class="drv-docs-warn__title">Документы водителя неполные</p>
+    <p class="hint" style="margin:0 0 6px">${esc(who)} — заполните в <strong>Справочники → водители → Паспорт и ВУ</strong>:</p>
+    <ul class="drv-docs-warn__list">${miss.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>
+    <p class="hint" style="margin:8px 0 0">Без этого в заявку, документы и заказчику уйдут неполные данные.</p>
+  </div>`;
+}
+function confirmIfDriverDocsIncomplete(rec, driverName){
+  if(driverDocsComplete(rec)) return true;
+  const who=String(driverName||(rec&&rec.name)||'водитель').trim();
+  const miss=driverDocsMissingItems(rec);
+  const lines=miss.map(m=>'• '+m).join('\n');
+  return confirm(`У «${who}» не заполнены документы:\n${lines}\n\nЗаполните в Справочниках → водители.\n\nВсё равно назначить?`);
+}
+function refreshDriverDocsWarnBox(el, driverName, firmId){
+  if(!el) return;
+  if(!shouldCheckDriverDocs(driverName)){
+    el.innerHTML='';
+    el.hidden=true;
+    return;
+  }
+  const rec=typeof findDriverRecord==='function'?findDriverRecord(driverName, firmId):null;
+  const html=driverDocsWarnBoxHtml(rec, driverName);
+  el.innerHTML=html;
+  el.hidden=!html;
+}
 function canEditDriverRecord(d){
   if(!d||!currentAdmin) return false;
   if(typeof isSuperAdmin==='function'&&isSuperAdmin()) return true;
