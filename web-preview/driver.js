@@ -1515,6 +1515,10 @@ function showCabinet(){
     ${license?`<div class="drv-profile-row"><span>ВУ</span><b>${esc(license)}${licenseIssued?`<br><small style="font-weight:500;color:var(--muted)">выдано ${esc(licenseIssued)}</small>`:''}</b></div>`:''}
     ${!passport&&!license?`<div class="hint" style="margin:8px 0">Паспорт и ВУ заполняет диспетчер в справочнике.</div>`:''}
   </div>`;
+  const docGallery=typeof driverDocPhotoGalleryHtml==='function'?driverDocPhotoGalleryHtml(rec):'';
+  if(docGallery){
+    html+=`<div class="drv-section-label">Снимки документов</div>${docGallery}`;
+  }
   html+=`<div class="drv-profile-stats">
     <div class="m"><span>Смен</span><b>${shiftsN}</b></div>
     <div class="m"><span>Заказов</span><b>${closedN}</b></div>

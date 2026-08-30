@@ -115,12 +115,23 @@ function syncOrderDriverVehicleDocs(o){
     set('driverPassportIssuedAt', drv.passportIssuedAt);
     set('driverLicenseNo', drv.licenseNo);
     set('driverLicenseIssuedAt', drv.licenseIssuedAt);
+    [
+      ['driverPassportPhoto','passportPhoto'],
+      ['driverPassportRegPhoto','passportRegPhoto'],
+      ['driverLicensePhotoFront','licensePhotoFront'],
+      ['driverLicensePhotoBack','licensePhotoBack']
+    ].forEach(([ok, dk])=>{
+      const photo=docPhotoOrNull(drv[dk]);
+      if(photo && o[ok]!==photo){ o[ok]=photo; changed=true; }
+      else if(!photo && o[ok]){ o[ok]=null; changed=true; }
+    });
   }
   if(veh){
     set('vehicleStsSeries', veh.stsSeries);
     set('vehicleStsNumber', veh.stsNumber);
-    if(veh.stsPhoto && o.vehicleStsPhoto!==veh.stsPhoto){ o.vehicleStsPhoto=veh.stsPhoto; changed=true; }
-    else if(!veh.stsPhoto && o.vehicleStsPhoto){ o.vehicleStsPhoto=null; changed=true; }
+    const stsPhoto=docPhotoOrNull(veh.stsPhoto);
+    if(stsPhoto && o.vehicleStsPhoto!==stsPhoto){ o.vehicleStsPhoto=stsPhoto; changed=true; }
+    else if(!stsPhoto && o.vehicleStsPhoto){ o.vehicleStsPhoto=null; changed=true; }
     const plate=String(veh.plate||'').trim();
     if(plate && o.vehiclePlate!==plate){ o.vehiclePlate=plate; changed=true; }
   }
@@ -498,17 +509,26 @@ function orderDriverVehicleDocsSectionHtml(o){
   const licenseIssued=String(o.driverLicenseIssuedAt||'').trim();
   const sts=orderStsText(o);
   const plateNo=orderVehiclePlate(o);
-  const stsPhoto=o.vehicleStsPhoto||((fleetVehicleForOrder&&fleetVehicleForOrder(o)||{}).stsPhoto)||null;
+  const stsPhoto=docPhotoOrNull(o.vehicleStsPhoto)||docPhotoOrNull((fleetVehicleForOrder&&fleetVehicleForOrder(o)||{}).stsPhoto);
+  const drvPhotos=typeof driverDocPhotoGalleryHtml==='function'
+    ?driverDocPhotoGalleryHtml({
+      passportPhoto:o.driverPassportPhoto||null,
+      passportRegPhoto:o.driverPassportRegPhoto||null,
+      licensePhotoFront:o.driverLicensePhotoFront||null,
+      licensePhotoBack:o.driverLicensePhotoBack||null
+    })
+    :'';
   return `<section class="form-section" id="order-drv-docs">
     <h2 class="form-section-title">Водитель и ТС · документы</h2>
-    <p class="form-section-hint">Данные из справочника на момент назначения. Кнопка ниже — обновить из актуальных карточек водителя и авто.</p>
+    <p class="form-section-hint">Данные и снимки из справочника на момент назначения. Кнопка ниже — обновить из актуальных карточек водителя и авто.</p>
     <div class="metric-strip" style="grid-template-columns:1fr">
       ${passport?`<div class="m"><span>Паспорт</span><b>${esc(passport)}${passportIssued?`<br><small style="font-weight:500;color:var(--muted)">${esc(passportIssued)}</small>`:''}</b></div>`:''}
       ${license?`<div class="m"><span>ВУ</span><b>${esc(license)}${licenseIssued?` · ${esc(licenseIssued)}`:''}</b></div>`:''}
       ${plateNo?`<div class="m"><span>Гос.номер</span><b>${esc(plateNo)}</b></div>`:''}
-      ${sts?`<div class="m"><span>СТС</span><b>${esc(sts)}${stsPhoto?' · скан загружен':''}</b></div>`:''}
+      ${sts?`<div class="m"><span>СТС</span><b>${esc(sts)}</b></div>`:''}
       ${!passport&&!license&&!plateNo&&!sts?`<div class="hint">Заполните паспорт и ВУ в «Справочники → Водители», госномер и СТС — в карточке авто.</div>`:''}
     </div>
+    ${drvPhotos||stsPhoto?`<div class="doc-photo-gallery-wrap">${drvPhotos}${docPhotoThumbHtml(stsPhoto,'СТС')}</div>`:''}
     <button type="button" class="secondary" id="d-sync-drv-docs" style="width:auto;margin-top:8px">Обновить из справочника</button>
   </section>`;
 }

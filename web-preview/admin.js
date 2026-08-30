@@ -842,11 +842,11 @@ function openVehicleCard(vehicleId){
       <div class="fin-grid">
         <label>СТС серия<input id="vc-sts-ser" inputmode="numeric" value="${esc(v.stsSeries||'')}" placeholder="77 XX" /></label>
         <label>СТС номер<input id="vc-sts-num" inputmode="numeric" value="${esc(v.stsNumber||'')}" placeholder="123456" /></label>
-        <label class="svc-full">Скан СТС (PNG/JPG, до 200 КБ)
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px">
-            ${v.stsPhoto?`<img src="${esc(v.stsPhoto)}" alt="СТС" style="max-height:64px;border-radius:8px;border:1px solid var(--border)" />`:''}
+        <label class="svc-full">Скан СТС (PNG/JPG, до ${DOC_PHOTO_MAX_KB} КБ)
+          <div class="doc-photo-row__box" style="margin-top:4px">
+            ${docPhotoThumbHtml(v.stsPhoto,'СТС')}
             <input type="file" accept="image/png,image/jpeg,image/webp" id="vc-sts-photo" />
-            ${v.stsPhoto?`<button type="button" class="secondary" id="vc-sts-clear" style="width:auto;padding:6px 10px">Убрать</button>`:''}
+            ${v.stsPhoto?`<button type="button" class="secondary doc-photo-clear" id="vc-sts-clear" title="Удалить">×</button>`:''}
           </div>
         </label>
         <button type="button" class="primary cat-add-btn fin-full" id="vc-save-docs">Сохранить документы</button>
@@ -937,18 +937,11 @@ function openVehicleCard(vehicleId){
     persist();
     flashCatOk('Документы сохранены');
   });
-  $('vc-sts-photo')&&($('vc-sts-photo').onchange=()=>{
-    const file=$('vc-sts-photo').files&&$('vc-sts-photo').files[0];
-    if(!file) return;
-    if(file.size>200*1024){ alert('Скан СТС до 200 КБ'); $('vc-sts-photo').value=''; return; }
-    const reader=new FileReader();
-    reader.onload=()=>{
-      v.stsPhoto=String(reader.result||'');
-      bumpDataEpoch('veh-sts-photo');
-      persist();
-      openVehicleCard(v.id);
-    };
-    reader.readAsDataURL(file);
+  $('vc-sts-photo')&&bindDocPhotoInput($('vc-sts-photo'), data=>{
+    v.stsPhoto=data;
+    bumpDataEpoch('veh-sts-photo');
+    persist();
+    openVehicleCard(v.id);
   });
   $('vc-sts-clear')&&($('vc-sts-clear').onclick=()=>{
     v.stsPhoto=null;
@@ -3035,6 +3028,12 @@ function openCatalogs(){
           <input id="drv-pass-at-${i}" placeholder="Дата выдачи" value="${esc(d.passportIssuedAt||'')}" title="Дата выдачи паспорта" />
           <input id="drv-lic-at-${i}" placeholder="ВУ выдано" value="${esc(d.licenseIssuedAt||'')}" title="Дата выдачи ВУ" />
         </div>
+        <div class="drv-doc-photos">
+          ${docPhotoUploadRow('Паспорт (разворот)', d.passportPhoto, `data-drv-photo="${i}" data-photo-key="passportPhoto"`, `data-drv-photo-clear="${i}" data-photo-key="passportPhoto"`)}
+          ${docPhotoUploadRow('Прописка', d.passportRegPhoto, `data-drv-photo="${i}" data-photo-key="passportRegPhoto"`, `data-drv-photo-clear="${i}" data-photo-key="passportRegPhoto"`)}
+          ${docPhotoUploadRow('ВУ лицевая', d.licensePhotoFront, `data-drv-photo="${i}" data-photo-key="licensePhotoFront"`, `data-drv-photo-clear="${i}" data-photo-key="licensePhotoFront"`)}
+          ${docPhotoUploadRow('ВУ оборот', d.licensePhotoBack, `data-drv-photo="${i}" data-photo-key="licensePhotoBack"`, `data-drv-photo-clear="${i}" data-photo-key="licensePhotoBack"`)}
+        </div>
       </details>
     </div>`;
   }).join('') || `<div class="hint">Нет водителей</div>`;
@@ -3058,7 +3057,7 @@ function openCatalogs(){
           <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
         </div>
       </div>
-      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
+      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec].filter(Boolean).join(' · ')||'укажите т и габариты')}${v.stsPhoto?' · СТС 📄':''}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
       <div class="veh-specs">
         <input id="veh-pay-${i}" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" value="${v.payloadTons??''}" />
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
@@ -3559,6 +3558,31 @@ function openCatalogs(){
       phone:state.drivers[i].phone,
       expires:exp
     });
+  });
+  document.querySelectorAll('[data-drv-photo]').forEach(inp=>bindDocPhotoInput(inp, data=>{
+    const i=+inp.dataset.drvPhoto;
+    const key=inp.dataset.photoKey;
+    const d=state.drivers[i];
+    if(!d||!key) return;
+    if(typeof canEditDriverRecord==='function'&&!canEditDriverRecord(d)){ alert('Нет доступа к этому водителю'); return; }
+    d[key]=data;
+    bumpDataEpoch('drv-photo');
+    persist();
+    openCatalogs();
+    flashCatOk('Снимок сохранён');
+  }));
+  document.querySelectorAll('[data-drv-photo-clear]').forEach(btn=>{
+    btn.onclick=()=>{
+      const i=+btn.dataset.drvPhotoClear;
+      const key=btn.dataset.photoKey;
+      const d=state.drivers[i];
+      if(!d||!key) return;
+      if(typeof canEditDriverRecord==='function'&&!canEditDriverRecord(d)){ alert('Нет доступа'); return; }
+      d[key]=null;
+      bumpDataEpoch('drv-photo-clear');
+      persist();
+      openCatalogs();
+    };
   });
   document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveDrvMeta;

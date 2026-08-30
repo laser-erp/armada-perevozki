@@ -82,7 +82,11 @@ function normalizeDriverRecord(d){
     passportNumber:String(d.passportNumber||'').trim(),
     passportIssuedBy:String(d.passportIssuedBy||'').trim(),
     passportIssuedAt:String(d.passportIssuedAt||'').trim(),
-    licenseIssuedAt:String(d.licenseIssuedAt||'').trim()
+    licenseIssuedAt:String(d.licenseIssuedAt||'').trim(),
+    passportPhoto:docPhotoOrNull(d.passportPhoto),
+    passportRegPhoto:docPhotoOrNull(d.passportRegPhoto),
+    licensePhotoFront:docPhotoOrNull(d.licensePhotoFront),
+    licensePhotoBack:docPhotoOrNull(d.licensePhotoBack)
   });
 }
 function formatPassportText(src){
@@ -105,6 +109,54 @@ function fleetVehicleForOrder(o){
   const firmId=o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o.ownCompanyId;
   return (state.vehicles||[]).find(v=>v.plate===plate && (!firmId||v.companyId===firmId))
     ||(state.vehicles||[]).find(v=>v.plate===plate)||null;
+}
+const DOC_PHOTO_MAX_KB=200;
+function docPhotoOrNull(v){
+  const s=v!=null?String(v):'';
+  return s.startsWith('data:image/')?s:null;
+}
+function docPhotoThumbHtml(src, label){
+  if(!docPhotoOrNull(src)) return '';
+  const cap=label?esc(label):'Документ';
+  return `<a href="${esc(src)}" target="_blank" rel="noopener" class="doc-photo-thumb" title="${cap}"><img src="${esc(src)}" alt="${cap}" loading="lazy" /></a>`;
+}
+function docPhotoUploadRow(label, existing, inputAttrs, clearAttrs){
+  return `<label class="doc-photo-row"><span>${esc(label)}</span>
+    <div class="doc-photo-row__box">
+      ${docPhotoThumbHtml(existing, label)}
+      <input type="file" accept="image/png,image/jpeg,image/webp" ${inputAttrs||''} />
+      ${existing?`<button type="button" class="secondary doc-photo-clear" ${clearAttrs||''} title="Удалить">×</button>`:''}
+    </div>
+  </label>`;
+}
+function bindDocPhotoInput(input, onLoad){
+  if(!input||typeof onLoad!=='function') return;
+  input.onchange=()=>{
+    const file=input.files&&input.files[0];
+    if(!file) return;
+    if(file.size>DOC_PHOTO_MAX_KB*1024){ alert(`Снимок до ${DOC_PHOTO_MAX_KB} КБ`); input.value=''; return; }
+    const reader=new FileReader();
+    reader.onload=()=>onLoad(String(reader.result||''));
+    reader.readAsDataURL(file);
+  };
+}
+function driverDocPhotoGalleryHtml(d, opts){
+  if(!d) return '';
+  opts=opts||{};
+  const items=[
+    ['passportPhoto','Паспорт'],
+    ['passportRegPhoto','Прописка'],
+    ['licensePhotoFront','ВУ лицо'],
+    ['licensePhotoBack','ВУ оборот']
+  ].map(([k,lbl])=>docPhotoThumbHtml(d[k], lbl)).filter(Boolean);
+  if(!items.length) return opts.emptyHint?`<div class="hint">${esc(opts.emptyHint)}</div>`:'';
+  return `<div class="doc-photo-gallery">${items.join('')}</div>`;
+}
+function canEditDriverRecord(d){
+  if(!d||!currentAdmin) return false;
+  if(typeof isSuperAdmin==='function'&&isSuperAdmin()) return true;
+  const myCo=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  return d.ownerAdminId===currentAdmin.id || (myCo&&d.companyId===myCo.id);
 }
 /** Привести все телефоны в базе к +7XXXXXXXXXX. */
 function normalizeAllPhones(){
@@ -1006,7 +1058,12 @@ function migrateCompanies(){
     passportNumber:String(d.passportNumber||'').trim(),
     passportIssuedBy:String(d.passportIssuedBy||'').trim(),
     passportIssuedAt:String(d.passportIssuedAt||'').trim(),
+    passportIssuedAt:String(d.passportIssuedAt||'').trim(),
     licenseIssuedAt:String(d.licenseIssuedAt||'').trim(),
+    passportPhoto:docPhotoOrNull(d.passportPhoto),
+    passportRegPhoto:docPhotoOrNull(d.passportRegPhoto),
+    licensePhotoFront:docPhotoOrNull(d.licensePhotoFront),
+    licensePhotoBack:docPhotoOrNull(d.licensePhotoBack),
     ownerAdminId:d.ownerAdminId||null,
     ownerAdminName:d.ownerAdminName||null,
     spaceId:d.spaceId||null,
@@ -1617,7 +1674,7 @@ function normalizeFleetVehicle(v){
     currentOdometer:numOrNull(v.currentOdometer),
     stsSeries:String(v.stsSeries||'').trim(),
     stsNumber:String(v.stsNumber||'').trim(),
-    stsPhoto:v.stsPhoto||null,
+    stsPhoto:docPhotoOrNull(v.stsPhoto),
     serviceIntervals:(Array.isArray(v.serviceIntervals)?v.serviceIntervals:[]).map(normalizeServiceInterval).filter(Boolean),
     maintenanceLogs:(Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]).map(normalizeMaintenanceLog).filter(Boolean)
   };
