@@ -65,7 +65,46 @@ function normalizeCarrierVehicle(v){
 function normalizeCarrierDriver(d){
   if(!d||typeof d!=='object') return null;
   const name=String(d.name||'').trim(); if(!name) return null;
-  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), licenseNo:String(d.licenseNo||'').trim(), vehicleId:d.vehicleId||null};
+  return {
+    id:d.id||uuid(), name, phone:formatPhone(d.phone||''), licenseNo:String(d.licenseNo||'').trim(),
+    passportSeries:String(d.passportSeries||'').trim(), passportNumber:String(d.passportNumber||'').trim(),
+    passportIssuedBy:String(d.passportIssuedBy||'').trim(), passportIssuedAt:String(d.passportIssuedAt||'').trim(),
+    licenseIssuedAt:String(d.licenseIssuedAt||'').trim(),
+    vehicleId:d.vehicleId||null
+  };
+}
+function normalizeDriverRecord(d){
+  if(!d||typeof d!=='object') return d;
+  return Object.assign(d, {
+    phone:formatPhone(d.phone||''),
+    licenseNo:String(d.licenseNo||'').trim(),
+    passportSeries:String(d.passportSeries||'').trim(),
+    passportNumber:String(d.passportNumber||'').trim(),
+    passportIssuedBy:String(d.passportIssuedBy||'').trim(),
+    passportIssuedAt:String(d.passportIssuedAt||'').trim(),
+    licenseIssuedAt:String(d.licenseIssuedAt||'').trim()
+  });
+}
+function formatPassportText(src){
+  if(!src) return '';
+  const s=String(src.passportSeries||src.driverPassportSeries||'').trim();
+  const n=String(src.passportNumber||src.driverPassportNumber||'').trim();
+  if(!s&&!n) return '';
+  return [s,n].filter(Boolean).join(' ');
+}
+function formatPassportIssuedText(src){
+  if(!src) return '';
+  const by=String(src.passportIssuedBy||src.driverPassportIssuedBy||'').trim();
+  const at=String(src.passportIssuedAt||src.driverPassportIssuedAt||'').trim();
+  return [by, at?('выдан '+at):''].filter(Boolean).join(', ');
+}
+function fleetVehicleForOrder(o){
+  if(!o) return null;
+  const plate=String(o.vehiclePlate||'').trim();
+  if(!plate||plate==='—') return null;
+  const firmId=o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o.ownCompanyId;
+  return (state.vehicles||[]).find(v=>v.plate===plate && (!firmId||v.companyId===firmId))
+    ||(state.vehicles||[]).find(v=>v.plate===plate)||null;
 }
 /** Привести все телефоны в базе к +7XXXXXXXXXX. */
 function normalizeAllPhones(){
@@ -957,12 +996,17 @@ function migrateCompanies(){
   });
   state.companies=(state.companies||[]).map(normalizeCompany).filter(Boolean);
   // drivers / vehicles: seed missing defaults (Нечаев А.С., В 603 СА 47, …)
-  state.drivers=(state.drivers||[]).map(d=>({
+  state.drivers=(state.drivers||[]).map(d=>normalizeDriverRecord({
     name:d.name,
     salaryPercent:d.salaryPercent??30,
     exchangeEnabled:!!d.exchangeEnabled,
     phone:String(d.phone||'').trim(),
     licenseNo:String(d.licenseNo||'').trim(),
+    passportSeries:String(d.passportSeries||'').trim(),
+    passportNumber:String(d.passportNumber||'').trim(),
+    passportIssuedBy:String(d.passportIssuedBy||'').trim(),
+    passportIssuedAt:String(d.passportIssuedAt||'').trim(),
+    licenseIssuedAt:String(d.licenseIssuedAt||'').trim(),
     ownerAdminId:d.ownerAdminId||null,
     ownerAdminName:d.ownerAdminName||null,
     spaceId:d.spaceId||null,
@@ -1571,6 +1615,10 @@ function normalizeFleetVehicle(v){
     companyId:v.companyId||null,
     companyName:v.companyName||null,
     currentOdometer:numOrNull(v.currentOdometer),
+    stsSeries:String(v.stsSeries||'').trim(),
+    stsNumber:String(v.stsNumber||'').trim(),
+    stsPhoto:v.stsPhoto||null,
+    gmsNumber:String(v.gmsNumber||'').trim(),
     serviceIntervals:(Array.isArray(v.serviceIntervals)?v.serviceIntervals:[]).map(normalizeServiceInterval).filter(Boolean),
     maintenanceLogs:(Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]).map(normalizeMaintenanceLog).filter(Boolean)
   };

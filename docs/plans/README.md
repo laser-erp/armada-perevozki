@@ -20,6 +20,7 @@
 
 | Что | Где в коде | Сборка |
 |-----|------------|--------|
+| **Паспорт/ВУ водителя, СТС и ГМС** в справочниках и заявке | `app.js`, `admin.js`, `driver.js`, `order-documents.js` | `drv-docs4317g` |
 | Раздел **«Планы»** у супер-админа | `admin-plans.js`, `docs/plans/` | `admin-plans4317a` |
 | Исправлен фильтр бух.доков (не показывать чужие фирмы) | `adminOrderVisibleForDocs` | `docs-filter4317e` |
 | Конструктор шаблонов на бланке | `doc-templates.js`, вкладка «Конструктор» | `doc-constructor4317d` |

@@ -383,6 +383,9 @@ function loginDriver(){
   const err=$('drv-login-error');
   const showErr=msg=>{ if(err) err.textContent=msg; };
   if(driverLoginStep==='phone'){ continueDriverPhone(); return; }
+  doLoginDriverPin(showErr);
+}
+async function doLoginDriverPin(showErr){
   const phone=formatPhone((driverLoginPhoneEl()&&driverLoginPhoneEl().value||'').trim());
   const pin=(($('drv-login-pin')||{}).value||'').trim();
   if(!phone){ showErr('Введите телефон'); return; }
@@ -392,7 +395,11 @@ function loginDriver(){
     if(formatPhone(rec.phone||'')!==phone){ showErr('Телефон не совпадает с выбранным профилем'); return; }
     if(resolveDriverPin(rec)!==pin){ showErr('Неверный PIN'); return; }
   } else {
-    const byPhone=findDriversByPhone(phone);
+    let byPhone=findDriversByPhone(phone);
+    if(!byPhone.length && typeof refreshAuthFromServer==='function'){
+      await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+      byPhone=findDriversByPhone(phone);
+    }
     if(!byPhone.length){
       showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
       return;
@@ -407,11 +414,9 @@ function loginDriver(){
     rec=matched[0];
   }
   if(!rec){ showErr('Профиль водителя не найден'); return; }
-  // закрепить pin в записи, если был только из админа/телефона
   if(String(rec.pin||'').trim()!==pin){
     rec.pin=pin;
-    const byPhone=findDriversByPhone(phone);
-    byPhone.forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
+    findDriversByPhone(phone).forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
     bumpDataEpoch('driver-pin-bind');
     persist();
   }
@@ -1490,6 +1495,11 @@ function showCabinet(){
   const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
   const phone=formatPhone(driverPhone(DRIVER, DRIVER_COMPANY_ID)||'')||'—';
   const plate=driverProfilePlate();
+  const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);
+  const passport=formatPassportText(rec);
+  const passportIssued=formatPassportIssuedText(rec);
+  const license=rec&&rec.licenseNo?String(rec.licenseNo).trim():'';
+  const licenseIssued=rec&&rec.licenseIssuedAt?String(rec.licenseIssuedAt).trim():'';
   const shiftsN=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER)).length;
   const closedN=mine.filter(o=>looksClosedOrder(o)).length;
   let html=`<div class="drv-earn">
@@ -1501,6 +1511,9 @@ function showCabinet(){
     <div class="drv-profile-row"><span>Телефон</span><b>${esc(phone)}</b></div>
     <div class="drv-profile-row"><span>Фирма</span><b>${esc(firm||'—')}</b></div>
     <div class="drv-profile-row"><span>Авто</span><b>${esc(plate)}</b></div>
+    ${passport?`<div class="drv-profile-row"><span>Паспорт</span><b>${esc(passport)}${passportIssued?`<br><small style="font-weight:500;color:var(--muted)">${esc(passportIssued)}</small>`:''}</b></div>`:''}
+    ${license?`<div class="drv-profile-row"><span>ВУ</span><b>${esc(license)}${licenseIssued?`<br><small style="font-weight:500;color:var(--muted)">выдано ${esc(licenseIssued)}</small>`:''}</b></div>`:''}
+    ${!passport&&!license?`<div class="hint" style="margin:8px 0">Паспорт и ВУ заполняет диспетчер в справочнике.</div>`:''}
   </div>`;
   html+=`<div class="drv-profile-stats">
     <div class="m"><span>Смен</span><b>${shiftsN}</b></div>

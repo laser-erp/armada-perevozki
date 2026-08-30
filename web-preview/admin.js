@@ -838,6 +838,22 @@ function openVehicleCard(vehicleId){
   box.innerHTML=`
     <p class="cat-panel-hint">${esc([firm, v.makeModel, vehicleSpecText(v)].filter(Boolean).join(' · ')||'Карточка автомобиля')}</p>
     <section class="form-section">
+      <h2 class="form-section-title">Документы ТС</h2>
+      <div class="fin-grid">
+        <label>СТС серия<input id="vc-sts-ser" inputmode="numeric" value="${esc(v.stsSeries||'')}" placeholder="77 XX" /></label>
+        <label>СТС номер<input id="vc-sts-num" inputmode="numeric" value="${esc(v.stsNumber||'')}" placeholder="123456" /></label>
+        <label>ГМС<input id="vc-gms" value="${esc(v.gmsNumber||'')}" placeholder="номер ГМС" /></label>
+        <label class="svc-full">Скан СТС (PNG/JPG, до 200 КБ)
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px">
+            ${v.stsPhoto?`<img src="${esc(v.stsPhoto)}" alt="СТС" style="max-height:64px;border-radius:8px;border:1px solid var(--border)" />`:''}
+            <input type="file" accept="image/png,image/jpeg,image/webp" id="vc-sts-photo" />
+            ${v.stsPhoto?`<button type="button" class="secondary" id="vc-sts-clear" style="width:auto;padding:6px 10px">Убрать</button>`:''}
+          </div>
+        </label>
+        <button type="button" class="primary cat-add-btn fin-full" id="vc-save-docs">Сохранить документы</button>
+      </div>
+    </section>
+    <section class="form-section">
       <h2 class="form-section-title">Основные</h2>
       <div class="fin-grid">
         <label>Модель<input id="vc-model" value="${esc(v.makeModel||'')}" placeholder="ГАЗ Валдай" /></label>
@@ -915,6 +931,33 @@ function openVehicleCard(vehicleId){
     persist();
     openVehicleCard(v.id);
   };
+  $('vc-save-docs')&&($('vc-save-docs').onclick=()=>{
+    v.stsSeries=String((($('vc-sts-ser')||{}).value||'').trim());
+    v.stsNumber=String((($('vc-sts-num')||{}).value||'').trim());
+    v.gmsNumber=String((($('vc-gms')||{}).value||'').trim());
+    bumpDataEpoch('veh-card-docs');
+    persist();
+    flashCatOk('Документы сохранены');
+  });
+  $('vc-sts-photo')&&($('vc-sts-photo').onchange=()=>{
+    const file=$('vc-sts-photo').files&&$('vc-sts-photo').files[0];
+    if(!file) return;
+    if(file.size>200*1024){ alert('Скан СТС до 200 КБ'); $('vc-sts-photo').value=''; return; }
+    const reader=new FileReader();
+    reader.onload=()=>{
+      v.stsPhoto=String(reader.result||'');
+      bumpDataEpoch('veh-sts-photo');
+      persist();
+      openVehicleCard(v.id);
+    };
+    reader.readAsDataURL(file);
+  });
+  $('vc-sts-clear')&&($('vc-sts-clear').onclick=()=>{
+    v.stsPhoto=null;
+    bumpDataEpoch('veh-sts-clear');
+    persist();
+    openVehicleCard(v.id);
+  });
   $('iv-add').onclick=()=>{
     const name=(($('iv-name')||{}).value||'').trim();
     if(!name){ alert('Укажите название интервала'); return; }
@@ -2379,6 +2422,8 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
     executorAdminId:null
   };
   stampOrderDriverPhone(order);
+  if(typeof syncOrderDriverVehicleDocs==='function') syncOrderDriverVehicleDocs(order);
+  if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
   ensureRoutePoints(order);
   applyOrderSchedule(order);
   upsertOrder(order);
@@ -2521,6 +2566,7 @@ function openDetail(id){
           </div>
         </div>
         ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
+        ${typeof orderDriverVehicleDocsSectionHtml==='function'?orderDriverVehicleDocsSectionHtml(o):''}
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
         <label>Требования к ТС (т / Д×Ш×В)</label>
@@ -2772,6 +2818,16 @@ function openDetail(id){
   wireRateAutoFill(o);
   wireOrderDocs(id);
   wireOrderEtrn(id);
+  $('d-sync-drv-docs')&&($('d-sync-drv-docs').onclick=()=>{
+    const order=state.orders.find(x=>x.id===id);
+    if(!order) return;
+    if(typeof syncOrderDriverVehicleDocs==='function') syncOrderDriverVehicleDocs(order);
+    if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
+    bumpDataEpoch('order-drv-docs-sync');
+    persist();
+    openDetail(id);
+    flashCatOk('Документы обновлены');
+  });
   const shipSameEl=$('d-shipper-same');
   const shipBox=$('d-shipper-fields');
   if(shipSameEl&&shipBox){
@@ -2960,7 +3016,8 @@ function openCatalogs(){
 
   const driverCards=drivers.map(({d,i})=>{
     const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||(d.spaceId&&(findSpaceById(d.spaceId)||{}).name)||'';
-    return `<div class="drv-card">
+    return `<div class="drv-card-wrap">
+      <div class="drv-card">
       <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
@@ -2970,6 +3027,17 @@ function openCatalogs(){
       <button type="button" class="icon-btn secondary" data-drv-invite="${i}" title="Ссылка 7 дн.">🔗</button>
       <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
+      </div>
+      <details class="drv-docs">
+        <summary>Паспорт и ВУ</summary>
+        <div class="drv-docs-grid">
+          <input id="drv-pass-ser-${i}" inputmode="numeric" maxlength="4" placeholder="Серия" value="${esc(d.passportSeries||'')}" title="Серия паспорта" />
+          <input id="drv-pass-num-${i}" inputmode="numeric" maxlength="6" placeholder="Номер" value="${esc(d.passportNumber||'')}" title="Номер паспорта" />
+          <input id="drv-pass-by-${i}" placeholder="Кем выдан" value="${esc(d.passportIssuedBy||'')}" title="Кем выдан" />
+          <input id="drv-pass-at-${i}" placeholder="Дата выдачи" value="${esc(d.passportIssuedAt||'')}" title="Дата выдачи паспорта" />
+          <input id="drv-lic-at-${i}" placeholder="ВУ выдано" value="${esc(d.licenseIssuedAt||'')}" title="Дата выдачи ВУ" />
+        </div>
+      </details>
     </div>`;
   }).join('') || `<div class="hint">Нет водителей</div>`;
 
@@ -2998,6 +3066,7 @@ function openCatalogs(){
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
         <input id="veh-w-${i}" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
         <input id="veh-h-${i}" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
+        <input id="veh-gms-${i}" placeholder="ГМС" title="Номер ГМС" value="${esc(v.gmsNumber||'')}" />
         <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km}" />
         <span class="hint" style="margin:0">л/100</span>
       </div>
@@ -3433,6 +3502,7 @@ function openCatalogs(){
     v.bodyLengthM=numOrNull(($('veh-l-'+i)||{}).value);
     v.bodyWidthM=numOrNull(($('veh-w-'+i)||{}).value);
     v.bodyHeightM=numOrNull(($('veh-h-'+i)||{}).value);
+    v.gmsNumber=String((($('veh-gms-'+i)||{}).value||'').trim());
     bumpDataEpoch('save-vehicle');
     persist(); flashCatOk(); openCatalogs();
   });
@@ -3501,6 +3571,11 @@ function openCatalogs(){
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     state.drivers[i].phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
     state.drivers[i].licenseNo=String((($('drv-license-'+i)||{}).value||'').trim());
+    state.drivers[i].passportSeries=String((($('drv-pass-ser-'+i)||{}).value||'').trim());
+    state.drivers[i].passportNumber=String((($('drv-pass-num-'+i)||{}).value||'').trim());
+    state.drivers[i].passportIssuedBy=String((($('drv-pass-by-'+i)||{}).value||'').trim());
+    state.drivers[i].passportIssuedAt=String((($('drv-pass-at-'+i)||{}).value||'').trim());
+    state.drivers[i].licenseIssuedAt=String((($('drv-lic-at-'+i)||{}).value||'').trim());
     const pin=(($('drv-pin-'+i)||{}).value||'').trim();
     if(pin && pin.length<4){ alert('PIN водителя — от 4 цифр'); return; }
     if(pin) state.drivers[i].pin=pin;
