@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-30-pin-btn4317e';
+  var APP_BUILD = '2026-08-30-admin-btn4317f';
 
   window.__armadaBootDone = false;
   setTimeout(function () {

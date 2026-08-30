@@ -102,6 +102,15 @@ function normalizeAllPhones(){
   });
   return changed;
 }
+function normalizeCompanyBank(b){
+  const raw=b||{};
+  return {
+    bankName:String(raw.bankName||'').trim(),
+    bankBik:String(raw.bankBik||'').replace(/\D/g,'').trim(),
+    bankAccount:String(raw.bankAccount||'').replace(/\D/g,'').trim(),
+    bankCorrAccount:String(raw.bankCorrAccount||'').replace(/\D/g,'').trim()
+  };
+}
 function normalizeCompany(c){
   if(!c||typeof c!=='object') return null;
   const name=String(c.name||'').trim(); if(!name) return null;
@@ -3827,70 +3836,6 @@ function updateSyncHint(){
   }
   updateDriverNetHint();
 }
-function openAdminLogin(){
-  openAdminLoginAsync().catch(err=>console.warn('openAdminLogin', err));
-}
-async function openAdminLoginAsync(){
-  migrateAdmins();
-  if(canAutoRestoreAdmin()){
-    clearEntrySkin();
-    show('admin');
-    renderAdmin();
-    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
-    return;
-  }
-  if(adminEntryRequiresPin()) currentAdmin=null;
-  fillAdminLoginSelect();
-  const pinIn=$('pin-input');
-  if(pinIn) pinIn.value='';
-  const pinErr=$('pin-error');
-  if(pinErr) pinErr.textContent='';
-  show('admin-pin');
-  applyEntrySkin('admin-pin');
-  wireAdminLoginHandlers();
-  const sel=$('admin-name-select');
-  const btn=$('pin-ok');
-  if(btn) btn.disabled=false;
-  let synced=false;
-  try{
-    if(sel) sel.disabled=true;
-    if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
-      synced=await Promise.race([
-        refreshAdminListForLogin(),
-        new Promise(resolve=>setTimeout(()=>resolve(false), 4500))
-      ]);
-    }
-    fillAdminLoginSelect();
-    if(!synced && pinErr){
-      pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
-    }
-  }catch(err){
-    console.warn('admin login list', err);
-    fillAdminLoginSelect();
-    if(pinErr) pinErr.textContent='Ошибка загрузки списка — попробуйте войти';
-  }finally{
-    if(sel) sel.disabled=false;
-    if(btn) btn.disabled=false;
-  }
-}
-function wireAdminLoginHandlers(){
-  const ok=$('pin-ok');
-  if(ok){
-    ok.type='button';
-    ok.onclick=()=>loginAdmin();
-  }
-  const pin=$('pin-input');
-  if(pin){
-    pin.onkeydown=e=>{
-      if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); }
-    };
-  }
-  const back=$('pin-back');
-  if(back && typeof backFromEntryLogin==='function'){
-    back.type='button';
-    back.onclick=()=>backFromEntryLogin();
-  }
-}
 const ENTRY_ASIDE={
   driver:{
     badge:'Водитель',
@@ -3954,6 +3899,70 @@ function applyEntrySkin(screenId){
     </div>`;
   const center=screen.querySelector('.center');
   if(center) center.insertBefore(aside, center.firstChild);
+}
+function openAdminLogin(){
+  openAdminLoginAsync().catch(err=>console.warn('openAdminLogin', err));
+}
+async function openAdminLoginAsync(){
+  migrateAdmins();
+  if(canAutoRestoreAdmin()){
+    clearEntrySkin();
+    show('admin');
+    renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+    return;
+  }
+  if(adminEntryRequiresPin()) currentAdmin=null;
+  fillAdminLoginSelect();
+  const pinIn=$('pin-input');
+  if(pinIn) pinIn.value='';
+  const pinErr=$('pin-error');
+  if(pinErr) pinErr.textContent='';
+  show('admin-pin');
+  wireAdminLoginHandlers();
+  try{ applyEntrySkin('admin-pin'); }catch(err){ console.warn('applyEntrySkin', err); }
+  const sel=$('admin-name-select');
+  const btn=$('pin-ok');
+  if(btn) btn.disabled=false;
+  let synced=false;
+  try{
+    if(sel) sel.disabled=true;
+    if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
+      synced=await Promise.race([
+        refreshAdminListForLogin(),
+        new Promise(resolve=>setTimeout(()=>resolve(false), 4500))
+      ]);
+    }
+    fillAdminLoginSelect();
+    if(!synced && pinErr){
+      pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
+    }
+  }catch(err){
+    console.warn('admin login list', err);
+    fillAdminLoginSelect();
+    if(pinErr) pinErr.textContent='Ошибка загрузки списка — попробуйте войти';
+  }finally{
+    if(sel) sel.disabled=false;
+    if(btn) btn.disabled=false;
+  }
+}
+function wireAdminLoginHandlers(){
+  const ok=$('pin-ok');
+  if(ok){
+    ok.type='button';
+    ok.onclick=()=>loginAdmin();
+  }
+  const pin=$('pin-input');
+  if(pin){
+    pin.onkeydown=e=>{
+      if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); }
+    };
+  }
+  const back=$('pin-back');
+  if(back && typeof backFromEntryLogin==='function'){
+    back.type='button';
+    back.onclick=()=>backFromEntryLogin();
+  }
 }
 function showDefaultAfterSplash(){
   initEntryFromPage();
