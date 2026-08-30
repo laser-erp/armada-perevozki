@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-28-etrn-shipper4317c";
+const APP_BUILD="2026-08-30-auth-sync4317a";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -1177,7 +1177,7 @@ function migrateDriverOwners(){
   let changed=false;
   (state.drivers||[]).forEach(d=>{
     if(d.ownerAdminId) return;
-    const adm=(state.admins||[]).find(a=>(a.name||'').trim().toLowerCase()===(d.name||'').trim().toLowerCase());
+    const adm=(state.admins||[]).find(a=>samePersonName(a.name, d.name));
     if(adm){ d.ownerAdminId=adm.id; d.ownerAdminName=adm.name; changed=true; }
   });
   return changed;
@@ -1229,8 +1229,62 @@ function normalizeSpace(s){
 }
 function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
 function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
+function personSurnameKey(name){
+  const parts=String(name||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '';
+  return parts[0].replace(/\./g,'');
+}
+function personInitials(name){
+  const parts=String(name||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(parts.length<2) return '';
+  return parts.slice(1).map(p=>p.replace(/\./g,'').charAt(0)).join('');
+}
+/** «Нечаев» и «Нечаев А.С.» — один человек (PIN админа ↔ водитель). */
 function samePersonName(a,b){
-  return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+  const na=String(a||'').trim().toLowerCase();
+  const nb=String(b||'').trim().toLowerCase();
+  if(!na||!nb) return false;
+  if(na===nb) return true;
+  const sa=personSurnameKey(na);
+  const sb=personSurnameKey(nb);
+  if(sa.length<3||sb.length<3||sa!==sb) return false;
+  const ia=personInitials(na);
+  const ib=personInitials(nb);
+  if(!ia||!ib) return true;
+  return ia.charAt(0)===ib.charAt(0);
+}
+/** PIN админа → водительские профили; при восстановлении доступа — сразу на сервер. */
+function syncAdminAuthToDrivers(adm){
+  if(!adm||!adm.id) return false;
+  if(typeof migrateSpaces==='function') migrateSpaces();
+  let changed=false;
+  const pin=String(adm.pin||'').trim();
+  const co=typeof ownCompanyForAdminId==='function'?ownCompanyForAdminId(adm.id):null;
+  const sp=findSpaceById(adm.spaceId);
+  const existing=(state.drivers||[]).find(d=>samePersonName(d.name, adm.name));
+  const driverName=existing?existing.name:adm.name;
+  if(co && ensureDriverInCompany({
+    name:driverName, companyId:co.id, companyName:co.name,
+    spaceId:adm.spaceId||co.spaceId||null,
+    ownerAdminId:adm.id, ownerAdminName:adm.name,
+    pin:pin.length>=4?pin:''
+  })) changed=true;
+  (state.drivers||[]).forEach(d=>{
+    if(!samePersonName(d.name, adm.name)) return;
+    if(pin.length>=4 && String(d.pin||'').trim()!==pin){ d.pin=pin; changed=true; }
+    if(!d.ownerAdminId){ d.ownerAdminId=adm.id; d.ownerAdminName=adm.name; changed=true; }
+    if(adm.spaceId && co && (!d.companyId || d.companyId===co.id || d.ownerAdminId===adm.id)){
+      if(d.spaceId!==adm.spaceId){ d.spaceId=adm.spaceId; changed=true; }
+      if(d.companyId!==co.id){ d.companyId=co.id; d.companyName=co.name; changed=true; }
+    }
+  });
+  if(existing && existing.name.length>String(adm.name||'').length && existing.name!==adm.name){
+    adm.name=existing.name;
+    if(sp) sp.adminName=existing.name;
+    changed=true;
+  }
+  if(changed && typeof bumpDataEpoch==='function') bumpDataEpoch('admin-driver-sync');
+  return changed;
 }
 /** «Наша фирма» пространства — у каждого админа своя. */
 function ensureOwnCompanyForSpace(space){
@@ -2004,20 +2058,25 @@ async function persistAdminPinImmediate(){
   syncStatus='syncing';
   updateDriverNetHint();
   if(typeof updateSyncHint==='function') updateSyncHint();
-  try{
-    await pushServerStateQueued();
-    syncStatus='ok';
-    pullFailCount=0;
-    updateDriverNetHint();
-    if(typeof updateSyncHint==='function') updateSyncHint();
-    return { ok:true };
-  }catch(err){
-    syncStatus='error';
-    console.warn('admin pin push', err);
-    updateDriverNetHint();
-    if(typeof updateSyncHint==='function') updateSyncHint();
-    return { ok:false, offline:false, err };
+  let lastErr=null;
+  for(let attempt=0; attempt<3; attempt++){
+    if(attempt>0) await new Promise(r=>setTimeout(r, 800*attempt));
+    try{
+      await pushServerStateQueued();
+      syncStatus='ok';
+      pullFailCount=0;
+      updateDriverNetHint();
+      if(typeof updateSyncHint==='function') updateSyncHint();
+      return { ok:true };
+    }catch(err){
+      lastErr=err;
+      console.warn('admin pin push attempt', attempt+1, err);
+    }
   }
+  syncStatus='error';
+  updateDriverNetHint();
+  if(typeof updateSyncHint==='function') updateSyncHint();
+  return { ok:false, offline:false, err:lastErr };
 }
 async function initCloudSync(){
   syncStatus='syncing';

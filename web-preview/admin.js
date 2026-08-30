@@ -218,8 +218,16 @@ async function loginAdmin(){
   const id=(($('admin-name-select')||{}).value||'').trim();
   const pin=(($('pin-input')||{}).value||'').trim();
   const adm=state.admins.find(a=>a.id===id);
-  if(!adm){ if(pinErr) pinErr.textContent='Выберите администратора'; return; }
-  if(pin!==String(adm.pin)){ if(pinErr) pinErr.textContent='Неверный PIN'; return; }
+  if(!adm){
+    if(pinErr) pinErr.textContent=state.admins.length
+      ? 'Выберите администратора'
+      : 'Нет учётных записей — попросите супер-админа восстановить доступ и дождитесь синхронизации';
+    return;
+  }
+  if(pin!==String(adm.pin)){
+    if(pinErr) pinErr.textContent='Неверный PIN. Если доступ только что восстановили — обновите страницу через минуту';
+    return;
+  }
   if(adm.mustChangePin){
     alert('Смените PIN: «Активность» → блок администраторов. Слабый или устаревший PIN из истории проекта.');
   }
@@ -624,7 +632,7 @@ function renderAdminActivity(){
       if(st) st.textContent=String(err.message||err);
     }
   });
-  $('new-adm-add').onclick=()=>{
+  $('new-adm-add').onclick=async()=>{
     if(!isSuperAdmin()) return;
     const name=(($('new-adm-name')||{}).value||'').trim();
     const pin=(($('new-adm-pin')||{}).value||'').trim();
@@ -633,7 +641,7 @@ function renderAdminActivity(){
     if(!name){ alert('Укажите имя администратора'); return; }
     if(!firmName){ alert('Укажите название фирмы'); return; }
     if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
-    if(state.admins.some(a=>(a.name||'').toLowerCase()===name.toLowerCase())){ alert('Такое имя уже есть'); return; }
+    if(state.admins.some(a=>samePersonName(a.name, name))){ alert('Такое имя уже есть'); return; }
     const inn=(($('new-firm-inn')||{}).value||'').replace(/\D/g,'');
     if(inn && !isValidInn(inn)){ alert('Некорректный ИНН'); return; }
     const adm={id:uuid(), name, pin, isSuper, spaceId:null};
@@ -646,7 +654,21 @@ function renderAdminActivity(){
       address:(($('new-firm-address')||{}).value||'').trim(),
       director:(($('new-firm-director')||{}).value||'').trim()
     });
-    persist(); renderAdminActivity();
+    if(typeof syncAdminAuthToDrivers==='function') syncAdminAuthToDrivers(adm);
+    if(typeof bumpDataEpoch==='function') bumpDataEpoch('new-admin');
+    const btn=$('new-adm-add');
+    if(btn){ btn.disabled=true; btn.textContent='…'; }
+    let saveResult={ ok:navigator.onLine!==false, offline:navigator.onLine===false };
+    if(typeof persistAdminPinImmediate==='function'){
+      saveResult=await persistAdminPinImmediate();
+    } else {
+      persist();
+    }
+    if(btn){ btn.disabled=false; btn.textContent='+ администратор и фирма'; }
+    renderAdminActivity();
+    if(!saveResult.ok){
+      alert('Администратор создан на этом устройстве, но не синхронизирован с сервером — проверьте интернет и сохраните PIN ещё раз');
+    }
   };
   document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=async()=>{
     if(!isSuperAdmin()) return;
@@ -676,6 +698,7 @@ function renderAdminActivity(){
       saveAdminSession();
       updateAdminChrome();
     }
+    if(typeof syncAdminAuthToDrivers==='function') syncAdminAuthToDrivers(state.admins[i]);
     if(typeof bumpDataEpoch==='function') bumpDataEpoch('admin-pin');
     const btn=b;
     const prevText=btn.textContent;
