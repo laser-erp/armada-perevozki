@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-pilot4317";
+const APP_BUILD="2026-08-31-entry-admin-fix4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -268,6 +268,17 @@ function openDedicatedEntryScreen(){
     return true;
   }
   return false;
+}
+function isArmadaEntryScreenVisible(){
+  return !!document.querySelector('#admin.show,#admin-pin.show,#driver.show,#driver-login.show,#customer-login.show,#customer-portal.show');
+}
+function bootFallbackAfterSplash(){
+  if(isArmadaEntryScreenVisible()) return;
+  if(typeof dedicatedEntryMode==='function' && dedicatedEntryMode()){
+    if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
+  }
+  if(typeof showDefaultAfterSplash==='function') showDefaultAfterSplash();
+  else if(typeof show==='function') show('roles');
 }
 function showHubAfterSplash(){
   if(document.querySelector('#splash.show') && typeof showAfterSplash==='function') showAfterSplash(showRoleHub);

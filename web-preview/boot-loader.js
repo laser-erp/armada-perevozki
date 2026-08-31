@@ -1,11 +1,15 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-31-pilot4317';
+  var APP_BUILD = '2026-08-31-entry-admin-fix4317';
 
   window.__armadaBootDone = false;
   setTimeout(function () {
     var sp = document.getElementById('splash');
     if (!sp || !sp.classList.contains('show')) return;
+    if (typeof bootFallbackAfterSplash === 'function') {
+      bootFallbackAfterSplash();
+      return;
+    }
     if (typeof showAfterSplash === 'function' && typeof showDefaultAfterSplash === 'function') {
       showAfterSplash(showDefaultAfterSplash);
       return;

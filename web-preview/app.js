@@ -4676,15 +4676,13 @@ try{
   } else if(urlEntry==='driver'){
     if(lastRole==='driver' && (await tryDriver())){ /* ok */ }
     else if(restoreDriverSession() && (await tryDriver())){ /* ok */ }
-    else if(document.querySelector('#splash.show')) showAfterSplash(()=>openDedicatedEntryScreen());
     else openDedicatedEntryScreen();
   } else if(urlEntry==='admin'){
     if(canAutoRestoreAdmin()){
       show('admin');
       renderAdmin();
       if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
-    }else if(document.querySelector('#splash.show')) showAfterSplash(openDedicatedEntryScreen);
-    else openDedicatedEntryScreen();
+    }else openDedicatedEntryScreen();
   } else if(lastRole==='driver'){
     if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
   } else if(lastRole==='customer'){
@@ -4718,8 +4716,9 @@ try{
     }
   }finally{
     window.__armadaBootDone=true;
-    if(document.querySelector('#splash.show') && !document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show') && !document.querySelector('#customer-portal.show')){
-      if(typeof showAfterSplash==='function' && typeof showDefaultAfterSplash==='function') showAfterSplash(showDefaultAfterSplash);
+    if(document.querySelector('#splash.show') && !isArmadaEntryScreenVisible()){
+      if(typeof bootFallbackAfterSplash==='function') showAfterSplash(bootFallbackAfterSplash);
+      else if(typeof showAfterSplash==='function' && typeof showDefaultAfterSplash==='function') showAfterSplash(showDefaultAfterSplash);
       else if(typeof show==='function') show('roles');
     }
   }
