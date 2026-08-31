@@ -843,6 +843,7 @@
     .form-triple{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
     .cust-route-map-wrap{margin:4px 0 2px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface2,#f4f6f5)}
     .addr-suggest-wrap{position:relative}
+    .addr-suggest-wrap > input,.addr-suggest-wrap > textarea{width:100%;box-sizing:border-box}
     .addr-suggest-list{
       position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;
       max-height:min(240px,42vh);overflow-y:auto;
