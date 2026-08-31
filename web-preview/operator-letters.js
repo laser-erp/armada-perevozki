@@ -85,8 +85,16 @@ function operatorLetterOutRecord(templateId) {
 function peekOperatorLetterOutNo(templateId) {
   const reg = operatorOutgoingRegistry();
   const rec = reg.byId[templateId];
-  if (rec && rec.seq != null) return { seq: rec.seq, date: rec.date || rec.issuedAt, assigned: true };
-  return { seq: reg.nextSeq, date: new Date().toISOString(), assigned: false };
+  if (rec && rec.seq != null) {
+    return { seq: rec.seq, date: rec.date || rec.issuedAt, assigned: true };
+  }
+  let seq = reg.nextSeq;
+  for (const t of OPERATOR_LETTER_CATALOG) {
+    if (t.id === templateId) break;
+    const prev = reg.byId[t.id];
+    if (!prev || prev.seq == null) seq += 1;
+  }
+  return { seq, date: new Date().toISOString(), assigned: false };
 }
 
 function ensureOperatorLetterOutNo(templateId) {
