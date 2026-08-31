@@ -1425,6 +1425,7 @@ function renderCustomerPortal(){
   renderCustomerDocsByOrder();
   syncCustomerPortalTabUi();
   syncCustomerDocsTabBadge();
+  if(typeof renderCustomerEpdSignCard==='function') renderCustomerEpdSignCard();
 }
 
 function renderCustomerInvoicesList(){

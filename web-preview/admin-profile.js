@@ -126,6 +126,7 @@ function renderAdminProfile() {
       renderAdminProfile();
     };
   }
+  if (typeof renderAdminEpdSignCard === 'function') renderAdminEpdSignCard();
 }
 
 function openAdminProfile() {

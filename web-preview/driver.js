@@ -1505,7 +1505,11 @@ function showCabinet(){
   const licenseIssued=rec&&rec.licenseIssuedAt?String(rec.licenseIssuedAt).trim():'';
   const shiftsN=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER)).length;
   const closedN=mine.filter(o=>looksClosedOrder(o)).length;
-  let html=`<div class="drv-earn">
+  let html='';
+  if(typeof epdSignCardHtml==='function'){
+    html+=epdSignCardHtml('driver');
+  }
+  html+=`<div class="drv-earn">
     <span class="lbl">Профиль</span>
     <span class="val" style="font-size:1.25rem">${esc(DRIVER||'—')}</span>
     <span class="sub">${esc(firm||'Водитель')}</span>
@@ -1569,6 +1573,7 @@ function showCabinet(){
     <div class="drv-section-label" style="margin-top:14px">О приложении</div>
     <div class="hint" style="margin-top:4px">АРМАДА · учёт перевозок<br>Сборка ${esc(APP_BUILD)}</div>`;
   $('cabinet-list').innerHTML=html;
+  if(typeof wireEpdSignCard==='function') wireEpdSignCard($('cabinet-list'));
   const ex=$('profile-exit');
   if(ex) ex.onclick=()=>leaveDriverMode();
   const nOn=$('profile-notify-on');

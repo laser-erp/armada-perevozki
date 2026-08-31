@@ -958,7 +958,19 @@
       border-radius:999px;background:#fff;color:var(--accent,#2563eb);
       font-size:.62rem;font-weight:800;line-height:1;vertical-align:middle;
     }
-    .filters button.on .cust-tab-badge{background:rgba(255,255,255,.95);color:var(--accent,#2563eb)}
+    .cust-tab-badge{background:rgba(255,255,255,.95);color:var(--accent,#2563eb)}
+    .epd-sign-card{
+      margin:0 0 14px;padding:12px 14px;border:1px solid var(--border);
+      border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 5%,var(--surface));
+    }
+    .epd-sign-card--compact{padding:10px 12px}
+    .epd-sign-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
+    .epd-sign-card-title{margin:0;font-size:.92rem;line-height:1.25}
+    .epd-sign-card-hint{margin:0 0 6px;font-size:.78rem}
+    .epd-sign-card-meta{margin:0 0 10px;font-size:.72rem}
+    .epd-sign-card-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .epd-sign-card-actions .primary,.epd-sign-card-actions .secondary{width:auto;flex:0 0 auto;padding:8px 14px;font-size:.82rem;text-decoration:none;display:inline-block}
+    #admin-epd-sign-slot{padding:0 12px 16px;max-width:640px}
     .cust-draft-banner{
       margin:0 0 12px;padding:12px 14px;border-radius:var(--radius,14px);
       background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);
