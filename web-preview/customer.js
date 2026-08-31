@@ -122,6 +122,17 @@ function renderCustomerDocsAlerts(co, carrier){
     host.innerHTML=parts.join('');
     host.hidden=false;
     host.setAttribute('aria-hidden','false');
+    const panel=$('cust-docs-alert-panel');
+    const countEl=$('cust-docs-alert-count');
+    const rows=host.querySelectorAll('.cust-alert-row').length;
+    if(panel){
+      panel.hidden=false;
+      panel.setAttribute('aria-hidden','false');
+    }
+    if(countEl){
+      if(rows>0){ countEl.hidden=false; countEl.textContent=String(rows); }
+      else countEl.hidden=true;
+    }
     if(co&&$('cust-contract-banner')&&typeof wireCustomerFrameworkContractBanner==='function'){
       wireCustomerFrameworkContractBanner(co, carrier);
     }
@@ -132,6 +143,13 @@ function renderCustomerDocsAlerts(co, carrier){
     host.innerHTML='';
     delete host.dataset.hasAlerts;
     host.setAttribute('aria-hidden','true');
+    const panel=$('cust-docs-alert-panel');
+    const countEl=$('cust-docs-alert-count');
+    if(panel){
+      panel.hidden=true;
+      panel.setAttribute('aria-hidden','true');
+    }
+    if(countEl) countEl.hidden=true;
   }
 }
 function syncCustomerDocsTabBadge(){

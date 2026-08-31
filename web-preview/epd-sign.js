@@ -501,17 +501,25 @@
     const st=prof&&prof.status||'none';
     const kindLabel=meta.kind==='pep'?'ПЭП':'КЭП';
     if(st==='active'){
-      return `<div class="cust-alert-strip cust-alert-strip--sign cust-alert-strip--ok cust-alert-strip--mini" data-epd-sign-role="${esc(role)}">
-        <span class="cust-alert-chip cust-alert-chip--ok">✓ ${esc(kindLabel)}</span>
+      return `<div class="cust-alert-row cust-alert-row--ok" data-epd-sign-role="${esc(role)}">
+        <span class="cust-alert-row-dot" aria-hidden="true"></span>
+        <div class="cust-alert-row-main">
+          <span class="cust-alert-row-label">${esc(kindLabel)}</span>
+          <span class="cust-alert-row-sub">Подпись активна</span>
+        </div>
       </div>`;
     }
-    const titles={ none:kindLabel, pending:'КЭП · …', expired:`${kindLabel} истекла` };
-    const title=titles[st]||titles.none;
+    const subs={ none:`Выпустите ${kindLabel} для подписания документов`, pending:'Завершите выпуск у оператора', expired:`${kindLabel} истекла — выпустите заново` };
+    const sub=subs[st]||subs.none;
     const actions=epdSignButtonsHtml(st, role, ctx, kindLabel, { compact:true });
     if(!actions) return '';
-    return `<div class="cust-alert-strip cust-alert-strip--sign cust-alert-strip--mini" data-epd-sign-role="${esc(role)}">
-      <strong class="cust-alert-strip-title">${esc(title)}</strong>
-      <div class="cust-alert-strip-actions">${actions}</div>
+    return `<div class="cust-alert-row cust-alert-row--sign" data-epd-sign-role="${esc(role)}">
+      <span class="cust-alert-row-dot" aria-hidden="true"></span>
+      <div class="cust-alert-row-main">
+        <span class="cust-alert-row-label">${esc(kindLabel)}</span>
+        <span class="cust-alert-row-sub">${esc(sub)}</span>
+      </div>
+      <div class="cust-alert-row-actions">${actions}</div>
     </div>`;
   }
 

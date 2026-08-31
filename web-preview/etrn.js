@@ -277,12 +277,16 @@ function customerEtrnT1BannerHtml(opts){
     `<button type="button" class="secondary cust-alert-btn cust-etrn-t1-sign" data-order-id="${esc(o.id)}">№ ${esc(o.sequentialNumber||'—')}</button>`
   ).join('');
   if(opts.compact){
-    return `<div class="cust-alert-strip cust-alert-strip--etrn">
-      <div class="cust-alert-strip-text">
-        <strong class="cust-alert-strip-title">ЭТrН · T1</strong>
-        <span class="hint">Подпишите на погрузке</span>
+    const sub=pending.length===1
+      ? `Заявка № ${esc(pending[0].sequentialNumber||'—')} · подпись на погрузке`
+      : `${pending.length} заявки · подпись T1 на погрузке`;
+    return `<div class="cust-alert-row cust-alert-row--etrn">
+      <span class="cust-alert-row-dot" aria-hidden="true"></span>
+      <div class="cust-alert-row-main">
+        <span class="cust-alert-row-label">ЭТрН · T1</span>
+        <span class="cust-alert-row-sub">${sub}</span>
       </div>
-      <div class="cust-alert-strip-actions">${btns}</div>
+      <div class="cust-alert-row-actions">${btns}</div>
     </div>`;
   }
   return `<div class="cust-etrn-banner"><strong>ЭТrН:</strong> подпишите T1 (вы — грузоотправитель) ${btns}</div>`;

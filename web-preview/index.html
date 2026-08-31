@@ -505,7 +505,13 @@
           <div id="cust-book-cal"></div>
         </div>
         <div id="cust-tab-docs" class="cust-portal-tab-panel" role="tabpanel" hidden>
-          <div class="cust-docs-alerts" id="cust-docs-alerts" hidden></div>
+          <section class="cust-docs-alert-panel" id="cust-docs-alert-panel" hidden aria-label="Требует внимания">
+            <header class="cust-docs-alert-panel-head">
+              <span class="cust-docs-alert-panel-title">Требует внимания</span>
+              <span class="cust-docs-alert-panel-count" id="cust-docs-alert-count" hidden></span>
+            </header>
+            <div class="cust-docs-alerts" id="cust-docs-alerts"></div>
+          </section>
           <section class="form-section">
             <h2 class="form-section-title">Счета</h2>
             <p class="hint">Счета формируются автоматически после отправки заявки. QR-код — для оплаты через приложение банка.</p>
