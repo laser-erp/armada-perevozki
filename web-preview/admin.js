@@ -4030,16 +4030,17 @@ function openCatalogs(){
     const companyName=(drvCo&&drvCo.name)||owner.companyName;
     if(!companyId){ alert('Выберите фирму (парк) для водителя'); return; }
     if(driverExistsInCompany(name, companyId)){ alert('Такой водитель уже есть в этой фирме'); return; }
+    const newId=uuid();
     state.drivers.push({
       name, salaryPercent:pct, phone, pin, exchangeEnabled,
-      id:uuid(),
+      id:newId,
       ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
       spaceId:owner.spaceId||null,
       companyId, companyName
     });
     bumpDataEpoch('add-driver');
-    persist(); openCatalogs();
-    flashCatOk();
+    persist();
+    openDriverCard(newId);
   });
   const finCoSel=$('fin-company');
   if(finCoSel){
