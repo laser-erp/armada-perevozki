@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-armada-order4317";
+const APP_BUILD="2026-08-31-armada-logist4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1168,6 +1168,11 @@ function normalizeCustomerPortalLead(raw){
     unloadAddress:String(raw.unloadAddress||'').trim()||null,
     vehicleAt:String(raw.vehicleAt||'').trim()||null,
     source:String(raw.source||'').trim()||null,
+    orderId:raw.orderId||null,
+    customerId:raw.customerId||null,
+    spaceId:raw.spaceId||null,
+    logistCompanyId:raw.logistCompanyId||null,
+    logistCompanyName:raw.logistCompanyName||null,
     status:raw.status==='done'?'done':'pending',
     createdAt:raw.createdAt||new Date().toISOString(),
     doneAt:raw.doneAt||null
@@ -1176,6 +1181,161 @@ function normalizeCustomerPortalLead(raw){
 function migrateCustomerPortalLeads(){
   state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
 }
+function companyOwnRole(c){
+  return !!(c&&Array.isArray(c.roles)&&c.roles.includes('own'));
+}
+function findArmadaLogistCompany(){
+  if(typeof migrateSpaces==='function') migrateSpaces();
+  const companies=state.companies||[];
+  let hit=companies.find(c=>companyOwnRole(c)&&String(c.name||'').toLowerCase().includes('армада'));
+  if(hit) return hit;
+  const sp=(state.spaces||[]).find(s=>String(s.name||'').toLowerCase().includes('армада'));
+  if(sp){
+    hit=companies.find(c=>companyOwnRole(c)&&c.spaceId===sp.id);
+    if(hit) return hit;
+  }
+  return null;
+}
+function mergeUniqueAddresses(existing, extra){
+  const seen=new Set();
+  const out=[];
+  [...(existing||[]), ...(Array.isArray(extra)?extra:[extra])].forEach(a=>{
+    const s=String(a||'').trim();
+    if(!s) return;
+    const k=s.toLowerCase();
+    if(seen.has(k)) return;
+    seen.add(k);
+    out.push(s);
+  });
+  return out;
+}
+function mapVtypeToBodyType(vtypeId){
+  const id=String(vtypeId||'').trim();
+  if(!id) return 'board';
+  const meta=ATI_BODY_TYPES.find(x=>x.id===id);
+  return meta&&meta.mapTo?meta.mapTo:'board';
+}
+function findArmadaCustomerByPhone(spaceId, phone){
+  const ph=typeof formatPhone==='function'?formatPhone(phone||''):String(phone||'').trim();
+  if(!ph) return null;
+  return (state.companies||[]).find(c=>{
+    if(spaceId&&c.spaceId!==spaceId) return false;
+    if(!Array.isArray(c.roles)||!c.roles.includes('customer')) return false;
+    if(typeof formatPhone==='function'&&formatPhone(c.portalPhone||'')===ph) return true;
+    if((c.phones||[]).some(p=>formatPhone(p)===ph)) return true;
+    return (c.contacts||[]).some(p=>formatPhone(p.phone||p)===ph);
+  })||null;
+}
+function ensureArmadaCustomerFromLead(lead, armadaCo){
+  if(!lead||!armadaCo) return null;
+  const spaceId=armadaCo.spaceId||null;
+  const phone=lead.phone;
+  let co=findArmadaCustomerByPhone(spaceId, phone);
+  const loadAddr=lead.loadAddress||'';
+  const unloadAddr=lead.unloadAddress||'';
+  if(co){
+    if(loadAddr) co.loadingAddresses=mergeUniqueAddresses(co.loadingAddresses, loadAddr);
+    if(unloadAddr) co.unloadingAddresses=mergeUniqueAddresses(co.unloadingAddresses, unloadAddr);
+    if(lead.inn&&!co.inn) co.inn=lead.inn;
+    if(!co.spaceId&&spaceId) co.spaceId=spaceId;
+    if(!co.portalPhone) co.portalPhone=phone;
+    if(lead.contactName){
+      const has=(co.contacts||[]).some(p=>String(p.name||'').trim().toLowerCase()===lead.contactName.toLowerCase());
+      if(!has){
+        co.contacts=(co.contacts||[]).concat([{name:lead.contactName, phone, role:''}]);
+      }
+    }
+    return co;
+  }
+  co={
+    id:uuid(),
+    name:lead.company,
+    roles:['customer'],
+    spaceId,
+    inn:lead.inn||'',
+    note:lead.source?`С ${lead.source}`:'',
+    portalPhone:phone,
+    portalEnabled:false,
+    portalPin:'',
+    loadingAddresses:loadAddr?[loadAddr]:[],
+    unloadingAddresses:unloadAddr?[unloadAddr]:[],
+    contacts:lead.contactName?[{name:lead.contactName, phone, role:''}]:[],
+    phones:[phone],
+    vehicles:[],
+    drivers:[]
+  };
+  state.companies=(state.companies||[]).concat([co]);
+  state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  if(typeof syncCustomersFromCompanies==='function') syncCustomersFromCompanies();
+  return co;
+}
+function insertPublicTransportOrder(lead, customerCo, armadaCo){
+  const spaceId=armadaCo.spaceId||null;
+  const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId)||(state.admins||[]).find(a=>a.isSuper)||null;
+  const seqNo=nextSequentialNumber();
+  const now=new Date().toISOString();
+  const load=String(lead.loadAddress||'').trim()||'—';
+  const unload=String(lead.unloadAddress||'').trim()||load;
+  const vtypes=lead.vehicleTypeId?[lead.vehicleTypeId]:[];
+  const order={
+    id:uuid(),
+    sequentialNumber:seqNo,
+    dayNumber:1,
+    createdAt:now,
+    source:'armada_sx',
+    customerSubmitted:true,
+    publicLeadId:lead.id,
+    ownerAdminId:spaceAdm&&spaceAdm.id||null,
+    ownerAdminName:spaceAdm&&spaceAdm.name||'',
+    spaceId,
+    customer:customerCo.name,
+    customerId:customerCo.id,
+    customerInn:customerCo.inn||'',
+    ownCompanyId:armadaCo.id,
+    ownCompanyName:armadaCo.name,
+    contactName:lead.contactName||lead.company||'',
+    contactPhone:lead.phone||'',
+    loadingContactName:lead.contactName||'',
+    loadingContactPhone:lead.phone||'',
+    cargoDescription:lead.comment||'',
+    loadingAddress:load,
+    unloadingAddress:unload,
+    routePoints:defaultRoutePoints(load, unload),
+    vehicleAt:lead.vehicleAt||null,
+    vehiclePlate:'—',
+    driverName:'Диспетчер',
+    driverPercent:0,
+    executorType:'logist',
+    onExchange:false,
+    fulfillment:'logist',
+    pricePending:true,
+    priceForClient:null,
+    reqBodyType:mapVtypeToBodyType(lead.vehicleTypeId),
+    vehicleTypeIds:vtypes,
+    partnerSpaceId:null,
+    transportApp:null
+  };
+  ensureRoutePoints(order);
+  state.orders=state.orders||[];
+  state.orders.unshift(order);
+  lead.orderId=order.id;
+  lead.customerId=customerCo.id;
+  lead.spaceId=spaceId;
+  lead.logistCompanyId=armadaCo.id;
+  lead.logistCompanyName=armadaCo.name;
+  return order;
+}
+function attachArmadaTransportLead(rec){
+  if(!rec||rec.kind!=='transport'||rec.orderId) return null;
+  const armada=findArmadaLogistCompany();
+  if(!armada){
+    console.warn('ООО «Армада» не найдена в справочнике — заявка сохранена без заказа');
+    return null;
+  }
+  const customer=ensureArmadaCustomerFromLead(rec, armada);
+  if(!customer) return null;
+  return insertPublicTransportOrder(rec, customer, armada);
+}
 async function appendCustomerPortalLead(raw){
   migrateCustomerPortalLeads();
   const rec=normalizeCustomerPortalLead(raw);
@@ -1183,16 +1343,34 @@ async function appendCustomerPortalLead(raw){
   const dup=(state.customerPortalLeads||[]).find(l=>
     l.status==='pending' && l.phone===rec.phone && l.company.toLowerCase()===rec.company.toLowerCase()
   );
-  if(dup) return {ok:true, id:dup.id, duplicate:true};
+  if(dup) return {ok:true, id:dup.id, duplicate:true, orderId:dup.orderId||null};
   state.customerPortalLeads.unshift(rec);
+  let order=null;
+  if(rec.kind==='transport'){
+    order=attachArmadaTransportLead(rec);
+    if(order) bumpDataEpoch('armada-sx-order');
+  }
   bumpDataEpoch('customer-portal-lead');
   persistLocalOnly();
   try{
     await persist();
-    return {ok:true, id:rec.id};
+    return {
+      ok:true,
+      id:rec.id,
+      orderId:rec.orderId||null,
+      orderNumber:order&&order.sequentialNumber||null,
+      customerId:rec.customerId||null
+    };
   }catch(err){
     console.warn('customer portal lead persist', err);
-    return {ok:true, id:rec.id, offline:true};
+    return {
+      ok:true,
+      id:rec.id,
+      offline:true,
+      orderId:rec.orderId||null,
+      orderNumber:order&&order.sequentialNumber||null,
+      customerId:rec.customerId||null
+    };
   }
 }
 function markCustomerPortalLeadDone(leadId){

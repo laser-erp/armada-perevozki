@@ -569,10 +569,13 @@ function renderAdminActivity(){
     <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
     ${transportLeads.length?`<section class="form-section">
       <h2 class="form-section-title">Заявки на транспорт · armada.sx</h2>
-      <p class="cat-panel-hint">С публичной формы <a href="/order.html" target="_blank" rel="noopener">order.html</a> и кнопок на armada.sx. Создайте заявку в кабинете или перезвоните клиенту.</p>
+      <p class="cat-panel-hint">С armada.sx → <a href="/order.html" target="_blank" rel="noopener">order.html</a>. Логист — <strong>ООО «Армада»</strong>, заказчик автоматически закрепляется в её справочнике, заявка попадает в общий список.</p>
       <div class="cat-list">
         ${transportLeads.map(l=>{
           const vLabel=l.vehicleTypeId&&typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(l.vehicleTypeId):(l.vehicleTypeId||'—');
+          const ord=l.orderId?(state.orders||[]).find(o=>o.id===l.orderId):null;
+          const ordNum=ord&&ord.sequentialNumber?`№${ord.sequentialNumber}`:'';
+          const logist=l.logistCompanyName||'ООО «Армада»';
           return `
           <div class="item-card" data-lead-id="${esc(l.id)}">
             <div class="item-top">
@@ -580,11 +583,13 @@ function renderAdminActivity(){
               <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
             </div>
             <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.source?` · ${esc(l.source)}`:''}</div>
+            <div class="hint">Логист: ${esc(logist)}${ordNum?` · заявка ${esc(ordNum)}`:''}</div>
             ${l.loadAddress?`<div class="hint">Подача: ${esc(l.loadAddress)}</div>`:''}
             ${l.unloadAddress?`<div class="hint">Выгрузка: ${esc(l.unloadAddress)}</div>`:''}
             ${l.vehicleAt?`<div class="hint">Когда: ${esc(typeof dateTime==='function'?dateTime(l.vehicleAt):l.vehicleAt)}</div>`:''}
             ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
-            <div class="row" style="margin-top:8px">
+            <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+              ${l.orderId?`<button type="button" class="primary lead-open-order-btn" data-order-id="${esc(l.orderId)}">Открыть заявку</button>`:''}
               <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
             </div>
           </div>`;
@@ -911,6 +916,11 @@ function renderAdminActivity(){
     if(!confirm(`Удалить администратора ${adm.name}?`)) return;
     state.admins=state.admins.filter(a=>a.id!==id);
     persist(); renderAdminActivity();
+  });
+  document.querySelectorAll('.lead-open-order-btn').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.orderId;
+    if(!id) return;
+    if(typeof openDetail==='function') openDetail(id);
   });
   document.querySelectorAll('.lead-done-btn').forEach(b=>b.onclick=()=>{
     if(!isSuperAdmin()) return;

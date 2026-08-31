@@ -1,6 +1,6 @@
 /* order.html — публичная заявка с armada.sx (CSP: без inline) */
 (function () {
-  var BUILD = '2026-08-31-armada-order4317';
+  var BUILD = '2026-08-31-armada-logist4317';
   var form = null;
   var statusEl = null;
   var selectedVtype = '';
@@ -192,7 +192,14 @@
       if (!res || !res.ok) throw new Error((res && res.error) || 'Не удалось сохранить');
       if (form) form.hidden = true;
       var okBox = qs('order-success');
-      if (okBox) okBox.hidden = false;
+      if (okBox) {
+        okBox.hidden = false;
+        var lead = okBox.querySelector('[data-order-num]');
+        if (lead && res.orderNumber) {
+          lead.textContent = 'Номер заявки: №' + res.orderNumber + '. Диспетчер ООО «Армада» свяжется с вами.';
+          lead.hidden = false;
+        }
+      }
       showStatus('', null);
     } catch (e) {
       console.warn('public transport order', e);
