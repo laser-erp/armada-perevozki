@@ -201,6 +201,21 @@ function orderCargoWeightText(o){
 }
 function orderCargoDocHtml(o){
   if(!o) return '<p class="muted">Не указан</p>';
+  if(Array.isArray(o.cargoItems)&&o.cargoItems.length){
+    return o.cargoItems.map((it,i)=>{
+      const lines=[];
+      lines.push(`<p><strong>${o.cargoItems.length>1?`${i+1}. `:''}${esc(it.text||'—')}</strong></p>`);
+      const weight=it.weightValue?(it.weightUnit==='kg'?`${it.weightValue} кг`:`${it.weightValue} т`):'';
+      if(weight) lines.push(`<p>Масса: <strong>${esc(weight)}</strong></p>`);
+      if([it.reqLengthM,it.reqWidthM,it.reqHeightM].some(x=>x>0)){
+        const dims=[it.reqLengthM,it.reqWidthM,it.reqHeightM].filter(x=>x>0).map(x=>`${x} м`).join(' × ');
+        if(dims) lines.push(`<p>Габариты: <strong>${esc(dims)}</strong></p>`);
+      }
+      if(it.places>0) lines.push(`<p>Мест: <strong>${esc(it.places)}</strong></p>`);
+      if(it.volume>0) lines.push(`<p>Объём: <strong>${esc(it.volume)} м³</strong></p>`);
+      return lines.join('');
+    }).join('');
+  }
   const lines=[];
   const kind=o.cargoKind&&typeof cargoKindLabel==='function'?cargoKindLabel(o.cargoKind):o.cargoKind;
   if(kind) lines.push(`Вид груза: <strong>${esc(kind)}</strong>`);
