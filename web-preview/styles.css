@@ -1247,7 +1247,37 @@
         radial-gradient(ellipse at 80% 100%, rgba(30,90,168,.05), transparent 45%),
         linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 55%)
     }
-    #roles.show .center.roles-hub{justify-content:flex-start;padding-top:16px;padding-bottom:28px}
+    #roles.show{overflow:auto;-webkit-overflow-scrolling:touch}
+    #roles.show .center.roles-hub{justify-content:flex-start;padding-top:16px;padding-bottom:28px;min-height:min-content}
+    @media(min-width:900px){
+      .phone:has(#roles.show){
+        max-width:min(1120px,96vw);
+        height:auto;min-height:100dvh;max-height:none
+      }
+      #roles.show .center.roles-hub{
+        justify-content:center;max-width:1080px;padding:28px 24px 36px;gap:20px
+      }
+      .roles-hub-head .logo{width:72px}
+      .roles-hub-title{font-size:clamp(1.45rem,2.2vw,1.85rem)}
+      .roles-hub-lead{max-width:520px;font-size:1rem}
+      .role-hub-stack{
+        display:grid;grid-template-columns:repeat(3,1fr);gap:18px;width:100%;align-items:stretch
+      }
+      .role-hub-card{
+        flex-direction:column;align-items:stretch;gap:12px;
+        padding:22px 20px 20px;min-height:300px;border-radius:18px
+      }
+      .role-hub-card::before{
+        left:0;right:0;top:0;bottom:auto;width:auto;height:5px;border-radius:18px 18px 0 0
+      }
+      .role-hub-icon{
+        flex:0 0 auto;width:56px;height:56px;font-size:1.65rem;border-radius:14px
+      }
+      .role-hub-name{font-size:1.08rem}
+      .role-hub-teaser{font-size:.88rem;flex:1}
+      .role-hub-cta{margin-top:auto;padding-top:10px;font-size:.88rem}
+      .role-hub-login{max-width:640px;margin-left:auto;margin-right:auto;width:100%}
+    }
     .auth-back{
       border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;
       padding:6px 0;min-height:36px;font-size:.85rem;font-family:inherit
