@@ -576,147 +576,158 @@
         <h1>Новый заказ</h1>
       </header>
       <div class="admin-form-scroll">
-        <section class="form-section">
-          <h2 class="form-section-title">Основание</h2>
-          <p class="form-section-hint">Номер за день и фирма по договору — от неё же берётся парк</p>
-          <div class="form-fields">
-            <label>Номер за день</label>
-            <div class="nums" id="create-day"><button type="button" data-cday="1">1</button><button type="button" data-cday="2">2</button><button type="button" data-cday="3">3</button><button type="button" data-cday="4">4</button><button type="button" data-cday="5">5</button></div>
-            <label for="create-own-company">От нашей фирмы (договор)</label>
-            <select id="create-own-company"></select>
-          </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Заказчик</h2>
-          <p class="form-section-hint">ИНН → «Загрузить» из ЕГРЮЛ ФНС (на сервере). Полный адрес: ключ API-ФНС в Активность.</p>
-          <div class="form-fields">
-            <label for="create-customer-inn">ИНН заказчика</label>
-            <div class="row" style="gap:8px;align-items:center">
-              <input id="create-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" />
-              <button type="button" class="secondary" id="create-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
-            </div>
-            <div class="hint" id="create-customer-inn-status"></div>
-            <label for="create-customer">Заказчик (наименование)</label>
-            <input id="create-customer" placeholder="Название компании" />
-            <div class="form-pair">
-              <div>
-                <label for="create-contact-name">Контактное лицо</label>
-                <input id="create-contact-name" placeholder="ФИО контакта" />
-              </div>
-              <div>
-                <label for="create-contact-phone">Телефон</label>
-                <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
-              </div>
+        <div class="cust-form-blocks admin-order-blocks">
+          <div class="cust-form-block" data-admin-step="basis">
+            <div class="cust-form-block-head">1. Основание</div>
+            <div class="cust-form-block-body">
+              <p class="form-section-hint">Номер за день и фирма по договору — от неё же берётся парк</p>
+              <label>Номер за день</label>
+              <div class="nums" id="create-day"><button type="button" data-cday="1">1</button><button type="button" data-cday="2">2</button><button type="button" data-cday="3">3</button><button type="button" data-cday="4">4</button><button type="button" data-cday="5">5</button></div>
+              <label for="create-own-company">От нашей фирмы (договор)</label>
+              <select id="create-own-company"></select>
             </div>
           </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Маршрут и подача</h2>
-          <div class="form-fields">
-            <label>Подача ТС</label>
-            <div class="form-pair">
-              <div>
-                <label for="create-vehicle-date">Дата</label>
-                <input id="create-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
+          <div class="cust-form-block" data-admin-step="customer">
+            <div class="cust-form-block-head">2. Заказчик</div>
+            <div class="cust-form-block-body">
+              <p class="form-section-hint">ИНН → «Загрузить» из ЕГРЮЛ ФНС (на сервере). Полный адрес: ключ API-ФНС в Активность.</p>
+              <label for="create-customer-inn">ИНН заказчика</label>
+              <div class="row" style="gap:8px;align-items:center">
+                <input id="create-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" />
+                <button type="button" class="secondary" id="create-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
               </div>
-              <div>
-                <label for="create-vehicle-time">Время</label>
-                <input id="create-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
-              </div>
-            </div>
-            <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
-            <div class="form-pair">
-              <div>
-                <label for="create-load">Адрес загрузки</label>
-                <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
-                <label for="create-loading-contact-name">Контакт на загрузке</label>
-                <input id="create-loading-contact-name" placeholder="ФИО" />
-                <label for="create-loading-contact-phone">Телефон на загрузке</label>
-                <input id="create-loading-contact-phone" inputmode="tel" placeholder="+79650730002" />
-              </div>
-              <div>
-                <label for="create-unload">Адрес выгрузки</label>
-                <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
-                <label for="create-unloading-contact-name">Контакт на выгрузке</label>
-                <input id="create-unloading-contact-name" placeholder="ФИО" />
-                <label for="create-unloading-contact-phone">Телефон на выгрузке</label>
-                <input id="create-unloading-contact-phone" inputmode="tel" placeholder="+79650730002" />
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Цены</h2>
-          <div class="form-fields">
-            <div class="form-pair">
-              <div>
-                <label for="create-price-client">Цена для заказчика, ₽</label>
-                <input id="create-price-client" inputmode="decimal" placeholder="сумма" />
-              </div>
-              <div>
-                <label for="create-price-carrier">Цена для перевозчика, ₽</label>
-                <input id="create-price-carrier" inputmode="decimal" placeholder="сумма" />
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Исполнение</h2>
-          <p class="form-section-hint" id="create-exec-hint">Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки</p>
-          <div class="form-fields">
-            <span class="create-exec-label" id="create-exec-mode-label">Кто везёт</span>
-            <div class="park-ex-switch create-exec-switch" id="create-exec-switch" role="group" aria-labelledby="create-exec-mode-label">
-              <button type="button" data-exec="own" class="on">Парк</button>
-              <button type="button" data-exec="exchange">Биржа</button>
-            </div>
-            <select id="create-exec-mode" hidden aria-hidden="true">
-              <option value="own">Наш водитель</option>
-              <option value="carrier">Водитель перевозчика</option>
-              <option value="exchange">На биржу</option>
-            </select>
-            <p class="hint" id="create-exec-carrier-wrap"><button type="button" class="text-link" id="create-exec-carrier">Перевозчик из справочника</button></p>
-            <div id="create-own-box">
-              <div class="hint" id="create-fleet-hint" style="margin:0 0 6px">Авто и водитель — только парк выбранной фирмы</div>
+              <div class="hint" id="create-customer-inn-status"></div>
+              <label for="create-customer">Заказчик (наименование)</label>
+              <input id="create-customer" placeholder="Название компании" />
               <div class="form-pair">
                 <div>
-                  <label for="create-plate">Автомобиль</label>
-                  <select id="create-plate"></select>
+                  <label for="create-contact-name">Контактное лицо</label>
+                  <input id="create-contact-name" placeholder="ФИО контакта" />
                 </div>
                 <div>
-                  <label for="create-driver">Водитель</label>
-                  <select id="create-driver"></select>
+                  <label for="create-contact-phone">Телефон</label>
+                  <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
                 </div>
               </div>
             </div>
-            <label for="create-carrier-company">Перевозчик (компания)</label>
-            <select id="create-carrier-company"></select>
-            <div id="create-carrier-people">
+          </div>
+          <div class="cust-form-block" data-admin-step="when">
+            <div class="cust-form-block-head">3. Когда</div>
+            <div class="cust-form-block-body">
+              <div class="form-pair cust-datetime-pair">
+                <div>
+                  <label for="create-vehicle-date">Дата</label>
+                  <input id="create-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
+                </div>
+                <div class="cust-time-field">
+                  <label for="create-vehicle-time">Время</label>
+                  <input id="create-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+                </div>
+              </div>
+              <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="route">
+            <div class="cust-form-block-head">4. Маршрут</div>
+            <div class="cust-form-block-body">
+              <label for="create-load">Адрес загрузки</label>
+              <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
+              <label for="create-loading-contact-name">Контакт на загрузке</label>
+              <div class="form-pair">
+                <div><input id="create-loading-contact-name" placeholder="ФИО" /></div>
+                <div>
+                  <label for="create-loading-contact-phone">Телефон</label>
+                  <input id="create-loading-contact-phone" inputmode="tel" placeholder="+79650730002" />
+                </div>
+              </div>
+              <label for="create-unload">Адрес выгрузки</label>
+              <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
+              <label for="create-unloading-contact-name">Контакт на выгрузке</label>
+              <div class="form-pair">
+                <div><input id="create-unloading-contact-name" placeholder="ФИО" /></div>
+                <div>
+                  <label for="create-unloading-contact-phone">Телефон</label>
+                  <input id="create-unloading-contact-phone" inputmode="tel" placeholder="+79650730002" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="cargo" id="create-req-block">
+            <div class="cust-form-block-head">5. Груз и ТС</div>
+            <div class="cust-form-block-body">
+              <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
+              <label>Грузоподъёмность и кузов (т / Д × Ш × В)</label>
+              <div class="form-triple cust-cargo-dims-row">
+                <input id="create-req-pay" class="cust-cargo-dim-input" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" aria-label="Тоннаж, т" />
+                <input id="create-req-l" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Д" title="Длина кузова, м" aria-label="Длина, м" />
+                <span class="cust-dim-sep" aria-hidden="true">×</span>
+                <input id="create-req-w" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Ш" title="Ширина, м" aria-label="Ширина, м" />
+                <span class="cust-dim-sep" aria-hidden="true">×</span>
+                <input id="create-req-h" class="cust-cargo-dim-input" inputmode="decimal" placeholder="В" title="Высота, м" aria-label="Высота, м" />
+              </div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="exec">
+            <div class="cust-form-block-head">6. Исполнение</div>
+            <div class="cust-form-block-body">
+              <p class="form-section-hint" id="create-exec-hint">Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки</p>
+              <span class="create-exec-label" id="create-exec-mode-label">Кто везёт</span>
+              <div class="park-ex-switch create-exec-switch" id="create-exec-switch" role="group" aria-labelledby="create-exec-mode-label">
+                <button type="button" data-exec="own" class="on">Парк</button>
+                <button type="button" data-exec="exchange">Биржа</button>
+              </div>
+              <select id="create-exec-mode" hidden aria-hidden="true">
+                <option value="own">Наш водитель</option>
+                <option value="carrier">Водитель перевозчика</option>
+                <option value="exchange">На биржу</option>
+              </select>
+              <p class="hint" id="create-exec-carrier-wrap"><button type="button" class="text-link" id="create-exec-carrier">Перевозчик из справочника</button></p>
+              <div id="create-own-box">
+                <div class="hint" id="create-fleet-hint" style="margin:0">Авто и водитель — только парк выбранной фирмы</div>
+                <div class="form-pair">
+                  <div>
+                    <label for="create-plate">Автомобиль</label>
+                    <select id="create-plate"></select>
+                  </div>
+                  <div>
+                    <label for="create-driver">Водитель</label>
+                    <select id="create-driver"></select>
+                  </div>
+                </div>
+              </div>
+              <label for="create-carrier-company">Перевозчик (компания)</label>
+              <select id="create-carrier-company"></select>
+              <div id="create-carrier-people">
+                <div class="form-pair">
+                  <div>
+                    <label for="create-carrier-driver">Водитель перевозчика</label>
+                    <select id="create-carrier-driver"></select>
+                  </div>
+                  <div>
+                    <label for="create-carrier-vehicle">ТС перевозчика</label>
+                    <select id="create-carrier-vehicle"></select>
+                  </div>
+                </div>
+              </div>
+              <div id="create-exchange-hint" class="hint" style="display:none">Штатный логист сначала закрывает свои машины. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.</div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="price">
+            <div class="cust-form-block-head">7. Цены</div>
+            <div class="cust-form-block-body">
               <div class="form-pair">
                 <div>
-                  <label for="create-carrier-driver">Водитель перевозчика</label>
-                  <select id="create-carrier-driver"></select>
+                  <label for="create-price-client">Цена для заказчика, ₽</label>
+                  <input id="create-price-client" inputmode="decimal" placeholder="сумма" />
                 </div>
                 <div>
-                  <label for="create-carrier-vehicle">ТС перевозчика</label>
-                  <select id="create-carrier-vehicle"></select>
+                  <label for="create-price-carrier">Цена для перевозчика, ₽</label>
+                  <input id="create-price-carrier" inputmode="decimal" placeholder="сумма" />
                 </div>
               </div>
             </div>
-            <div id="create-exchange-hint" class="hint" style="display:none">Штатный логист сначала закрывает свои машины. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.</div>
           </div>
-        </section>
-        <section class="form-section" id="create-req-block">
-          <h2 class="form-section-title">Требования к ТС</h2>
-          <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
-          <div class="form-fields">
-            <div class="row">
-              <input id="create-req-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" style="flex:0 0 64px;text-align:center" />
-              <input id="create-req-l" inputmode="decimal" placeholder="Д, м" title="Длина кузова, м" style="flex:1;text-align:center" />
-              <input id="create-req-w" inputmode="decimal" placeholder="Ш, м" title="Ширина, м" style="flex:1;text-align:center" />
-              <input id="create-req-h" inputmode="decimal" placeholder="В, м" title="Высота, м" style="flex:1;text-align:center" />
-            </div>
-          </div>
-        </section>
+        </div>
       </div>
       <div class="admin-form-actions">
         <div class="error" id="create-error"></div>

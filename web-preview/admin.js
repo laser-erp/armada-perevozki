@@ -2971,8 +2971,9 @@ function openDetail(id){
     detailMeta.textContent=`${statusText(o)} · ${orderDayLabel(o.dayNumber)} · ${o.driverName||'—'}${m.percent!=null?` (${m.percent}%)`:''}`;
   }
   $('detail-form').innerHTML=`
+    <div class="cust-form-blocks admin-order-blocks">
     <section class="form-section">
-      <h2 class="form-section-title">Время на заказ</h2>
+      <h2 class="form-section-title">Сводка</h2>
       <div class="metric-strip">
         <div class="m"><span>До заказа</span><b>${esc(formatDurationMin(o.timeToOrderMin))}</b></div>
         <div class="m"><span>С грузом</span><b>${esc(formatDurationMin(o.timeLoadedMin))}</b></div>
@@ -2990,7 +2991,7 @@ function openDetail(id){
     ${orderDocsSectionHtml(o)}
     ${orderEtrnSectionHtml(o)}
     <section class="form-section">
-      <h2 class="form-section-title">Участники</h2>
+      <h2 class="form-section-title">1. Заказчик и груз</h2>
       <div class="form-fields">
         <div class="form-pair">
           <div>
@@ -3101,7 +3102,7 @@ function openDetail(id){
     </section>
     ${typeof orderDriverVehicleDocsSectionHtml==='function'?orderDriverVehicleDocsSectionHtml(o):''}
     <section class="form-section">
-      <h2 class="form-section-title">Маршрут</h2>
+      <h2 class="form-section-title">2. Маршрут</h2>
       <div class="form-fields">
         <div id="route-editor"></div>
         <div class="form-pair">
@@ -3158,7 +3159,7 @@ function openDetail(id){
       </div>
     </section>
     <section class="form-section">
-      <h2 class="form-section-title">Тариф клиенту</h2>
+      <h2 class="form-section-title">3. Тариф клиенту</h2>
       <p class="form-section-hint">${(()=>{ const f=financeForOrder(o); return `Пакет: мин ${f.minWorkHours} ч + ${f.podachaHours} ч подачи; в пакете ${f.cityKmThreshold} км. Нулевой до ≤${f.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — 1 ч; иначе 2 ч. Сверх — ₽/км.`; })()}</p>
       <div class="form-fields">
         <div class="form-pair">
@@ -3200,7 +3201,7 @@ function openDetail(id){
       </div>
     </section>
     <section class="form-section">
-      <h2 class="form-section-title">Ставки и ЗП</h2>
+      <h2 class="form-section-title">4. Ставки и ЗП</h2>
       <p class="form-section-hint">ЗП, подушка и прибыль — от ставки «наличные». С НДС = без НДС +22%.</p>
       <div class="form-fields">
         <label for="d-form">Форма для клиента (документы)</label>
@@ -3236,7 +3237,7 @@ function openDetail(id){
       </div>
     </section>
     <section class="form-section">
-      <h2 class="form-section-title">Итоги</h2>
+      <h2 class="form-section-title">5. Итоги</h2>
       <div class="calc">
         <div class="calc-row"><span>Нулевой</span><span>${fmt(o.emptyKmBefore)} км</span></div>
         <div class="calc-row"><span>С грузом</span><span>${fmt(o.loadedKm)} км</span></div>
@@ -3263,6 +3264,7 @@ function openDetail(id){
         <div class="calc-row"><span>Рекомендация +${Math.round(m.markupPercent)}%</span><span>${fmt(m.recommendedRate)} руб</span></div>
       </div>
     </section>
+    </div>
   `;
   show('admin-detail');
   const detailScroll=$('detail-form'); if(detailScroll) detailScroll.scrollTop=0;

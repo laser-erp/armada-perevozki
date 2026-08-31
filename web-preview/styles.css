@@ -891,6 +891,46 @@
     .cust-date-cal .drv-cal{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:var(--surface,#fff)}
     .cust-date-cal .drv-cal-meta .period{font-size:.72rem}
     .cust-date-cal .drv-cal-grid button.past{opacity:.35;cursor:not-allowed}
+    #admin-create .admin-form-shell,#admin-detail .admin-form-shell{max-width:720px}
+    .admin-order-blocks.cust-form-blocks{margin:0;gap:12px}
+    .admin-order-blocks .cust-form-block-head{letter-spacing:0;text-transform:none}
+    #admin-detail #detail-form > .form-section,
+    .admin-order-blocks > .form-section{
+      border:1px solid var(--border);border-radius:14px;background:var(--surface,#fff);
+      padding:0;margin:0;overflow:hidden;gap:0
+    }
+    .admin-order-blocks > .form-section .form-section-title{
+      padding:10px 14px;margin:0;background:var(--surface2,#f4f6f5);border-bottom:1px solid var(--border);
+      font-size:.82rem;font-weight:800;text-transform:none;letter-spacing:0;color:var(--text,#1a1f1c)
+    }
+    #admin-detail #detail-form > .form-section .form-section-hint,
+    #admin-detail #detail-form > .form-section .form-fields,
+    #admin-detail #detail-form > .form-section .metric-strip,
+    #admin-detail #detail-form > .form-section .claim-box,
+    #admin-detail #detail-form > .form-section .calc,
+    .admin-order-blocks > .form-section .form-section-hint,
+    .admin-order-blocks > .form-section .form-fields,
+    .admin-order-blocks > .form-section .metric-strip,
+    .admin-order-blocks > .form-section .claim-box,
+    .admin-order-blocks > .form-section .calc{padding-left:14px;padding-right:14px}
+    #admin-detail #detail-form > .form-section .form-fields,
+    .admin-order-blocks > .form-section .form-fields{padding-bottom:14px;display:flex;flex-direction:column;gap:8px}
+    #admin-detail #detail-form > .form-section .metric-strip,
+    .admin-order-blocks > .form-section .metric-strip{padding:12px 14px 0}
+    #admin-detail #detail-form > .form-section .form-section-hint,
+    .admin-order-blocks > .form-section .form-section-hint{padding-top:10px;margin:0}
+    #admin-detail #detail-form > .form-section .claim-box,
+    .admin-order-blocks > .form-section .claim-box{margin:0 14px 14px}
+    #admin-detail #detail-form > .form-section .calc,
+    .admin-order-blocks > .form-section .calc{margin:0 14px 14px}
+    #admin-create .admin-form-scroll,#admin-detail .admin-form-scroll{padding:12px 14px 24px}
+    #admin-create .cust-cargo-dims-row,#admin-detail .cust-cargo-dims-row{
+      display:inline-flex;align-items:center;flex-wrap:wrap;gap:4px 5px;width:auto;max-width:100%
+    }
+    #admin-create .cust-cargo-dim-input,#admin-detail .cust-cargo-dim-input{
+      width:3.5rem!important;max-width:4rem!important;min-width:0!important;flex:0 0 3.5rem!important;
+      padding:6px 4px!important;text-align:center
+    }
     .cust-form-blocks{display:flex;flex-direction:column;gap:12px;margin:6px 0 2px}
     .cust-form-layout{display:flex;align-items:flex-start;gap:16px}
     .cust-order-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:8px}
@@ -1142,8 +1182,10 @@
     }
     .drv-card-warn ul{margin:6px 0 0;padding-left:1.1rem;line-height:1.35}
     .drv-card-photo-box{margin-top:6px}
-    .drv-card-actions{display:flex;flex-direction:column;gap:8px}
-    .drv-card-actions .danger-text{color:#DC2626;border-color:rgba(220,38,38,.35)}
+    #driver-card-actions .primary{min-height:46px;font-size:.92rem;font-weight:700}
+    #driver-card-actions .secondary{min-height:40px}
+    #driver-card-actions .danger-text{color:#DC2626}
+    #drv-card-ok{margin:0 0 4px}
     .drv-docs{margin:0 0 4px;padding:0 4px}
     .drv-docs summary{cursor:pointer;font-size:.72rem;font-weight:700;color:var(--accent);padding:4px 2px}
     .drv-docs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:4px 0 8px}
