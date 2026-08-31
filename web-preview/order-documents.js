@@ -1091,9 +1091,9 @@ function customerFrameworkContractBannerHtml(customerCo, carrierCo, opts){
   if(opts.compact){
     return `<div class="cust-alert-strip cust-alert-strip--contract cust-alert-strip--mini" id="cust-contract-banner">
       <strong class="cust-alert-strip-title">Договор</strong>
-      <div class="cust-alert-strip-actions cust-contract-actions">
+      <div class="cust-alert-strip-actions">
         <button type="button" class="secondary cust-alert-btn" id="cust-contract-preview">Просмотр</button>
-        <label class="cust-check-item cust-alert-check"><input type="checkbox" id="cust-contract-agree"/> Согласен</label>
+        <label class="cust-check-item cust-alert-check"><input type="checkbox" id="cust-contract-agree"/> <span class="cust-alert-check-lbl">Согласен</span></label>
         <button type="button" class="primary cust-alert-btn" id="cust-contract-sign" disabled>Подписать</button>
       </div>
     </div>`;
