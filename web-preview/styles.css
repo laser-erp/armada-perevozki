@@ -963,6 +963,28 @@
       margin:0 0 14px;padding:12px 14px;border:1px solid var(--border);
       border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 5%,var(--surface));
     }
+    .epd-sign-card--active{border-color:color-mix(in srgb,#16a34a 35%,var(--border));background:color-mix(in srgb,#16a34a 6%,var(--surface))}
+    .epd-sign-section-title{margin:0 0 2px;font-size:.95rem}
+    .epd-sign-card-sub{margin:0 0 10px;font-size:.78rem;color:var(--muted)}
+    .epd-sign-plaque{
+      display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:10px;
+      border:1px solid var(--border);background:var(--field);
+    }
+    .epd-sign-plaque-icon{
+      flex:0 0 auto;width:28px;height:28px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+      font-weight:800;font-size:.85rem;line-height:1;
+    }
+    .epd-sign-plaque-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .epd-sign-plaque-body strong{font-size:.88rem;line-height:1.25}
+    .epd-sign-plaque-body .hint{font-size:.72rem;margin:0;line-height:1.35}
+    .epd-sign-plaque--active{border-color:color-mix(in srgb,#16a34a 45%,var(--border));background:color-mix(in srgb,#16a34a 10%,var(--field))}
+    .epd-sign-plaque--active .epd-sign-plaque-icon{background:#16a34a;color:#fff}
+    .epd-sign-plaque--pending{border-color:color-mix(in srgb,#f59e0b 45%,var(--border));background:color-mix(in srgb,#f59e0b 10%,var(--field))}
+    .epd-sign-plaque--pending .epd-sign-plaque-icon{background:#f59e0b;color:#fff}
+    .epd-sign-plaque--expired{border-color:color-mix(in srgb,#ef4444 40%,var(--border));background:color-mix(in srgb,#ef4444 8%,var(--field))}
+    .epd-sign-plaque--expired .epd-sign-plaque-icon{background:#ef4444;color:#fff}
+    .epd-sign-plaque--none .epd-sign-plaque-icon{background:var(--border);color:var(--muted)}
+    .epd-sign-issued{margin:0 0 8px;font-size:.72rem}
     .epd-sign-card--compact{padding:10px 12px}
     .epd-sign-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
     .epd-sign-card-title{margin:0;font-size:.92rem;line-height:1.25}

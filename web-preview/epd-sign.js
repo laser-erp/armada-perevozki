@@ -386,6 +386,54 @@
     }catch(_){}
   }
 
+  function epdSignPlaqueHtml(st, kindLabel){
+    if(st==='active'){
+      return `<div class="epd-sign-plaque epd-sign-plaque--active" role="status">
+        <span class="epd-sign-plaque-icon" aria-hidden="true">✓</span>
+        <div class="epd-sign-plaque-body">
+          <strong>Подпись активна</strong>
+          <span class="hint">${esc(kindLabel)} готова к использованию в документах и ЭТrН</span>
+        </div>
+      </div>`;
+    }
+    if(st==='pending'){
+      return `<div class="epd-sign-plaque epd-sign-plaque--pending" role="status">
+        <span class="epd-sign-plaque-icon" aria-hidden="true">…</span>
+        <div class="epd-sign-plaque-body">
+          <strong>Оформление не завершено</strong>
+          <span class="hint">Завершите выпуск у оператора ЭПД</span>
+        </div>
+      </div>`;
+    }
+    if(st==='expired'){
+      return `<div class="epd-sign-plaque epd-sign-plaque--expired" role="status">
+        <span class="epd-sign-plaque-icon" aria-hidden="true">!</span>
+        <div class="epd-sign-plaque-body">
+          <strong>Подпись истекла</strong>
+          <span class="hint">Выпустите ${esc(kindLabel)} заново</span>
+        </div>
+      </div>`;
+    }
+    return `<div class="epd-sign-plaque epd-sign-plaque--none" role="status">
+      <span class="epd-sign-plaque-icon" aria-hidden="true">○</span>
+      <div class="epd-sign-plaque-body">
+        <strong>Подпись не оформлена</strong>
+        <span class="hint">Нужна для подписания документов через оператора</span>
+      </div>
+    </div>`;
+  }
+
+  function epdSignActionsHtml(st, role, ctx, kindLabel){
+    const issueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить ${esc(kindLabel)}</button>`;
+    const continueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Продолжить выпуск</button>`;
+    const renewBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить заново</button>`;
+    const checkBtn=`<button type="button" class="secondary epd-sign-check" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Проверить статус</button>`;
+    if(st==='active') return `<div class="epd-sign-card-actions">${checkBtn}</div>`;
+    if(st==='pending') return `<div class="epd-sign-card-actions">${continueBtn}${checkBtn}</div>`;
+    if(st==='expired') return `<div class="epd-sign-card-actions">${renewBtn}</div>`;
+    return `<div class="epd-sign-card-actions">${issueBtn}</div>`;
+  }
+
   function epdSignCardHtml(role, opts){
     opts=opts||{};
     const meta=EPD_SIGN_ROLES[role];
@@ -395,17 +443,16 @@
     const st=prof&&prof.status||'none';
     const op=epdOperatorInfo();
     const kindLabel=meta.kind==='pep'?'ПЭП':'КЭП';
-    const btnLabel=st==='active'?'Управление подписью':(st==='pending'?'Продолжить оформление':'Оформить '+kindLabel);
-    return `<section class="epd-sign-card${opts.compact?' epd-sign-card--compact':''}" data-epd-sign-role="${esc(role)}">
-      <div class="epd-sign-card-head">
-        <h3 class="epd-sign-card-title">${esc(meta.title)}</h3>
-        <span class="doc-status ${esc(epdSignStatusCls(st))}">${esc(epdSignStatusLabel(st))}</span>
-      </div>
+    const issuedLine=prof&&prof.issuedAt&&st==='active'
+      ?`<p class="meta epd-sign-issued">Выпущена: ${esc(typeof dateTime==='function'?dateTime(prof.issuedAt):prof.issuedAt)}</p>`:'';
+    return `<section class="epd-sign-card epd-sign-card--${esc(st)}${opts.compact?' epd-sign-card--compact':''}" data-epd-sign-role="${esc(role)}">
+      <h3 class="epd-sign-section-title">Электронная подпись</h3>
+      <p class="meta epd-sign-card-sub">${esc(meta.title)}</p>
+      ${epdSignPlaqueHtml(st, kindLabel)}
+      ${issuedLine}
       <p class="hint epd-sign-card-hint">${esc(meta.hint)}</p>
-      <p class="meta epd-sign-card-meta">В приложении АРМАДА · оператор <strong>${esc(op.name)}</strong> · ${esc(kindLabel)} · ЭТrН ${esc(meta.tituls)}</p>
-      <div class="epd-sign-card-actions">
-        <button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">${esc(btnLabel)}</button>
-      </div>
+      <p class="meta epd-sign-card-meta">Оператор <strong>${esc(op.name)}</strong> · ${esc(kindLabel)} · ЭТrН ${esc(meta.tituls)}</p>
+      ${epdSignActionsHtml(st, role, ctx, kindLabel)}
       ${opts.extra||''}
     </section>`;
   }
@@ -421,6 +468,21 @@
         finally{ btn.disabled=false; }
       };
     });
+    (root||document).querySelectorAll('.epd-sign-check').forEach(btn=>{
+      if(btn.dataset.epdCheckWired) return;
+      btn.dataset.epdCheckWired='1';
+      btn.onclick=async e=>{
+        e.preventDefault();
+        const role=btn.getAttribute('data-epd-sign-role');
+        const entityId=btn.getAttribute('data-epd-entity-id')||'';
+        btn.disabled=true;
+        try{
+          const synced=await syncEpdSignProfileFromApi(role, entityId);
+          if(!synced) alert('Статус на сервере пока недоступен — подключите оператора ЭПД.');
+          epdRefreshUi({ refreshDriverCabinet:role==='driver' });
+        }finally{ btn.disabled=false; }
+      };
+    });
   }
 
   function renderCustomerEpdSignCard(){
@@ -431,12 +493,7 @@
   }
 
   function renderAdminEpdSignCard(){
-    const host=$('admin-epd-sign-slot');
-    if(!host||!currentAdmin) return;
-    host.innerHTML=epdSignCardHtml('carrier', {
-      extra:'<p class="hint">ПЭП водителя (T3/T4) — приложение «Водитель» → Профиль → та же схема через оператора.</p>'
-    });
-    wireEpdSignCard(host);
+    /* карточка встроена в renderAdminProfile() */
   }
 
   function epdSignNeedsAttention(role, entityId){

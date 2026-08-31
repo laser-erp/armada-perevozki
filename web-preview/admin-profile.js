@@ -93,6 +93,7 @@ function renderAdminProfile() {
   host.innerHTML = `<section class="admin-profile-card">
     <h2>${esc(adm.name)}</h2>
     <p class="cat-panel-hint">Печать и подпись подставляются при печати писем и документов от вашего имени. PNG или JPG, до ${ADMIN_DOC_IMAGE_MAX_KB} КБ каждый файл.</p>
+    ${typeof epdSignCardHtml==='function'?epdSignCardHtml('carrier', { extra:'<p class="hint">ПЭП водителя (T3/T4) — в приложении «Водитель» → Профиль.</p>' }):''}
     <div class="admin-profile-grid">
       ${docPhotoUploadRow('Печать организации', stamp, 'id="adm-profile-stamp"', 'id="adm-profile-stamp-clear"')}
       ${docPhotoUploadRow('Подпись', signature, 'id="adm-profile-signature"', 'id="adm-profile-signature-clear"')}
@@ -126,7 +127,7 @@ function renderAdminProfile() {
       renderAdminProfile();
     };
   }
-  if (typeof renderAdminEpdSignCard === 'function') renderAdminEpdSignCard();
+  if (typeof wireEpdSignCard === 'function') wireEpdSignCard(host);
 }
 
 function openAdminProfile() {
