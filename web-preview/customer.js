@@ -2183,6 +2183,8 @@ function syncCustomerOrderModeUi(){
   if(formPanel) formPanel.hidden=mode==='chat';
   const vtypeSearchWrap=$('cust-vtype-search-wrap');
   if(vtypeSearchWrap) vtypeSearchWrap.hidden=mode==='chat';
+  const portal=$('customer-portal');
+  if(portal) portal.classList.toggle('cust-order-chat-mode', mode==='chat');
   if(chatPanel){
     if(mode==='chat') chatPanel.removeAttribute('hidden');
     else chatPanel.hidden=true;
@@ -2426,7 +2428,15 @@ function customerChatUpdateProgress(){
 }
 function customerChatScrollBottom(){
   const thread=$('cust-chat-thread');
-  if(thread) requestAnimationFrame(()=>{ thread.scrollTop=thread.scrollHeight; });
+  if(!thread) return;
+  requestAnimationFrame(()=>{
+    thread.scrollTop=thread.scrollHeight;
+  });
+}
+function customerChatFocus(el){
+  if(!el||typeof el.focus!=='function') return;
+  try{ el.focus({preventScroll:true}); }catch(_){ try{ el.focus(); }catch(__){} }
+  customerChatScrollBottom();
 }
 function customerChatSetVehicleType(vtype){
   resetCustomerVehicleTypes();
@@ -2694,7 +2704,7 @@ function customerChatWireWidgets(stepId){
         if(mode==='pick'){
           syncWhenChips('pick');
           const de=$('cust-chat-date');
-          if(de) de.focus();
+          if(de) customerChatFocus(de);
           return;
         }
         syncWhenChips(mode);
@@ -2756,7 +2766,7 @@ function customerChatWireWidgets(stepId){
     if(inp){
       inp.onkeydown=e=>{ if(e.key==='Enter' && !e.defaultPrevented){ e.preventDefault(); submit(); } };
       if(typeof wireAddressAutocomplete==='function') wireAddressAutocomplete(inp);
-      setTimeout(()=>inp.focus(), 80);
+      setTimeout(()=>customerChatFocus(inp), 80);
     }
   }
   if(stepId==='loadContact' || stepId==='unloadContact'){
@@ -2769,7 +2779,7 @@ function customerChatWireWidgets(stepId){
       const err=$('cust-chat-error');
       if(stepId==='loadContact' && !phone){
         if(err) err.textContent='Укажите телефон контакта на погрузке';
-        if(phoneInp) phoneInp.focus();
+        if(phoneInp) customerChatFocus(phoneInp);
         return;
       }
       if(err) err.textContent='';
@@ -2796,7 +2806,7 @@ function customerChatWireWidgets(stepId){
       if(!el) return;
       el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } };
     });
-    setTimeout(()=>{(phoneInp||nameInp).focus();}, 80);
+    setTimeout(()=>customerChatFocus(phoneInp||nameInp), 80);
   }
   if(stepId==='shipper'){
     const yes=$('cust-chat-shipper-yes');
@@ -2809,8 +2819,8 @@ function customerChatWireWidgets(stepId){
       const name=(nameInp&&nameInp.value||'').trim();
       const phone=formatPhone((phoneInp&&phoneInp.value||'').trim());
       const err=$('cust-chat-error');
-      if(!name){ if(err) err.textContent='Укажите грузоотправителя'; if(nameInp) nameInp.focus(); return; }
-      if(!phone){ if(err) err.textContent='Укажите телефон грузоотправителя'; if(phoneInp) phoneInp.focus(); return; }
+      if(!name){ if(err) err.textContent='Укажите грузоотправителя'; if(nameInp) customerChatFocus(nameInp); return; }
+      if(!phone){ if(err) err.textContent='Укажите телефон грузоотправителя'; if(phoneInp) customerChatFocus(phoneInp); return; }
       if(err) err.textContent='';
       customerChat.data.shipperSameAsCustomer=false;
       customerChat.data.shipperName=name;
@@ -2834,7 +2844,7 @@ function customerChatWireWidgets(stepId){
       const p=customerChat.data.loadingContactPhone||'';
       if(nameInp&&!nameInp.value&&n) nameInp.value=n;
       if(phoneInp&&!phoneInp.value&&p) phoneInp.value=p;
-      setTimeout(()=>{(nameInp||phoneInp).focus();}, 80);
+      setTimeout(()=>customerChatFocus(nameInp||phoneInp), 80);
     };
     if(ok) ok.onclick=submitOther;
     [nameInp, phoneInp].forEach(el=>{
@@ -2914,7 +2924,7 @@ function customerChatWireWidgets(stepId){
         if(e.key==='Escape'&&suggest){ suggest.hidden=true; activeIdx=-1; }
       };
       search.onblur=()=>{ setTimeout(()=>{ if(suggest) suggest.hidden=true; }, 150); };
-      setTimeout(()=>search.focus(), 80);
+      setTimeout(()=>customerChatFocus(search), 80);
     }
   }
   if(stepId==='loadMethod' || stepId==='unloadMethod'){
@@ -3002,7 +3012,7 @@ function customerChatUpdateCompose(){
     if(step.id==='loadContact') inp.placeholder='Иван +79001234567';
     else if(step.id==='unloadContact') inp.placeholder='Имя и телефон или «пропустить»';
   }
-  if(compose) compose.style.display=show?'flex':'none';
+  if(compose) compose.classList.toggle('is-visible', !!show);
 }
 function customerChatAdvance(userText){
   const err=$('cust-chat-error'); if(err) err.textContent='';
