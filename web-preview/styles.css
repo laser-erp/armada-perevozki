@@ -1252,7 +1252,7 @@
     }
     .phone:has(#roles.show){overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
     #roles.show .center.roles-hub{
-      flex:0 0 auto;width:100%;min-height:min(100%,100dvh);
+      flex:0 0 auto;width:100%;
       justify-content:flex-start;padding-top:16px;
       padding-bottom:calc(32px + env(safe-area-inset-bottom,0));min-height:min-content
     }
@@ -1565,4 +1565,10 @@
       .adm-tpl-side{flex:0 0 220px;border-bottom:0;border-right:1px solid var(--border);overflow:auto;max-height:none}
       .adm-tpl-main{flex:1;min-width:0}
       .adm-tpl-preview-wrap{max-height:480px}
+    }
+
+    /* Standalone doc pages (help, legal, invite) — not app shell */
+    html.doc-page,body.doc-page{
+      height:auto;min-height:100%;min-height:100dvh;
+      overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto
     }
