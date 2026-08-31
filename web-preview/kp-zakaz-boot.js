@@ -9,8 +9,10 @@
   if (cta) cta.href = login;
   if (carrier) {
     var card = document.getElementById('carrier-card');
+    var def = document.getElementById('hero-default');
     var name = document.getElementById('carrier-name');
     if (name) name.textContent = carrier;
     if (card) card.hidden = false;
+    if (def) def.hidden = true;
   }
 })();

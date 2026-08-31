@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#0f766e" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/landing.css?v=2026-08-31-land4317" />
+  <link rel="stylesheet" href="/landing.css?v=2026-08-31-customer-lead4317" />
 </head>
 <body class="landing landing--customer">
   <header class="landing-top">
@@ -33,7 +33,7 @@
         <p class="landing-hero-lead">Не звоните диспетчеру «сколько будет» и «где машина». Заявка с телефона, минимальная цена на экране, статус рейса — в личном кабинете. Без установки приложения.</p>
         <div class="landing-hero-cta">
           <a class="landing-btn landing-btn-primary" id="cta-login" href="/z/">Войти в портал</a>
-          <a class="landing-btn landing-btn-secondary" id="cta-contact" href="mailto:hello@armada.sx?subject=Хочу%20портал%20заказчика%20АРМАДА">Хочу отправлять грузы</a>
+          <button type="button" class="landing-btn landing-btn-secondary" id="cta-contact">Хочу отправлять грузы</button>
         </div>
         <p class="landing-hero-note">PIN и ссылку выдаёт ваш перевозчик. Работаете с ним напрямую — договор с АРМАДА не нужен.</p>
       </div>
@@ -145,7 +145,7 @@
       <h2>Хотите отправлять грузы через АРМАДА?</h2>
       <p>Если ваш перевозчик ещё не подключил портал — передайте ему эту страницу или напишите нам: свяжем с логистом в сети.</p>
       <div class="landing-cta-bar" style="margin-top:16px">
-        <a class="landing-btn landing-btn-secondary" id="cta-mail" href="mailto:hello@armada.sx?subject=Хочу%20портал%20заказчика%20АРМАДА" style="background:#fff">Оставить заявку</a>
+        <button type="button" class="landing-btn landing-btn-secondary" id="cta-mail" style="background:#fff">Оставить заявку</button>
         <a class="landing-btn landing-btn-ghost" href="/z/" style="color:#fff;border-color:rgba(255,255,255,.4)">Уже есть PIN — войти</a>
       </div>
     </section>
@@ -156,19 +156,43 @@
     <p><a href="mailto:hello@armada.sx">hello@armada.sx</a> · <a href="mailto:support@armada.sx">support@armada.sx</a></p>
     <p>АРМАДА · портал заказчика</p>
   </footer>
-  <script src="/kp-zakaz-boot.js?v=2026-08-31-land4317"></script>
-  <script>
-  (function(){
-    var q=new URLSearchParams(location.search||'');
-    var carrier=(q.get('carrier')||'').trim();
-    if(!carrier) return;
-    var card=document.getElementById('carrier-card');
-    var def=document.getElementById('hero-default');
-    var name=document.getElementById('carrier-name');
-    if(name) name.textContent=carrier;
-    if(card) card.hidden=false;
-    if(def) def.hidden=true;
-  })();
-  </script>
+
+  <div class="landing-lead-modal" id="lead-modal" hidden>
+    <div class="landing-lead-dialog" role="dialog" aria-labelledby="lead-title" aria-modal="true">
+      <button type="button" class="landing-lead-close" id="lead-close" aria-label="Закрыть">×</button>
+      <h2 id="lead-title">Хочу отправлять грузы</h2>
+      <p class="landing-lead-intro">Оставьте контакты — логист свяжется с вами, включит портал и пришлёт PIN для входа.</p>
+      <form id="lead-form" class="landing-lead-form">
+        <label>Компания <span class="req">*</span>
+          <input type="text" id="lead-company" name="company" required autocomplete="organization" placeholder="ООО «…»" />
+        </label>
+        <label>ИНН
+          <input type="text" id="lead-inn" name="inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" />
+        </label>
+        <label>Телефон <span class="req">*</span>
+          <input type="tel" id="lead-phone" name="phone" required autocomplete="tel" placeholder="+7 …" />
+        </label>
+        <label>Контактное лицо
+          <input type="text" id="lead-name" name="contactName" autocomplete="name" placeholder="Иван И." />
+        </label>
+        <label>Комментарий
+          <textarea id="lead-comment" name="comment" rows="2" placeholder="Маршруты, объём отправок…"></textarea>
+        </label>
+        <p class="landing-lead-status" id="lead-status" hidden></p>
+        <button type="submit" class="landing-btn landing-btn-primary" id="lead-submit">Отправить заявку</button>
+      </form>
+      <div class="landing-lead-success" id="lead-success" hidden>
+        <p><strong>Заявка принята.</strong> Логист свяжется с вами и пришлёт ссылку на портал с PIN.</p>
+        <p class="landing-lead-intro">Пока ждёте — сохраните страницу или напишите перевозчику напрямую.</p>
+        <div class="landing-hero-cta">
+          <button type="button" class="landing-btn landing-btn-primary" id="lead-done">Готово</button>
+          <button type="button" class="landing-btn landing-btn-ghost" id="lead-again">Ещё одна заявка</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/kp-zakaz-boot.js?v=2026-08-31-customer-lead4317"></script>
+  <script src="/kp-zakaz-lead.js?v=2026-08-31-customer-lead4317"></script>
 </body>
 </html>

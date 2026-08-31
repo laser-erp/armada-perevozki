@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-print-fix4317";
+const APP_BUILD="2026-08-31-customer-lead4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -933,7 +933,8 @@ const state={
   adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{},
   billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}},
   invoices:Array.isArray(saved.invoices)?saved.invoices:[],
-  docTemplates:(saved.docTemplates && typeof saved.docTemplates==='object')?saved.docTemplates:{spaces:{}}
+  docTemplates:(saved.docTemplates && typeof saved.docTemplates==='object')?saved.docTemplates:{spaces:{}},
+  customerPortalLeads:Array.isArray(saved.customerPortalLeads)?saved.customerPortalLeads:[]
 };
 let pbRecordId=null;
 let persistTimer=null;
@@ -1098,6 +1099,61 @@ function nextSequentialNumber(){
   state.seq=(Number(state.seq)||0)+1;
   return state.seq;
 }
+function normalizeCustomerPortalLead(raw){
+  if(!raw||typeof raw!=='object') return null;
+  const company=String(raw.company||raw.companyName||'').trim();
+  const phone=typeof formatPhone==='function'?formatPhone(raw.phone||''):String(raw.phone||'').trim();
+  if(!company||!phone) return null;
+  const inn=String(raw.inn||'').replace(/\D/g,'');
+  return {
+    id:raw.id||uuid(),
+    company,
+    inn:inn||null,
+    phone,
+    contactName:String(raw.contactName||raw.name||'').trim()||null,
+    comment:String(raw.comment||'').trim()||null,
+    carrierHint:String(raw.carrierHint||raw.carrier||'').trim()||null,
+    status:raw.status==='done'?'done':'pending',
+    createdAt:raw.createdAt||new Date().toISOString(),
+    doneAt:raw.doneAt||null
+  };
+}
+function migrateCustomerPortalLeads(){
+  state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
+}
+async function appendCustomerPortalLead(raw){
+  migrateCustomerPortalLeads();
+  const rec=normalizeCustomerPortalLead(raw);
+  if(!rec) return {ok:false, error:'Заполните компанию и телефон'};
+  const dup=(state.customerPortalLeads||[]).find(l=>
+    l.status==='pending' && l.phone===rec.phone && l.company.toLowerCase()===rec.company.toLowerCase()
+  );
+  if(dup) return {ok:true, id:dup.id, duplicate:true};
+  state.customerPortalLeads.unshift(rec);
+  bumpDataEpoch('customer-portal-lead');
+  persistLocalOnly();
+  try{
+    await persist();
+    return {ok:true, id:rec.id};
+  }catch(err){
+    console.warn('customer portal lead persist', err);
+    return {ok:true, id:rec.id, offline:true};
+  }
+}
+function markCustomerPortalLeadDone(leadId){
+  migrateCustomerPortalLeads();
+  const lead=(state.customerPortalLeads||[]).find(l=>l.id===leadId);
+  if(!lead) return false;
+  lead.status='done';
+  lead.doneAt=new Date().toISOString();
+  bumpDataEpoch('customer-lead-done');
+  persist();
+  return true;
+}
+function pendingCustomerPortalLeads(){
+  migrateCustomerPortalLeads();
+  return (state.customerPortalLeads||[]).filter(l=>l.status==='pending');
+}
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
   console.info('dataEpoch →', state.dataEpoch, reason||'');
@@ -1142,6 +1198,7 @@ function snapshot(){
     billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
     invoices:Array.isArray(state.invoices)?state.invoices:[],
     docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
+    customerPortalLeads:Array.isArray(state.customerPortalLeads)?state.customerPortalLeads:[],
     opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
@@ -1179,6 +1236,7 @@ function applyPayload(p, opts){
   else if(p.docTemplates&&typeof p.docTemplates==='object') state.docTemplates=p.docTemplates;
   state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{}, p.settings||{});
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
+  state.customerPortalLeads=Array.isArray(p.customerPortalLeads)?p.customerPortalLeads.map(normalizeCustomerPortalLead).filter(Boolean):[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
   state.dataEpoch=Number(p.dataEpoch)||0;
   mergeAdminAuthFromRemote(p, opts);

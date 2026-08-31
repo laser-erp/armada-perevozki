@@ -557,12 +557,33 @@ function flashAdmPinOk(msg, isWarn){
 }
 function renderAdminActivity(){
   migrateAdmins();
+  migrateCustomerPortalLeads();
   const online=onlineAdmins();
   const log=(state.adminLogins||[]).slice(0,40);
   const ops=(state.opsLog||[]).slice(0,25);
+  const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
     <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
+    ${leads.length?`<section class="form-section">
+      <h2 class="form-section-title">Заявки заказчиков · портал</h2>
+      <p class="cat-panel-hint">С kp-zakaz.html — «Хочу отправлять грузы». Включите портал в карточке компании и выдайте PIN.</p>
+      <div class="cat-list">
+        ${leads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)}</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.inn?` · ИНН ${esc(l.inn)}`:''}${l.contactName?` · ${esc(l.contactName)}`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            ${l.carrierHint?`<div class="hint">Перевозчик: ${esc(l.carrierHint)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </section>`:''}
     ${ops.length?`<section class="form-section">
       <h2 class="form-section-title">Журнал ЭТрН / API (S3)</h2>
       <div class="cat-list">
@@ -864,6 +885,13 @@ function renderAdminActivity(){
     if(!confirm(`Удалить администратора ${adm.name}?`)) return;
     state.admins=state.admins.filter(a=>a.id!==id);
     persist(); renderAdminActivity();
+  });
+  document.querySelectorAll('.lead-done-btn').forEach(b=>b.onclick=()=>{
+    if(!isSuperAdmin()) return;
+    const id=b.dataset.leadId;
+    if(!id||typeof markCustomerPortalLeadDone!=='function') return;
+    markCustomerPortalLeadDone(id);
+    renderAdminActivity();
   });
 }
 
