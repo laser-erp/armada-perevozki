@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-driver-save-ui4317";
+const APP_BUILD="2026-08-31-restore-nechaev4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1530,6 +1530,7 @@ function applyPayload(p, opts){
   healOrphanOrdersIntoShifts();
   healAllOrders();
   purgeCancelledOrders();
+  if(typeof migrateRestoreNechaevDriver==='function') migrateRestoreNechaevDriver();
   purgeDeletedDrivers();
   compactSequentialNumbers();
 }
@@ -1934,8 +1935,57 @@ function markDriverDeleted(d){
   const key=driverTombstoneKey(d.name, d.companyId);
   if(!state.deletedDriverKeys.includes(key)) state.deletedDriverKeys.push(key);
 }
+function unmarkDriverDeleted(name, companyId){
+  if(!Array.isArray(state.deletedDriverKeys)) return false;
+  const key=driverTombstoneKey(name, companyId);
+  const i=state.deletedDriverKeys.indexOf(key);
+  if(i<0) return false;
+  state.deletedDriverKeys.splice(i,1);
+  return true;
+}
+function restoreDriverInCompany(opts){
+  const name=String(opts.name||'').trim();
+  const companyId=opts.companyId;
+  if(!name||!companyId) return false;
+  unmarkDriverDeleted(name, companyId);
+  return ensureDriverInCompany(opts);
+}
 function isDriverDeleted(name, companyId){
   return (state.deletedDriverKeys||[]).includes(driverTombstoneKey(name, companyId));
+}
+/** Вернуть Нечаева А.С. в ИП Нечаев (tombstone после удаления в справочнике). */
+function migrateRestoreNechaevDriver(){
+  const CANON='Нечаев А.С.';
+  const adm=(state.admins||[]).find(a=>samePersonName(a.name, CANON));
+  const name=adm?String(adm.name||'').trim():CANON;
+  if(!name) return false;
+  const owns=(typeof ownCompaniesList==='function'?ownCompaniesList():[])
+    .filter(c=>(c.name||'').toLowerCase().includes('нечаев'));
+  let co=owns[0]||null;
+  if(!co&&adm&&adm.spaceId){
+    const sp=findSpaceById(adm.spaceId);
+    if(sp) co=ensureOwnCompanyForSpace(sp);
+  }
+  if(!co) return false;
+  let changed=false;
+  (state.deletedDriverKeys||[]).slice().forEach(key=>{
+    const sep=key.lastIndexOf('|');
+    if(sep<0) return;
+    const nm=key.slice(0, sep);
+    const cid=key.slice(sep+1);
+    if(cid===co.id && nm.includes('нечаев') && unmarkDriverDeleted(nm, co.id)) changed=true;
+  });
+  if(driverExistsInCompany(name, co.id)) return changed;
+  const def=DEFAULT_DRIVERS.find(d=>samePersonName(d.name, CANON))||{};
+  if(restoreDriverInCompany({
+    name, companyId:co.id, companyName:co.name,
+    spaceId:co.spaceId||adm?.spaceId||null,
+    ownerAdminId:adm?.id||null, ownerAdminName:adm?.name||null,
+    salaryPercent:def.salaryPercent??30,
+    exchangeEnabled:!!def.exchangeEnabled,
+    phone:def.phone||adm?.phone||''
+  })) changed=true;
+  return changed;
 }
 function purgeDeletedDrivers(){
   if(!Array.isArray(state.drivers)) return false;
