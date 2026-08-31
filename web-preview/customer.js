@@ -2408,9 +2408,11 @@ function customerChatPaintMethodChips(thread, attr, selected){
   thread.querySelectorAll(`[${attr}]`).forEach(btn=>{
     const id=btn.getAttribute(attr);
     const on=selected.has(id);
-    btn.classList.toggle('primary', on);
-    btn.classList.toggle('muted', !on);
     btn.classList.toggle('is-selected', on);
+    btn.classList.toggle('primary', on && btn.classList.contains('chat-chip'));
+    btn.classList.toggle('muted', !on && btn.classList.contains('chat-chip'));
+    const check=btn.querySelector('.chat-method-check');
+    if(check) check.textContent=on?'✓':'';
   });
 }
 function customerChatPaintSingleChip(root, attr, selectedId){
@@ -2564,6 +2566,12 @@ function customerChatScrollBottom(){
   const thread=$('cust-chat-thread');
   if(!thread) return;
   requestAnimationFrame(()=>{
+    const panel=thread.querySelector('.chat-step-panel');
+    if(panel){
+      try{ panel.scrollIntoView({block:'end', behavior:'instant'}); }catch(_){
+        try{ panel.scrollIntoView(false); }catch(__){}
+      }
+    }
     thread.scrollTop=thread.scrollHeight;
   });
 }
@@ -2825,21 +2833,25 @@ function customerChatRenderWidgets(){
     const attr=step.id==='loadMethod'?'data-chat-load':'data-chat-unload';
     const okId=step.id==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok';
     const selCount=selected.size;
-    widget=`<p class="chat-vtype-hint">Выберите один или несколько вариантов, затем «Далее» или повторное нажатие на выбранный.</p>
-    <div class="chat-chips chat-load-chips">${
+    widget=`<p class="chat-step-lead">Отметьте подходящие варианты (можно несколько):</p>
+    <div class="chat-method-list">${
       opts.map(o=>{
         const on=selected.has(o.id);
-        return `<button type="button" class="chat-chip ${on?'primary is-selected':'muted'}" ${attr}="${esc(o.id)}">${esc(o.label)}</button>`;
+        return `<button type="button" class="chat-method-row${on?' is-selected':''}" ${attr}="${esc(o.id)}">
+          <span class="chat-method-check" aria-hidden="true">${on?'✓':''}</span>
+          <span class="chat-method-label">${esc(o.label)}</span>
+        </button>`;
       }).join('')
     }</div>
-    <div class="chat-chips"><button type="button" class="chat-chip primary" id="${okId}"${selCount?'':' disabled'}>${selCount?`Далее → (${selCount})`:'Далее →'}</button></div>`;
+    <div class="chat-step-actions"><button type="button" class="chat-chip primary" id="${okId}"${selCount?'':' disabled'}>${selCount?`Далее → (${selCount})`:'Далее →'}</button></div>`;
   }else if(step.id==='summary' && customerChat.summaryReady){
     widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
   }
   if(widget){
-    const wrap=document.createElement('div');
-    wrap.innerHTML=widget;
-    while(wrap.firstChild) thread.appendChild(wrap.firstChild);
+    const panel=document.createElement('div');
+    panel.className='chat-step-panel';
+    panel.innerHTML=widget;
+    thread.appendChild(panel);
   }
   customerChatWireWidgets(step.id);
   customerChatScrollBottom();
