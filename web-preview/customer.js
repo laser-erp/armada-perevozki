@@ -331,7 +331,8 @@ function maybeNotifyCustomerOrderUpdates(){
 }
 function customerOrders(){
   if(!currentCustomer) return [];
-  return (state.orders||[]).filter(o=>o && o.customerId===currentCustomer.companyId)
+  const dead=typeof deletedOrderIdSet==='function'?deletedOrderIdSet():new Set();
+  return (state.orders||[]).filter(o=>o && o.customerId===currentCustomer.companyId && !dead.has(o.id))
     .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
 }
 

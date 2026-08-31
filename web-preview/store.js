@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-entry-hard4317";
+const APP_BUILD="2026-08-31-order-del4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1583,6 +1583,7 @@ function applyPayload(p, opts){
   healOrphanOrdersIntoShifts();
   healAllOrders();
   purgeCancelledOrders();
+  if(typeof pruneInvoicesForDeletedOrders==='function') pruneInvoicesForDeletedOrders();
   if(typeof migrateRestoreNechaevDriver==='function') migrateRestoreNechaevDriver();
   purgeDeletedDrivers();
   compactSequentialNumbers();
@@ -2629,7 +2630,10 @@ async function initCloudSync(){
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
       } else {
-        // Локальная эпоха выше — заказы/смены не трогаем, но auth с сервера сохраняем.
+        // Локальная эпоха выше — tombstone удалений с сервера всё равно применяем.
+        unionDeletedOrderIds(remote.deletedOrderIds||[]);
+        if(typeof purgeDeadOrdersEverywhere==='function') purgeDeadOrdersEverywhere();
+        if(typeof pruneInvoicesForDeletedOrders==='function') pruneInvoicesForDeletedOrders();
         if(typeof mergeAdminAuthFromRemote==='function'){
           mergeAdminAuthFromRemote(remote, {remoteWinsAuth:true});
         }

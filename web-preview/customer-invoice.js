@@ -82,13 +82,29 @@ function findInvoiceById(id){
   return ensureInvoicesRoot().find(x=>x.id===id)||null;
 }
 function findInvoiceByOrderId(orderId){
+  if(!orderId) return null;
+  if(typeof deletedOrderIdSet==='function' && deletedOrderIdSet().has(orderId)) return null;
   return ensureInvoicesRoot().find(x=>x.orderId===orderId)||null;
 }
 function customerInvoicesForPortal(customerId){
   if(!customerId) return [];
+  const dead=typeof deletedOrderIdSet==='function'?deletedOrderIdSet():new Set();
+  const liveOrderIds=new Set((state.orders||[]).filter(o=>o&&o.customerId===customerId).map(o=>o.id));
   return ensureInvoicesRoot()
-    .filter(x=>x.customerId===customerId)
+    .filter(x=>{
+      if(x.customerId!==customerId) return false;
+      if(x.orderId&&dead.has(x.orderId)) return false;
+      if(x.orderId&&!liveOrderIds.has(x.orderId)) return false;
+      return true;
+    })
     .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+}
+function pruneInvoicesForDeletedOrders(){
+  const dead=typeof deletedOrderIdSet==='function'?deletedOrderIdSet():new Set();
+  if(!Array.isArray(state.invoices)||!state.invoices.length) return false;
+  const before=state.invoices.length;
+  state.invoices=state.invoices.filter(inv=>inv && inv.orderId && !dead.has(inv.orderId));
+  return state.invoices.length!==before;
 }
 function createCustomerInvoiceForOrder(order, customerCo, carrierCo){
   if(!order||!order.id) return null;

@@ -2698,6 +2698,12 @@ function detachOrderReferences(deletedOrders){
     clearAdminUiForDeletedOrders(Array.from(delSet));
   }
 
+  if(Array.isArray(state.invoices)){
+    const invBefore=state.invoices.length;
+    state.invoices=state.invoices.filter(inv=>!inv||!inv.orderId||!delSet.has(inv.orderId));
+    if(state.invoices.length!==invBefore) changed=true;
+  }
+
   return changed;
 }
 function removeOrdersByIds(ids){
