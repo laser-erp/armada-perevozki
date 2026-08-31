@@ -1571,7 +1571,10 @@
     }
 
     /* Standalone doc pages (help, legal, invite) — not app shell */
-    html.doc-page,body.doc-page{
+    html:has(body.doc-page),
+    html.doc-page,
+    body.doc-page{
       height:auto;min-height:100%;min-height:100dvh;
-      overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto
+      overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto;
+      touch-action:pan-y
     }
