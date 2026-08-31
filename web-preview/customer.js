@@ -3155,7 +3155,6 @@ function wireCustomerAddressFields(){
   attach('cust-unload');
 }
 function wireCustomerPortal(){
-  $('role-customer')&&($('role-customer').onclick=()=>{ setEntryMode('customer'); openCustomerLogin(); });
   $('cust-login-ok')&&($('cust-login-ok').onclick=loginCustomer);
   $('cust-login-pin')&&($('cust-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginCustomer(); });
   $('cust-portal-back')&&($('cust-portal-back').onclick=logoutCustomer);

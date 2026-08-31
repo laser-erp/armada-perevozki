@@ -4617,16 +4617,8 @@ function wireAdminLoginHandlers(){
   }
 }
 function showDefaultAfterSplash(){
-  initEntryFromPage();
-  initPortalScopeFromPage();
-  const entryId=entryLoginScreenId();
-  if(entryId==='roles'){
-    showRoleHub();
-    return;
-  }
-  if(entryId==='driver-login') openDriverLogin(false);
-  else if(entryId==='admin-pin') openAdminLogin();
-  else if(entryId==='customer-login') openCustomerLogin();
+  if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
+  showRoleHub();
 }
 // Сразу после загрузки localStorage — без PIN, если сессия была (кроме /a без PIN в этой вкладке)
 try{
@@ -4684,15 +4676,15 @@ try{
   } else if(urlEntry==='driver'){
     if(lastRole==='driver' && (await tryDriver())){ /* ok */ }
     else if(restoreDriverSession() && (await tryDriver())){ /* ok */ }
-    else if(document.querySelector('#splash.show')) showAfterSplash(()=>openDriverLogin(false));
-    else openDriverLogin(false);
+    else if(document.querySelector('#splash.show')) showAfterSplash(()=>openDedicatedEntryScreen());
+    else openDedicatedEntryScreen();
   } else if(urlEntry==='admin'){
     if(canAutoRestoreAdmin()){
       show('admin');
       renderAdmin();
       if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
-    }else if(document.querySelector('#splash.show')) showAfterSplash(openAdminLogin);
-    else openAdminLogin();
+    }else if(document.querySelector('#splash.show')) showAfterSplash(openDedicatedEntryScreen);
+    else openDedicatedEntryScreen();
   } else if(lastRole==='driver'){
     if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
   } else if(lastRole==='customer'){
@@ -4733,9 +4725,6 @@ try{
   }
 })();
 function wireShellHandlers(){
-  $('role-admin')&&($('role-admin').onclick=()=>{ if(typeof goEntryLanding==='function') goEntryLanding('admin'); else { setEntryMode('admin'); if(typeof openAdminLogin==='function') openAdminLogin(); } });
-  $('role-customer')&&($('role-customer').onclick=()=>{ if(typeof goEntryLanding==='function') goEntryLanding('customer'); else { setEntryMode('customer'); if(typeof openCustomerLogin==='function') openCustomerLogin(); } });
-  $('role-driver')&&($('role-driver').onclick=()=>{ if(typeof goEntryLanding==='function') goEntryLanding('driver'); else { setEntryMode('driver'); if(typeof openDriverLogin==='function') openDriverLogin(false); } });
   $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
     if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
     if(typeof openDriverLogin==='function') openDriverLogin(true);

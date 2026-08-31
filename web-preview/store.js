@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-cust-alerts-inline4317";
+const APP_BUILD="2026-08-31-entry-links4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -206,9 +206,9 @@ function readEntryFromUrl(){
     const fromQ=normalizeEntryMode(q.get('entry'));
     if(fromQ) return fromQ;
     const path=(location.pathname||'').toLowerCase();
-    if(/driver\.html$/i.test(path)||/\/v\/?$/.test(path)) return 'driver';
-    if(/admin\.html$/i.test(path)||/\/a\/?$/.test(path)) return 'admin';
-    if(/zakaz\.html$/i.test(path)||/\/z(\/|$)/.test(path)) return 'customer';
+    if(/driver\.html$/i.test(path)||/^\/v(?:\/|$)/.test(path)) return 'driver';
+    if(/admin\.html$/i.test(path)||/^\/a(?:\/|$)/.test(path)) return 'admin';
+    if(/zakaz\.html$/i.test(path)||/^\/z(?:\/|$)/.test(path)) return 'customer';
   }catch(_){}
   return null;
 }
@@ -255,6 +255,19 @@ function entryLoginScreenId(){
 function showRoleHub(){
   if(typeof clearEntrySkin==='function') clearEntrySkin();
   if(typeof show==='function') show('roles');
+}
+function openDedicatedEntryScreen(){
+  initEntryFromPage();
+  if(typeof initPortalScopeFromPage==='function') initPortalScopeFromPage();
+  const mode=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():readEntryFromUrl();
+  if(mode==='admin' && typeof openAdminLogin==='function'){ openAdminLogin(); return true; }
+  if(mode==='driver' && typeof openDriverLogin==='function'){ openDriverLogin(false); return true; }
+  if(mode==='customer'){
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(typeof openCustomerLogin==='function') openCustomerLogin();
+    return true;
+  }
+  return false;
 }
 function showHubAfterSplash(){
   if(document.querySelector('#splash.show') && typeof showAfterSplash==='function') showAfterSplash(showRoleHub);

@@ -120,6 +120,7 @@
       flex:1 1 auto;min-width:96px;padding:10px 14px;border-radius:10px;font-weight:700;font-size:.85rem;
       font-family:inherit;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text)
     }
+    a.role-hub-login-btn{display:inline-block;text-align:center;text-decoration:none;box-sizing:border-box;line-height:1.25}
     .role-hub-login-admin{background:var(--accent);color:#fff;border-color:var(--accent)}
     #roles.show .roles-hub-head .logo{animation:splashRise .45s ease both}
     #roles.show .roles-hub-title{animation:splashRise .45s ease .05s both}
