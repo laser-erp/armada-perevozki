@@ -3328,7 +3328,6 @@ function openCatalogs(){
       <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}${veh?`<span class="drv-firm">🚛 ${esc(veh.plate)}</span>`:''}</div>
       <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
-      <input class="drv-license" id="drv-license-${i}" value="${esc(d.licenseNo||'')}" placeholder="ВУ" title="Водительское удостоверение" />
       <input class="drv-pin" id="drv-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(d.pin||resolveDriverPin(d)||'')}" placeholder="PIN" title="PIN водителя" />
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
       <button type="button" class="icon-btn secondary" data-drv-invite="${i}" title="Ссылка 7 дн.">🔗</button>
@@ -3336,14 +3335,16 @@ function openCatalogs(){
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
       </div>
       <details class="drv-docs">
-        <summary>Паспорт и ВУ</summary>
+        <summary>Паспорт и ВУ${!String(d.licenseNo||'').trim()?' · <span class="drv-docs-miss">нет номера ВУ</span>':''}</summary>
         <div class="drv-docs-grid">
-          <input id="drv-pass-ser-${i}" inputmode="numeric" maxlength="4" placeholder="Серия" value="${esc(d.passportSeries||'')}" title="Серия паспорта" />
-          <input id="drv-pass-num-${i}" inputmode="numeric" maxlength="6" placeholder="Номер" value="${esc(d.passportNumber||'')}" title="Номер паспорта" />
-          <input id="drv-pass-by-${i}" placeholder="Кем выдан" value="${esc(d.passportIssuedBy||'')}" title="Кем выдан" />
-          <input id="drv-pass-at-${i}" placeholder="Дата выдачи" value="${esc(d.passportIssuedAt||'')}" title="Дата выдачи паспорта" />
+          <input id="drv-lic-num-${i}" inputmode="numeric" placeholder="Номер ВУ *" value="${esc(d.licenseNo||'')}" title="Номер водительского удостоверения" />
           <input id="drv-lic-at-${i}" placeholder="ВУ выдано" value="${esc(d.licenseIssuedAt||'')}" title="Дата выдачи ВУ" />
+          <input id="drv-pass-ser-${i}" inputmode="numeric" maxlength="4" placeholder="Серия паспорта" value="${esc(d.passportSeries||'')}" title="Серия паспорта" />
+          <input id="drv-pass-num-${i}" inputmode="numeric" maxlength="6" placeholder="Номер паспорта" value="${esc(d.passportNumber||'')}" title="Номер паспорта" />
+          <input id="drv-pass-by-${i}" placeholder="Кем выдан" value="${esc(d.passportIssuedBy||'')}" title="Кем выдан" class="drv-docs-span2" />
+          <input id="drv-pass-at-${i}" placeholder="Дата выдачи паспорта" value="${esc(d.passportIssuedAt||'')}" title="Дата выдачи паспорта" />
         </div>
+        <p class="hint drv-docs-hint">Снимки с телефона сжимаются автоматически (до ${DOC_PHOTO_MAX_KB} КБ). После правок нажмите ✓.</p>
         <div class="drv-doc-photos">
           ${docPhotoUploadRow('Паспорт (разворот)', d.passportPhoto, `data-drv-photo="${i}" data-photo-key="passportPhoto"`, `data-drv-photo-clear="${i}" data-photo-key="passportPhoto"`)}
           ${docPhotoUploadRow('Прописка', d.passportRegPhoto, `data-drv-photo="${i}" data-photo-key="passportRegPhoto"`, `data-drv-photo-clear="${i}" data-photo-key="passportRegPhoto"`)}
@@ -3906,7 +3907,7 @@ function openCatalogs(){
     if(!d) return;
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
     state.drivers[i].phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
-    state.drivers[i].licenseNo=String((($('drv-license-'+i)||{}).value||'').trim());
+    state.drivers[i].licenseNo=String((($('drv-lic-num-'+i)||$('drv-license-'+i)||{}).value||'').trim());
     state.drivers[i].passportSeries=String((($('drv-pass-ser-'+i)||{}).value||'').trim());
     state.drivers[i].passportNumber=String((($('drv-pass-num-'+i)||{}).value||'').trim());
     state.drivers[i].passportIssuedBy=String((($('drv-pass-by-'+i)||{}).value||'').trim());

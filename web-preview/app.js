@@ -114,6 +114,47 @@ function fleetVehicleForOrder(o){
 }
 const DOC_PHOTO_MAX_KB=200;
 const ADMIN_DOC_IMAGE_MAX_KB=500;
+const DOC_PHOTO_MAX_SIDE=1600;
+function compressDocPhotoFile(file, maxKb){
+  const limit=maxKb||DOC_PHOTO_MAX_KB;
+  return new Promise(resolve=>{
+    if(!file||!(file.type||'').startsWith('image/')){ resolve(null); return; }
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width, h=img.height;
+        const maxSide=DOC_PHOTO_MAX_SIDE;
+        if(w>maxSide||h>maxSide){
+          if(w>=h){ h=Math.round(h*maxSide/w); w=maxSide; }
+          else { w=Math.round(w*maxSide/h); h=maxSide; }
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        if(!ctx){ resolve(null); return; }
+        ctx.drawImage(img,0,0,w,h);
+        let quality=0.88;
+        let dataUrl=canvas.toDataURL('image/jpeg', quality);
+        const maxBytes=limit*1024*1.37;
+        while(dataUrl.length>maxBytes&&quality>0.32){
+          quality-=0.07;
+          dataUrl=canvas.toDataURL('image/jpeg', quality);
+        }
+        if(dataUrl.length>maxBytes){
+          alert(`Не удалось сжать до ${limit} КБ — сделайте кадр ближе или обрежьте фото`);
+          resolve(null);
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.onerror=()=>resolve(null);
+      img.src=String(reader.result||'');
+    };
+    reader.onerror=()=>resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
 function docPhotoOrNull(v){
   const s=v!=null?String(v):'';
   return s.startsWith('data:image/')?s:null;
@@ -138,13 +179,28 @@ function docPhotoUploadRow(label, existing, inputAttrs, clearAttrs){
 function bindDocPhotoInput(input, onLoad, maxKb){
   if(!input||typeof onLoad!=='function') return;
   const limit=maxKb||DOC_PHOTO_MAX_KB;
-  input.onchange=()=>{
+  input.onchange=async ()=>{
     const file=input.files&&input.files[0];
     if(!file) return;
-    if(file.size>limit*1024){ alert(`Снимок до ${limit} КБ`); input.value=''; return; }
-    const reader=new FileReader();
-    reader.onload=()=>onLoad(String(reader.result||''));
-    reader.readAsDataURL(file);
+    const prevDisabled=input.disabled;
+    input.disabled=true;
+    try{
+      let data=null;
+      if(file.size<=limit*1024){
+        data=await new Promise(res=>{
+          const r=new FileReader();
+          r.onload=()=>res(String(r.result||''));
+          r.onerror=()=>res(null);
+          r.readAsDataURL(file);
+        });
+      }else{
+        data=await compressDocPhotoFile(file, limit);
+      }
+      if(data) onLoad(data);
+      else input.value='';
+    }finally{
+      input.disabled=prevDisabled;
+    }
   };
 }
 function driverDocPhotoGalleryHtml(d, opts){

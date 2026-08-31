@@ -1131,6 +1131,9 @@
     .drv-docs summary{cursor:pointer;font-size:.72rem;font-weight:700;color:var(--accent);padding:4px 2px}
     .drv-docs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:4px 0 8px}
     .drv-docs-grid input{width:100%;padding:6px 8px;min-height:30px;font-size:.72rem;border-radius:var(--pill);border:0;background:var(--field);color:var(--text)}
+    .drv-docs-grid input.drv-docs-span2{grid-column:1/-1}
+    .drv-docs-hint{margin:0 0 6px;font-size:.65rem}
+    .drv-docs-miss{color:#D97706;font-weight:600}
     .vc-crew-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
     .vc-crew-item{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;padding:6px 8px;border-radius:var(--pill);background:var(--field)}
     .vc-crew-item input{flex:0 0 auto}
