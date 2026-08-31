@@ -321,7 +321,7 @@ function operatorLetterBodyToPrintHtml(filled) {
   let parts = '';
 
   if (/^Исх\./i.test(paras[0])) {
-    parts += `<div class="meta-row"><div class="meta-row__out">${operatorLetterParaHtml(paras[0]).replace(/^<p>|<\/p>$/g, '')}</div></div>`;
+    parts += `<div class="meta-row"><div class="meta-row__out">${esc(paras[0]).replace(/\n/g, '<br/>')}</div></div>`;
     i = 1;
   }
 
@@ -367,17 +367,34 @@ function operatorLetterBodyToPrintHtml(filled) {
     const tail = closingParas.slice(1);
     const sigName = tail.length ? tail[0] : '';
     const sigRole = tail.slice(1);
+    const marksHtml = typeof operatorLetterSignMarksHtml === 'function'
+      ? operatorLetterSignMarksHtml()
+      : '<div class="signature__line"></div>';
     parts += `<div class="closing">
       <p class="closing__respect">${esc(closingParas[0])}</p>
       <div class="signature">
         <p class="signature__role">${sigRole.map(l => esc(l)).join('<br/>')}</p>
-        <div class="signature__line"></div>
+        ${marksHtml}
         <p class="signature__name">${esc(sigName)}</p>
       </div>
     </div>`;
   }
 
   return parts;
+}
+
+function operatorLetterSignMarksHtml() {
+  const assets = typeof currentAdminDocAssets === 'function'
+    ? currentAdminDocAssets({ platformStamp: true })
+    : { stamp: null, signature: null };
+  const stamp = assets && assets.stamp;
+  const signature = assets && assets.signature;
+  if (!stamp && !signature) return '<div class="signature__line"></div>';
+  let html = '<div class="signature__marks">';
+  if (signature) html += `<img class="signature__sig" src="${esc(signature)}" alt="Подпись" />`;
+  if (stamp) html += `<img class="signature__stamp" src="${esc(stamp)}" alt="Печать" />`;
+  html += '</div>';
+  return html;
 }
 
 function operatorLetterPrintCss() {
@@ -405,6 +422,9 @@ body{font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.45;c
 .signature{display:grid;grid-template-columns:1fr 120px 1fr;align-items:end;gap:8px;margin-top:8px;font-size:11pt}
 .signature__role{margin:0}
 .signature__line{border-bottom:1px solid #111;height:1px}
+.signature__marks{position:relative;height:56px;grid-column:2}
+.signature__stamp{position:absolute;left:50%;bottom:0;transform:translateX(-20%);height:52px;width:auto;max-width:110px;object-fit:contain;opacity:.95}
+.signature__sig{position:absolute;left:50%;bottom:8px;transform:translateX(-55%);height:32px;width:auto;max-width:100px;object-fit:contain}
 .signature__name{margin:0;text-align:right}
 .letter-footer{margin-top:28px;padding-top:6px;border-top:1px solid #cbd5e1;font-family:Inter,Arial,sans-serif;font-size:7.5pt;color:#64748b;text-align:center}
 .print-toolbar{display:flex;gap:8px;margin:0 0 16px;position:sticky;top:0;background:#fff;padding:10px 0;z-index:2;font-family:Inter,Arial,sans-serif}

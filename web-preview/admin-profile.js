@@ -1,0 +1,128 @@
+/* АРМАДА — профиль администратора: печать и подпись для документов */
+const DEFAULT_PLATFORM_STAMP = '/assets/armada-stamp.png';
+
+function findAdminRecord(adminId) {
+  return (state.admins || []).find(a => a.id === adminId) || null;
+}
+
+function defaultPlatformStampUrl() {
+  const origin = typeof location !== 'undefined' && location.origin ? location.origin : '';
+  return origin ? `${origin}${DEFAULT_PLATFORM_STAMP}` : DEFAULT_PLATFORM_STAMP;
+}
+
+function adminDocAssets(adminId, opts) {
+  opts = opts || {};
+  const adm = adminId ? findAdminRecord(adminId) : null;
+  const adminStamp = adminDocImageOrNull(adm && adm.stampDataUrl);
+  const signature = adminDocImageOrNull(adm && adm.signatureDataUrl);
+  let stamp = adminStamp;
+  if (!stamp && opts.platformStamp) stamp = defaultPlatformStampUrl();
+  return { stamp, signature, admin: adm };
+}
+
+function currentAdminDocAssets(opts) {
+  const id = currentAdmin && currentAdmin.id;
+  return adminDocAssets(id, opts);
+}
+
+function adminDocSignMarksHtml(assets, opts) {
+  if (!assets) return '';
+  opts = opts || {};
+  const stamp = assets.stamp;
+  const signature = assets.signature;
+  if (!stamp && !signature) return opts.lineFallback !== false
+    ? '<div class="doc-sign-line"></div>'
+    : '';
+  let html = '<div class="doc-sign-marks">';
+  if (signature) {
+    html += `<img class="doc-sign-signature" src="${esc(signature)}" alt="Подпись" />`;
+  }
+  if (stamp) {
+    html += `<img class="doc-sign-stamp" src="${esc(stamp)}" alt="Печать" />`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function adminDocSignBlockHtml(leftTitle, rightTitle, leftName, rightName, assets) {
+  assets = assets || (typeof currentAdminDocAssets === 'function' ? currentAdminDocAssets() : { stamp: null, signature: null });
+  const marks = adminDocSignMarksHtml(assets);
+  return `<div class="sign sign--with-marks">
+    <div class="sign-col">
+      <p class="sign-caption">${esc(leftTitle)}: _______________ / ${esc(leftName || '_______________')}</p>
+    </div>
+    <div class="sign-col sign-col--executor">
+      <p class="sign-caption">${esc(rightTitle)}: _______________ / ${esc(rightName || '_______________')}</p>
+      ${marks}
+    </div>
+  </div>`;
+}
+
+function saveAdminDocImage(adminId, key, dataUrl) {
+  const adm = findAdminRecord(adminId);
+  if (!adm) return false;
+  const val = adminDocImageOrNull(dataUrl);
+  if (val) adm[key] = val;
+  else delete adm[key];
+  if (typeof persist === 'function') persist();
+  return true;
+}
+
+function renderAdminProfile() {
+  const host = $('admin-profile-form');
+  if (!host || !currentAdmin) return;
+  const adm = findAdminRecord(currentAdmin.id) || currentAdmin;
+  const stamp = adminDocImageOrNull(adm.stampDataUrl);
+  const signature = adminDocImageOrNull(adm.signatureDataUrl);
+  host.innerHTML = `<section class="admin-profile-card">
+    <h2>${esc(adm.name)}</h2>
+    <p class="cat-panel-hint">Печать и подпись подставляются при печати писем и документов от вашего имени. PNG или JPG, до ${ADMIN_DOC_IMAGE_MAX_KB} КБ каждый файл.</p>
+    <div class="admin-profile-grid">
+      ${docPhotoUploadRow('Печать организации', stamp, 'id="adm-profile-stamp"', 'id="adm-profile-stamp-clear"')}
+      ${docPhotoUploadRow('Подпись', signature, 'id="adm-profile-signature"', 'id="adm-profile-signature-clear"')}
+    </div>
+    <p class="hint">Письма операторам ЭТрН используют печать ООО «АРМАДА» по умолчанию, если вы не загрузили свою. Остальные документы — только ваши файлы.</p>
+    <div class="admin-profile-preview">
+      <p class="meta">Пример на печати</p>
+      <div class="admin-profile-sample">${adminDocSignMarksHtml({ stamp: stamp || defaultPlatformStampUrl(), signature })}</div>
+    </div>
+  </section>`;
+
+  bindDocPhotoInput($('adm-profile-stamp'), src => {
+    saveAdminDocImage(currentAdmin.id, 'stampDataUrl', src);
+    renderAdminProfile();
+  }, ADMIN_DOC_IMAGE_MAX_KB);
+  bindDocPhotoInput($('adm-profile-signature'), src => {
+    saveAdminDocImage(currentAdmin.id, 'signatureDataUrl', src);
+    renderAdminProfile();
+  }, ADMIN_DOC_IMAGE_MAX_KB);
+  const stampClear = $('adm-profile-stamp-clear');
+  if (stampClear) {
+    stampClear.onclick = () => {
+      saveAdminDocImage(currentAdmin.id, 'stampDataUrl', null);
+      renderAdminProfile();
+    };
+  }
+  const sigClear = $('adm-profile-signature-clear');
+  if (sigClear) {
+    sigClear.onclick = () => {
+      saveAdminDocImage(currentAdmin.id, 'signatureDataUrl', null);
+      renderAdminProfile();
+    };
+  }
+}
+
+function openAdminProfile() {
+  if (!currentAdmin) {
+    if (typeof fillAdminLoginSelect === 'function') fillAdminLoginSelect();
+    show('admin-pin');
+    return;
+  }
+  document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b => {
+    b.classList.toggle('on', b.dataset.nav === 'profile');
+  });
+  renderAdminProfile();
+  const back = $('profile-back');
+  if (back) back.onclick = () => { show('admin'); renderAdmin(); };
+  show('admin-profile-screen');
+}

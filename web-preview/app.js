@@ -113,9 +113,13 @@ function fleetVehicleForOrder(o){
     ||(state.vehicles||[]).find(v=>v.plate===plate)||null;
 }
 const DOC_PHOTO_MAX_KB=200;
+const ADMIN_DOC_IMAGE_MAX_KB=500;
 function docPhotoOrNull(v){
   const s=v!=null?String(v):'';
   return s.startsWith('data:image/')?s:null;
+}
+function adminDocImageOrNull(v){
+  return docPhotoOrNull(v);
 }
 function docPhotoThumbHtml(src, label){
   if(!docPhotoOrNull(src)) return '';
@@ -131,12 +135,13 @@ function docPhotoUploadRow(label, existing, inputAttrs, clearAttrs){
     </div>
   </label>`;
 }
-function bindDocPhotoInput(input, onLoad){
+function bindDocPhotoInput(input, onLoad, maxKb){
   if(!input||typeof onLoad!=='function') return;
+  const limit=maxKb||DOC_PHOTO_MAX_KB;
   input.onchange=()=>{
     const file=input.files&&input.files[0];
     if(!file) return;
-    if(file.size>DOC_PHOTO_MAX_KB*1024){ alert(`Снимок до ${DOC_PHOTO_MAX_KB} КБ`); input.value=''; return; }
+    if(file.size>limit*1024){ alert(`Снимок до ${limit} КБ`); input.value=''; return; }
     const reader=new FileReader();
     reader.onload=()=>onLoad(String(reader.result||''));
     reader.readAsDataURL(file);
@@ -563,6 +568,10 @@ function normalizeAdmin(a){
   if(phone) out.phone=phone;
   if(String(a.loginBy||'').trim().toLowerCase()==='phone') out.loginBy='phone';
   else if(a.loginBy==='inn') out.loginBy='inn';
+  const stamp=adminDocImageOrNull(a.stampDataUrl);
+  if(stamp) out.stampDataUrl=stamp;
+  const signature=adminDocImageOrNull(a.signatureDataUrl);
+  if(signature) out.signatureDataUrl=signature;
   return out;
 }
 function migrateAdmins(){

@@ -206,6 +206,7 @@ function setAdminNav(nav){
   if(nav==='plans'){ openAdminPlans(); return; }
   if(nav==='links'){ openAdminLinks(); return; }
   if(nav==='documents'){ openAdminDocuments(); return; }
+  if(nav==='profile'){ openAdminProfile(); return; }
   if(nav==='eto') state.adminFilter='eto';
   else if(nav==='exchange') state.adminFilter='exchange';
   else {
