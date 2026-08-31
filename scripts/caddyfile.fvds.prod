@@ -24,24 +24,28 @@ aptown1.fvds.ru {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store, no-cache, must-revalidate"
 		file_server
 	}
 	handle @entry_admin {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store, no-cache, must-revalidate"
 		file_server
 	}
 	handle @entry_customer_root {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store, no-cache, must-revalidate"
 		file_server
 	}
 	handle @entry_portal_slug {
 		root * /var/www/armada
 		rewrite * /index.html
 		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store, no-cache, must-revalidate"
 		file_server
 	}
 	redir /driver.html /v/ permanent

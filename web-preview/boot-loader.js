@@ -1,13 +1,41 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-31-entry-admin-fix4317';
+  var APP_BUILD = '2026-08-31-a-entry4317';
 
   window.__armadaBootDone = false;
+
+  function dedicatedScreenId() {
+    var p = (location.pathname || '').toLowerCase();
+    if (/\/(a)(\/|$)/.test(p)) return 'admin-pin';
+    if (/\/(v)(\/|$)/.test(p)) return 'driver-login';
+    if (/\/(z)(\/|$)/.test(p)) return 'customer-login';
+    return null;
+  }
+
+  function showScreenEarly(id) {
+    if (!id) return;
+    var target = document.getElementById(id);
+    if (!target) return;
+    var root = document.getElementById('shell') || document.querySelector('.phone');
+    var screens = root ? root.querySelectorAll('.screen') : document.querySelectorAll('.phone > .screen');
+    screens.forEach(function (s) {
+      s.classList.remove('show');
+    });
+    target.classList.add('show');
+  }
+
+  showScreenEarly(dedicatedScreenId());
+
   setTimeout(function () {
     var sp = document.getElementById('splash');
     if (!sp || !sp.classList.contains('show')) return;
     if (typeof bootFallbackAfterSplash === 'function') {
       bootFallbackAfterSplash();
+      return;
+    }
+    var early = dedicatedScreenId();
+    if (early) {
+      showScreenEarly(early);
       return;
     }
     if (typeof showAfterSplash === 'function' && typeof showDefaultAfterSplash === 'function') {
@@ -22,11 +50,7 @@
       show('roles');
       return;
     }
-    document.querySelectorAll('.phone > .screen').forEach(function (s) {
-      s.classList.remove('show');
-    });
-    var roles = document.getElementById('roles');
-    if (roles) roles.classList.add('show');
+    showScreenEarly('roles');
   }, 5000);
 
   function loadScript(src) {
@@ -87,13 +111,25 @@
     return shellScripts();
   }
 
+  function finishBoot() {
+    window.__armadaBootDone = true;
+    if (typeof openDedicatedEntryScreen === 'function' && openDedicatedEntryScreen()) return;
+    if (typeof bootFallbackAfterSplash === 'function') {
+      bootFallbackAfterSplash();
+      return;
+    }
+    var early = dedicatedScreenId();
+    if (early) showScreenEarly(early);
+  }
+
   var chain = Promise.resolve();
   scriptBundle().forEach(function (f) {
     chain = chain.then(function () {
       return loadScript('/' + f + '?v=' + encodeURIComponent(APP_BUILD));
     });
   });
-  chain.catch(function (err) {
+  chain.then(finishBoot).catch(function (err) {
     console.error('АРМАДА boot-loader', err);
+    finishBoot();
   });
 })();
