@@ -492,10 +492,11 @@
             <div class="chat-progress" aria-hidden="true"><div class="chat-progress-fill" id="cust-chat-progress"></div></div>
             <p class="chat-step-hint" id="cust-chat-step-hint"></p>
             <div class="chat-thread" id="cust-chat-thread" role="log" aria-live="polite"></div>
+            <div class="chat-action-tray" id="cust-chat-tray" hidden></div>
             <div class="cust-chat-footer">
-              <div class="chat-compose is-visible" id="cust-chat-compose">
-                <input id="cust-chat-input" placeholder="Напишите ответ…" aria-label="Сообщение" autocomplete="off" />
-                <button type="button" id="cust-chat-send" aria-label="Отправить">→</button>
+              <div class="chat-compose" id="cust-chat-compose">
+                <input id="cust-chat-input" placeholder="Сообщение…" aria-label="Сообщение" autocomplete="off" enterkeyhint="send" />
+                <button type="button" id="cust-chat-send" aria-label="Отправить">➤</button>
               </div>
               <div class="error" id="cust-chat-error"></div>
             </div>

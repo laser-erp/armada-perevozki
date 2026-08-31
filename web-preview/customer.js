@@ -2706,11 +2706,11 @@ function customerChatBotPrompt(stepId){
     if(who) return `${who}<strong>когда подать машину?</strong>`;
     return '<strong>Когда подать машину?</strong>';
   }
-  if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Укажите адрес загрузки — подскажем адреса, по которым уже возили.';
-  if(stepId==='unload') return '<strong>Куда везём?</strong> Можно выбрать из недавних адресов.';
-  if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — подскажем недавние контакты.';
+  if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Введите адрес внизу или выберите из недавних.';
+  if(stepId==='unload') return '<strong>Куда везём?</strong> Введите адрес внизу или выберите из недавних.';
+  if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — введите внизу или выберите из недавних.';
   if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> Грузоотправитель подписывает ЭТрН (T1) на погрузке. Заказчик перевозки может быть другим.';
-  if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Имя и телефон (можно пропустить, если тот же).';
+  if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Введите внизу, выберите из недавних или «пропустить».';
   if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
   if(stepId==='loadMethod'){
     if(who) return `${who}<strong>как будем грузить?</strong> Выберите подходящие варианты.`;
@@ -2749,15 +2749,10 @@ function customerChatUpdateProgress(){
 function customerChatScrollBottom(){
   const thread=$('cust-chat-thread');
   if(!thread) return;
-  requestAnimationFrame(()=>{
-    const panel=thread.querySelector('.chat-step-panel');
-    if(panel){
-      try{ panel.scrollIntoView({block:'end', behavior:'instant'}); }catch(_){
-        try{ panel.scrollIntoView(false); }catch(__){}
-      }
-    }
-    thread.scrollTop=thread.scrollHeight;
-  });
+  requestAnimationFrame(()=>{ thread.scrollTop=thread.scrollHeight; });
+}
+function customerChatTrayRoot(){
+  return $('cust-chat-tray');
 }
 function customerChatFocus(el){
   if(!el||typeof el.focus!=='function') return;
@@ -2916,9 +2911,11 @@ function customerChatRenderMessages(){
   customerChatUpdateProgress();
 }
 function customerChatRenderWidgets(){
-  const thread=$('cust-chat-thread');
-  if(!thread) return;
+  const tray=customerChatTrayRoot();
+  if(!tray) return;
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
+  tray.innerHTML='';
+  tray.hidden=true;
   if(!step) return;
   if(step.id!=='summary' && customerChat.summaryReady) return;
   if(customerChat.messages.some(m=>m.stepId==='submitted')) return;
@@ -2971,27 +2968,16 @@ function customerChatRenderWidgets(){
     <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-when-next"${pendingWhen?'':' disabled'}>Далее →</button></div>`;
   }else if(step.id==='load' || step.id==='unload'){
     const kind=step.id==='load'?'load':'unload';
-    const val=kind==='load'?(customerChat.data.load||''):(customerChat.data.unload||'');
-    widget=`${customerChatHistoryAddrChipsHtml(kind)}
-    <div class="chat-widget"><input id="cust-chat-addr" placeholder="Город, улица, дом…" value="${esc(val)}" autocomplete="off" aria-label="Адрес" /></div>
-    <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-addr-ok">Далее →</button></div>`;
+    widget=customerChatHistoryAddrChipsHtml(kind);
   }else if(step.id==='loadContact' || step.id==='unloadContact'){
     const isLoad=step.id==='loadContact';
     const kind=isLoad?'load':'unload';
-    const cName=isLoad?(customerChat.data.loadingContactName||''):(customerChat.data.unloadingContactName||'');
-    const cPhone=isLoad?(customerChat.data.loadingContactPhone||''):(customerChat.data.unloadingContactPhone||'');
-    widget=`${customerChatHistoryContactChipsHtml(kind)}
-    <div class="chat-widget">
-      <div class="chat-widget-row">
-        <input id="cust-chat-contact-name" placeholder="ФИО" value="${esc(cName)}" autocomplete="name" aria-label="Имя контакта" />
-        <input id="cust-chat-contact-phone" placeholder="+7…" value="${esc(cPhone)}" inputmode="tel" autocomplete="tel" aria-label="Телефон" style="max-width:9.5rem" />
-      </div>
-    </div>
-    <div class="chat-chips">
-      <button type="button" class="chat-chip primary" id="cust-chat-contact-ok">Далее →</button>${
-        !isLoad?`<button type="button" class="chat-chip muted" id="cust-chat-contact-skip">Пропустить</button>
-      <button type="button" class="chat-chip muted" id="cust-chat-contact-same">Как на загрузке</button>`:''
-      }</div>`;
+    widget=`${customerChatHistoryContactChipsHtml(kind)}${
+      !isLoad?`<div class="chat-chips chat-tray-actions">
+      <button type="button" class="chat-chip muted" id="cust-chat-contact-skip">Пропустить</button>
+      <button type="button" class="chat-chip muted" id="cust-chat-contact-same">Как на загрузке</button>
+    </div>`:''
+    }`;
   }else if(step.id==='shipper'){
     const other=customerChat.data.shipperSameAsCustomer===false;
     widget=`<div class="chat-chips">
@@ -3049,21 +3035,19 @@ function customerChatRenderWidgets(){
     widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-submit">Отправить заявку</button></div>`;
   }
   if(widget){
-    const panel=document.createElement('div');
-    panel.className='chat-step-panel';
-    panel.innerHTML=widget;
-    thread.appendChild(panel);
+    tray.hidden=false;
+    tray.innerHTML=`<div class="chat-step-panel">${widget}</div>`;
   }
   customerChatWireWidgets(step.id);
   customerChatScrollBottom();
 }
 function customerChatWireWidgets(stepId){
   if(stepId==='when'){
-    const thread=$('cust-chat-thread');
+    const tray=customerChatTrayRoot();
     const syncWhenChips=mode=>{
       customerChat.data.pendingWhen=mode;
       saveCustomerChatState();
-      customerChatPaintSingleChip(thread, 'data-chat-when', mode);
+      customerChatPaintSingleChip(tray, 'data-chat-when', mode);
       const next=$('cust-chat-when-next');
       if(next) next.disabled=!mode || mode==='pick';
       const pick=$('cust-chat-when-pick');
@@ -3155,57 +3139,51 @@ function customerChatWireWidgets(stepId){
     if(focusEl) setTimeout(()=>customerChatFocus(focusEl), 80);
   }
   if(stepId==='load' || stepId==='unload'){
-    const ok=$('cust-chat-addr-ok');
-    const inp=$('cust-chat-addr');
-    const submit=()=>{
-      const addr=(inp&&inp.value||'').trim();
-      if(addr.length<4){
+    const submitAddr=addr=>{
+      const a=String(addr||'').trim();
+      if(a.length<4){
         const err=$('cust-chat-error'); if(err) err.textContent='Укажите адрес (минимум 4 символа)';
         return;
       }
       const err=$('cust-chat-error'); if(err) err.textContent='';
-      if(stepId==='load') customerChat.data.load=addr;
-      else customerChat.data.unload=addr;
-      customerChatAdvance(addr);
+      if(stepId==='load') customerChat.data.load=a;
+      else customerChat.data.unload=a;
+      const inp=$('cust-chat-input');
+      if(inp) inp.value='';
+      customerChatAdvance(a);
     };
-    if(ok) ok.onclick=submit;
-    if(inp){
-      inp.onkeydown=e=>{ if(e.key==='Enter' && !e.defaultPrevented){ e.preventDefault(); submit(); } };
-      if(typeof wireAddressAutocomplete==='function') wireAddressAutocomplete(inp);
-      setTimeout(()=>customerChatFocus(inp), 80);
-    }
     document.querySelectorAll('.chat-history-addr').forEach(btn=>{
-      btn.onclick=()=>{
-        const addr=btn.getAttribute('data-chat-addr')||'';
-        if(inp) inp.value=addr;
-        submit();
-      };
+      btn.onclick=()=>submitAddr(btn.getAttribute('data-chat-addr')||'');
     });
   }
   if(stepId==='loadContact' || stepId==='unloadContact'){
-    const ok=$('cust-chat-contact-ok');
-    const nameInp=$('cust-chat-contact-name');
-    const phoneInp=$('cust-chat-contact-phone');
-    const submit=()=>{
-      const name=(nameInp&&nameInp.value||'').trim();
-      const phone=formatPhone((phoneInp&&phoneInp.value||'').trim());
+    const submit=(name, phone)=>{
+      const n=String(name||'').trim();
+      const p=formatPhone(String(phone||'').trim());
       const err=$('cust-chat-error');
-      if(stepId==='loadContact' && !phone){
+      if(stepId==='loadContact' && !p){
         if(err) err.textContent='Укажите телефон контакта на погрузке';
-        if(phoneInp) customerChatFocus(phoneInp);
         return;
       }
       if(err) err.textContent='';
-      customerChatSaveContact(stepId, name, phone);
-      customerChatAdvance(customerChatContactLine(name, phone));
+      customerChatSaveContact(stepId, n, p);
+      const inp=$('cust-chat-input');
+      if(inp) inp.value='';
+      customerChatAdvance(customerChatContactLine(n, p));
     };
-    if(ok) ok.onclick=submit;
+    document.querySelectorAll('.chat-history-contact').forEach(btn=>{
+      btn.onclick=()=>{
+        submit(btn.getAttribute('data-chat-contact-name')||'', btn.getAttribute('data-chat-contact-phone')||'');
+      };
+    });
     const skip=$('cust-chat-contact-skip');
     if(skip) skip.onclick=()=>{
       customerChat.data.unloadingContactName='';
       customerChat.data.unloadingContactPhone='';
       customerChatApplyToForm();
       saveCustomerChatState();
+      const inp=$('cust-chat-input');
+      if(inp) inp.value='';
       customerChatAdvance('Без отдельного контакта');
     };
     const same=$('cust-chat-contact-same');
@@ -3213,20 +3191,10 @@ function customerChatWireWidgets(stepId){
       const n=customerChat.data.loadingContactName||'';
       const p=customerChat.data.loadingContactPhone||'';
       customerChatSaveContact('unloadContact', n, p);
+      const inp=$('cust-chat-input');
+      if(inp) inp.value='';
       customerChatAdvance(n||p?`Как на загрузке: ${customerChatContactLine(n, p)}`:'Как на загрузке');
     };
-    [nameInp, phoneInp].forEach(el=>{
-      if(!el) return;
-      el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } };
-    });
-    document.querySelectorAll('.chat-history-contact').forEach(btn=>{
-      btn.onclick=()=>{
-        if(nameInp) nameInp.value=btn.getAttribute('data-chat-contact-name')||'';
-        if(phoneInp) phoneInp.value=btn.getAttribute('data-chat-contact-phone')||'';
-        submit();
-      };
-    });
-    setTimeout(()=>customerChatFocus(phoneInp||nameInp), 80);
   }
   if(stepId==='shipper'){
     const yes=$('cust-chat-shipper-yes');
@@ -3356,7 +3324,7 @@ function customerChatWireWidgets(stepId){
   if(stepId==='loadMethod' || stepId==='unloadMethod'){
     const key=stepId==='loadMethod'?'loadMethods':'unloadMethods';
     const attr=stepId==='loadMethod'?'data-chat-load':'data-chat-unload';
-    const thread=$('cust-chat-thread');
+    const tray=customerChatTrayRoot();
     const selected=new Set(customerChat.data[key]||[]);
     const opts=stepId==='loadMethod'
       ?customerChatLoadMethodOptions(customerChat.data.bodyVtype||'tent')
@@ -3373,16 +3341,16 @@ function customerChatWireWidgets(stepId){
     const syncSelection=()=>{
       customerChat.data[key]=[...selected];
       saveCustomerChatState();
-      customerChatPaintMethodChips(thread, attr, selected);
+      customerChatPaintMethodChips(tray, attr, selected);
       customerChatUpdateMethodNextBtn($(stepId==='loadMethod'?'cust-chat-load-ok':'cust-chat-unload-ok'), selected.size);
     };
     if(opts.length===1){
       const only=opts[0];
-      thread&&thread.querySelectorAll(`[${attr}]`).forEach(btn=>{
+      tray&&tray.querySelectorAll(`[${attr}]`).forEach(btn=>{
         btn.onclick=()=>advanceMethods([only.id]);
       });
     }else{
-      thread&&thread.querySelectorAll(`[${attr}]`).forEach(btn=>{
+      tray&&tray.querySelectorAll(`[${attr}]`).forEach(btn=>{
         btn.onclick=()=>{
           const id=btn.getAttribute(attr);
           if(selected.has(id)){
@@ -3427,18 +3395,43 @@ function customerChatRenderAll(){
   customerChatRenderWidgets();
   customerChatUpdateCompose();
 }
+function customerChatWireComposeInput(step){
+  const inp=$('cust-chat-input');
+  if(!inp) return;
+  if(typeof wireAddressAutocomplete==='function' && !inp.dataset.addrSuggestWired){
+    wireAddressAutocomplete(inp, {
+      onSelect:()=>{ if(typeof customerRouteBump==='function') customerRouteBump(); },
+      onBlur:()=>{ if(typeof customerRouteBump==='function') customerRouteBump(); }
+    });
+  }
+  const textSteps=['load','unload','loadContact','unloadContact'];
+  if(step && textSteps.includes(step.id)){
+    setTimeout(()=>customerChatFocus(inp), 80);
+  }
+}
 function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
-  const textSteps=['loadContact','unloadContact'];
+  const textSteps=['load','unload','loadContact','unloadContact'];
   const show=step && textSteps.includes(step.id) && !customerChat.summaryReady && !customerChat.messages.some(m=>m.stepId==='submitted');
   const inp=$('cust-chat-input');
-  if(inp) inp.placeholder='Напишите ответ…';
-  if(compose && step){
-    if(step.id==='loadContact') inp.placeholder='Иван +79001234567';
-    else if(step.id==='unloadContact') inp.placeholder='Имя и телефон или «пропустить»';
+  if(inp && step){
+    if(step.id==='load'){
+      inp.placeholder='Город, улица, дом…';
+      if(!inp.matches(':focus')) inp.value=customerChat.data.load||'';
+    }else if(step.id==='unload'){
+      inp.placeholder='Город, улица, дом…';
+      if(!inp.matches(':focus')) inp.value=customerChat.data.unload||'';
+    }else if(step.id==='loadContact'){
+      inp.placeholder='Иван +79001234567';
+      if(!inp.matches(':focus')) inp.value='';
+    }else if(step.id==='unloadContact'){
+      inp.placeholder='Имя и телефон или «пропустить»';
+      if(!inp.matches(':focus')) inp.value='';
+    }
   }
   if(compose) compose.classList.toggle('is-visible', !!show);
+  if(show) customerChatWireComposeInput(step);
 }
 function customerChatAdvance(userText){
   const err=$('cust-chat-error'); if(err) err.textContent='';
@@ -3479,6 +3472,18 @@ function customerChatHandleTextInput(){
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
   if(!step) return;
   const err=$('cust-chat-error');
+  if(step.id==='load' || step.id==='unload'){
+    if(raw.length<4){
+      if(err) err.textContent='Укажите адрес (минимум 4 символа)';
+      return;
+    }
+    if(err) err.textContent='';
+    if(step.id==='load') customerChat.data.load=raw;
+    else customerChat.data.unload=raw;
+    if(inp) inp.value='';
+    customerChatAdvance(raw);
+    return;
+  }
   if(step.id==='loadContact' || step.id==='unloadContact'){
     if(/^пропуст/i.test(raw) && step.id==='unloadContact'){
       customerChat.data.unloadingContactName='';
@@ -3516,22 +3521,6 @@ function customerChatHandleTextInput(){
     customerChatAdvance(customerChatContactLine(parsed.name, parsed.phone));
     return;
   }
-  if(step.id==='body'){
-    if(inp) inp.value='';
-    const search=$('cust-chat-vtype-search');
-    if(search) search.value=raw;
-    const matches=customerChatVtypeMatches(raw);
-    if(matches.length===1){
-      customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label, true);
-      return;
-    }
-    if(matches.length>1){
-      customerChatFilterVtypeSuggest(raw);
-      if(err) err.textContent='Выберите тип из списка';
-      return;
-    }
-    if(err) err.textContent='Тип не найден — попробуйте «тент», «реф» или «трал»';
-  }
 }
 function initCustomerChatWizard(forceReset){
   if(forceReset){
@@ -3541,6 +3530,8 @@ function initCustomerChatWizard(forceReset){
     if(!restoreCustomerChatState()){
       resetCustomerChat();
       customerChatAddBot('cargo');
+    }else{
+      customerChat.data=customerChatMigrateData(customerChat.data);
     }
   }
   customerChatRenderAll();
