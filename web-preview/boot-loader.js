@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-31-epd-sign-plaque4317';
+  var APP_BUILD = '2026-08-31-epd-sign-fix4317';
 
   window.__armadaBootDone = false;
   setTimeout(function () {

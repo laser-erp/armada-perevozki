@@ -81,7 +81,7 @@
   function epdReturnUrl(extra){
     const base=(typeof location!=='undefined'&&location.origin)?location.origin:'https://app.armada.sx';
     const path=(typeof location!=='undefined'&&location.pathname)?location.pathname:'/';
-    const q=new URLSearchParams(Object.assign({ 'epd-sign':'1' }, extra||{}));
+    const q=new URLSearchParams(Object.assign({ 'epd-sign':'ok' }, extra||{}));
     return `${base}${path}?${q.toString()}`;
   }
 
@@ -191,15 +191,23 @@
       <div class="epd-operator-fallback" id="epd-operator-fallback" hidden>
         <p class="hint">Сайт оператора не открывается во фрейме — это их политика безопасности.</p>
         <button type="button" class="primary" id="epd-operator-fallback-open">Открыть оператора</button>
-        <button type="button" class="secondary" id="epd-operator-fallback-done">Я подписал — обновить</button>
+        <button type="button" class="secondary" id="epd-operator-fallback-done">Подпись выпущена</button>
       </div>
+      <footer class="epd-operator-foot" id="epd-operator-foot" hidden>
+        <button type="button" class="primary" id="epd-operator-confirm">Подпись выпущена</button>
+        <p class="hint">Нажимайте только после завершения у оператора. «Назад» — выход без смены статуса.</p>
+      </footer>
     </div>`;
     document.body.appendChild(shell);
-    $('epd-operator-close').onclick=()=>closeEpdOperatorShell(true);
+    $('epd-operator-close').onclick=()=>{
+      if(epdShellOpts&&epdShellOpts.kind==='signup') closeEpdOperatorShell({ abort:true });
+      else closeEpdOperatorShell({ refresh:true });
+    };
     $('epd-operator-fallback-open').onclick=()=>{
       if(epdShellOpts&&epdShellOpts.url) window.open(epdShellOpts.url, '_blank', 'noopener');
     };
-    $('epd-operator-fallback-done').onclick=()=>closeEpdOperatorShell(true);
+    $('epd-operator-fallback-done').onclick=()=>closeEpdOperatorShell({ confirmed:true });
+    $('epd-operator-confirm').onclick=()=>closeEpdOperatorShell({ confirmed:true });
     $('epd-operator-ext').onclick=()=>{
       if(epdShellOpts&&epdShellOpts.url) window.open(epdShellOpts.url, '_blank', 'noopener');
     };
@@ -215,14 +223,25 @@
 
   function openEpdOperatorShell(url, opts){
     opts=opts||{};
-    epdShellOpts={ url, title:opts.title||'Подпись · оператор ЭПД', onClose:opts.onClose, mode:opts.mode||'iframe' };
+    epdShellOpts=Object.assign({
+      url,
+      title:opts.title||'Подпись · оператор ЭПД',
+      onClose:opts.onClose,
+      mode:opts.mode||'iframe',
+      kind:opts.kind||'titul',
+      prevStatus:opts.prevStatus||'none',
+      pollRole:opts.pollRole||'',
+      pollEntityId:opts.pollEntityId||''
+    }, opts);
     const shell=ensureEpdOperatorShell();
     const title=$('epd-operator-title');
     const lead=$('epd-operator-lead');
     const frame=$('epd-operator-frame');
     const sandbox=$('epd-operator-sandbox');
+    const foot=$('epd-operator-foot');
     if(title) title.textContent=epdShellOpts.title;
     if(lead) lead.textContent=opts.lead||'Ключ и юридическая сила — у оператора ЭПД. Окно открыто внутри АРМАДА.';
+    if(foot) foot.hidden=(epdShellOpts.kind!=='signup');
     epdShowOperatorFallback(false);
     if(sandbox) sandbox.hidden=true;
     if(frame){
@@ -267,8 +286,28 @@
     return true;
   }
 
-  async function closeEpdOperatorShell(refresh){
+  async function epdMarkSignUpComplete(role, entityId){
+    if(!role||!entityId) return;
+    const synced=await syncEpdSignProfileFromApi(role, entityId);
+    if(synced&&synced.status==='active') return;
+    if(!confirm('Вы завершили выпуск подписи у оператора?\n\nНажмите «ОК» только если регистрация действительно пройдена.')) return;
+    upsertEpdSignProfile(role, entityId, { status:'active', issuedAt:new Date().toISOString(), lastCheckedAt:new Date().toISOString() });
+  }
+
+  function epdSignUpAbort(role, entityId, prevStatus){
+    if(!role||!entityId) return;
+    if(prevStatus==='active'){
+      upsertEpdSignProfile(role, entityId, { lastCheckedAt:new Date().toISOString() });
+      return;
+    }
+    upsertEpdSignProfile(role, entityId, { status:'none', pendingUrl:'', lastCheckedAt:new Date().toISOString() });
+  }
+
+  async function closeEpdOperatorShell(opts){
+    if(typeof opts==='boolean') opts={ refresh:opts };
+    opts=opts||{};
     const shell=$('epd-operator-shell');
+    const saved=epdShellOpts;
     if(shell) shell.hidden=true;
     document.body.classList.remove('epd-operator-open');
     clearInterval(epdShellPollTimer);
@@ -277,12 +316,19 @@
     if(frame){ frame.removeAttribute('src'); frame.hidden=false; }
     const sandbox=$('epd-operator-sandbox');
     if(sandbox){ sandbox.hidden=true; sandbox.innerHTML=''; }
-    const opts=epdShellOpts;
+    const foot=$('epd-operator-foot');
+    if(foot) foot.hidden=true;
     epdShellOpts=null;
-    if(refresh&&opts){
-      if(opts.pollRole&&opts.pollEntityId) await syncEpdSignProfileFromApi(opts.pollRole, opts.pollEntityId);
-      if(typeof opts.onClose==='function') opts.onClose();
-      epdRefreshUi(opts);
+    if(saved){
+      if(opts.confirmed&&saved.kind==='signup'){
+        await epdMarkSignUpComplete(saved.pollRole, saved.pollEntityId);
+      }else if(opts.abort&&saved.kind==='signup'){
+        epdSignUpAbort(saved.pollRole, saved.pollEntityId, saved.prevStatus);
+      }else if(opts.refresh){
+        if(saved.pollRole&&saved.pollEntityId) await syncEpdSignProfileFromApi(saved.pollRole, saved.pollEntityId);
+        if(typeof saved.onClose==='function') await saved.onClose();
+      }
+      epdRefreshUi(saved);
     }
   }
 
@@ -302,16 +348,18 @@
     const ctx=opts.ctx||epdSignContextForRole(role);
     if(entityId) ctx.entityId=entityId;
     if(!ctx.entityId){ alert('Не удалось определить профиль'); return false; }
-    upsertEpdSignProfile(role, ctx.entityId, { status:'pending', lastCheckedAt:new Date().toISOString() });
+    const prof=getEpdSignProfile(role, ctx.entityId);
+    const prevStatus=(prof&&prof.status)||'none';
     let url=await fetchEpdSignUpUrl(role, ctx);
     if(!url) url=epdSignFallbackUrl(role, ctx);
-    upsertEpdSignProfile(role, ctx.entityId, { pendingUrl:url });
+    upsertEpdSignProfile(role, ctx.entityId, { pendingUrl:url, lastCheckedAt:new Date().toISOString() });
     const op=epdOperatorInfo();
     return openEpdOperatorShell(url, {
-      title:`Оформить подпись · ${op.name}`,
-      lead:`Регистрация ${EPD_SIGN_ROLES[role].kind==='pep'?'ПЭП':'КЭП'} внутри АРМАДА через ${op.name}. После завершения нажмите «Назад».`,
-      pollRole:role, pollEntityId:ctx.entityId,
-      onClose:()=>upsertEpdSignProfile(role, ctx.entityId, { status:'active', issuedAt:new Date().toISOString() })
+      kind:'signup',
+      prevStatus,
+      title:`Выпустить подпись · ${op.name}`,
+      lead:`Оформление ${EPD_SIGN_ROLES[role].kind==='pep'?'ПЭП':'КЭП'} через ${op.name}. После выпуска нажмите «Подпись выпущена». «Назад» — без смены статуса.`,
+      pollRole:role, pollEntityId:ctx.entityId
     });
   }
 
@@ -351,7 +399,7 @@
       onClose:()=>epdRefreshUi({ refreshDriverCabinet:role==='driver' })
     });
     const issueBtn=$('epd-sandbox-issue');
-    if(issueBtn) issueBtn.onclick=async()=>{ await closeEpdOperatorShell(false); await openEpdSignUp(role, ctx.entityId); };
+    if(issueBtn) issueBtn.onclick=async()=>{ await closeEpdOperatorShell({ refresh:false }); await openEpdSignUp(role, ctx.entityId); };
     const confirmBtn=$('epd-sandbox-confirm');
     if(confirmBtn) confirmBtn.onclick=()=>{
       if(typeof signEtrnTitul==='function'){
@@ -359,7 +407,7 @@
           :role==='carrier'?'перевозчик':(typeof DRIVER!=='undefined'&&DRIVER?DRIVER:'водитель');
         signEtrnTitul(orderId, titul, by);
       }
-      closeEpdOperatorShell(true);
+      closeEpdOperatorShell({ refresh:true });
     };
     return true;
   }
@@ -367,7 +415,8 @@
   function applyEpdSignReturnFromUrl(){
     try{
       const q=new URLSearchParams(location.search||'');
-      if(q.get('epd-sign')!=='1') return;
+      const signFlag=String(q.get('epd-sign')||'').trim();
+      if(signFlag!=='ok'&&signFlag!=='1') return;
       const role=String(q.get('role')||'').trim();
       const orderId=String(q.get('orderId')||'').trim();
       const titul=String(q.get('titul')||'').trim();
@@ -428,7 +477,8 @@
     const continueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Продолжить выпуск</button>`;
     const renewBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить заново</button>`;
     const checkBtn=`<button type="button" class="secondary epd-sign-check" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Проверить статус</button>`;
-    if(st==='active') return `<div class="epd-sign-card-actions">${checkBtn}</div>`;
+    const resetBtn=`<button type="button" class="hint epd-sign-reset" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Сбросить статус</button>`;
+    if(st==='active') return `<div class="epd-sign-card-actions">${checkBtn}${resetBtn}</div>`;
     if(st==='pending') return `<div class="epd-sign-card-actions">${continueBtn}${checkBtn}</div>`;
     if(st==='expired') return `<div class="epd-sign-card-actions">${renewBtn}</div>`;
     return `<div class="epd-sign-card-actions">${issueBtn}</div>`;
@@ -483,6 +533,18 @@
         }finally{ btn.disabled=false; }
       };
     });
+    (root||document).querySelectorAll('.epd-sign-reset').forEach(btn=>{
+      if(btn.dataset.epdResetWired) return;
+      btn.dataset.epdResetWired='1';
+      btn.onclick=e=>{
+        e.preventDefault();
+        const role=btn.getAttribute('data-epd-sign-role');
+        const entityId=btn.getAttribute('data-epd-entity-id')||'';
+        if(!confirm('Сбросить статус подписи? Используйте, если «активна» появилась ошибочно.')) return;
+        upsertEpdSignProfile(role, entityId, { status:'none', pendingUrl:'', issuedAt:'', expiresAt:'' });
+        epdRefreshUi({ refreshDriverCabinet:role==='driver' });
+      };
+    });
   }
 
   function renderCustomerEpdSignCard(){
@@ -524,7 +586,7 @@
       try{
         const d=ev.data;
         if(!d||d.type!=='armada-epd-sign-done') return;
-        closeEpdOperatorShell(true);
+        closeEpdOperatorShell({ confirmed:true });
       }catch(_){}
     });
   }

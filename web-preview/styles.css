@@ -986,13 +986,10 @@
     .epd-sign-plaque--none .epd-sign-plaque-icon{background:var(--border);color:var(--muted)}
     .epd-sign-issued{margin:0 0 8px;font-size:.72rem}
     .epd-sign-card--compact{padding:10px 12px}
-    .epd-sign-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
-    .epd-sign-card-title{margin:0;font-size:.92rem;line-height:1.25}
     .epd-sign-card-hint{margin:0 0 6px;font-size:.78rem}
     .epd-sign-card-meta{margin:0 0 10px;font-size:.72rem}
     .epd-sign-card-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     .epd-sign-card-actions .primary,.epd-sign-card-actions .secondary{width:auto;flex:0 0 auto;padding:8px 14px;font-size:.82rem;text-decoration:none;display:inline-block}
-    #admin-epd-sign-slot{padding:0 12px 16px;max-width:640px}
     body.epd-operator-open{overflow:hidden}
     .epd-operator-shell{
       position:fixed;inset:0;z-index:9600;background:rgba(15,23,42,.72);
@@ -1015,6 +1012,14 @@
     .epd-sandbox-card .primary,.epd-sandbox-card .secondary{width:auto;margin:8px 8px 0 0}
     .epd-operator-fallback{padding:16px;text-align:center;border-top:1px solid var(--border)}
     .epd-operator-fallback .primary,.epd-operator-fallback .secondary{width:auto;margin:4px}
+    .epd-operator-foot{
+      flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface);
+      display:flex;flex-direction:column;gap:6px;align-items:stretch;
+    }
+    .epd-operator-foot[hidden]{display:none!important}
+    .epd-operator-foot .primary{width:100%}
+    .epd-operator-foot .hint{margin:0;font-size:.72rem;text-align:center}
+    .epd-sign-reset{border:0;background:transparent;cursor:pointer;padding:0;font-size:.72rem;text-decoration:underline;color:var(--muted)}
     .cust-draft-banner{
       margin:0 0 12px;padding:12px 14px;border-radius:var(--radius,14px);
       background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);
