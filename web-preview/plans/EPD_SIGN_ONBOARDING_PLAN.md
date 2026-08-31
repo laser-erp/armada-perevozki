@@ -1,140 +1,69 @@
 # Оформление подписи в приложении (все роли → оператор ЭПД)
 
-Статус: **MVP UI готов** · API `POST /epd/sign-up-url` — следующий шаг на armada-api.
+Статус: **in-app shell готов** · API на armada-api — следующий шаг.
 
 ---
 
-## Идея
+## Принцип
 
-Зарегистрировался в АРМАДА → в своём приложении видишь блок **«Оформить подпись»** → одна кнопка → **ссылка оператора ЭПД** (Кontur и др.) → вернулся → статус **«активна»**.
+**Подписи живут в АРМАДА** — пользователь не уходит «куда-то в Контур навсегда»:
 
-Без «езжай в УЦ с флешкой», без отдельных кабинетов. АРМАДА не выпускает КЭП/ПЭП — только **ведёт в оператора** и хранит статус.
+1. Карточка «Оформить КЭП/ПЭП» в профиле роли.
+2. Кнопка → **полноэкранное окно оператора внутри приложения** (`#epd-operator-shell` + iframe).
+3. Подпись титула ЭТrН → то же окно (`openEpdTitulSign`).
+4. Статус профиля — в `state.epdSignProfiles`, синхронизация через API/webhook.
 
-| Роль | Где в UI | Тип подписи | ЭТrН |
-|------|----------|-------------|------|
-| Заказчик | Портал → «Бух доки» | КЭП | T1 |
-| Логист / перевозчик | Кабинет → Профиль | КЭП | T2 |
-| Водитель | Водитель → Профиль | ПЭП | T3, T4 |
-
-ИП «директор = водитель»: **КЭП в кабинете**, **ПЭП в приложении водителя** — оба с телефона через оператора.
+Криптография и юридическая сила — **у оператора**. АРМАДА — оболочка и учёт статуса.
 
 ---
 
-## Поток пользователя
+## UI по ролям
 
-```
-[Регистрация / вход в АРМАДА]
-        ↓
-[Карточка «Оформить КЭП/ПЭП» — статус: не оформлена]
-        ↓
-[Оформить] → POST armada-api/epd/sign-up-url
-        ↓
-[302 / JSON.url → окно оператора: Гosуслуги, SMS, облачная КЭП…]
-        ↓
-[Webhook оператора → armada-api → state.epdSignProfiles]
-        ↓
-[returnUrl ?epd-sign=1&role=carrier] → статус «активна» в приложении
-        ↓
-[Подписать ЭТrН] → deep link оператора на конкретный титул
-```
+| Роль | Экран | Подпись |
+|------|-------|---------|
+| Заказчик | Бух доки | КЭП · T1 |
+| Логист | Профиль | КЭП · T2 |
+| Водитель | Профиль | ПЭП · T3/T4 |
+
+ИП «один на всё»: T2 из водительского приложения тоже открывает окно оператора (контекст фирмы по `DRIVER_COMPANY_ID`).
 
 ---
 
-## Модель данных (клиент)
+## Модуль `epd-sign.js`
 
-`state.epdSignProfiles['carrier:companyId']`:
+| Функция | Назначение |
+|---------|------------|
+| `openEpdSignUp(role)` | Оформление подписи → iframe оператора |
+| `openEpdTitulSign(orderId, titul, role)` | Подпись титула ЭТrН in-app |
+| `openEpdOperatorShell(url)` | Общая оболочка |
+| `syncEpdSignProfileFromApi` | Опрос `/epd/sign-status` |
 
-```json
-{
-  "role": "carrier",
-  "entityId": "…",
-  "signKind": "kep",
-  "status": "none|pending|active|expired",
-  "operatorId": "kontur",
-  "externalUserId": "",
-  "issuedAt": "",
-  "expiresAt": "",
-  "pendingUrl": ""
-}
-```
-
-Ключ: `{role}:{entityId}`.
+Sandbox (без ключей): панель внутри shell + «Подписать (sandbox)».
 
 ---
 
-## API armada-api (добавить на VPS)
+## API armada-api
 
-### `POST /epd/sign-up-url`
+### `POST /epd/sign-up-url` — выпуск подписи
 
-Тело:
-
-```json
-{
-  "role": "customer|carrier|driver",
-  "entityId": "uuid",
-  "inn": "10 или 12 цифр",
-  "phone": "+7…",
-  "name": "Наименование / ФИО",
-  "returnUrl": "https://app.armada.sx/a/?epd-sign=1&role=carrier"
-}
-```
-
-Ответ:
-
-```json
-{
-  "url": "https://… оператор …",
-  "expiresInSec": 3600
-}
-```
-
-Логика на сервере:
-
-1. Проверить JWT / сессию роли.
-2. Создать или найти пользователя в API оператора (Кontur Logistics / Diadoc).
-3. Вернуть **одноразовую ссылку** на регистрацию/выпуск подписи.
-4. Записать `pending` в PB рядом с заказом/компанией.
-
-### `POST /epd/webhook` (уже есть черновик)
-
-События: `sign.issued`, `sign.expired`, `titul.signed` → обновить `epdSignProfiles` и `order.etrn.tituls`.
+### `POST /epd/titul-sign-url` — подпись титула `{ orderId, titul, role }`
 
 ### `GET /epd/sign-status?role=&entityId=`
 
-Для обновления статуса без перезагрузки.
+### `POST /epd/webhook` — события оператора → профили + `order.etrn.tituls`
+
+`returnUrl`: `?epd-sign=1&role=carrier&orderId=…&titul=t2`
 
 ---
 
-## Fallback без API
+## Fallback
 
-Пока `configured: false` — кнопка открывает **landing оператора** с UTM и подставленными `inn`, `phone` (`epd-sign.js` → `epdSignFallbackUrl`).
+Если оператор запрещает iframe (X-Frame-Options) — кнопки «В браузере» и «Я подписал — обновить».
 
 ---
 
 ## Файлы
 
-| Файл | Назначение |
-|------|------------|
-| `web-preview/epd-sign.js` | Карточка, статусы, ссылки |
-| `web-preview/customer.js` | `renderCustomerEpdSignCard` в «Бух доки» |
-| `web-preview/admin-profile.js` | КЭП перевозчика |
-| `web-preview/driver.js` | ПЭП водителя |
-| `scripts/armada-api.env.example` | ключи оператора |
-
----
-
-## Чек-лист для ИП (текст в UI)
-
-1. Нажмите «Оформить КЭП» в **Профиле** кабинета (перевозчик).
-2. В приложении **водителя** → «Оформить ПЭП» (тот же телефон).
-3. Заказчик оформляет КЭП в **Бух доки** (T1).
-4. На погрузке: T1 → T2 (вы в кабинете или с телефона) → T3 (водитель).
-
----
-
-## Следующие шаги
-
-1. Реализовать `POST /epd/sign-up-url` в armada-api при ключах Контура.
-2. Webhook → синхронизация статуса (не только `?epd-sign=1` на return).
-3. При «Подписать T2/T3» — `POST /orders/:id/etrn/sign-url?titul=t2` вместо sandbox.
-4. Badge «подпись не оформлена» на вкладках до `active`.
+- `web-preview/epd-sign.js` — shell + логика
+- `web-preview/etrn.js` — T1/T2/T3/T4 через `openEpdTitulSign`
+- `web-preview/styles.css` — `.epd-operator-shell`

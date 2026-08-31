@@ -971,6 +971,28 @@
     .epd-sign-card-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     .epd-sign-card-actions .primary,.epd-sign-card-actions .secondary{width:auto;flex:0 0 auto;padding:8px 14px;font-size:.82rem;text-decoration:none;display:inline-block}
     #admin-epd-sign-slot{padding:0 12px 16px;max-width:640px}
+    body.epd-operator-open{overflow:hidden}
+    .epd-operator-shell{
+      position:fixed;inset:0;z-index:9600;background:rgba(15,23,42,.72);
+      display:flex;align-items:stretch;justify-content:center;padding:0;
+    }
+    .epd-operator-shell[hidden]{display:none!important}
+    .epd-operator-panel{
+      display:flex;flex-direction:column;width:100%;max-width:720px;height:100%;
+      background:var(--surface);box-shadow:0 8px 40px rgba(0,0,0,.25);
+    }
+    .epd-operator-head{
+      display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;
+    }
+    .epd-operator-head h2{margin:0;font-size:1rem;flex:1}
+    .epd-operator-ext{border:0;background:transparent;cursor:pointer;font-size:.78rem;font-weight:600}
+    .epd-operator-lead{margin:0;padding:8px 12px;font-size:.76rem;border-bottom:1px solid var(--border);flex-shrink:0}
+    .epd-operator-body{flex:1;min-height:0;position:relative}
+    .epd-operator-frame{width:100%;height:100%;border:0;display:block;background:#fff}
+    .epd-operator-sandbox{padding:16px;overflow:auto;height:100%}
+    .epd-sandbox-card .primary,.epd-sandbox-card .secondary{width:auto;margin:8px 8px 0 0}
+    .epd-operator-fallback{padding:16px;text-align:center;border-top:1px solid var(--border)}
+    .epd-operator-fallback .primary,.epd-operator-fallback .secondary{width:auto;margin:4px}
     .cust-draft-banner{
       margin:0 0 12px;padding:12px 14px;border-radius:var(--radius,14px);
       background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);

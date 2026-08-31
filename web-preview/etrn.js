@@ -281,6 +281,10 @@ function wireCustomerEtrnT1(root){
   (root||document).querySelectorAll('.cust-etrn-t1-sign').forEach(btn=>{
     btn.onclick=()=>{
       const oid=btn.dataset.orderId;
+      if(typeof openEpdTitulSign==='function'){
+        openEpdTitulSign(oid,'t1','customer');
+        return;
+      }
       const o=(state.orders||[]).find(x=>x.id===oid);
       const ship=orderShipperInfo(o);
       const by=ship.name||'грузоотправитель';
@@ -334,6 +338,10 @@ function renderShipperEtrnT1Overlay(orderId, token){
   const signBtn=$('cust-shipper-etrn-sign');
   if(signBtn){
     signBtn.onclick=()=>{
+      if(typeof openEpdTitulSign==='function'){
+        openEpdTitulSign(orderId,'t1','customer');
+        return;
+      }
       const by=ship.name||'грузоотправитель';
       if(signEtrnTitul(orderId,'t1',by)){
         renderShipperEtrnT1Overlay(orderId, token);
@@ -516,7 +524,13 @@ function wireOrderEtrn(orderId){
   if(print) print.onclick=()=>openEtrnPrint(orderId);
   document.querySelectorAll('.etrn-titul-sign').forEach(b=>{
     b.onclick=()=>{
-      if(signEtrnTitul(b.dataset.orderId, b.dataset.titul, 'admin')){
+      const titul=b.dataset.titul;
+      const oid=b.dataset.orderId;
+      if(typeof openEpdTitulSign==='function'){
+        openEpdTitulSign(oid, titul, typeof epdRoleForTitul==='function'?epdRoleForTitul(titul):'carrier');
+        return;
+      }
+      if(signEtrnTitul(oid, titul, 'admin')){
         if(typeof openDetail==='function') openDetail(orderId);
       }
     };
@@ -557,7 +571,23 @@ async function openDriverEtrnSign(orderId){
       persist();
     }
   }
+  const t=o.etrn&&o.etrn.tituls||{};
+  if(t.t1==='pending'){
+    renderDriverBanner();
+    alert(`ЭТрН: ждём подпись T1 от грузоотправителя · заказ №${o.sequentialNumber}\n\n${orderShipperSameAsCustomer(o)?'Попросите заказчика подписать в личном кабинете.':'Отправьте ссылку грузоотправителю (заказчик получил её в кабинете).'}`);
+    return;
+  }
+  const pendingTitul=t.t4==='pending'?'t4':(t.t3==='pending'?'t3':(t.t2==='pending'?'t2':null));
+  if(pendingTitul&&typeof openEpdTitulSign==='function'){
+    await openEpdTitulSign(orderId, pendingTitul, epdRoleForTitul?epdRoleForTitul(pendingTitul):'driver');
+    renderDriverBanner();
+    return;
+  }
   const url=driverEtrnSignUrl(o);
+  if(url&&typeof openEpdOperatorShell==='function'){
+    openEpdOperatorShell(url, { title:`ЭТrН · заказ №${o.sequentialNumber}`, onClose:()=>renderDriverBanner() });
+    return;
+  }
   if(url){
     try{ window.open(url, '_blank', 'noopener'); return; }catch(_){}
   }
