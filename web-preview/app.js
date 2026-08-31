@@ -4072,21 +4072,21 @@ const ENTRY_ASIDE={
     title:'В дороге — всё в одном месте',
     lead:'Смена, ЕТО и заказы на телефоне. Не нужно устанавливать приложение — откройте ссылку и добавьте на экран.',
     items:['Открыть и закрыть смену','Пройти ЕТО перед выездом','Заявки, одометры, статусы'],
-    foot:'<a href="help.html#driver">Инструкция для водителя</a> · <a href="kp.html">О сервисе</a>'
+    foot:'<a href="help.html?role=driver">Инструкция для водителя</a> · <a href="kp.html">О сервисе</a>'
   },
   admin:{
     badge:'Администратор',
     title:'Кабинет диспетчера',
     lead:'Заявки, внутренняя биржа между перевозчиками, справочники и ЭТрН — для микро-парка.',
     items:['Создание и контроль заявок','Биржа и назначение водителей','Водители, авто, тарифы','ЭТрН и биллинг в одном окне'],
-    foot:'<a href="help.html#admin">Помощь</a> · <a href="kp-logist.html">Для логиста</a> · <a href="/downloads/">Материалы</a>'
+    foot:'<a href="help.html?role=admin">Помощь</a> · <a href="kp-logist.html">Для логиста</a> · <a href="/downloads/">Материалы</a>'
   },
   customer:{
     badge:'Заказчик',
     title:'Портал заказчика',
     lead:'Отправьте заявку и смотрите расчёт минимальной цены. Статус заказа — в личном кабинете.',
     items:['Новая заявка с телефона','Минимальная цена до отправки','Статус: биржа, назначен, в работе'],
-    foot:'<a href="help.html#customer">Как это работает</a> · <a href="/kp-zakaz.html">Для заказчика</a>'
+    foot:'<a href="help.html?role=customer">Как это работает</a> · <a href="/kp-zakaz.html">Для заказчика</a>'
   }
 };
 function clearEntrySkin(){
@@ -4116,7 +4116,7 @@ function applyEntrySkin(screenId){
   }
   let foot=cfg.foot||'';
   if(mode==='customer' && typeof customerKpPageUrl==='function'){
-    foot=`<a href="/help.html#customer">Как это работает</a> · <a href="${esc(customerKpPageUrl())}">Коммерческое предложение</a>`;
+    foot=`<a href="/help.html?role=customer">Как это работает</a> · <a href="${esc(customerKpPageUrl())}">Коммерческое предложение</a>`;
   }
   aside.innerHTML=`
     <div class="entry-aside-inner">
@@ -4332,7 +4332,7 @@ function wireShellHandlers(){
   }
   $('admin-exit')&&typeof logoutAdmin==='function'&&($('admin-exit').onclick=logoutAdmin);
   $('admin-help')&&($('admin-help').onclick=()=>{
-    window.open('help.html','_blank','noopener');
+    window.open('help.html?role=admin','_blank','noopener');
   });
   $('admin-catalogs')&&typeof setAdminNav==='function'&&($('admin-catalogs').onclick=()=>setAdminNav('catalogs'));
   $('admin-activity')&&typeof setAdminNav==='function'&&($('admin-activity').onclick=()=>setAdminNav('activity'));

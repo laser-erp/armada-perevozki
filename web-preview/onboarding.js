@@ -185,7 +185,7 @@
     },
     {
       title:'Как начать',
-      body:'<p>1. Откройте свою страницу входа: <strong>водитель</strong>, <strong>администратор</strong> или <strong>заказчик</strong> (ссылки на экране выбора роли).</p><p>2. PIN выдаёт администратор перевозчика.</p><p>3. Полная инструкция — <a href="help.html" target="_blank" rel="noopener">на странице «Помощь»</a>.</p>'
+      body:'<p>1. Откройте свою страницу входа: <strong>водитель</strong>, <strong>администратор</strong> или <strong>заказчик</strong> (ссылки на экране выбора роли).</p><p>2. PIN выдаёт администратор перевозчика.</p><p>3. Инструкции по ролям: <a href="help.html?role=carrier" target="_blank" rel="noopener">перевозчик</a>, <a href="help.html?role=customer" target="_blank" rel="noopener">заказчик</a>.</p>'
     }
   ];
 
@@ -319,7 +319,7 @@
       },
       {
         title:'Профиль',
-        body:'<p>Начисления и ожидающие расчёта суммы, уведомления, выход.</p><p>Подсказки и полная инструкция — в профиле или на <a href="help.html" target="_blank" rel="noopener">странице помощи</a>.</p>',
+        body:'<p>Начисления и ожидающие расчёта суммы, уведомления, выход.</p><p>Подсказки и полная инструкция — в профиле или на <a href="help.html?role=driver" target="_blank" rel="noopener">странице помощи водителя</a>.</p>',
         target:'btn-cabinet',
         placement:'top'
       }
@@ -345,7 +345,7 @@
       },
       {
         title:'Мои заявки',
-        body:'<p>Статусы: на бирже, назначен, в работе, закрыт. История ваших отправок.</p><p>Инструкция: <a href="help.html" target="_blank" rel="noopener">Помощь</a>.</p>',
+        body:'<p>Статусы: на бирже, назначен, в работе, закрыт. История ваших отправок.</p><p>Инструкция: <a href="help.html?role=customer" target="_blank" rel="noopener">Помощь заказчику</a>.</p>',
         target:'cust-orders-list',
         placement:'top'
       }
@@ -363,7 +363,16 @@
     startTour(key, TOURS[which], {force:true});
   }
 
-  function openHelp(){ window.open('help.html','_blank','noopener'); }
+  function openHelp(){
+    var role='carrier';
+    try{
+      var p=(location.pathname||'').toLowerCase();
+      if(/\/(v)(\/|$)/.test(p)) role='driver';
+      else if(/\/(z)(\/|$)/.test(p)) role='customer';
+      else if(/\/(a)(\/|$)/.test(p)) role='admin';
+    }catch(_){}
+    window.open('help.html?role='+role,'_blank','noopener');
+  }
 
   window.ArmadaOnboarding={
     showRolesWelcome,
