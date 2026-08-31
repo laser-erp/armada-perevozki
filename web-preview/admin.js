@@ -1282,6 +1282,162 @@ function openVehicleCard(vehicleId){
     openVehicleCard(v.id);
   };
 }
+function resolveDriverCardIndex(key){
+  const drivers=state.drivers||[];
+  if(key==null||key==='') return -1;
+  if(typeof key==='number' && drivers[key]) return key;
+  const s=String(key);
+  let i=drivers.findIndex(d=>d.id&&String(d.id)===s);
+  if(i>=0) return i;
+  const n=parseInt(s,10);
+  return Number.isFinite(n)&&drivers[n]?n:-1;
+}
+function driverCardPhotoField(label, existing, inputId, clearId){
+  return `<label class="svc-full">${esc(label)}
+    <div class="doc-photo-row__box drv-card-photo-box">
+      ${docPhotoThumbHtml(existing, label)}
+      <input type="file" accept="image/png,image/jpeg,image/webp" id="${inputId}" />
+      ${docPhotoOrNull(existing)?`<button type="button" class="secondary doc-photo-clear" id="${clearId}" title="Удалить">×</button>`:''}
+    </div>
+  </label>`;
+}
+function openDriverCard(driverKey){
+  if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
+  const i=resolveDriverCardIndex(driverKey);
+  if(i<0){ alert('Водитель не найден'); catalogTab='drivers'; openCatalogs(); return; }
+  const d=state.drivers[i];
+  if(!d){ alert('Водитель не найден'); catalogTab='drivers'; openCatalogs(); return; }
+  if(typeof canEditDriverRecord==='function'&&!canEditDriverRecord(d)){ alert('Нет доступа к этому водителю'); return; }
+  if(!d.id) d.id=uuid();
+  state._driverCardIndex=i;
+  const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'';
+  const veh=typeof vehicleForDriver==='function'?vehicleForDriver(d):null;
+  const miss=typeof driverDocsMissingItems==='function'?driverDocsMissingItems(d):[];
+  const titleEl=$('drv-card-title');
+  if(titleEl) titleEl.textContent=d.name||'Водитель';
+  const box=$('driver-card-form');
+  if(!box) return;
+  box.innerHTML=`
+    <p class="cat-panel-hint">${esc([firm, veh?`🚛 ${veh.plate}`:null, formatPhone(d.phone||'')||null].filter(Boolean).join(' · ')||'Карточка водителя')}</p>
+    ${miss.length?`<div class="drv-card-warn"><strong>Заполните для заявок:</strong><ul>${miss.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+    <section class="form-section">
+      <h2 class="form-section-title">Основное</h2>
+      <div class="fin-grid">
+        <label>Телефон<input id="dc-phone" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" /></label>
+        <label>PIN<input id="dc-pin" inputmode="numeric" maxlength="8" value="${esc(d.pin||resolveDriverPin(d)||'')}" placeholder="PIN входа" /></label>
+        <label>ЗП, %<input id="dc-pct" inputmode="decimal" value="${esc(d.salaryPercent??30)}" /></label>
+        <label class="check svc-full" style="align-self:end;padding:8px 0"><input type="checkbox" id="dc-ex" ${d.exchangeEnabled?'checked':''}/> Биржа</label>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Водительское удостоверение</h2>
+      <p class="form-section-hint">Номер, дата выдачи и обе стороны документа — в одном блоке.</p>
+      <div class="fin-grid">
+        <label class="svc-full">Номер ВУ<input id="dc-lic-num" inputmode="numeric" value="${esc(d.licenseNo||'')}" placeholder="Серия и номер" /></label>
+        <label>Дата выдачи<input id="dc-lic-at" placeholder="ДД.ММ.ГГГГ" value="${esc(d.licenseIssuedAt||'')}" /></label>
+        ${driverCardPhotoField('Скан · лицевая сторона', d.licensePhotoFront, 'dc-lic-front', 'dc-lic-front-clear')}
+        ${driverCardPhotoField('Скан · оборотная сторона', d.licensePhotoBack, 'dc-lic-back', 'dc-lic-back-clear')}
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Паспорт</h2>
+      <p class="form-section-hint">Реквизиты и снимки разворота с фото и страницы с пропиской.</p>
+      <div class="fin-grid">
+        <label>Серия<input id="dc-pass-ser" inputmode="numeric" maxlength="4" value="${esc(d.passportSeries||'')}" placeholder="1234" /></label>
+        <label>Номер<input id="dc-pass-num" inputmode="numeric" maxlength="6" value="${esc(d.passportNumber||'')}" placeholder="567890" /></label>
+        <label class="svc-full">Кем выдан<input id="dc-pass-by" value="${esc(d.passportIssuedBy||'')}" placeholder="УФМС / МВД…" /></label>
+        <label>Дата выдачи<input id="dc-pass-at" value="${esc(d.passportIssuedAt||'')}" placeholder="ДД.ММ.ГГГГ" /></label>
+        ${driverCardPhotoField('Скан · разворот с фото', d.passportPhoto, 'dc-pass-photo', 'dc-pass-photo-clear')}
+        ${driverCardPhotoField('Скан · страница с пропиской', d.passportRegPhoto, 'dc-pass-reg', 'dc-pass-reg-clear')}
+      </div>
+    </section>
+    <section class="form-section drv-card-actions">
+      <button type="button" class="primary cat-add-btn" id="dc-save">Сохранить</button>
+      <button type="button" class="secondary cat-add-btn" id="dc-invite">Ссылка водителю (7 дн.)</button>
+      <button type="button" class="secondary cat-add-btn danger-text" id="dc-delete">Удалить из фирмы</button>
+      <p class="hint">Снимки с телефона сжимаются до ${DOC_PHOTO_MAX_KB} КБ. Текстовые поля — кнопкой «Сохранить».</p>
+    </section>
+  `;
+  show('admin-driver-card');
+  const refresh=()=>openDriverCard(i);
+  const bindPhoto=(inputId, clearId, key)=>{
+    const inp=$(inputId);
+    if(inp) bindDocPhotoInput(inp, data=>{
+      d[key]=data;
+      bumpDataEpoch('drv-card-photo');
+      persist();
+      refresh();
+    });
+    const clr=$(clearId);
+    if(clr) clr.onclick=()=>{
+      d[key]=null;
+      bumpDataEpoch('drv-card-photo-clear');
+      persist();
+      refresh();
+    };
+  };
+  bindPhoto('dc-lic-front','dc-lic-front-clear','licensePhotoFront');
+  bindPhoto('dc-lic-back','dc-lic-back-clear','licensePhotoBack');
+  bindPhoto('dc-pass-photo','dc-pass-photo-clear','passportPhoto');
+  bindPhoto('dc-pass-reg','dc-pass-reg-clear','passportRegPhoto');
+  $('drv-card-back').onclick=()=>{ catalogTab='drivers'; openCatalogs(); };
+  $('dc-save').onclick=()=>{
+    d.phone=formatPhone((($('dc-phone')||{}).value||'').trim());
+    const pin=(($('dc-pin')||{}).value||'').trim();
+    if(pin && pin.length<4){ alert('PIN — от 4 цифр'); return; }
+    if(pin) d.pin=pin;
+    else if(!d.pin) d.pin=resolveDriverPin(d);
+    if(pct>=0){
+      d.salaryPercent=pct;
+      (state.orders||[]).filter(o=>samePersonName(o.driverName, d.name)).forEach(o=>{ o.driverPercent=pct; });
+    }
+    d.exchangeEnabled=!!(($('dc-ex')||{}).checked);
+    d.licenseNo=String((($('dc-lic-num')||{}).value||'').trim());
+    d.licenseIssuedAt=String((($('dc-lic-at')||{}).value||'').trim());
+    d.passportSeries=String((($('dc-pass-ser')||{}).value||'').trim());
+    d.passportNumber=String((($('dc-pass-num')||{}).value||'').trim());
+    d.passportIssuedBy=String((($('dc-pass-by')||{}).value||'').trim());
+    d.passportIssuedAt=String((($('dc-pass-at')||{}).value||'').trim());
+    if(!d.companyId){
+      const co=typeof catalogDriverCompany==='function'?catalogDriverCompany():currentOwnCompany();
+      if(co){ d.companyId=co.id; d.companyName=co.name; d.spaceId=currentSpaceId(); }
+    }
+    bumpDataEpoch('drv-card-save');
+    persist();
+    flashCatOk('Водитель сохранён');
+    refresh();
+  };
+  $('dc-invite').onclick=async ()=>{
+    d.phone=formatPhone((($('dc-phone')||{}).value||'').trim());
+    persist();
+    const res=await createDriverInvite(i);
+    if(!res.ok){ alert(res.message||'Не удалось создать ссылку'); return; }
+    const exp=res.invite&&res.invite.expiresAt?new Date(res.invite.expiresAt).toLocaleDateString('ru-RU'):'7 дней';
+    const co=findCompanyById(d.companyId)||currentOwnCompany();
+    openShareSheet({
+      kind:'driverInvite',
+      url:res.url,
+      title:'Приглашение водителя',
+      carrier:(co&&co.name)||'АРМАДА',
+      phone:d.phone,
+      expires:exp
+    });
+  };
+  $('dc-delete').onclick=()=>{
+    if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Нет доступа'); return; }
+    const name=d.name||'';
+    const firmName=d.companyName||(findCompanyById(d.companyId)||{}).name||'фирмы';
+    if(!confirm(`Удалить водителя ${name} из «${firmName}»?`)) return;
+    const sameFirm=(state.drivers||[]).filter(x=>d.companyId?x.companyId===d.companyId:(d.spaceId?x.spaceId===d.spaceId:true));
+    if(sameFirm.length<=1){ alert('В этой фирме должен остаться хотя бы один водитель'); return; }
+    if(typeof markDriverDeleted==='function') markDriverDeleted(d);
+    state.drivers.splice(i,1);
+    bumpDataEpoch('del-driver');
+    persist();
+    catalogTab='drivers';
+    openCatalogs();
+  };
+}
 function dayKeyFromIso(iso){
   if(!iso) return '';
   const d=new Date(iso);
@@ -3324,41 +3480,22 @@ function openCatalogs(){
   }).join('') || `<div class="hint">Пока пусто — нажмите «+ Компания»</div>`;
 
   const driverCards=drivers.map(({d,i})=>{
-    const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||(d.spaceId&&(findSpaceById(d.spaceId)||{}).name)||'';
+    const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'';
     const veh=typeof vehicleForDriver==='function'?vehicleForDriver(d):null;
-    return `<div class="drv-card-wrap">
-      <div class="drv-card">
-      <div class="drv-name" title="${esc(firm||d.name)}">${esc(d.name)}${isSuperAdmin()&&firm?`<span class="drv-firm">${esc(firm)}</span>`:''}${veh?`<span class="drv-firm">🚛 ${esc(veh.plate)}</span>`:''}</div>
-      <input class="tiny" id="drv-${i}" inputmode="decimal" value="${d.salaryPercent}" title="%" aria-label="%" />
-      <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
-      <input class="drv-pin" id="drv-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(d.pin||resolveDriverPin(d)||'')}" placeholder="PIN" title="PIN водителя" />
-      <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
-      <button type="button" class="icon-btn secondary" data-drv-invite="${i}" title="Ссылка 7 дн.">🔗</button>
-      <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
-      <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
-      </div>
-      <div class="drv-lic-row">
-        <label>Номер ВУ<input id="drv-lic-num-${i}" inputmode="numeric" placeholder="Серия и номер водительского *" value="${esc(d.licenseNo||'')}" title="Номер водительского удостоверения" /></label>
-      </div>
-      <details class="drv-docs">
-        <summary>Паспорт и снимки${!String(d.licenseNo||'').trim()?' · <span class="drv-docs-miss">заполните номер ВУ выше</span>':''}</summary>
-        <div class="drv-docs-grid">
-          <input id="drv-lic-at-${i}" placeholder="ВУ выдано (дата)" value="${esc(d.licenseIssuedAt||'')}" title="Дата выдачи ВУ" />
-          <input id="drv-pass-ser-${i}" inputmode="numeric" maxlength="4" placeholder="Серия паспорта" value="${esc(d.passportSeries||'')}" title="Серия паспорта" />
-          <input id="drv-pass-num-${i}" inputmode="numeric" maxlength="6" placeholder="Номер паспорта" value="${esc(d.passportNumber||'')}" title="Номер паспорта" />
-          <input id="drv-pass-by-${i}" placeholder="Кем выдан" value="${esc(d.passportIssuedBy||'')}" title="Кем выдан" class="drv-docs-span2" />
-          <input id="drv-pass-at-${i}" placeholder="Дата выдачи паспорта" value="${esc(d.passportIssuedAt||'')}" title="Дата выдачи паспорта" />
+    const miss=typeof driverDocsMissingItems==='function'?driverDocsMissingItems(d):[];
+    const openKey=d.id||String(i);
+    const meta=[formatPhone(d.phone||''), d.licenseNo?`ВУ ${d.licenseNo}`:null, veh?`🚛 ${veh.plate}`:null].filter(Boolean).join(' · ');
+    return `<div class="item-card drv-list-card">
+      <button type="button" class="drv-list-open" data-open-drv="${esc(openKey)}">
+        <div class="item-top" style="pointer-events:none">
+          <div class="item-name">${esc(d.name)}${isSuperAdmin()&&firm?` <span class="drv-firm">${esc(firm)}</span>`:''}</div>
+          ${miss.length?`<span class="drv-docs-badge warn">${miss.length} не заполнено</span>`:`<span class="drv-docs-badge ok">док. ок</span>`}
         </div>
-        <p class="hint drv-docs-hint">Снимки с телефона сжимаются автоматически (до ${DOC_PHOTO_MAX_KB} КБ). После правок нажмите ✓.</p>
-        <div class="drv-doc-photos">
-          ${docPhotoUploadRow('Паспорт (разворот)', d.passportPhoto, `data-drv-photo="${i}" data-photo-key="passportPhoto"`, `data-drv-photo-clear="${i}" data-photo-key="passportPhoto"`)}
-          ${docPhotoUploadRow('Прописка', d.passportRegPhoto, `data-drv-photo="${i}" data-photo-key="passportRegPhoto"`, `data-drv-photo-clear="${i}" data-photo-key="passportRegPhoto"`)}
-          ${docPhotoUploadRow('ВУ лицевая', d.licensePhotoFront, `data-drv-photo="${i}" data-photo-key="licensePhotoFront"`, `data-drv-photo-clear="${i}" data-photo-key="licensePhotoFront"`)}
-          ${docPhotoUploadRow('ВУ оборот', d.licensePhotoBack, `data-drv-photo="${i}" data-photo-key="licensePhotoBack"`, `data-drv-photo-clear="${i}" data-photo-key="licensePhotoBack"`)}
-        </div>
-      </details>
+        <div class="meta">${esc(meta||'Телефон и документы не заполнены')}</div>
+      </button>
+      <button type="button" class="primary cat-add-btn" data-open-drv="${esc(openKey)}" style="margin-top:6px">Документы и профиль</button>
     </div>`;
-  }).join('') || `<div class="hint">Нет водителей</div>`;
+  }).join('') || `<div class="hint">Нет водителей — добавьте ниже</div>`;
 
   const vehicleCards=vehicles.map(({v,i})=>{
     const coName=v.companyName||(v.companyId&&(findCompanyById(v.companyId)||{}).name)||(isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'');
@@ -3420,7 +3557,7 @@ function openCatalogs(){
           ? `<label class="svc-full">Фирма (парк)<select id="drv-company-pick">${owns.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
           : '';
         const hint=active
-          ? `Водители «${esc(active.name)}» — только эта фирма; после правок нажмите ✓`
+          ? `Водители «${esc(active.name)}». Нажмите карточку — все документы в одном месте.`
           : (isSuperAdmin()?'Выберите фирму или добавьте «нашу»':'Сначала нужна ваша фирма');
         return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
       })()}
@@ -3872,89 +4009,7 @@ function openCatalogs(){
     persist(); openCatalogs();
     flashCatOk();
   });
-  document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); flashCatOk(); });
-  document.querySelectorAll('[data-drv-invite]').forEach(b=>b.onclick=async ()=>{
-    const i=+b.dataset.drvInvite;
-    const phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
-    if(phone) state.drivers[i].phone=phone;
-    const res=await createDriverInvite(i);
-    if(!res.ok){ alert(res.message||'Не удалось создать ссылку'); return; }
-    const exp=res.invite&&res.invite.expiresAt?new Date(res.invite.expiresAt).toLocaleDateString('ru-RU'):'7 дней';
-    const co=findCompanyById(state.drivers[i].companyId)||currentOwnCompany();
-    const carrier=(co&&co.name)||'АРМАДА';
-    openShareSheet({
-      kind:'driverInvite',
-      url:res.url,
-      title:'Приглашение водителя',
-      carrier,
-      phone:state.drivers[i].phone,
-      expires:exp
-    });
-  });
-  document.querySelectorAll('[data-drv-photo]').forEach(inp=>bindDocPhotoInput(inp, data=>{
-    const i=+inp.dataset.drvPhoto;
-    const key=inp.dataset.photoKey;
-    const d=state.drivers[i];
-    if(!d||!key) return;
-    if(typeof canEditDriverRecord==='function'&&!canEditDriverRecord(d)){ alert('Нет доступа к этому водителю'); return; }
-    d[key]=data;
-    bumpDataEpoch('drv-photo');
-    persist();
-    openCatalogs();
-    flashCatOk('Снимок сохранён');
-  }));
-  document.querySelectorAll('[data-drv-photo-clear]').forEach(btn=>{
-    btn.onclick=()=>{
-      const i=+btn.dataset.drvPhotoClear;
-      const key=btn.dataset.photoKey;
-      const d=state.drivers[i];
-      if(!d||!key) return;
-      if(typeof canEditDriverRecord==='function'&&!canEditDriverRecord(d)){ alert('Нет доступа'); return; }
-      d[key]=null;
-      bumpDataEpoch('drv-photo-clear');
-      persist();
-      openCatalogs();
-    };
-  });
-  document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
-    const i=+b.dataset.saveDrvMeta;
-    const d=state.drivers[i];
-    if(!d) return;
-    if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
-    state.drivers[i].phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
-    state.drivers[i].licenseNo=String((($('drv-lic-num-'+i)||$('drv-license-'+i)||{}).value||'').trim());
-    state.drivers[i].passportSeries=String((($('drv-pass-ser-'+i)||{}).value||'').trim());
-    state.drivers[i].passportNumber=String((($('drv-pass-num-'+i)||{}).value||'').trim());
-    state.drivers[i].passportIssuedBy=String((($('drv-pass-by-'+i)||{}).value||'').trim());
-    state.drivers[i].passportIssuedAt=String((($('drv-pass-at-'+i)||{}).value||'').trim());
-    state.drivers[i].licenseIssuedAt=String((($('drv-lic-at-'+i)||{}).value||'').trim());
-    const pin=(($('drv-pin-'+i)||{}).value||'').trim();
-    if(pin && pin.length<4){ alert('PIN водителя — от 4 цифр'); return; }
-    if(pin) state.drivers[i].pin=pin;
-    else if(!state.drivers[i].pin) state.drivers[i].pin=resolveDriverPin(state.drivers[i]);
-    state.drivers[i].exchangeEnabled=!!(($('drv-ex-'+i)||{}).checked);
-    const pct=+(($('drv-'+i).value||'').replace(',','.')); if(pct>=0) state.drivers[i].salaryPercent=pct;
-    if(!state.drivers[i].companyId){
-      const co=currentOwnCompany();
-      if(co){ state.drivers[i].companyId=co.id; state.drivers[i].companyName=co.name; state.drivers[i].spaceId=currentSpaceId(); }
-    }
-    persist(); flashCatOk();
-  });
-  document.querySelectorAll('[data-del-drv]').forEach(b=>b.onclick=()=>{
-    const i=+b.dataset.delDrv;
-    const d=state.drivers[i];
-    if(!d) return;
-    if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Чужой водитель — нет доступа'); return; }
-    const name=d.name||'';
-    const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'этой фирмы';
-    if(!confirm(`Удалить водителя ${name} из «${firm}»?\nВ других фирмах он останется.`)) return;
-    const sameFirm=(state.drivers||[]).filter(x=>d.companyId?x.companyId===d.companyId:(d.spaceId?x.spaceId===d.spaceId:true));
-    if(sameFirm.length<=1){ alert('В этой фирме должен остаться хотя бы один водитель'); return; }
-    if(typeof markDriverDeleted==='function') markDriverDeleted(d);
-    state.drivers.splice(i,1);
-    bumpDataEpoch('del-driver');
-    persist(); openCatalogs();
-  });
+  document.querySelectorAll('[data-open-drv]').forEach(b=>b.onclick=()=>openDriverCard(b.dataset.openDrv));
   $('own-drv-add')&&($('own-drv-add').onclick=async ()=>{
     if(!currentAdmin){ alert('Войдите как администратор'); return; }
     const g=await billingGuardCurrentAdminWithServer('add_driver');
