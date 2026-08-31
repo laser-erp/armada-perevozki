@@ -942,6 +942,23 @@
       font-size:.74rem;font-weight:700;color:var(--muted,#64748b);cursor:pointer;
     }
     .cust-order-mode-tab.on{background:#fff;color:var(--accent,#2563eb);box-shadow:0 1px 4px rgba(15,23,42,.08)}
+    .cust-portal-tabs{
+      position:sticky;top:0;z-index:3;
+      background:var(--surface);border-bottom:1px solid var(--border);
+      margin:0 -12px 10px;padding:8px 10px;
+      flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+    }
+    .cust-portal-tabs::-webkit-scrollbar{display:none}
+    .cust-portal-tabs button{flex:0 0 auto;white-space:nowrap}
+    .cust-portal-tab-panel[hidden]{display:none!important}
+    .cust-tab-badge{
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:16px;height:16px;margin-left:4px;padding:0 4px;
+      border-radius:999px;background:#fff;color:var(--accent,#2563eb);
+      font-size:.62rem;font-weight:800;line-height:1;vertical-align:middle;
+    }
+    .filters button.on .cust-tab-badge{background:rgba(255,255,255,.95);color:var(--accent,#2563eb)}
     .cust-draft-banner{
       margin:0 0 12px;padding:12px 14px;border-radius:var(--radius,14px);
       background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);

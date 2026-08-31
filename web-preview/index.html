@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-31-admin-phone-login4317" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-31-admin-phone-login4317" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-31-customer-portal-tabs4317" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-31-customer-portal-tabs4317" />
 
 </head>
 <body>
@@ -145,9 +145,16 @@
         <button type="button" class="hint" id="cust-notify-toggle" style="margin-left:auto;font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer">Уведомления</button>
         <a href="help.html?role=customer" class="hint" style="font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
       </header>
-      <div class="admin-form-scroll">
+      <div class="admin-form-scroll" id="cust-portal-scroll">
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
         <p class="cat-panel-hint" id="cust-armada-source-banner" hidden style="color:var(--brand,#0f766e);font-weight:600"></p>
+        <nav class="cust-portal-tabs filters" id="cust-portal-tabs" role="tablist" aria-label="Разделы портала">
+          <button type="button" class="on" data-cust-tab="new" role="tab" aria-selected="true">Новая заявка</button>
+          <button type="button" data-cust-tab="calendar" role="tab" aria-selected="false">Календарь броней</button>
+          <button type="button" data-cust-tab="docs" role="tab" aria-selected="false">Бух доки<span class="cust-tab-badge" id="cust-docs-badge" hidden></span></button>
+          <button type="button" data-cust-tab="orders" role="tab" aria-selected="false">Мои заявки</button>
+        </nav>
+        <div id="cust-tab-new" class="cust-portal-tab-panel" role="tabpanel">
         <div id="cust-draft-banner" class="cust-draft-banner" hidden>
           <strong>Черновик заявки</strong>
           <p id="cust-draft-banner-text"></p>
@@ -158,7 +165,6 @@
         </div>
         <section class="form-section" id="cust-order-form">
           <div class="cust-order-head">
-            <h2 class="form-section-title">Новая заявка</h2>
             <div class="cust-order-mode-tabs" role="tablist" aria-label="Способ оформления">
               <button type="button" class="cust-order-mode-tab on" data-cust-mode="form" role="tab" aria-selected="true">Форма</button>
               <button type="button" class="cust-order-mode-tab" data-cust-mode="chat" role="tab" aria-selected="false">Чат</button>
@@ -493,21 +499,29 @@
             <div class="error" id="cust-chat-error"></div>
           </div>
         </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Календарь броней</h2>
-          <p class="hint">Точка на дате подачи — когда логист подтвердил бронь своей машины или нашёл перевозчика на бирже.</p>
+        </div>
+        <div id="cust-tab-calendar" class="cust-portal-tab-panel" role="tabpanel" hidden>
+          <p class="hint">Точка на дате подачи — когда логист подтвердил бронь своей машины или нашёл перевозчика на бирже. Нажмите дату — заявки откроются во вкладке «Мои заявки».</p>
           <div id="cust-book-cal"></div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Мои счета</h2>
-          <p class="hint">Счета формируются автоматически после отправки заявки. QR-код — для оплаты через приложение банка.</p>
-          <div id="cust-invoices-list"></div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Мои заявки</h2>
+        </div>
+        <div id="cust-tab-docs" class="cust-portal-tab-panel" role="tabpanel" hidden>
+          <div id="cust-tab-docs-contract"></div>
           <div id="cust-etrn-banner"></div>
+          <section class="form-section">
+            <h2 class="form-section-title">Счета</h2>
+            <p class="hint">Счета формируются автоматически после отправки заявки. QR-код — для оплаты через приложение банка.</p>
+            <div id="cust-invoices-list"></div>
+          </section>
+          <section class="form-section">
+            <h2 class="form-section-title">Акты, договоры и ЭТрН по заявкам</h2>
+            <p class="hint">Рамочный договор, заявка на перевозку, договор‑заявка, акт и ЭТрН. T1 подписывает грузоотправитель на погрузке.</p>
+            <div id="cust-docs-by-order"></div>
+          </section>
+        </div>
+        <div id="cust-tab-orders" class="cust-portal-tab-panel" role="tabpanel" hidden>
+          <p class="hint" id="cust-orders-day-hint" hidden></p>
           <div id="cust-orders-list"></div>
-        </section>
+        </div>
       </div>
     </div>
     <div id="cust-shipper-etrn-overlay" class="cust-shipper-etrn-overlay" hidden>

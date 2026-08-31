@@ -975,7 +975,7 @@ function documentEmailBody(kind, o){
     `По заявке №${o.sequentialNumber||'—'} (${routeText(o)||'маршрут'}) подготовлен документ: ${documentEmailSubject(kind,o).replace(/^АРМАДА: /,'')}.`,
     ``,
     `Скачать в личном кабинете: ${portal}`,
-    `Раздел «Мои заявки» → документы по заявке.`,
+    `Вкладка «Бух доки» → документы по заявке.`,
     ``,
     `С уважением, АРМАДА`
   ];
@@ -1016,6 +1016,7 @@ function sendCustomerAllReadyDocumentsEmail(orderId){
     `По заявке №${o.sequentialNumber||'—'} доступны документы: ${kinds.join(', ')}.`,
     '',
     'Скачайте в личном кабинете: https://app.armada.sx/z/',
+    'Вкладка «Бух доки».',
     '',
     'С уважением, АРМАДА'
   ].join('\n'));

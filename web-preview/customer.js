@@ -6,6 +6,9 @@ if(typeof globalThis.esc!=='function'){
 }
 const CUSTOMER_SESSION_KEY='armada_customer_session_v1';
 const CUST_URL_PREF_KEY='armada_cust_url_pref_v1';
+const CUST_PORTAL_TAB_KEY='armada_cust_portal_tab_v1';
+const CUST_PORTAL_TABS=['new','calendar','docs','orders'];
+let custPortalTab='new';
 let currentCustomer=null; // { companyId, name, phone, spaceId }
 
 function readCustomerPortalUrlParams(){
@@ -50,6 +53,57 @@ function applyCustomerPortalUrlParams(){
     banner.textContent=`Заявка с ${prefs.source}: ${vLabel}. Заполните адрес и отправьте.`;
     banner.hidden=false;
   }
+}
+
+function loadCustomerPortalTab(){
+  try{
+    const t=sessionStorage.getItem(CUST_PORTAL_TAB_KEY);
+    if(t&&CUST_PORTAL_TABS.includes(t)) return t;
+  }catch(_){}
+  return 'new';
+}
+function saveCustomerPortalTab(tab){
+  try{ sessionStorage.setItem(CUST_PORTAL_TAB_KEY, tab); }catch(_){}
+}
+function setCustomerPortalTab(tab, opts){
+  if(!CUST_PORTAL_TABS.includes(tab)) tab='new';
+  custPortalTab=tab;
+  saveCustomerPortalTab(tab);
+  syncCustomerPortalTabUi();
+  if(!opts||!opts.skipScroll){
+    const scroll=$('cust-portal-scroll');
+    if(scroll) scroll.scrollTop=0;
+  }
+}
+function syncCustomerPortalTabUi(){
+  document.querySelectorAll('#cust-portal-tabs [data-cust-tab]').forEach(btn=>{
+    const on=btn.getAttribute('data-cust-tab')===custPortalTab;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-selected', on?'true':'false');
+  });
+  CUST_PORTAL_TABS.forEach(id=>{
+    const panel=$('cust-tab-'+id);
+    if(panel) panel.hidden=(id!==custPortalTab);
+  });
+}
+function customerDocsTabBadgeCount(){
+  let n=0;
+  const co=currentCustomer&&findCompanyById(currentCustomer.companyId);
+  if(co&&typeof customerFrameworkContractStatus==='function'){
+    const st=customerFrameworkContractStatus(co);
+    if(st==='pending') n++;
+  }
+  if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'&&typeof customerCanSignEtrnT1==='function'){
+    n+=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o)).length;
+  }
+  return n;
+}
+function syncCustomerDocsTabBadge(){
+  const badge=$('cust-docs-badge');
+  if(!badge) return;
+  const n=customerDocsTabBadgeCount();
+  if(n>0){ badge.hidden=false; badge.textContent=n>9?'9+':String(n); }
+  else badge.hidden=true;
 }
 
 function findCustomerPortalCompany(phone, pin, scope){
@@ -1160,6 +1214,7 @@ function paintCustomerBookingCal(){
     btn.onclick=()=>{
       const key=btn.getAttribute('data-cust-cal-day');
       customerCal.from=customerCal.from===key?null:key;
+      setCustomerPortalTab('orders');
       renderCustomerPortal();
     };
   });
@@ -1273,6 +1328,8 @@ function showCustomerPortal(){
   renderCustomerPortal();
   maybePromptCustomerOrderDraft();
   syncCustomerOrderModeUi();
+  custPortalTab=loadCustomerPortalTab();
+  syncCustomerPortalTabUi();
   show('customer-portal');
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeCustomer();
 }
@@ -1317,6 +1374,14 @@ function renderCustomerPortal(){
       const k=typeof dayKeyFromIso==='function'?dayKeyFromIso(o.vehicleAt||o.createdAt):'';
       return k===day;
     }):orders;
+    const dayHint=$('cust-orders-day-hint');
+    if(dayHint){
+      if(day){
+        dayHint.hidden=false;
+        const lbl=typeof driverHistDayLabel==='function'?driverHistDayLabel(day):day;
+        dayHint.textContent=`Показаны заявки на ${lbl}. Сбросить фильтр — в «Календарь броней».`;
+      }else dayHint.hidden=true;
+    }
     list.innerHTML=shown.length?shown.map(o=>{
       const st=customerOrderStatusLabel(o);
       const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.bookStatus==='confirmed'?'closed':o.bookStatus==='requested'?'inbox':o.onExchange?'exchange':(o.startOdometer!=null?'progress':(typeof waitingLogistDriver==='function'&&waitingLogistDriver(o.driverName)?'inbox':''));
@@ -1333,34 +1398,23 @@ function renderCustomerPortal(){
         <p class="meta">${esc(o.ownCompanyName||'Диспетчер')}${bookLine?` · ${esc(bookLine)}`:''}${o.fulfillment==='direct'?' · свой парк':''}</p>
         <p class="meta">${o.executorType==='partner'?'':(o.driverName&&o.driverName!=='Биржа'&&o.driverName!=='Диспетчер'?`Водитель: ${esc(o.driverName)} · `:'')}${o.pricePending?'Цена: уточнит диспетчер · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
-        ${(()=>{
-          const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
-          return inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
-        })()}
-        ${typeof customerEtrnT1SignHtml==='function'?customerEtrnT1SignHtml(o):''}
         ${typeof customerDriverDocsConfirmHtml==='function'?customerDriverDocsConfirmHtml(o):''}
-        ${typeof customerOrderDocumentsHtml==='function'?`<details class="cust-order-docs-wrap"><summary>Документы по заявке</summary>${customerOrderDocumentsHtml(o)}</details>`:''}
+        <p class="meta"><button type="button" class="hint cust-goto-docs" style="border:0;background:transparent;cursor:pointer;padding:0;font-size:inherit">Документы → «Бух доки»</button></p>
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
-    customerWireInvoiceLinks(list);
-    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(list);
-    if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments(list);
+    list.querySelectorAll('.cust-goto-docs').forEach(btn=>{
+      btn.onclick=()=>setCustomerPortalTab('docs');
+    });
   }
-  const scroll=$('cust-portal-scroll')||document.querySelector('#customer-portal .admin-form-scroll');
-  if(scroll && typeof customerFrameworkContractBannerHtml==='function'){
-    const existing=$('cust-contract-banner');
+  const contractSlot=$('cust-tab-docs-contract');
+  if(contractSlot && typeof customerFrameworkContractBannerHtml==='function'){
     const bannerHtml=customerFrameworkContractBannerHtml(co, carrier);
-    if(bannerHtml && !existing){
-      const wrap=document.createElement('div');
-      wrap.innerHTML=bannerHtml;
-      const banner=wrap.firstElementChild;
-      const subEl=$('cust-portal-sub');
-      if(banner && subEl && subEl.parentNode) subEl.parentNode.insertBefore(banner, subEl.nextSibling);
-      else if(banner && scroll.firstChild) scroll.insertBefore(banner, scroll.firstChild);
-      if(typeof wireCustomerFrameworkContractBanner==='function') wireCustomerFrameworkContractBanner(co, carrier);
-    } else if(!bannerHtml && existing){
-      existing.remove();
-    }
+    if(bannerHtml){
+      if(!$('cust-contract-banner')){
+        contractSlot.innerHTML=bannerHtml;
+        if(typeof wireCustomerFrameworkContractBanner==='function') wireCustomerFrameworkContractBanner(co, carrier);
+      }
+    }else contractSlot.innerHTML='';
   }
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
@@ -1368,6 +1422,9 @@ function renderCustomerPortal(){
   maybeNotifyCustomerOrderUpdates();
   paintCustomerFormChecklist();
   renderCustomerInvoicesList();
+  renderCustomerDocsByOrder();
+  syncCustomerPortalTabUi();
+  syncCustomerDocsTabBadge();
 }
 
 function renderCustomerInvoicesList(){
@@ -1383,6 +1440,25 @@ function renderCustomerInvoicesList(){
     </div>`;
   }).join(''):'<div class="empty">Счета появятся после отправки заявки</div>';
   customerWireInvoiceLinks(list);
+}
+
+function renderCustomerDocsByOrder(){
+  const list=$('cust-docs-by-order');
+  if(!list||!currentCustomer) return;
+  const orders=customerOrders().slice(0,20);
+  list.innerHTML=orders.length?orders.map(o=>{
+    const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
+    const invLine=inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
+    return `<div class="card" style="margin-bottom:8px">
+      <h3 style="margin:0 0 4px;font-size:.9rem">Заявка № ${esc(o.sequentialNumber||'—')} · ${esc(routeText(o))}</h3>
+      ${invLine}
+      ${typeof customerEtrnT1SignHtml==='function'?customerEtrnT1SignHtml(o):''}
+      ${typeof customerOrderDocumentsHtml==='function'?customerOrderDocumentsHtml(o):''}
+    </div>`;
+  }).join(''):'<div class="empty">Документы появятся после первой заявки</div>';
+  customerWireInvoiceLinks(list);
+  if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(list);
+  if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments(list);
 }
 
 function readCustomerVehicleAt(){
@@ -1750,7 +1826,7 @@ function customerSubmitSuccessMessage(invoice, order){
   html+=`<li><strong>Счёт</strong> — ${invoice?'готов, скачайте ниже':'сформируется автоматически'}</li>`;
   const co=currentCustomer&&findCompanyById(currentCustomer.companyId);
   const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(co):'none';
-  html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (раздел выше)':'будет подготовлен'}</li>`;
+  html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (вкладка «Бух доки»)':'будет подготовлен'}</li>`;
   html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
   html+=`<li><strong>Акт</strong> — после закрытия заказа</li>`;
   html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке${order&&order.shipperSameAsCustomer===false?' (отдельная ссылка отправится грузоотправителю)':''}, QR у водителя в пути</li>`;
@@ -3061,6 +3137,13 @@ function wireCustomerPortal(){
   $('cust-login-ok')&&($('cust-login-ok').onclick=loginCustomer);
   $('cust-login-pin')&&($('cust-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginCustomer(); });
   $('cust-portal-back')&&($('cust-portal-back').onclick=logoutCustomer);
+  const portalTabs=$('cust-portal-tabs');
+  if(portalTabs&&!portalTabs.dataset.wired){
+    portalTabs.dataset.wired='1';
+    portalTabs.querySelectorAll('[data-cust-tab]').forEach(btn=>{
+      btn.onclick=()=>setCustomerPortalTab(btn.getAttribute('data-cust-tab'));
+    });
+  }
   $('cust-notify-toggle')&&($('cust-notify-toggle').onclick=()=>enableCustomerNotifications());
   $('cust-submit')&&($('cust-submit').onclick=submitCustomerOrder);
   let routeTimer=null;
