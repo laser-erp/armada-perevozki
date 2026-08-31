@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-31-a-entry4317';
+  var APP_BUILD = '2026-08-31-tabs-login4317';
 
   window.__armadaBootDone = false;
 
@@ -113,6 +113,12 @@
 
   function finishBoot() {
     window.__armadaBootDone = true;
+    var early = dedicatedScreenId();
+    if (early && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
+    if (early === 'admin-pin') {
+      var loginBtn = document.getElementById('pin-ok');
+      if (loginBtn) loginBtn.disabled = false;
+    }
     if (typeof openDedicatedEntryScreen === 'function' && openDedicatedEntryScreen()) return;
     if (typeof bootFallbackAfterSplash === 'function') {
       bootFallbackAfterSplash();

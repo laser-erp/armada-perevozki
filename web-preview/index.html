@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-31-a-entry4317" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-31-a-entry4317" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-31-tabs-login4317" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-31-tabs-login4317" />
 
 </head>
 <body>
@@ -145,15 +145,15 @@
         <button type="button" class="hint" id="cust-notify-toggle" style="margin-left:auto;font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer">Уведомления</button>
         <a href="help.html?role=customer" class="hint" style="font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
       </header>
+      <nav class="cust-portal-tabs filters" id="cust-portal-tabs" role="tablist" aria-label="Разделы портала">
+        <button type="button" class="on" data-cust-tab="new" role="tab" aria-selected="true">Новая заявка</button>
+        <button type="button" data-cust-tab="calendar" role="tab" aria-selected="false">Календарь броней</button>
+        <button type="button" data-cust-tab="docs" role="tab" aria-selected="false">Бух доки<span class="cust-tab-badge" id="cust-docs-badge" hidden></span></button>
+        <button type="button" data-cust-tab="orders" role="tab" aria-selected="false">Мои заявки</button>
+      </nav>
       <div class="admin-form-scroll" id="cust-portal-scroll">
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
         <p class="cat-panel-hint" id="cust-armada-source-banner" hidden style="color:var(--brand,#0f766e);font-weight:600"></p>
-        <nav class="cust-portal-tabs filters" id="cust-portal-tabs" role="tablist" aria-label="Разделы портала">
-          <button type="button" class="on" data-cust-tab="new" role="tab" aria-selected="true">Новая заявка</button>
-          <button type="button" data-cust-tab="calendar" role="tab" aria-selected="false">Календарь броней</button>
-          <button type="button" data-cust-tab="docs" role="tab" aria-selected="false">Бух доки<span class="cust-tab-badge" id="cust-docs-badge" hidden></span></button>
-          <button type="button" data-cust-tab="orders" role="tab" aria-selected="false">Мои заявки</button>
-        </nav>
         <div id="cust-tab-new" class="cust-portal-tab-panel" role="tabpanel">
         <div id="cust-draft-banner" class="cust-draft-banner" hidden>
           <strong>Черновик заявки</strong>
@@ -946,6 +946,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-31-a-entry4317"></script>
+  <script src="/boot-loader.js?v=2026-08-31-tabs-login4317"></script>
 </body>
 </html>

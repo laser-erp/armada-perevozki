@@ -4563,9 +4563,11 @@ async function openAdminLoginAsync(){
   }
   if(adminEntryRequiresPin()) currentAdmin=null;
   const innIn=$('admin-login-inn');
-  if(innIn) innIn.value='';
   const pinIn=$('pin-input');
-  if(pinIn) pinIn.value='';
+  const hadInn=innIn&&innIn.value.trim();
+  const hadPin=pinIn&&pinIn.value.trim();
+  if(innIn&&!hadInn) innIn.value='';
+  if(pinIn&&!hadPin) pinIn.value='';
   const pinErr=$('pin-error');
   if(pinErr) pinErr.textContent='';
   show('admin-pin');
@@ -4573,23 +4575,15 @@ async function openAdminLoginAsync(){
   try{ applyEntrySkin('admin-pin'); }catch(err){ console.warn('applyEntrySkin', err); }
   const btn=$('pin-ok');
   if(btn) btn.disabled=false;
-  let synced=false;
-  try{
-    if(btn) btn.disabled=true;
-    if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
-      synced=await Promise.race([
-        refreshAdminListForLogin(),
-        new Promise(resolve=>setTimeout(()=>resolve(false), 4500))
-      ]);
-    }
-    if(!synced && pinErr){
-      pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
-    }
-  }catch(err){
-    console.warn('admin login list', err);
-    if(pinErr) pinErr.textContent='Ошибка загрузки с сервера — попробуйте войти';
-  }finally{
-    if(btn) btn.disabled=false;
+  if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
+    refreshAdminListForLogin().then(synced=>{
+      if(!synced&&pinErr&&!pinErr.textContent){
+        pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
+      }
+    }).catch(err=>{
+      console.warn('admin login list', err);
+      if(pinErr&&!pinErr.textContent) pinErr.textContent='Ошибка загрузки с сервера — попробуйте войти';
+    });
   }
 }
 function wireAdminLoginHandlers(){
