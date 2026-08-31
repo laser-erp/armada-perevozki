@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-login-dup4317";
+const APP_BUILD="2026-08-31-entry-hard4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -253,6 +253,13 @@ function entryLoginScreenId(){
   return 'roles';
 }
 function showRoleHub(){
+  if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
+    if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
+    const sid=typeof entryLoginScreenId==='function'?entryLoginScreenId():null;
+    if(sid && sid!=='roles' && typeof show==='function'){ show(sid); return; }
+    if(typeof window.__armadaApplyEntryRoute==='function') window.__armadaApplyEntryRoute();
+    return;
+  }
   if(typeof clearEntrySkin==='function') clearEntrySkin();
   if(typeof show==='function') show('roles');
 }

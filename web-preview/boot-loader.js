@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-31-login-dup4317';
+  var APP_BUILD = '2026-08-31-entry-hard4317';
 
   window.__armadaBootDone = false;
 
@@ -14,6 +14,10 @@
 
   function showScreenEarly(id) {
     if (!id) return;
+    if (typeof window.__armadaApplyEntryRoute === 'function') {
+      window.__armadaApplyEntryRoute();
+      return;
+    }
     var target = document.getElementById(id);
     if (!target) return;
     var root = document.getElementById('shell') || document.querySelector('.phone');
@@ -27,15 +31,15 @@
   showScreenEarly(dedicatedScreenId());
 
   setTimeout(function () {
+    var entry = dedicatedScreenId();
+    if (entry) {
+      showScreenEarly(entry);
+      return;
+    }
     var sp = document.getElementById('splash');
     if (!sp || !sp.classList.contains('show')) return;
     if (typeof bootFallbackAfterSplash === 'function') {
       bootFallbackAfterSplash();
-      return;
-    }
-    var early = dedicatedScreenId();
-    if (early) {
-      showScreenEarly(early);
       return;
     }
     if (typeof showAfterSplash === 'function' && typeof showDefaultAfterSplash === 'function') {
@@ -48,9 +52,7 @@
     }
     if (typeof show === 'function') {
       show('roles');
-      return;
     }
-    showScreenEarly('roles');
   }, 5000);
 
   function loadScript(src) {
@@ -114,17 +116,19 @@
   function finishBoot() {
     window.__armadaBootDone = true;
     var early = dedicatedScreenId();
-    if (early && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
-    if (early === 'admin-pin') {
-      var loginBtn = document.getElementById('pin-ok');
-      if (loginBtn) loginBtn.disabled = false;
+    if (early) {
+      showScreenEarly(early);
+      if (early === 'admin-pin' && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
+      if (early === 'admin-pin') {
+        var loginBtn = document.getElementById('pin-ok');
+        if (loginBtn) loginBtn.disabled = false;
+      }
     }
     if (typeof openDedicatedEntryScreen === 'function' && openDedicatedEntryScreen()) return;
     if (typeof bootFallbackAfterSplash === 'function') {
       bootFallbackAfterSplash();
       return;
     }
-    var early = dedicatedScreenId();
     if (early) showScreenEarly(early);
   }
 

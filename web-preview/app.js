@@ -4610,6 +4610,13 @@ function wireAdminLoginHandlers(){
   }
 }
 function showDefaultAfterSplash(){
+  if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
+    if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
+    const sid=typeof entryLoginScreenId==='function'?entryLoginScreenId():null;
+    if(sid && sid!=='roles' && typeof show==='function'){ show(sid); return; }
+    if(typeof window.__armadaApplyEntryRoute==='function') window.__armadaApplyEntryRoute();
+    return;
+  }
   if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
   showRoleHub();
 }
@@ -4709,10 +4716,14 @@ try{
     }
   }finally{
     window.__armadaBootDone=true;
+    if(typeof window.__armadaApplyEntryRoute==='function' && typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
+      if(!isArmadaEntryScreenVisible()) window.__armadaApplyEntryRoute();
+    }
     if(document.querySelector('#splash.show') && !isArmadaEntryScreenVisible()){
       if(typeof bootFallbackAfterSplash==='function') showAfterSplash(bootFallbackAfterSplash);
       else if(typeof showAfterSplash==='function' && typeof showDefaultAfterSplash==='function') showAfterSplash(showDefaultAfterSplash);
-      else if(typeof show==='function') show('roles');
+      else if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl() && typeof window.__armadaApplyEntryRoute==='function') window.__armadaApplyEntryRoute();
+      else if(typeof show==='function' && !(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl())) show('roles');
     }
   }
 })();
@@ -4805,14 +4816,22 @@ document.addEventListener('visibilitychange',()=>{
 });
 if('serviceWorker' in navigator){
   let reloading=false;
+  function armadaSkipSwReload(){
+    try{
+      const p=(location.pathname||'').toLowerCase();
+      return /^\/(v|a|z)(?:\/|$)/.test(p);
+    }catch(_){ return false; }
+  }
   navigator.serviceWorker.addEventListener('message',e=>{
     if(e.data && e.data.type==='ARMADA_SW_UPDATED' && !reloading){
+      if(armadaSkipSwReload()) return;
       reloading=true;
       location.reload();
     }
   });
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(reloading) return;
+    if(armadaSkipSwReload()) return;
     if(!navigator.serviceWorker.controller) return;
     reloading=true;
     location.reload();

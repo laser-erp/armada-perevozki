@@ -158,10 +158,22 @@ body.entry-customer .entry-aside-carrier-wrap{
   body.entry-page #admin-pin.show .center,
   body.entry-page #customer-login.show .center{
     flex-direction:column;align-items:stretch;text-align:center;
+    padding:16px 12px 24px;gap:12px;min-height:auto;
   }
   .entry-aside{max-width:none;text-align:center}
+  .entry-aside-inner{padding:4px 0}
+  .entry-aside h1{font-size:1.15rem;margin-bottom:8px}
+  .entry-aside-lead{font-size:.88rem;margin-bottom:10px;line-height:1.4}
+  .entry-aside-list{font-size:.82rem}
+  .entry-aside-list li{padding:5px 0}
+  .entry-aside-foot{margin-top:10px;font-size:.75rem}
   .entry-aside-list li{text-align:left}
   body.entry-page .auth-panel{max-width:none}
+  body.entry-customer #customer-login.show .entry-aside{display:none}
+  body.entry-customer #customer-login.show .center{
+    justify-content:flex-start;padding-top:max(12px, env(safe-area-inset-top,0));
+  }
+  body.entry-admin #admin-pin.show .entry-aside{display:none}
   body.entry-driver .entry-aside{
     margin-bottom:8px;
     padding:14px 16px;
