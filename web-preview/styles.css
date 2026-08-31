@@ -1173,9 +1173,34 @@
     .cust-drv-confirm__text .metric-strip{margin:0}
     .cust-drv-confirm__files{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
     .cust-drv-confirm__files-label{font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:6px}
-    .doc-photo-thumb{display:block;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--surface)}
+    .doc-photo-thumb{
+      display:block;border-radius:8px;overflow:hidden;border:1px solid var(--border);
+      background:var(--surface);padding:0;cursor:pointer;line-height:0
+    }
     .doc-photo-thumb img{display:block;height:56px;width:auto;max-width:96px;object-fit:cover}
     #cabinet-panel .doc-photo-thumb img{height:72px;max-width:120px}
+    .doc-photo-overlay{
+      display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.82);
+      align-items:center;justify-content:center;padding:16px;box-sizing:border-box
+    }
+    .doc-photo-overlay.show{display:flex}
+    body.doc-photo-open{overflow:hidden}
+    .doc-photo-overlay__panel{
+      width:min(920px,100%);max-height:min(92vh,100%);display:flex;flex-direction:column;
+      background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);
+      box-shadow:var(--shadow-lg,0 12px 40px rgba(0,0,0,.35));overflow:hidden
+    }
+    .doc-photo-overlay__head{
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      padding:10px 12px;border-bottom:1px solid var(--border);font-weight:700;font-size:.88rem
+    }
+    .doc-photo-overlay__body{
+      overflow:auto;padding:12px;display:flex;align-items:center;justify-content:center;
+      background:#111827
+    }
+    .doc-photo-overlay__body img{
+      display:block;max-width:100%;max-height:calc(92vh - 72px);width:auto;height:auto;object-fit:contain
+    }
     .calc{background:var(--bg0);border:1px solid var(--border)}
     /* Админка: боковое меню + основная зона */
     #admin{background:var(--bg0)}

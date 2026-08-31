@@ -162,10 +162,65 @@ function docPhotoOrNull(v){
 function adminDocImageOrNull(v){
   return docPhotoOrNull(v);
 }
+function closeDocPhotoPreview(){
+  const overlay=$('doc-photo-overlay');
+  if(overlay) overlay.classList.remove('show');
+  document.body.classList.remove('doc-photo-open');
+}
+function docPhotoOverlayKey(e){
+  if(e.key==='Escape') closeDocPhotoPreview();
+}
+function ensureDocPhotoOverlay(){
+  let overlay=$('doc-photo-overlay');
+  if(overlay) return overlay;
+  overlay=document.createElement('div');
+  overlay.id='doc-photo-overlay';
+  overlay.className='doc-photo-overlay';
+  overlay.innerHTML=`<div class="doc-photo-overlay__panel" role="dialog" aria-modal="true" aria-label="Просмотр документа">
+    <header class="doc-photo-overlay__head">
+      <span id="doc-photo-overlay-title"></span>
+      <button type="button" class="icon-btn" id="doc-photo-overlay-close" aria-label="Закрыть">×</button>
+    </header>
+    <div class="doc-photo-overlay__body">
+      <img id="doc-photo-overlay-img" alt="" />
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', ev=>{
+    if(ev.target===overlay) closeDocPhotoPreview();
+  });
+  $('doc-photo-overlay-close').onclick=()=>closeDocPhotoPreview();
+  document.addEventListener('keydown', docPhotoOverlayKey);
+  return overlay;
+}
+function openDocPhotoPreview(src, label){
+  if(!docPhotoOrNull(src)) return;
+  const overlay=ensureDocPhotoOverlay();
+  const title=$('doc-photo-overlay-title');
+  const img=$('doc-photo-overlay-img');
+  if(title) title.textContent=label||'Документ';
+  if(img){ img.src=src; img.alt=label||'Документ'; }
+  overlay.classList.add('show');
+  document.body.classList.add('doc-photo-open');
+}
+function wireDocPhotoPreview(){
+  if(wireDocPhotoPreview._done) return;
+  wireDocPhotoPreview._done=true;
+  document.addEventListener('click', e=>{
+    const btn=e.target.closest('[data-doc-photo-view]');
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const img=btn.querySelector('img');
+    const src=img&&(img.currentSrc||img.src);
+    if(!src) return;
+    openDocPhotoPreview(src, btn.title||btn.getAttribute('aria-label')||(img&&img.alt)||'Документ');
+  }, true);
+}
 function docPhotoThumbHtml(src, label){
   if(!docPhotoOrNull(src)) return '';
   const cap=label?esc(label):'Документ';
-  return `<a href="${esc(src)}" target="_blank" rel="noopener" class="doc-photo-thumb" title="${cap}"><img src="${esc(src)}" alt="${cap}" loading="lazy" /></a>`;
+  return `<button type="button" class="doc-photo-thumb" data-doc-photo-view="1" title="${cap}" aria-label="${cap}"><img src="${esc(src)}" alt="${cap}" loading="lazy" /></button>`;
 }
 function docPhotoUploadRow(label, existing, inputAttrs, clearAttrs){
   return `<label class="doc-photo-row"><span>${esc(label)}</span>
@@ -4289,6 +4344,7 @@ try{
 (async function boot(){
   try{
   if(typeof initShareSheet==='function') initShareSheet();
+  if(typeof wireDocPhotoPreview==='function') wireDocPhotoPreview();
   initEntryFromPage();
   initPortalScopeFromPage();
   migrateAdmins();
