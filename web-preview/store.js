@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-dc-save-fix4317";
+const APP_BUILD="2026-08-31-driver-save-ui4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2608,6 +2608,7 @@ async function pullRemoteUpdates(reason){
       else if(typeof restoreAdminSession==='function') restoreAdminSession();
       if(detailId && (state.orders||[]).some(o=>o.id===detailId)) openDetail(detailId);
       else if(document.querySelector('#admin-vehicle-card.show') && state._vehicleCardId) openVehicleCard(state._vehicleCardId);
+      else if(document.querySelector('#admin-driver-card.show') && state._driverCardId) openDriverCard(state._driverCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
       else if(document.querySelector('#admin.show')) scheduleAdminRerender();
     } else if(typeof currentCustomer!=='undefined' && currentCustomer || document.querySelector('#customer-portal.show')){

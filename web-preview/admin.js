@@ -1283,21 +1283,57 @@ function openVehicleCard(vehicleId){
   };
 }
 function flashDriverCardOk(msg){
-  const box=$('driver-card-form');
-  if(!box) return;
-  let el=$('drv-card-ok');
-  if(!el){
-    el=document.createElement('div');
-    el.id='drv-card-ok';
-    el.className='toast-ok';
-    el.style.display='none';
-    el.style.marginBottom='8px';
-    box.insertBefore(el, box.firstChild);
-  }
+  const el=$('drv-card-ok');
+  if(!el) return;
   el.textContent=msg||'Сохранено';
   el.style.display='block';
   clearTimeout(flashDriverCardOk._t);
-  flashDriverCardOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, 2400);
+  flashDriverCardOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, 3200);
+}
+function updateDriverCardWarn(d){
+  const box=$('driver-card-form');
+  if(!box||!d) return;
+  const miss=typeof driverDocsMissingItems==='function'?driverDocsMissingItems(d):[];
+  let warn=box.querySelector('.drv-card-warn');
+  if(!miss.length){
+    if(warn) warn.remove();
+    return;
+  }
+  const html=`<strong>Заполните для заявок:</strong><ul>${miss.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;
+  if(warn) warn.innerHTML=html;
+  else{
+    warn=document.createElement('div');
+    warn.className='drv-card-warn';
+    warn.innerHTML=html;
+    const hint=box.querySelector('.cat-panel-hint');
+    if(hint&&hint.nextSibling) box.insertBefore(warn, hint.nextSibling);
+    else box.insertBefore(warn, box.firstChild);
+  }
+}
+function readDriverCardFieldsInto(d){
+  if(!d) return false;
+  d.phone=formatPhone((($('dc-phone')||{}).value||'').trim());
+  const pin=(($('dc-pin')||{}).value||'').trim();
+  if(pin && pin.length<4){ alert('PIN — от 4 цифр'); return false; }
+  if(pin) d.pin=pin;
+  else if(!d.pin) d.pin=resolveDriverPin(d);
+  const pct=+(($('dc-pct')||{}).value||'').replace(',','.');
+  if(!Number.isNaN(pct) && pct>=0){
+    d.salaryPercent=pct;
+    (state.orders||[]).filter(o=>samePersonName(o.driverName, d.name)).forEach(o=>{ o.driverPercent=pct; });
+  }
+  d.exchangeEnabled=!!(($('dc-ex')||{}).checked);
+  d.licenseNo=String((($('dc-lic-num')||{}).value||'').trim());
+  d.licenseIssuedAt=String((($('dc-lic-at')||{}).value||'').trim());
+  d.passportSeries=String((($('dc-pass-ser')||{}).value||'').trim());
+  d.passportNumber=String((($('dc-pass-num')||{}).value||'').trim());
+  d.passportIssuedBy=String((($('dc-pass-by')||{}).value||'').trim());
+  d.passportIssuedAt=String((($('dc-pass-at')||{}).value||'').trim());
+  if(!d.companyId){
+    const co=typeof catalogDriverCompany==='function'?catalogDriverCompany():currentOwnCompany();
+    if(co){ d.companyId=co.id; d.companyName=co.name; d.spaceId=currentSpaceId(); }
+  }
+  return true;
 }
 function resolveDriverCardIndex(key){
   const drivers=state.drivers||[];
@@ -1327,6 +1363,7 @@ function openDriverCard(driverKey){
   if(typeof canEditDriverRecord==='function'&&!canEditDriverRecord(d)){ alert('Нет доступа к этому водителю'); return; }
   if(!d.id) d.id=uuid();
   state._driverCardIndex=i;
+  state._driverCardId=d.id;
   const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'';
   const veh=typeof vehicleForDriver==='function'?vehicleForDriver(d):null;
   const miss=typeof driverDocsMissingItems==='function'?driverDocsMissingItems(d):[];
@@ -1368,14 +1405,11 @@ function openDriverCard(driverKey){
         ${driverCardPhotoField('Скан · страница с пропиской', d.passportRegPhoto, 'dc-pass-reg', 'dc-pass-reg-clear')}
       </div>
     </section>
-    <section class="form-section drv-card-actions">
-      <button type="button" class="primary cat-add-btn" id="dc-save">Сохранить</button>
-      <button type="button" class="secondary cat-add-btn" id="dc-invite">Ссылка водителю (7 дн.)</button>
-      <button type="button" class="secondary cat-add-btn danger-text" id="dc-delete">Удалить из фирмы</button>
-      <p class="hint">Снимки с телефона сжимаются до ${DOC_PHOTO_MAX_KB} КБ. Текстовые поля — кнопкой «Сохранить».</p>
-    </section>
+    <p class="hint">Снимки с телефона сжимаются до ${DOC_PHOTO_MAX_KB} КБ. Поля — кнопкой «Сохранить» внизу экрана.</p>
   `;
   show('admin-driver-card');
+  const okEl=$('drv-card-ok');
+  if(okEl) okEl.style.display='none';
   const refresh=()=>openDriverCard(i);
   const bindPhoto=(inputId, clearId, key)=>{
     const inp=$(inputId);
@@ -1399,35 +1433,25 @@ function openDriverCard(driverKey){
   bindPhoto('dc-pass-reg','dc-pass-reg-clear','passportRegPhoto');
   $('drv-card-back').onclick=()=>{ catalogTab='drivers'; openCatalogs(); };
   const saveBtn=$('dc-save');
-  if(saveBtn) saveBtn.onclick=()=>{
-    d.phone=formatPhone((($('dc-phone')||{}).value||'').trim());
-    const pin=(($('dc-pin')||{}).value||'').trim();
-    if(pin && pin.length<4){ alert('PIN — от 4 цифр'); return; }
-    if(pin) d.pin=pin;
-    else if(!d.pin) d.pin=resolveDriverPin(d);
-    const pct=+(($('dc-pct')||{}).value||'').replace(',','.');
-    if(!Number.isNaN(pct) && pct>=0){
-      d.salaryPercent=pct;
-      (state.orders||[]).filter(o=>samePersonName(o.driverName, d.name)).forEach(o=>{ o.driverPercent=pct; });
-    }
-    d.exchangeEnabled=!!(($('dc-ex')||{}).checked);
-    d.licenseNo=String((($('dc-lic-num')||{}).value||'').trim());
-    d.licenseIssuedAt=String((($('dc-lic-at')||{}).value||'').trim());
-    d.passportSeries=String((($('dc-pass-ser')||{}).value||'').trim());
-    d.passportNumber=String((($('dc-pass-num')||{}).value||'').trim());
-    d.passportIssuedBy=String((($('dc-pass-by')||{}).value||'').trim());
-    d.passportIssuedAt=String((($('dc-pass-at')||{}).value||'').trim());
-    if(!d.companyId){
-      const co=typeof catalogDriverCompany==='function'?catalogDriverCompany():currentOwnCompany();
-      if(co){ d.companyId=co.id; d.companyName=co.name; d.spaceId=currentSpaceId(); }
-    }
-    bumpDataEpoch('drv-card-save');
-    persist();
-    flashDriverCardOk('Водитель сохранён');
-    refresh();
-  };
-  $('dc-invite').onclick=async ()=>{
-    d.phone=formatPhone((($('dc-phone')||{}).value||'').trim());
+  if(saveBtn){
+    saveBtn.disabled=false;
+    saveBtn.textContent='Сохранить';
+    saveBtn.onclick=()=>{
+      if(!readDriverCardFieldsInto(d)) return;
+      saveBtn.disabled=true;
+      saveBtn.textContent='Сохранение…';
+      bumpDataEpoch('drv-card-save');
+      persist();
+      updateDriverCardWarn(d);
+      flashDriverCardOk('Водитель сохранён');
+      saveBtn.disabled=false;
+      saveBtn.textContent='Сохранено ✓';
+      setTimeout(()=>{ if(saveBtn) saveBtn.textContent='Сохранить'; }, 2000);
+    };
+  }
+  const inviteBtn=$('dc-invite');
+  if(inviteBtn) inviteBtn.onclick=async ()=>{
+    if(!readDriverCardFieldsInto(d)) return;
     persist();
     const res=await createDriverInvite(i);
     if(!res.ok){ alert(res.message||'Не удалось создать ссылку'); return; }
@@ -1442,7 +1466,8 @@ function openDriverCard(driverKey){
       expires:exp
     });
   };
-  $('dc-delete').onclick=()=>{
+  const deleteBtn=$('dc-delete');
+  if(deleteBtn) deleteBtn.onclick=()=>{
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Нет доступа'); return; }
     const name=d.name||'';
     const firmName=d.companyName||(findCompanyById(d.companyId)||{}).name||'фирмы';
