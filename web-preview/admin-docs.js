@@ -162,67 +162,115 @@ function adminDocsBuhPanelHtml() {
     ${list}${more}`;
 }
 
+function adminDocsConstructorCatalog() {
+  const buh = (typeof DOC_TEMPLATE_CATALOG !== 'undefined' ? DOC_TEMPLATE_CATALOG : []);
+  const ops = (typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
+    && typeof OPERATOR_LETTER_CATALOG !== 'undefined')
+    ? OPERATOR_LETTER_CATALOG.map(t => ({
+      id: t.id,
+      title: 'Оператор: ' + t.title,
+      hint: t.hint,
+      group: 'operators'
+    }))
+    : (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG.map(t => ({
+      id: t.id,
+      title: 'Оператор: ' + t.title,
+      hint: t.hint + ' · только просмотр',
+      group: 'operators'
+    })) : []);
+  return buh.concat(ops);
+}
+
+function adminDocsConstructorCanEdit(tplId) {
+  if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
+    return typeof canEditOperatorLetters === 'function' && canEditOperatorLetters();
+  }
+  const sid = adminDocsSpaceId();
+  return sid && typeof canEditDocTemplatesForSpace === 'function' && canEditDocTemplatesForSpace(sid);
+}
+
 function adminDocsLettersPanelHtml() {
-  return `<p class="cat-panel-hint">Исходящие на фирменном бланке вашей фирмы. Текст письма редактируется в <button type="button" class="linkish" data-adm-goto-constructor="letter">Конструкторе</button>.</p>
+  const ops = (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG : []).map(t => {
+    const custom = typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(t.id);
+    const pdf = t.pdf ? `/downloads/${esc(t.pdf)}` : '';
+    return `<div class="adm-doc-card">
+      <div>
+        <h3>${esc(t.title)}</h3>
+        <p class="meta">${esc(t.hint)}${custom ? ' · изменено' : ''}</p>
+      </div>
+      <div class="adm-doc-actions adm-doc-actions--stack">
+        <button type="button" class="secondary adm-op-letter-edit" data-op-letter="${esc(t.id)}">Редактировать</button>
+        <button type="button" class="primary adm-op-letter-print" data-op-letter="${esc(t.id)}">Печать</button>
+        ${pdf ? `<a class="secondary" href="${pdf}" target="_blank" rel="noopener">PDF</a>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  const editHint = typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
+    ? 'Текст писем операторам редактирует супер-админ в «Конструкторе» или кнопкой «Редактировать».'
+    : 'Просмотр и печать. Редактирование — только супер-админ.';
+  return `<p class="cat-panel-hint">${editHint} Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
     <div class="adm-doc-card">
       <div><h3>Пустой фирменный бланк</h3><p class="meta">Новое письмо · реквизиты из «Наша фирма»</p></div>
       <div class="adm-doc-actions"><button type="button" class="primary" id="adm-letter-blank">Открыть</button></div>
     </div>
-    <div class="adm-doc-card">
-      <div><h3>Письма операторам ЭТрН</h3><p class="meta">Контур · Калуга Астрал · шаблон PDF</p></div>
-      <div class="adm-doc-actions"><a class="secondary" href="downloads/ARMADA_Pismo_Operatoram_ETRN.pdf" target="_blank" rel="noopener">PDF</a></div>
-    </div>`;
+    <h3 class="adm-docs-subtitle">Письма операторам ЭТрН</h3>
+    ${ops || '<div class="empty">Нет шаблонов операторов</div>'}`;
 }
 
 function adminDocsConstructorPanelHtml() {
   const sid = adminDocsSpaceId();
-  if (!sid) {
+  const tplId = adminDocsConstructorTpl || 'application';
+  const isOp = typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId);
+  if (!sid && !isOp) {
     return '<div class="empty">Нет space у администратора — шаблоны привязаны к фирме.</div>';
   }
-  const canEdit = typeof canEditDocTemplatesForSpace === 'function' && canEditDocTemplatesForSpace(sid);
-  const sp = findSpaceById(sid);
-  const tplId = adminDocsConstructorTpl || 'application';
+  const canEdit = adminDocsConstructorCanEdit(tplId);
+  const sp = sid ? findSpaceById(sid) : null;
   const body = typeof getDocTemplateBody === 'function' ? getDocTemplateBody(sid, tplId) : '';
-  const sample = typeof docTemplateSampleOrder === 'function' ? docTemplateSampleOrder(sid) : null;
+  const sample = sid && typeof docTemplateSampleOrder === 'function' ? docTemplateSampleOrder(sid) : null;
   let order = sample;
-  if (adminDocsConstructorOrderId) {
+  if (!isOp && adminDocsConstructorOrderId) {
     order = (state.orders || []).find(o => o.id === adminDocsConstructorOrderId) || sample;
   }
   const preview = typeof renderDocTemplatePreviewHtml === 'function'
     ? renderDocTemplatePreviewHtml(tplId, body, order, sid)
     : '';
-  const orderOpts = (state.orders || [])
+  const orderOpts = !isOp && sid ? (state.orders || [])
     .filter(o => o && (o.spaceId === sid || o.partnerSpaceId === sid))
     .slice(0, 30)
     .map(o => `<option value="${esc(o.id)}"${order && order.id === o.id ? ' selected' : ''}>№${esc(o.sequentialNumber)} · ${esc(o.customer || '—')}</option>`)
-    .join('');
-  const tplList = (typeof DOC_TEMPLATE_CATALOG !== 'undefined' ? DOC_TEMPLATE_CATALOG : []).map(t => `
+    .join('') : '';
+  const tplList = adminDocsConstructorCatalog().map(t => `
     <button type="button" class="adm-tpl-item${t.id === tplId ? ' on' : ''}" data-adm-tpl-id="${esc(t.id)}">
       <span class="adm-tpl-item-title">${esc(t.title)}</span>
       <span class="adm-tpl-item-hint">${esc(t.hint)}</span>
     </button>`).join('');
-  const vars = (typeof DOC_TEMPLATE_VARS !== 'undefined' ? DOC_TEMPLATE_VARS : []).map(v =>
+  const vars = !isOp && (typeof DOC_TEMPLATE_VARS !== 'undefined' ? DOC_TEMPLATE_VARS : []).map(v =>
     `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
   ).join('');
+  const opVars = isOp ? `<button type="button" class="adm-tpl-var" data-adm-tpl-var="{{today}}" title="Сегодня">{{today}}</button>` : '';
   const readOnlyHint = canEdit
-    ? `<p class="cat-panel-hint">Шаблоны фирмы «${esc(sp && sp.name || sid)}». После сохранения подстановка полей используется при печати документов.</p>`
-    : `<p class="hint">Просмотр шаблонов другой фирмы. Редактировать можно только шаблоны своего space${typeof isSuperAdmin === 'function' && isSuperAdmin() ? ' (ваш space как супер-админа)' : ''}.</p>`;
+    ? isOp
+      ? '<p class="cat-panel-hint">Письмо платформы ООО «АРМАДА» оператору ЭТрН. Сохранение синхронизируется на сервер.</p>'
+      : `<p class="cat-panel-hint">Шаблоны фирмы «${esc(sp && sp.name || sid)}». После сохранения подстановка полей используется при печати документов.</p>`
+    : isOp
+      ? '<p class="hint">Просмотр письма оператору. Редактировать может только супер-админ.</p>'
+      : `<p class="hint">Просмотр шаблонов другой фирмы. Редактировать можно только шаблоны своего space${typeof isSuperAdmin === 'function' && isSuperAdmin() ? ' (ваш space как супер-админа)' : ''}.</p>`;
   return `${readOnlyHint}
     <div class="adm-tpl-layout">
       <aside class="adm-tpl-side">
         <h3 class="adm-tpl-side-title">Шаблоны</h3>
         <div class="adm-tpl-list">${tplList}</div>
-        <h3 class="adm-tpl-side-title">Поля</h3>
-        <div class="adm-tpl-vars">${vars}</div>
+        ${!isOp ? `<h3 class="adm-tpl-side-title">Поля</h3><div class="adm-tpl-vars">${vars}</div>` : `<h3 class="adm-tpl-side-title">Поля</h3><div class="adm-tpl-vars">${opVars}</div>`}
       </aside>
       <div class="adm-tpl-main">
         <div class="adm-tpl-toolbar">
-          <label class="adm-tpl-order-lbl">Пример заявки
+          ${!isOp ? `<label class="adm-tpl-order-lbl">Пример заявки
             <select id="adm-tpl-order"${canEdit ? '' : ' disabled'}>
               <option value="">— демо-данные —</option>
               ${orderOpts}
             </select>
-          </label>
+          </label>` : '<span class="hint">Письмо оператору · без привязки к заявке</span>'}
           <div class="adm-tpl-actions">
             ${canEdit ? `<button type="button" class="secondary" id="adm-tpl-reset">Сброс</button>
               <button type="button" class="primary" id="adm-tpl-save">Сохранить</button>` : ''}
@@ -240,12 +288,16 @@ function refreshAdminDocsConstructorPreview() {
   const sid = adminDocsSpaceId();
   const editor = $('adm-tpl-editor');
   const box = $('adm-tpl-preview');
-  if (!sid || !editor || !box) return;
+  if (!editor || !box) return;
   const tplId = adminDocsConstructorTpl || 'application';
+  const isOp = typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId);
+  if (!sid && !isOp) return;
   let order = null;
-  const sel = $('adm-tpl-order');
-  if (sel && sel.value) order = (state.orders || []).find(o => o.id === sel.value) || null;
-  else if (typeof docTemplateSampleOrder === 'function') order = docTemplateSampleOrder(sid);
+  if (!isOp) {
+    const sel = $('adm-tpl-order');
+    if (sel && sel.value) order = (state.orders || []).find(o => o.id === sel.value) || null;
+    else if (sid && typeof docTemplateSampleOrder === 'function') order = docTemplateSampleOrder(sid);
+  }
   if (typeof renderDocTemplatePreviewHtml === 'function') {
     box.innerHTML = renderDocTemplatePreviewHtml(tplId, editor.value, order, sid);
   }
@@ -295,10 +347,13 @@ function wireAdminDocsConstructor() {
   const save = $('adm-tpl-save');
   if (save) {
     save.onclick = () => {
+      const tplId = adminDocsConstructorTpl || 'application';
+      if (!adminDocsConstructorCanEdit(tplId)) return;
       const sid = adminDocsSpaceId();
-      if (!sid || !canEditDocTemplatesForSpace(sid)) return;
       const ta = $('adm-tpl-editor');
-      if (typeof setDocTemplateBody === 'function') setDocTemplateBody(sid, adminDocsConstructorTpl, ta ? ta.value : '');
+      if (typeof setDocTemplateBody === 'function') {
+        setDocTemplateBody(sid, tplId, ta ? ta.value : '');
+      }
       if (typeof persist === 'function') persist();
       save.textContent = 'Сохранено';
       setTimeout(() => { save.textContent = 'Сохранить'; }, 1500);
@@ -307,11 +362,14 @@ function wireAdminDocsConstructor() {
   const reset = $('adm-tpl-reset');
   if (reset) {
     reset.onclick = () => {
-      const sid = adminDocsSpaceId();
-      if (!sid || !canEditDocTemplatesForSpace(sid)) return;
+      const tplId = adminDocsConstructorTpl || 'application';
+      if (!adminDocsConstructorCanEdit(tplId)) return;
       if (!confirm('Вернуть текст шаблона по умолчанию?')) return;
-      if (state.docTemplates && state.docTemplates.spaces && state.docTemplates.spaces[sid]) {
-        delete state.docTemplates.spaces[sid][adminDocsConstructorTpl];
+      const sid = adminDocsSpaceId();
+      if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
+        if (state.docTemplates && state.docTemplates.platform) delete state.docTemplates.platform[tplId];
+      } else if (state.docTemplates && state.docTemplates.spaces && state.docTemplates.spaces[sid]) {
+        delete state.docTemplates.spaces[sid][tplId];
       }
       if (typeof bumpDataEpoch === 'function') bumpDataEpoch('doc-template-reset');
       if (typeof persist === 'function') persist();
@@ -321,6 +379,11 @@ function wireAdminDocsConstructor() {
   const printBtn = $('adm-tpl-print');
   if (printBtn) {
     printBtn.onclick = () => {
+      const tplId = adminDocsConstructorTpl || 'application';
+      if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
+        if (typeof openOperatorLetterPrint === 'function') openOperatorLetterPrint(tplId);
+        return;
+      }
       const sid = adminDocsSpaceId();
       const ta = $('adm-tpl-editor');
       const body = ta ? ta.value : '';
@@ -371,6 +434,20 @@ function wireAdminDocsPanel() {
   }
   const blank = $('adm-letter-blank');
   if (blank) blank.onclick = () => openAdminLetterBlank();
+  document.querySelectorAll('.adm-op-letter-edit').forEach(btn => {
+    btn.onclick = () => {
+      adminDocsTab = 'constructor';
+      adminDocsConstructorTpl = btn.dataset.opLetter || 'etrnKontur';
+      paintAdminDocsTabs();
+      renderAdminDocsBody();
+    };
+  });
+  document.querySelectorAll('.adm-op-letter-print').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.opLetter;
+      if (id && typeof openOperatorLetterPrint === 'function') openOperatorLetterPrint(id);
+    };
+  });
   document.querySelectorAll('.adm-doc-open').forEach(btn => {
     btn.onclick = () => {
       if (typeof openAdminOrderDocument === 'function') {

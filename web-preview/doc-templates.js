@@ -120,12 +120,22 @@ function getDocTemplateRecord(spaceId, templateId) {
 }
 
 function getDocTemplateBody(spaceId, templateId) {
+  if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
+    return typeof getOperatorLetterBody === 'function'
+      ? getOperatorLetterBody(templateId)
+      : defaultOperatorLetterBody(templateId);
+  }
   const rec = getDocTemplateRecord(spaceId, templateId);
   if (rec && rec.body) return String(rec.body);
   return defaultDocTemplateBody(templateId);
 }
 
 function setDocTemplateBody(spaceId, templateId, body) {
+  if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
+    return typeof setOperatorLetterBody === 'function'
+      ? setOperatorLetterBody(templateId, body)
+      : false;
+  }
   if (!spaceId || !templateId) return false;
   docTemplatesRoot();
   if (!state.docTemplates.spaces[spaceId]) state.docTemplates.spaces[spaceId] = {};
@@ -235,6 +245,11 @@ function docTemplateLetterheadHtml(spaceId) {
 }
 
 function renderDocTemplatePreviewHtml(templateId, body, order, spaceId) {
+  if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
+    return typeof renderOperatorLetterPreviewHtml === 'function'
+      ? renderOperatorLetterPreviewHtml(templateId, body)
+      : '';
+  }
   const ctx = buildDocTemplateContext(order, spaceId);
   const filled = substituteDocTemplate(body, ctx);
   const inner = renderDocTemplateTextToHtml(filled);
@@ -248,6 +263,9 @@ function renderDocTemplatePreviewHtml(templateId, body, order, spaceId) {
 }
 
 function hasCustomDocTemplate(spaceId, templateId) {
+  if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
+    return typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(templateId);
+  }
   const rec = getDocTemplateRecord(spaceId, templateId);
   return !!(rec && rec.body);
 }
@@ -262,13 +280,21 @@ function buildOrderDocFromTemplate(kind, o, spaceId) {
 
 function docTemplatesSnapshotSlice() {
   docTemplatesRoot();
-  return { spaces: structuredClone(state.docTemplates.spaces) };
+  const out = { spaces: structuredClone(state.docTemplates.spaces) };
+  if (state.docTemplates.platform && typeof state.docTemplates.platform === 'object') {
+    out.platform = structuredClone(state.docTemplates.platform);
+  }
+  return out;
 }
 
 function applyDocTemplatesPayload(slice) {
   if (!slice || typeof slice !== 'object') return;
   docTemplatesRoot();
   if (slice.spaces && typeof slice.spaces === 'object') state.docTemplates.spaces = slice.spaces;
+  if (slice.platform && typeof slice.platform === 'object') {
+    if (typeof applyOperatorLettersPlatform === 'function') applyOperatorLettersPlatform(slice.platform);
+    else state.docTemplates.platform = slice.platform;
+  }
 }
 
 function openDocTemplatePrint(templateId, spaceId, order) {
