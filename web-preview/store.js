@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-cust-alerts-compact4317";
+const APP_BUILD="2026-08-31-entry-routing4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -240,6 +240,12 @@ function entryFromQueryOnly(){
   }catch(_){ return null; }
 }
 function entryLoginScreenId(){
+  const fromPath=readEntryFromUrl();
+  if(fromPath){
+    if(fromPath==='driver') return 'driver-login';
+    if(fromPath==='admin') return 'admin-pin';
+    if(fromPath==='customer') return 'customer-login';
+  }
   const m=entryFromQueryOnly();
   if(m==='driver') return 'driver-login';
   if(m==='admin') return 'admin-pin';
@@ -474,6 +480,9 @@ function backFromEntryLogin(opts){
     if(typeof show==='function') show('admin');
     if(typeof renderAdmin==='function') renderAdmin();
     return;
+  }
+  if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
+    try{ location.assign('/'); return; }catch(_){}
   }
   setEntryMode(null);
   if(typeof showRoleHub==='function') showRoleHub();
@@ -2082,6 +2091,12 @@ function migrateSpaces(){
     const before=sp.ownCompanyId;
     ensureOwnCompanyForSpace(sp);
     if(sp.ownCompanyId!==before) changed=true;
+    const co=ownCompanyForSpaceId(sp.id);
+    const coInn=co&&normalizeLoginInn(co.inn);
+    if(coInn && normalizeLoginInn(sp.inn)!==coInn){
+      sp.inn=coInn;
+      changed=true;
+    }
   });
   const superAdm=(state.admins||[]).find(a=>a.isSuper);
   const fallbackSpace=superAdm&&superAdm.spaceId;
