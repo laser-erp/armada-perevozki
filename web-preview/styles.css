@@ -1116,7 +1116,8 @@
       height:min(560px,calc(100svh - 11rem));
       min-height:min(560px,calc(100svh - 11rem));
       max-height:min(560px,calc(100svh - 11rem));
-      background:#f8faf9;border:1px solid var(--border,#e2e8e4);border-radius:14px;overflow:hidden;
+      background:#f8faf9;border:1px solid var(--border,#e2e8e4);border-radius:14px;
+      overflow:hidden;max-width:100%;
     }
     .chat-progress{height:3px;background:#e2e8e4;flex-shrink:0}
     .chat-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#10b981);border-radius:0 2px 2px 0;transition:width .25s ease}
@@ -1165,7 +1166,7 @@
     .chat-chip.muted{border-color:var(--border,#cbd5e1);background:#fff;color:var(--muted,#64748b)}
     .chat-chip:disabled{opacity:.45;cursor:not-allowed}
     .chat-widget{margin-top:2px;padding-left:36px}
-    .chat-widget input,.chat-widget select{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border,#cbd5e1);border-radius:10px;font-size:.82rem;font-family:inherit}
+    .chat-widget input,.chat-widget select{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border,#cbd5e1);border-radius:10px;font-size:16px;font-family:inherit}
     .chat-widget-row{display:flex;gap:8px;margin-top:6px}
     .chat-widget-row input{flex:1}
     .chat-summary{background:#fff;border:1px solid var(--border,#e2e8e4);border-radius:12px;padding:10px 12px;margin-top:6px;font-size:.74rem;line-height:1.5}
@@ -1181,7 +1182,7 @@
     }
     .chat-compose{display:flex;gap:8px;padding:10px 12px;background:#fff;flex-shrink:0;min-height:3.25rem;box-sizing:border-box}
     .chat-compose:not(.is-visible){visibility:hidden;pointer-events:none}
-    .chat-compose input{flex:1;border:1px solid var(--border,#cbd5e1);border-radius:999px;padding:10px 14px;font-size:.82rem;font-family:inherit}
+    .chat-compose input{flex:1;border:1px solid var(--border,#cbd5e1);border-radius:999px;padding:10px 14px;font-size:16px;font-family:inherit}
     .chat-compose button{border:0;background:#2563eb;color:#fff;border-radius:999px;padding:0 16px;font-weight:700;font-size:.78rem;cursor:pointer;font-family:inherit;min-width:44px}
     #cust-chat-panel .error{padding:0 12px 8px;font-size:.78rem;min-height:0;flex-shrink:0}
     #cust-chat-panel .error:empty{padding-bottom:0}
