@@ -299,14 +299,7 @@ function applyDocTemplatesPayload(slice) {
 
 function openDocTemplatePrint(templateId, spaceId, order) {
   const body = getDocTemplateBody(spaceId, templateId);
-  let html = renderDocTemplatePreviewHtml(templateId, body, order, spaceId);
-  if (templateId === 'letter' && typeof adminDocSignMarksHtml === 'function') {
-    const assets = typeof currentAdminDocAssets === 'function' ? currentAdminDocAssets() : null;
-    const marks = adminDocSignMarksHtml(assets);
-    if (marks && (marks.indexOf('doc-sign-stamp') >= 0 || marks.indexOf('doc-sign-signature') >= 0)) {
-      html = html.replace('</article>', `<div class="adm-letter-sign">${marks}</div></article>`);
-    }
-  }
+  const html = renderDocTemplatePreviewHtml(templateId, body, order, spaceId);
   const title = (DOC_TEMPLATE_CATALOG.find(t => t.id === templateId) || {}).title || 'Документ';
   if (typeof openPrintHtml === 'function') {
     openPrintHtml(title, html);

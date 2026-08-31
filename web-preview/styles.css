@@ -1139,6 +1139,11 @@
     .doc-photo-row{display:flex;flex-direction:column;gap:4px;font-size:.68rem;color:var(--muted);font-weight:600}
     .doc-photo-row__box{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
     .doc-photo-row input[type=file]{font-size:.65rem;max-width:100%}
+    .doc-sign-marks{position:relative;height:58px;width:180px;margin-left:auto}
+    .doc-sign-marks--scan{height:80px;width:200px}
+    .doc-sign-stamp{position:absolute;right:0;bottom:0;width:72px;height:72px;object-fit:contain}
+    .doc-sign-signature{position:absolute;right:48px;bottom:8px;max-width:100px;max-height:36px;object-fit:contain}
+    .doc-sign-line{border-top:1px solid #111;margin-top:12px}
     .doc-photo-clear{min-width:28px;min-height:28px;padding:0!important;line-height:1}
     .doc-photo-gallery,#cabinet-panel .doc-photo-gallery-wrap{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
     .order-drv-docs-files{margin-top:4px}
@@ -1468,10 +1473,10 @@
     .admin-profile-card h2{margin:0 0 8px;font-size:1.15rem}
     .admin-profile-grid{display:grid;gap:16px;margin:16px 0}
     .admin-profile-preview{margin-top:20px;padding:14px;border:1px dashed var(--border);border-radius:10px;background:var(--field)}
-    .admin-profile-sample{position:relative;height:72px;margin-top:8px}
-    .admin-profile-sample .doc-sign-marks{height:68px}
-    .admin-profile-sample .doc-sign-stamp{height:60px}
-    .admin-profile-sample .doc-sign-signature{height:38px;right:64px}
+    .admin-profile-sample{position:relative;height:88px;margin-top:8px}
+    .admin-profile-sample .doc-sign-marks{height:80px;width:200px;margin-left:auto}
+    .admin-profile-sample .doc-sign-marks--scan .doc-sign-stamp{width:72px;height:72px;object-fit:contain;opacity:.9;mix-blend-mode:multiply;filter:contrast(1.06) saturate(.92);transform:rotate(-7deg)}
+    .admin-profile-sample .doc-sign-marks--scan .doc-sign-signature{width:88px;max-height:32px;object-fit:contain;mix-blend-mode:multiply;opacity:.93;right:56px;bottom:8px}
 
     /* Документы (админ) */
     #admin-docs-screen .admin-form-shell{max-width:920px}

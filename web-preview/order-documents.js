@@ -293,11 +293,6 @@ function orderCarrierResponsibleLine(o){
   return [name, phone?`☎ ${phone}`:''].filter(Boolean).join(' · ');
 }
 function orderDocSignBlock(o, leftTitle, rightTitle, leftName, rightName){
-  const adminId=o&&(o.ownerAdminId||o.executorAdminId);
-  const assets=typeof adminDocAssets==='function'?adminDocAssets(adminId):null;
-  if(typeof adminDocSignBlockHtml==='function'){
-    return adminDocSignBlockHtml(leftTitle, rightTitle, leftName, rightName, assets);
-  }
   return `<div class="sign">
     <div>${esc(leftTitle)}: _______________ / ${esc(leftName||'_______________')}</div>
     <div>${esc(rightTitle)}: _______________ / ${esc(rightName||'_______________')}</div>
@@ -456,12 +451,10 @@ function buildOrderDocBody(kind, o){
     <h2>4. Стоимость</h2>
     <p>${esc(orderDocMoneyLine(o))}</p>
     <p>Работы выполнены полностью, стороны претензий не имеют.</p>
-    ${typeof adminDocSignBlockHtml==='function'
-      ? adminDocSignBlockHtml('Заказчик', 'Исполнитель', '', o.ownerAdminName||'', typeof adminDocAssets==='function'?adminDocAssets(o.ownerAdminId||o.executorAdminId):null)
-      : `<div class="sign">
+    <div class="sign">
       <div>Заказчик _______________ / _______________</div>
-      <div>Исполнитель _______________ / _______________</div>
-    </div>`}`;
+      <div>Исполнитель _______________ / ${esc(o.ownerAdminName||'_______________')}</div>
+    </div>`;
 }
 function orderDocPrintHtml(title, bodyHtml){
   return `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8" />
@@ -481,35 +474,30 @@ function orderDocPrintHtml(title, bodyHtml){
   th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}
   th{background:#f3f4f6;font-size:11px}
   .sign{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:28px}
-  .sign div,.sign-col{padding-top:18px}
-  .sign-col--executor{position:relative;min-height:72px}
-  .sign-caption{margin:0 0 8px;padding-top:18px;border-top:1px solid #111}
-  .doc-sign-marks{position:relative;height:58px;margin-top:4px}
-  .doc-sign-stamp{position:absolute;right:0;bottom:0;height:54px;width:auto;max-width:120px;object-fit:contain}
-  .doc-sign-signature{position:absolute;right:52px;bottom:6px;height:34px;width:auto;max-width:140px;object-fit:contain}
-  .doc-sign-line{border-top:1px solid #111;margin-top:12px}
-  .adm-letter-sign{margin-top:24px;display:flex;justify-content:flex-end}
-  .adm-letter-sign .doc-sign-marks{width:180px;height:64px}
+  .sign div{padding-top:18px;border-top:1px solid #111}
   .toolbar{display:flex;gap:8px;margin:0 0 12px;position:sticky;top:0;background:#fff;padding:8px 0}
-  .toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;background:#EF4444;color:#fff}
-  .toolbar button.secondary{background:#f3f4f6;color:#111}
-  @media print{.toolbar{display:none!important}.sheet{padding:0}}
+  .toolbar button,.print-toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;background:#EF4444;color:#fff}
+  .toolbar button.secondary,.print-toolbar button.secondary{background:#f3f4f6;color:#111}
+  .print-toolbar{display:flex;gap:8px;margin:0 0 12px;position:sticky;top:0;background:#fff;padding:8px 0;z-index:2}
+  @media print{.toolbar,.print-toolbar{display:none!important}.sheet{padding:0}}
 </style></head><body>
 <div class="sheet">
-  <div class="toolbar">
-    <button type="button" onclick="window.print()">Печать / PDF</button>
-    <button type="button" class="secondary" onclick="window.close()">Закрыть</button>
-  </div>
+  ${typeof printWindowToolbarHtml==='function'?printWindowToolbarHtml('Печать'):''}
   ${bodyHtml}
 </div>
 </body></html>`;
 }
 function openPrintHtml(title, bodyHtml){
+  if(typeof openPrintDocumentHtml==='function'){
+    openPrintDocumentHtml(orderDocPrintHtml(title, bodyHtml));
+    return;
+  }
   const w=window.open('', '_blank');
   if(!w){ alert('Разрешите всплывающие окна, чтобы печатать документ'); return; }
   w.document.open();
   w.document.write(orderDocPrintHtml(title, bodyHtml));
   w.document.close();
+  if(typeof wirePrintWindowControls==='function') wirePrintWindowControls(w);
 }
 function refreshOrderDocRow(orderId, kind){
   const o=state.orders.find(x=>x.id===orderId); if(!o) return;

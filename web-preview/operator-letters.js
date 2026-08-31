@@ -313,7 +313,7 @@ function operatorLetterParaHtml(text, className) {
   return `<p${cls}>${esc(text).replace(/\n/g, '<br/>')}</p>`;
 }
 
-function operatorLetterBodyToPrintHtml(filled) {
+function operatorLetterBodyToPrintHtml(filled, opts) {
   const paras = String(filled || '').split(/\n\n+/).map(p => p.trim()).filter(Boolean);
   if (!paras.length) return '<div class="body-text"><p class="no-indent">—</p></div>';
 
@@ -368,7 +368,7 @@ function operatorLetterBodyToPrintHtml(filled) {
     const sigName = tail.length ? tail[0] : '';
     const sigRole = tail.slice(1);
     const marksHtml = typeof operatorLetterSignMarksHtml === 'function'
-      ? operatorLetterSignMarksHtml()
+      ? operatorLetterSignMarksHtml(opts && opts.signed ? 'scan' : 'blank')
       : '<div class="signature__line"></div>';
     parts += `<div class="closing">
       <p class="closing__respect">${esc(closingParas[0])}</p>
@@ -383,14 +383,15 @@ function operatorLetterBodyToPrintHtml(filled) {
   return parts;
 }
 
-function operatorLetterSignMarksHtml() {
+function operatorLetterSignMarksHtml(mode) {
+  if (mode !== 'scan') return '<div class="signature__line"></div>';
   const assets = typeof currentAdminDocAssets === 'function'
     ? currentAdminDocAssets({ platformStamp: true, platformSignature: true })
     : { stamp: null, signature: null };
   const stamp = assets && assets.stamp;
   const signature = assets && assets.signature;
   if (!stamp && !signature) return '<div class="signature__line"></div>';
-  let html = '<div class="signature__marks">';
+  let html = '<div class="signature__marks signature__marks--scan">';
   if (signature) html += `<img class="signature__sig" src="${esc(signature)}" alt="Подпись" />`;
   if (stamp) html += `<img class="signature__stamp" src="${esc(stamp)}" alt="Печать" />`;
   html += '</div>';
@@ -423,8 +424,9 @@ body{font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.45;c
 .signature__role{margin:0}
 .signature__line{border-bottom:1px solid #111;height:1px}
 .signature__marks{position:relative;height:56px;grid-column:2}
-.signature__stamp{position:absolute;left:50%;bottom:0;transform:translateX(-20%);height:52px;width:auto;max-width:110px;object-fit:contain;opacity:.95}
-.signature__sig{position:absolute;left:50%;bottom:8px;transform:translateX(-55%);height:32px;width:auto;max-width:100px;object-fit:contain}
+.signature__marks--scan{height:24mm;width:58mm;margin:0 auto}
+.signature__stamp{position:absolute;right:0;bottom:0;width:38mm;height:38mm;object-fit:contain;opacity:.9;mix-blend-mode:multiply;filter:contrast(1.06) saturate(.92);transform:rotate(-7deg);transform-origin:70% 80%}
+.signature__sig{position:absolute;right:26mm;bottom:1.5mm;width:44mm;max-height:14mm;object-fit:contain;object-position:left bottom;opacity:.93;mix-blend-mode:multiply;filter:contrast(1.08);transform:rotate(-2deg);transform-origin:left bottom}
 .signature__name{margin:0;text-align:right}
 .letter-footer{margin-top:28px;padding-top:6px;border-top:1px solid #cbd5e1;font-family:Inter,Arial,sans-serif;font-size:7.5pt;color:#64748b;text-align:center}
 .print-toolbar{display:flex;gap:8px;margin:0 0 16px;position:sticky;top:0;background:#fff;padding:10px 0;z-index:2;font-family:Inter,Arial,sans-serif}
@@ -441,15 +443,15 @@ body{font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.45;c
 }`;
 }
 
-function operatorLetterPrintShell(title, articleHtml) {
+function operatorLetterPrintShell(title, articleHtml, printLabel) {
+  const toolbar = typeof printWindowToolbarHtml === 'function'
+    ? printWindowToolbarHtml(printLabel || 'Печать')
+    : '';
   return `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8" />
 <title>${esc(title)}</title>
 <style>${operatorLetterPrintCss()}</style></head><body>
 <div class="letter-sheet">
-  <div class="print-toolbar">
-    <button type="button" onclick="window.print()">Печать / PDF</button>
-    <button type="button" class="secondary" onclick="window.close()">Закрыть</button>
-  </div>
+  ${toolbar}
   ${articleHtml}
 </div>
 </body></html>`;
@@ -458,7 +460,7 @@ function operatorLetterPrintShell(title, articleHtml) {
 function renderOperatorLetterPrintHtml(templateId, body, opts) {
   const p = ARMADA_PLATFORM_PARTY;
   const filled = fillOperatorLetterBody(body, templateId, opts);
-  const inner = operatorLetterBodyToPrintHtml(filled);
+  const inner = operatorLetterBodyToPrintHtml(filled, { signed: !!(opts && opts.signed) });
   return `<article class="letter-page">
     ${platformLetterheadPrintHtml()}
     ${inner}
@@ -469,14 +471,39 @@ function renderOperatorLetterPrintHtml(templateId, body, opts) {
 function openOperatorLetterPrintDocument(templateId, body, opts) {
   const title = (operatorLetterMeta(templateId) || {}).title || 'Письмо оператору';
   const html = renderOperatorLetterPrintHtml(templateId, body, opts);
+  const shell = operatorLetterPrintShell(title, html, 'Печать');
+  if (typeof openPrintDocumentHtml === 'function') {
+    openPrintDocumentHtml(shell);
+    return;
+  }
   const w = window.open('', '_blank');
   if (!w) {
     alert('Разрешите всплывающие окна, чтобы печатать документ');
     return;
   }
   w.document.open();
-  w.document.write(operatorLetterPrintShell(title, html));
+  w.document.write(shell);
   w.document.close();
+  if (typeof wirePrintWindowControls === 'function') wirePrintWindowControls(w);
+}
+
+function openOperatorLetterSignedPdfDocument(templateId, body, opts) {
+  const title = ((operatorLetterMeta(templateId) || {}).title || 'Письмо оператору') + ' · PDF';
+  const html = renderOperatorLetterPrintHtml(templateId, body, Object.assign({}, opts || {}, { signed: true }));
+  const shell = operatorLetterPrintShell(title, html, 'Сохранить PDF');
+  if (typeof openPrintDocumentHtml === 'function') {
+    openPrintDocumentHtml(shell);
+    return;
+  }
+  const w = window.open('', '_blank');
+  if (!w) {
+    alert('Разрешите всплывающие окна');
+    return;
+  }
+  w.document.open();
+  w.document.write(shell);
+  w.document.close();
+  if (typeof wirePrintWindowControls === 'function') wirePrintWindowControls(w);
 }
 
 
@@ -484,6 +511,12 @@ function openOperatorLetterPrint(templateId) {
   ensureOperatorLetterOutNo(templateId);
   const body = getOperatorLetterBody(templateId);
   openOperatorLetterPrintDocument(templateId, body, { assign: true });
+}
+
+function openOperatorLetterSignedPdf(templateId) {
+  ensureOperatorLetterOutNo(templateId);
+  const body = getOperatorLetterBody(templateId);
+  openOperatorLetterSignedPdfDocument(templateId, body, { assign: true });
 }
 
 function applyOperatorLettersPlatform(platform) {

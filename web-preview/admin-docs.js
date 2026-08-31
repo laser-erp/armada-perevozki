@@ -192,7 +192,6 @@ function adminDocsConstructorCanEdit(tplId) {
 function adminDocsLettersPanelHtml() {
   const ops = (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG : []).map(t => {
     const custom = typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(t.id);
-    const pdf = t.pdf ? `/downloads/${esc(t.pdf)}` : '';
     const outMeta = typeof operatorLetterOutMetaLine === 'function' ? operatorLetterOutMetaLine(t.id) : '';
     return `<div class="adm-doc-card">
       <div>
@@ -202,14 +201,14 @@ function adminDocsLettersPanelHtml() {
       <div class="adm-doc-actions adm-doc-actions--stack">
         <button type="button" class="secondary adm-op-letter-edit" data-op-letter="${esc(t.id)}">Редактировать</button>
         <button type="button" class="primary adm-op-letter-print" data-op-letter="${esc(t.id)}">Печать</button>
-        ${pdf ? `<a class="secondary" href="${pdf}" target="_blank" rel="noopener">PDF</a>` : ''}
+        <button type="button" class="secondary adm-op-letter-pdf" data-op-letter="${esc(t.id)}">PDF</button>
       </div>
     </div>`;
   }).join('');
   const editHint = typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
     ? 'Текст писем операторам редактирует супер-админ. Исходящий № и дата проставляются автоматически при печати.'
     : 'Просмотр и печать. Редактирование — только супер-админ.';
-  return `<p class="cat-panel-hint">${editHint} Исходящие номера сквозные: Контур — первый, Калуга — второй (фиксируются при печати). Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
+  return `<p class="cat-panel-hint">${editHint} <strong>Печать</strong> — бланк для подписи от руки. <strong>PDF</strong> — с печатью и подписью для отправки. Исходящие номера сквозные: Контур — первый, Калуга — второй. Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
     <div class="adm-doc-card">
       <div><h3>Пустой фирменный бланк</h3><p class="meta">Новое письмо · реквизиты из «Наша фирма»</p></div>
       <div class="adm-doc-actions"><button type="button" class="primary" id="adm-letter-blank">Открыть</button></div>
@@ -459,6 +458,15 @@ function wireAdminDocsPanel() {
       const id = btn.dataset.opLetter;
       if (id && typeof openOperatorLetterPrint === 'function') {
         openOperatorLetterPrint(id);
+        renderAdminDocsBody();
+      }
+    };
+  });
+  document.querySelectorAll('.adm-op-letter-pdf').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.opLetter;
+      if (id && typeof openOperatorLetterSignedPdf === 'function') {
+        openOperatorLetterSignedPdf(id);
         renderAdminDocsBody();
       }
     };

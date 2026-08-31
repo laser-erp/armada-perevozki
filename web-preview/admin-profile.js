@@ -40,12 +40,16 @@ function currentAdminDocAssets(opts) {
 function adminDocSignMarksHtml(assets, opts) {
   if (!assets) return '';
   opts = opts || {};
+  if (opts.blank) {
+    return opts.lineFallback !== false ? '<div class="doc-sign-line"></div>' : '';
+  }
   const stamp = assets.stamp;
   const signature = assets.signature;
-  if (!stamp && !signature) return opts.lineFallback !== false
-    ? '<div class="doc-sign-line"></div>'
-    : '';
-  let html = '<div class="doc-sign-marks">';
+  if (!stamp && !signature) {
+    return opts.lineFallback !== false ? '<div class="doc-sign-line"></div>' : '';
+  }
+  const scan = opts.scan ? ' doc-sign-marks--scan' : '';
+  let html = `<div class="doc-sign-marks${scan}">`;
   if (signature) {
     html += `<img class="doc-sign-signature" src="${esc(signature)}" alt="Подпись" />`;
   }
@@ -93,10 +97,10 @@ function renderAdminProfile() {
       ${docPhotoUploadRow('Печать организации', stamp, 'id="adm-profile-stamp"', 'id="adm-profile-stamp-clear"')}
       ${docPhotoUploadRow('Подпись', signature, 'id="adm-profile-signature"', 'id="adm-profile-signature-clear"')}
     </div>
-    <p class="hint">Письма операторам ЭТрН и документы генерального директора используют печать и подпись ООО «АРМАДА» по умолчанию, если вы не загрузили свои. Остальные администраторы — только свои файлы.</p>
+    <p class="hint"><strong>Печать</strong> — бланк с пустым местом для подписи в оригинале. <strong>PDF</strong> — готовый документ с печатью и подписью (как на скане). Файлы ниже используются для PDF.</p>
     <div class="admin-profile-preview">
-      <p class="meta">Пример на печати</p>
-      <div class="admin-profile-sample">${adminDocSignMarksHtml(adminDocAssets(currentAdmin.id, { platformStamp: true, platformSignature: true }))}</div>
+      <p class="meta">Как будет выглядеть в PDF</p>
+      <div class="admin-profile-sample">${adminDocSignMarksHtml(adminDocAssets(currentAdmin.id, { platformStamp: true, platformSignature: true }), { scan: true })}</div>
     </div>
   </section>`;
 
