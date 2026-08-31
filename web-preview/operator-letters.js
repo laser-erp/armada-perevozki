@@ -18,8 +18,8 @@ const OPERATOR_LETTER_CATALOG = [
 
 const OPERATOR_LETTER_VARS = [
   { key: '{{letter.outNo}}', label: 'Исходящий номер (авто при печати)' },
-  { key: '{{letter.outDate}}', label: 'Дата исходящего (авто)' },
-  { key: '{{today}}', label: 'Сегодня (ДД.ММ.ГГГГ)' }
+  { key: '{{letter.outDate}}', label: 'Дата исходящего («31» августа 2026 г.)' },
+  { key: '{{today}}', label: 'Сегодня (как дата исходящего)' }
 ];
 
 const ARMADA_PLATFORM_PARTY = {
@@ -72,7 +72,25 @@ function operatorLetterOutDateRu(iso) {
   ];
   const d = iso ? new Date(iso) : new Date();
   if (Number.isNaN(d.getTime())) return '—';
-  return `«${d.getDate()}» ${months[d.getMonth()]} ${d.getFullYear()} г.`;
+  let day;
+  let monthIdx;
+  let year;
+  try {
+    const parts = new Intl.DateTimeFormat('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric'
+    }).formatToParts(d);
+    day = parts.find(p => p.type === 'day').value;
+    monthIdx = Number(parts.find(p => p.type === 'month').value) - 1;
+    year = parts.find(p => p.type === 'year').value;
+  } catch (_e) {
+    day = String(d.getDate());
+    monthIdx = d.getMonth();
+    year = String(d.getFullYear());
+  }
+  return `«${day}» ${months[monthIdx]} ${year} г.`;
 }
 
 function operatorLetterOutRecord(templateId) {
@@ -211,13 +229,11 @@ function canEditOperatorLetters() {
 function operatorLetterContext(templateId, opts) {
   const options = opts && typeof opts === 'object' ? opts : {};
   const issued = options.assign ? ensureOperatorLetterOutNo(templateId) : peekOperatorLetterOutNo(templateId);
-  const today = typeof dayOnly === 'function'
-    ? dayOnly(new Date().toISOString())
-    : new Date().toLocaleDateString('ru-RU');
   const outNo = issued && issued.seq != null ? String(issued.seq) : '—';
   const outDate = operatorLetterOutDateRu(issued && (issued.date || issued.issuedAt));
+  const todayFormal = operatorLetterOutDateRu(new Date().toISOString());
   return {
-    '{{today}}': today,
+    '{{today}}': todayFormal,
     '{{letter.outNo}}': outNo,
     '{{letter.outDate}}': outDate
   };
@@ -235,6 +251,7 @@ function fillOperatorLetterBody(body, templateId, opts) {
   if (ctx['{{letter.outDate}}'] && ctx['{{letter.outDate}}'] !== '—') {
     out = out.replace(/(от\s+)\{\{today\}\}/i, `$1${ctx['{{letter.outDate}}']}`);
     out = out.replace(/(от\s+)__+[^\n]*/i, `от ${ctx['{{letter.outDate}}']}`);
+    out = out.replace(/(от\s+)\d{1,2}\.\d{1,2}\.\d{4}/i, `от ${ctx['{{letter.outDate}}']}`);
   }
   return out;
 }
