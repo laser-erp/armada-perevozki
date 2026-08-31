@@ -292,12 +292,178 @@ function renderOperatorLetterPreviewHtml(templateId, body, opts) {
   </article>`;
 }
 
+function platformLetterheadPrintHtml() {
+  const p = ARMADA_PLATFORM_PARTY;
+  const origin = typeof location !== 'undefined' && location.origin ? location.origin : '';
+  const logo = origin ? `${origin}/logo.png` : '/logo.png';
+  return `<header class="letterhead">
+    <img class="letterhead__logo" src="${logo}" alt="АРМАДА" width="68" height="68" />
+    <div class="letterhead__brand">
+      <p class="letterhead__name">${esc(p.brand)}</p>
+      <p class="letterhead__full">${esc(p.full)}</p>
+      <p class="letterhead__req">${esc(p.address)}<br />
+        ИНН ${esc(p.inn)} · КПП ${esc(p.kpp)} · ОГРН ${esc(p.ogrn)}</p>
+      <p class="letterhead__contacts">тел.: ${esc(p.phone)} · e-mail: ${esc(p.email)} · ${esc(p.site)}</p>
+    </div>
+  </header>`;
+}
+
+function operatorLetterParaHtml(text, className) {
+  const cls = className ? ` class="${className}"` : '';
+  return `<p${cls}>${esc(text).replace(/\n/g, '<br/>')}</p>`;
+}
+
+function operatorLetterBodyToPrintHtml(filled) {
+  const paras = String(filled || '').split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+  if (!paras.length) return '<div class="body-text"><p class="no-indent">—</p></div>';
+
+  let i = 0;
+  let parts = '';
+
+  if (/^Исх\./i.test(paras[0])) {
+    parts += `<div class="meta-row"><div class="meta-row__out">${operatorLetterParaHtml(paras[0]).replace(/^<p>|<\/p>$/g, '')}</div></div>`;
+    i = 1;
+  }
+
+  const recipient = [];
+  while (i < paras.length && !/^О .+/i.test(paras[i]) && !/^Уважаем/i.test(paras[i])) {
+    recipient.push(paras[i]);
+    i += 1;
+  }
+  if (recipient.length) {
+    parts += `<div class="recipient-block">${recipient.map(p => operatorLetterParaHtml(p)).join('')}</div>`;
+  }
+
+  if (i < paras.length && /^О .+/i.test(paras[i])) {
+    parts += `<p class="subject">${esc(paras[i])}</p>`;
+    i += 1;
+  }
+
+  const bodyParas = [];
+  const closingParas = [];
+  for (; i < paras.length; i += 1) {
+    if (/^С уважением/i.test(paras[i])) {
+      closingParas.push(paras[i]);
+      i += 1;
+      while (i < paras.length) {
+        closingParas.push(paras[i]);
+        i += 1;
+      }
+      break;
+    }
+    bodyParas.push(paras[i]);
+  }
+
+  if (bodyParas.length) {
+    parts += '<div class="body-text">';
+    bodyParas.forEach(p => {
+      const noIndent = /^Контактное/i.test(p) || /^Уважаем/i.test(p);
+      parts += operatorLetterParaHtml(p, noIndent ? 'no-indent' : '');
+    });
+    parts += '</div>';
+  }
+
+  if (closingParas.length) {
+    const tail = closingParas.slice(1);
+    const sigName = tail.length ? tail[0] : '';
+    const sigRole = tail.slice(1);
+    parts += `<div class="closing">
+      <p class="closing__respect">${esc(closingParas[0])}</p>
+      <div class="signature">
+        <p class="signature__role">${sigRole.map(l => esc(l)).join('<br/>')}</p>
+        <div class="signature__line"></div>
+        <p class="signature__name">${esc(sigName)}</p>
+      </div>
+    </div>`;
+  }
+
+  return parts;
+}
+
+function operatorLetterPrintCss() {
+  return `@page{size:A4;margin:18mm 20mm 22mm 25mm}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.45;color:#111;background:#fff}
+.letter-page{position:relative;min-height:255mm}
+.letterhead{display:grid;grid-template-columns:72px 1fr;gap:14px 16px;align-items:start;padding-bottom:10px;border-bottom:2.5px solid #1e5aa8;margin-bottom:18px}
+.letterhead__logo{width:68px;height:auto}
+.letterhead__brand{font-family:Inter,Arial,sans-serif}
+.letterhead__name{font-size:15pt;font-weight:700;letter-spacing:.04em;color:#1e5aa8;margin:0 0 2px}
+.letterhead__full{font-size:8.5pt;color:#334155;margin:0 0 6px}
+.letterhead__req{font-size:8.5pt;color:#475569;margin:0;line-height:1.35}
+.letterhead__contacts{font-size:8.5pt;color:#475569;margin:4px 0 0}
+.meta-row{display:flex;justify-content:flex-end;margin:0 0 22px}
+.meta-row__out{text-align:right;font-size:11pt}
+.recipient-block{margin:0 0 18px;font-size:12pt}
+.recipient-block p{margin:0 0 4px}
+.subject{text-align:center;font-weight:700;margin:0 0 16px;font-size:12pt}
+.body-text p{margin:0 0 10px;text-align:justify;text-indent:1.25cm}
+.body-text p.no-indent{text-indent:0}
+.closing{margin-top:22px}
+.closing__respect{margin:0 0 28px;text-indent:1.25cm}
+.signature{display:grid;grid-template-columns:1fr 120px 1fr;align-items:end;gap:8px;margin-top:8px;font-size:11pt}
+.signature__role{margin:0}
+.signature__line{border-bottom:1px solid #111;height:1px}
+.signature__name{margin:0;text-align:right}
+.letter-footer{margin-top:28px;padding-top:6px;border-top:1px solid #cbd5e1;font-family:Inter,Arial,sans-serif;font-size:7.5pt;color:#64748b;text-align:center}
+.print-toolbar{display:flex;gap:8px;margin:0 0 16px;position:sticky;top:0;background:#fff;padding:10px 0;z-index:2;font-family:Inter,Arial,sans-serif}
+.print-toolbar button{border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:14px;background:#1e5aa8;color:#fff}
+.print-toolbar button.secondary{background:#f1f5f9;color:#111}
+@media screen{
+  body{background:#e8edf3;padding:24px 16px 48px}
+  .letter-sheet{max-width:210mm;margin:0 auto;padding:18mm 20mm 22mm 25mm;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12)}
+}
+@media print{
+  .print-toolbar{display:none!important}
+  body{background:#fff;padding:0}
+  .letter-sheet{padding:0;box-shadow:none;max-width:none}
+}`;
+}
+
+function operatorLetterPrintShell(title, articleHtml) {
+  return `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8" />
+<title>${esc(title)}</title>
+<style>${operatorLetterPrintCss()}</style></head><body>
+<div class="letter-sheet">
+  <div class="print-toolbar">
+    <button type="button" onclick="window.print()">Печать / PDF</button>
+    <button type="button" class="secondary" onclick="window.close()">Закрыть</button>
+  </div>
+  ${articleHtml}
+</div>
+</body></html>`;
+}
+
+function renderOperatorLetterPrintHtml(templateId, body, opts) {
+  const p = ARMADA_PLATFORM_PARTY;
+  const filled = fillOperatorLetterBody(body, templateId, opts);
+  const inner = operatorLetterBodyToPrintHtml(filled);
+  return `<article class="letter-page">
+    ${platformLetterheadPrintHtml()}
+    ${inner}
+    <footer class="letter-footer">ООО «АРМАДА» · ИНН ${esc(p.inn)} · ${esc(p.site)}</footer>
+  </article>`;
+}
+
+function openOperatorLetterPrintDocument(templateId, body, opts) {
+  const title = (operatorLetterMeta(templateId) || {}).title || 'Письмо оператору';
+  const html = renderOperatorLetterPrintHtml(templateId, body, opts);
+  const w = window.open('', '_blank');
+  if (!w) {
+    alert('Разрешите всплывающие окна, чтобы печатать документ');
+    return;
+  }
+  w.document.open();
+  w.document.write(operatorLetterPrintShell(title, html));
+  w.document.close();
+}
+
+
 function openOperatorLetterPrint(templateId) {
   ensureOperatorLetterOutNo(templateId);
   const body = getOperatorLetterBody(templateId);
-  const html = renderOperatorLetterPreviewHtml(templateId, body, { assign: true });
-  const title = (operatorLetterMeta(templateId) || {}).title || 'Письмо оператору';
-  if (typeof openPrintHtml === 'function') openPrintHtml(title, html);
+  openOperatorLetterPrintDocument(templateId, body, { assign: true });
 }
 
 function applyOperatorLettersPlatform(platform) {

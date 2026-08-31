@@ -389,12 +389,9 @@ function wireAdminDocsConstructor() {
         if (typeof ensureOperatorLetterOutNo === 'function') ensureOperatorLetterOutNo(tplId);
         const ta = $('adm-tpl-editor');
         const body = ta ? ta.value : (typeof getOperatorLetterBody === 'function' ? getOperatorLetterBody(tplId) : '');
-        if (typeof openPrintHtml === 'function' && typeof renderOperatorLetterPreviewHtml === 'function') {
+        if (typeof openOperatorLetterPrintDocument === 'function') {
           const meta = typeof operatorLetterMeta === 'function' ? operatorLetterMeta(tplId) : null;
-          openPrintHtml(
-            (meta && meta.title) || 'Письмо оператору',
-            renderOperatorLetterPreviewHtml(tplId, body, { assign: true })
-          );
+          openOperatorLetterPrintDocument(tplId, body, { assign: true });
         }
         renderAdminDocsBody();
         return;
