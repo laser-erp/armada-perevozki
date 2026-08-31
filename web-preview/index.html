@@ -580,6 +580,9 @@
           <div class="cust-form-block" data-admin-step="basis">
             <div class="cust-form-block-head">1. Основание</div>
             <div class="cust-form-block-body">
+              <label for="create-copy-from">Скопировать с прошлого заказа</label>
+              <select id="create-copy-from"><option value="">— новый заказ —</option></select>
+              <p class="hint" id="create-copy-hint">Выберите заказ — подставим заказчика, маршрут, груз и цены. Дату подачи и водителя укажите заново.</p>
               <p class="form-section-hint">Номер за день и фирма по договору — от неё же берётся парк</p>
               <label>Номер за день</label>
               <div class="nums" id="create-day"><button type="button" data-cday="1">1</button><button type="button" data-cday="2">2</button><button type="button" data-cday="3">3</button><button type="button" data-cday="4">4</button><button type="button" data-cday="5">5</button></div>
@@ -770,6 +773,7 @@
       <div class="admin-form-actions" id="detail-actions" style="display:none">
         <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
         <button class="primary" id="detail-save">Сохранить</button>
+        <button class="secondary" id="detail-copy-order">Повторить заказ</button>
         <button class="secondary" id="detail-return-exchange" style="display:none">На биржу снова</button>
         <button class="secondary" id="detail-cancel-order" style="display:none">Отменить заказ</button>
       </div>

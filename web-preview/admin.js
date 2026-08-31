@@ -1774,6 +1774,7 @@ function adminOrderCardHtml(o){
       : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
     <div class="order-actions">
       <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
+      <button type="button" class="secondary copy-order" data-id="${o.id}">Повторить</button>
       ${sideBtns?`<div class="row">${sideBtns}</div>`:''}
     </div>
   </div>`;
@@ -2622,6 +2623,10 @@ function renderAdmin(){
     };
   });
   document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+  document.querySelectorAll('#admin-list .copy-order').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    openAdminCreateScreen({ fromOrderId:b.dataset.id });
+  });
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=e=>{
     if(e.target.closest('.order-pick,input')) return;
     openDetail(tr.dataset.id);
@@ -2710,32 +2715,162 @@ function roleLabels(c){
   ].filter(Boolean).join(' · ');
 }
 let createDay=1;
+function orderAddressByKind(o, kind){
+  if(!o) return '';
+  if(kind==='loading' && o.loadingAddress) return String(o.loadingAddress).trim();
+  if(kind==='unloading' && o.unloadingAddress) return String(o.unloadingAddress).trim();
+  const pts=Array.isArray(o.routePoints)?o.routePoints:[];
+  const hit=pts.find(p=>p&&p.address&&p.kind===kind);
+  return hit?String(hit.address).trim():'';
+}
+function ordersForCopyTemplate(){
+  return allOrders().filter(o=>o&&o.id&&canAdminSeeOrder(o)&&matchesOwnerFilter(o)&&!o.cancelledAt);
+}
+function fillCreateCopySelect(selectedId){
+  const sel=$('create-copy-from');
+  if(!sel) return;
+  const cur=selectedId!=null?selectedId:sel.value;
+  const list=ordersForCopyTemplate().slice(0,100);
+  sel.innerHTML=`<option value="">— новый заказ —</option>`+
+    list.map(o=>{
+      const route=typeof routeText==='function'?routeText(o):'';
+      const cust=String(o.customer||'—').trim();
+      const tail=route?` · ${route}`:'';
+      const label=`№${o.sequentialNumber||'—'} · ${cust}${tail}`.slice(0,120);
+      return `<option value="${esc(o.id)}">${esc(label)}</option>`;
+    }).join('');
+  if(cur && list.some(o=>o.id===cur)) sel.value=cur;
+  else if(!cur) sel.value='';
+}
+function resetCreateFormFields(){
+  if($('create-exec-mode')){
+    const co=currentOwnCompany();
+    const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(co);
+    const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(co);
+    $('create-exec-mode').value=hasPark?'own':(dispatcher?'exchange':'carrier');
+  }
+  ['create-customer','create-contact-name','create-contact-phone','create-load','create-unload',
+    'create-loading-contact-name','create-loading-contact-phone','create-unloading-contact-name','create-unloading-contact-phone',
+    'create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-cargo-desc',
+    'create-price-client','create-price-carrier','create-vehicle-date','create-vehicle-time'].forEach(id=>{
+    const el=$(id);
+    if(el) el.value='';
+  });
+  ['create-load','create-unload'].forEach(id=>{
+    const el=$(id);
+    if(el){ delete el.dataset.lat; delete el.dataset.lon; }
+  });
+  const cargoKindEl=$('create-cargo-kind'); if(cargoKindEl) cargoKindEl.value='';
+  if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
+  if($('create-copy-hint')) $('create-copy-hint').textContent='Выберите заказ — подставим заказчика, маршрут, груз и цены. Дату подачи и водителя укажите заново.';
+  if($('create-error')) $('create-error').textContent='';
+  if(typeof resetCreatePriceState==='function') resetCreatePriceState();
+  if(typeof fillCreateCargoKindSelect==='function') fillCreateCargoKindSelect();
+  createDay=1;
+  highlightDay();
+}
+function fillCreateFormFromOrder(o){
+  if(!o) return;
+  if(o.dayNumber>=1&&o.dayNumber<=5) createDay=+o.dayNumber;
+  highlightDay();
+  const ownEl=$('create-own-company');
+  if(ownEl && o.ownCompanyId) ownEl.value=o.ownCompanyId;
+  fillCreateFleetSelects();
+  const set=(id,v)=>{ const el=$(id); if(el) el.value=v!=null&&v!==''?String(v):''; };
+  set('create-customer', o.customer||'');
+  set('create-customer-inn', o.customerInn||'');
+  set('create-contact-name', o.contactName||'');
+  set('create-contact-phone', o.contactPhone||'');
+  set('create-load', orderAddressByKind(o,'loading'));
+  set('create-unload', orderAddressByKind(o,'unloading'));
+  ['create-load','create-unload'].forEach(id=>{ const el=$(id); if(el){ delete el.dataset.lat; delete el.dataset.lon; } });
+  set('create-loading-contact-name', o.loadingContactName||'');
+  set('create-loading-contact-phone', o.loadingContactPhone||'');
+  set('create-unloading-contact-name', o.unloadingContactName||'');
+  set('create-unloading-contact-phone', o.unloadingContactPhone||'');
+  set('create-cargo-desc', o.cargoDescription||'');
+  if($('create-cargo-kind')) $('create-cargo-kind').value=o.cargoKind||'';
+  set('create-req-pay', o.reqPayloadTons??'');
+  set('create-req-l', o.reqLengthM??'');
+  set('create-req-w', o.reqWidthM??'');
+  set('create-req-h', o.reqHeightM??'');
+  const clientEl=$('create-price-client');
+  const carrierEl=$('create-price-carrier');
+  const clientAmt=o.priceForClient??o.rateCash??null;
+  const carrierAmt=o.priceForCarrier??null;
+  if(clientEl && clientAmt!=null && clientAmt>0){ clientEl.value=String(Math.round(clientAmt)); clientEl.dataset.auto='1'; }
+  if(carrierEl && carrierAmt!=null && carrierAmt>0){ carrierEl.value=String(Math.round(carrierAmt)); carrierEl.dataset.auto='1'; }
+  let mode='own';
+  if(o.onExchange || o.executorType==='exchange') mode='exchange';
+  else if(o.executorType==='carrier' || (o.carrierCompanyId && o.executorType!=='own')) mode='carrier';
+  const execEl=$('create-exec-mode');
+  if(execEl) execEl.value=mode;
+  const carEl=$('create-carrier-company');
+  if(carEl && o.carrierCompanyId) carEl.value=o.carrierCompanyId;
+  fillExecutorUI();
+  fillContactPickers(o.customer||'');
+  fillCreateCopySelect(o.id);
+  const hint=$('create-copy-hint');
+  if(hint) hint.textContent=`Скопировано с заказа №${o.sequentialNumber||'—'}. Проверьте дату подачи, водителя и цены.`;
+  if(typeof scheduleCreateRouteEstimate==='function') scheduleCreateRouteEstimate();
+  if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+  updateCreateFreeHint();
+}
+async function openAdminCreateScreen(opts){
+  if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
+  const g=await billingGuardCurrentAdminWithServer('create_order');
+  if(!g.ok){ alert(g.message); return; }
+  const fromOrderId=opts&&opts.fromOrderId;
+  resetCreateFormFields();
+  fillCreateSelects();
+  fillCustomerPickers();
+  if(fromOrderId){
+    const src=(state.orders||[]).find(x=>x.id===fromOrderId);
+    if(src){
+      if(!canAdminSeeOrder(src)){ alert('Нет доступа к этому заказу'); return; }
+      fillCreateFormFromOrder(src);
+    } else fillCreateCopySelect('');
+  }else{
+    fillAddressPickers('');
+    fillContactPickers('');
+    fillCreateCopySelect('');
+  }
+  fillExecutorUI();
+  wireVehicleAtHint('create');
+  wireCreateCustomerInn();
+  if(typeof wireCreateAddressFields==='function') wireCreateAddressFields();
+  if(typeof wireCreatePricePreview==='function') wireCreatePricePreview();
+  if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+  show('admin-create');
+  highlightDay();
+  const createScroll=document.querySelector('#admin-create .admin-form-scroll');
+  if(createScroll) createScroll.scrollTop=0;
+}
 function bindAdminCreate(){
-  $('admin-new').onclick=async ()=>{
-    if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-    const g=await billingGuardCurrentAdminWithServer('create_order');
-    if(!g.ok){ alert(g.message); return; }
-    if($('create-exec-mode')){
-      const co=currentOwnCompany();
-      const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(co);
-      const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(co);
-      $('create-exec-mode').value=hasPark?'own':(dispatcher?'exchange':'carrier');
-    }
-    ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-cargo-desc','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
-    const cargoKindEl=$('create-cargo-kind'); if(cargoKindEl) cargoKindEl.value='';
-    if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
-    if(typeof resetCreatePriceState==='function') resetCreatePriceState();
-    if(typeof fillCreateCargoKindSelect==='function') fillCreateCargoKindSelect();
-    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn();
-    if(typeof wireCreateAddressFields==='function') wireCreateAddressFields();
-    if(typeof wireCreatePricePreview==='function') wireCreatePricePreview();
-    if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
-    show('admin-create'); highlightDay();
-    const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
-  };
+  $('admin-new').onclick=()=>openAdminCreateScreen();
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
   document.querySelectorAll('[data-cday]').forEach(b=>b.onclick=()=>{ createDay=+b.dataset.cday; highlightDay(); });
   $('create-save').onclick=saveDispatcherOrder;
+  const copySel=$('create-copy-from');
+  if(copySel && !copySel._wired){
+    copySel._wired=true;
+    copySel.onchange=()=>{
+      const id=copySel.value;
+      if(!id){
+        resetCreateFormFields();
+        fillCreateSelects();
+        fillCustomerPickers();
+        fillAddressPickers('');
+        fillContactPickers('');
+        fillExecutorUI();
+        if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+        updateCreateFreeHint();
+        return;
+      }
+      const o=(state.orders||[]).find(x=>x.id===id);
+      if(o) fillCreateFormFromOrder(o);
+    };
+  }
 }
 function highlightDay(){
   document.querySelectorAll('[data-cday]').forEach(b=>{
@@ -3305,6 +3440,10 @@ function openDetail(id){
   const detailActions=$('detail-actions'); if(detailActions) detailActions.style.display='flex';
   const detailOk=$('detail-ok'); if(detailOk) detailOk.style.display='none';
   const detailCancel=$('detail-cancel-order');
+  const detailCopy=$('detail-copy-order');
+  if(detailCopy){
+    detailCopy.onclick=()=>openAdminCreateScreen({ fromOrderId:id });
+  }
   const detailReturn=$('detail-return-exchange');
   if(detailReturn){
     const showRet=canReturnOrderToExchange(o);
