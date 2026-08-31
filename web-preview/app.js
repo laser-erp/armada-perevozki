@@ -4304,7 +4304,8 @@ function wireShellHandlers(){
     $('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); } });
   }
   $('btn-home')&&typeof showDriverHome==='function'&&($('btn-home').onclick=showDriverHome);
-  $('role-admin')&&($('role-admin').onclick=()=>openAdminLogin());
+  $('role-admin')&&($('role-admin').onclick=()=>{ setEntryMode('admin'); if(typeof openAdminLogin==='function') openAdminLogin(); });
+  $('role-customer')&&($('role-customer').onclick=()=>{ setEntryMode('customer'); if(typeof openCustomerLogin==='function') openCustomerLogin(); });
   $('pin-back')&&typeof backFromEntryLogin==='function'&&($('pin-back').onclick=()=>backFromEntryLogin());
   if(typeof loginAdmin==='function'){
     $('pin-ok')&&($('pin-ok').onclick=loginAdmin);

@@ -218,13 +218,6 @@ function getEntryMode(){
 function initEntryFromPage(){
   const fromUrl=readEntryFromUrl();
   if(fromUrl) setEntryMode(fromUrl);
-  else if(!getEntryMode()){
-    const path=(location.pathname||'').toLowerCase();
-    if((/index\.html$/.test(path)||path==='/'||path.endsWith('/'))
-      && !/\/[avz]\/?$/i.test(path)){
-      setEntryMode('admin');
-    }
-  }
 }
 function entryLoginScreenId(){
   const m=getEntryMode();
