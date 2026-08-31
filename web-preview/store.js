@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-armada-logist4317";
+const APP_BUILD="2026-08-31-kontur-epd4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2303,6 +2303,14 @@ async function armadaApiLogin(pin, meta){
     if(res.ok && data.token){ setArmadaApiToken(data.token); return data.token; }
   }catch(err){ console.warn('armada-api login', err); }
   return null;
+}
+async function fetchArmadaApiHealth(timeoutMs){
+  if(!API_BASE) return null;
+  try{
+    const res=await fetchWithTimeout(`${API_BASE}/health`, { headers:{ Accept:'application/json' } }, timeoutMs||6000);
+    const data=await res.json().catch(()=>null);
+    return res.ok&&data?data:null;
+  }catch(_){ return null; }
 }
 async function fetchServerStateFromApi(timeoutMs){
   const res=await fetchWithTimeout(`${API_BASE}/state`, { headers:armadaApiJsonHeaders() }, timeoutMs);

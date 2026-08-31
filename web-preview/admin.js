@@ -555,6 +555,33 @@ function flashAdmPinOk(msg, isWarn){
   const ms=(msg&&msg.length>28)?4200:2200;
   flashAdmPinOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, ms);
 }
+function paintEpdServerStatus(){
+  const el=$('epd-server-status');
+  if(!el) return;
+  if(typeof fetchArmadaApiHealth!=='function'){
+    el.textContent='armada-api: проверка недоступна (нет API)';
+    return;
+  }
+  el.textContent='Проверка armada-api…';
+  fetchArmadaApiHealth(8000).then(h=>{
+    if(!h||!h.ok){
+      el.innerHTML='<span class="hint">armada-api: не отвечает или недоступен</span>';
+      return;
+    }
+    const epd=h.epd||{};
+    const op=epd.operator||'—';
+    const configured=!!epd.configured;
+    const sandbox=!!epd.sandbox;
+    const cfgLabel=configured?'ключи на сервере есть':'ключи не настроены — см. plans/KONTUR_EPD_PLAN.md';
+    const sbLabel=sandbox?'тестовый контур':'боевой контур';
+    el.innerHTML=`<span class="${configured?'ok':'hint'}">armada-api ${esc(h.version||'')}: оператор <strong>${esc(op)}</strong> · ${esc(cfgLabel)} · ${esc(sbLabel)}</span>`;
+    if(op==='kontur'&&!configured){
+      el.innerHTML+=`<br><span class="hint">Когда Контур пришлёт ключ разработчика — добавьте в .env на VPS и перезапустите armada-api.</span>`;
+    }
+  }).catch(()=>{
+    el.textContent='armada-api: ошибка проверки';
+  });
+}
 function renderAdminActivity(){
   migrateAdmins();
   migrateCustomerPortalLeads();
@@ -698,8 +725,9 @@ function renderAdminActivity(){
         <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
       </div>
       <h2 class="form-section-title" style="margin-top:12px">Оператор ЭПД (ЭТрН)</h2>
-      <p class="cat-panel-hint">Оператор электронных перевозочных документов: СБИС, Контур, Диадoc. Ключ API — следующий этап; сейчас sandbox с QR у водителя.</p>
-      <label>Оператор</label>
+      <p class="cat-panel-hint">S3-2.7 стратегического плана. Оператор на сервере — Контур.Логистика (<a href="https://developer.kontur.ru/doc/logistics.api" target="_blank" rel="noopener">документация API</a>). Ключи разработчика прописываются в <code>/opt/armada-api/.env</code> на VPS, не в браузере.</p>
+      <p class="cat-panel-hint" id="epd-server-status">Проверка armada-api…</p>
+      <label>Оператор (в данных приложения — для UI и sandbox)</label>
       <div class="row">
         <select id="epd-operator" style="flex:1">
           <option value="">— sandbox (локально) —</option>
@@ -783,6 +811,7 @@ function renderAdminActivity(){
     persist();
     alert(state.settings.epdWebhookToken?'Webhook token сохранён':'Webhook token очищен');
   });
+  paintEpdServerStatus();
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{
     const st=$('new-firm-inn-status');
     const inn=(($('new-firm-inn')||{}).value||'').trim();

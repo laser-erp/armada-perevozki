@@ -31,6 +31,8 @@ if curl -fsS -o /dev/null "$BASE/"; then pass "HTTPS $BASE"; else fail "HTTPS $B
 HEALTH="$(curl -fsS "$API/health" 2>/dev/null || echo '{}')"
 if echo "$HEALTH" | grep -q '"ok":true'; then pass "API health ok"; else fail "API health"; fi
 if echo "$HEALTH" | grep -q 'armada-api'; then pass "API service name"; else fail "API service name"; fi
+if echo "$HEALTH" | grep -q '"operator":"kontur"'; then pass "EPD operator kontur"; else fail "EPD operator"; fi
+if echo "$HEALTH" | grep -q '"epd"'; then pass "EPD block in health"; else fail "EPD block"; fi
 
 echo "S1 driverInvites"
 if curl -fsS -o /dev/null "$BASE/invite.html"; then pass "invite.html"; else fail "invite.html"; fi
@@ -39,7 +41,7 @@ if grep -q 'armada_app_v5' "$STORE_TMP"; then pass "store.js KEY"; else fail "st
 if grep -q 'driverInvitePageUrl' "$STORE_TMP"; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
 if grep -q 'ENTRY_SESSION_KEY' "$STORE_TMP"; then pass "separate entry modes in store.js"; else fail "entry modes"; fi
 
-echo "S3 ETRN MVP"
+if grep -q 'fetchArmadaApiHealth' "$STORE_TMP"; then pass "fetchArmadaApiHealth in store.js"; else fail "fetchArmadaApiHealth"; fi
 for f in etrn.js billing.js; do
   if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
 done

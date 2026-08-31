@@ -7,7 +7,7 @@
     "result": "pass",
     "notes": "smoke PASS + prod sync MATCH; APP_BUILD entrybc21"
   },
-  "updatedAt": "2026-08-28T12:58:00Z",
+  "updatedAt": "2026-08-31T14:15:00Z",
   "deploy": {
     "production": {
       "status": "done",
@@ -68,7 +68,12 @@
           "status": "done",
           "notes": "Фирменный бланк; PDF на проде"
         },
-        "S3-2.7": { "status": "paused", "notes": "epd.configured false — ключи оператора" }
+        "S3-2.7": {
+          "status": "in_progress",
+          "notes": "Документация Контур получена; UI + health; epd.configured false — ждём ключи в /opt/armada-api/.env",
+          "doc": "web-preview/plans/KONTUR_EPD_PLAN.md",
+          "operatorDoc": "https://developer.kontur.ru/doc/logistics.api"
+        }
       }
     },
     "S4": { "title": "—", "status": "paused", "notes": "Не автозапускать без «Делай»" },
@@ -86,7 +91,7 @@
   "production": {
     "url": "https://aptown1.fvds.ru",
     "api": "https://aptown1.fvds.ru/armada-api",
-    "build": "2026-08-27-entrybc21",
+    "build": "2026-08-31-kontur-epd4317",
     "sw": "armada-shell-v29",
     "epdConfigured": false,
     "onboarding": "welcome + tours + help.html",
