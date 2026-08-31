@@ -472,13 +472,16 @@
     </div>`;
   }
 
-  function epdSignButtonsHtml(st, role, ctx, kindLabel){
-    const issueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить ${esc(kindLabel)}</button>`;
+  function epdSignButtonsHtml(st, role, ctx, kindLabel, opts){
+    opts=opts||{};
+    const short=!!opts.compact;
+    const issueLbl=short?'Выпустить':`Выпустить ${kindLabel}`;
+    const issueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">${esc(issueLbl)}</button>`;
     const continueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Продолжить</button>`;
-    const renewBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить заново</button>`;
-    const checkBtn=`<button type="button" class="secondary epd-sign-check" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Проверить</button>`;
-    const resetBtn=`<button type="button" class="hint epd-sign-reset" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Сбросить</button>`;
-    if(st==='active') return `${checkBtn}${resetBtn}`;
+    const renewBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Заново</button>`;
+    const checkBtn=`<button type="button" class="secondary epd-sign-check" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">${short?'Статус':'Проверить'}</button>`;
+    const resetBtn=`<button type="button" class="hint epd-sign-reset" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Сброс</button>`;
+    if(st==='active') return short?'':`${checkBtn}${resetBtn}`;
     if(st==='pending') return `${continueBtn}${checkBtn}`;
     if(st==='expired') return `${renewBtn}`;
     return `${issueBtn}`;
@@ -498,22 +501,17 @@
     const st=prof&&prof.status||'none';
     const kindLabel=meta.kind==='pep'?'ПЭП':'КЭП';
     if(st==='active'){
-      return `<div class="cust-alert-strip cust-alert-strip--sign cust-alert-strip--ok" data-epd-sign-role="${esc(role)}">
-        <div class="cust-alert-strip-text">
-          <span class="cust-alert-chip cust-alert-chip--ok">✓ ${esc(kindLabel)} активна</span>
-          <span class="hint">ЭТrН T1 и бухдоки</span>
-        </div>
-        <div class="cust-alert-strip-actions">${epdSignButtonsHtml(st, role, ctx, kindLabel)}</div>
+      return `<div class="cust-alert-strip cust-alert-strip--sign cust-alert-strip--ok cust-alert-strip--mini" data-epd-sign-role="${esc(role)}">
+        <span class="cust-alert-chip cust-alert-chip--ok">✓ ${esc(kindLabel)}</span>
       </div>`;
     }
-    const titles={ none:`${kindLabel} не оформлена`, pending:'Оформление не завершено', expired:`${kindLabel} истекла` };
+    const titles={ none:kindLabel, pending:'КЭП · …', expired:`${kindLabel} истекла` };
     const title=titles[st]||titles.none;
-    return `<div class="cust-alert-strip cust-alert-strip--sign" data-epd-sign-role="${esc(role)}">
-      <div class="cust-alert-strip-text">
-        <strong class="cust-alert-strip-title">${esc(title)}</strong>
-        <span class="hint">Через оператора · T1</span>
-      </div>
-      <div class="cust-alert-strip-actions">${epdSignButtonsHtml(st, role, ctx, kindLabel)}</div>
+    const actions=epdSignButtonsHtml(st, role, ctx, kindLabel, { compact:true });
+    if(!actions) return '';
+    return `<div class="cust-alert-strip cust-alert-strip--sign cust-alert-strip--mini" data-epd-sign-role="${esc(role)}">
+      <strong class="cust-alert-strip-title">${esc(title)}</strong>
+      <div class="cust-alert-strip-actions">${actions}</div>
     </div>`;
   }
 

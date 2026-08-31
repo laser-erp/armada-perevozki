@@ -1089,11 +1089,8 @@ function customerFrameworkContractBannerHtml(customerCo, carrierCo, opts){
   if(st==='signed') return '';
   const carrierName=carrierCo&&carrierCo.name||'перевозчиком';
   if(opts.compact){
-    return `<div class="cust-alert-strip cust-alert-strip--contract" id="cust-contract-banner">
-      <div class="cust-alert-strip-text">
-        <strong class="cust-alert-strip-title">Рамочный договор</strong>
-        <span class="hint">Для работы с ${esc(carrierName)}</span>
-      </div>
+    return `<div class="cust-alert-strip cust-alert-strip--contract cust-alert-strip--mini" id="cust-contract-banner">
+      <strong class="cust-alert-strip-title">Договор</strong>
       <div class="cust-alert-strip-actions cust-contract-actions">
         <button type="button" class="secondary cust-alert-btn" id="cust-contract-preview">Просмотр</button>
         <label class="cust-check-item cust-alert-check"><input type="checkbox" id="cust-contract-agree"/> Согласен</label>

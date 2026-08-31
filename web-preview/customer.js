@@ -85,6 +85,12 @@ function syncCustomerPortalTabUi(){
     const panel=$('cust-tab-'+id);
     if(panel) panel.hidden=(id!==custPortalTab);
   });
+  const alerts=$('cust-docs-alerts');
+  if(alerts){
+    const show=custPortalTab==='docs'&&alerts.dataset.hasAlerts==='1';
+    alerts.hidden=!show;
+    alerts.setAttribute('aria-hidden', show?'false':'true');
+  }
 }
 function customerDocsTabBadgeCount(){
   let n=0;
@@ -118,8 +124,10 @@ function renderCustomerDocsAlerts(co, carrier){
     if(etrnHtml) parts.push(etrnHtml);
   }
   if(parts.length){
-    host.hidden=false;
+    host.dataset.hasAlerts='1';
     host.innerHTML=parts.join('');
+    host.hidden=(typeof custPortalTab!=='undefined'&&custPortalTab!=='docs');
+    host.setAttribute('aria-hidden', host.hidden?'true':'false');
     if(co&&$('cust-contract-banner')&&typeof wireCustomerFrameworkContractBanner==='function'){
       wireCustomerFrameworkContractBanner(co, carrier);
     }
@@ -128,6 +136,8 @@ function renderCustomerDocsAlerts(co, carrier){
   }else{
     host.hidden=true;
     host.innerHTML='';
+    delete host.dataset.hasAlerts;
+    host.setAttribute('aria-hidden','true');
   }
 }
 function syncCustomerDocsTabBadge(){
@@ -3259,3 +3269,4 @@ function wireCustomerPortal(){
 }
 
 wireCustomerPortal();
+globalThis.renderCustomerDocsAlerts=renderCustomerDocsAlerts;
