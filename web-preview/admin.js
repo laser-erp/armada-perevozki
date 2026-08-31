@@ -1,5 +1,34 @@
 /* АРМАДА admin UI: login/chrome, vehicle card, boards/catalogs (phase2 chunk D) */
 const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
+function normalizeLoginInn(raw){
+  return String(raw||'').replace(/\D/g,'');
+}
+function spaceIdsForLoginInn(innRaw){
+  const inn=normalizeLoginInn(innRaw);
+  if(!inn) return new Set();
+  const ids=new Set();
+  (state.spaces||[]).forEach(s=>{
+    if(normalizeLoginInn(s.inn)===inn) ids.add(s.id);
+  });
+  (state.companies||[]).forEach(c=>{
+    if(!companyHasRole(c,'own')) return;
+    if(normalizeLoginInn(c.inn)===inn && c.spaceId) ids.add(c.spaceId);
+  });
+  return ids;
+}
+function findAdminByInnAndPin(innRaw, pin){
+  const pinStr=String(pin||'').trim();
+  if(!pinStr) return null;
+  const inn=normalizeLoginInn(innRaw);
+  if(!inn) return null;
+  const spaceIds=spaceIdsForLoginInn(inn);
+  if(!spaceIds.size) return null;
+  const matches=(state.admins||[]).filter(a=>{
+    if(String(a.pin||'').trim()!==pinStr) return false;
+    return !!(a.spaceId && spaceIds.has(a.spaceId));
+  });
+  return matches.length===1 ? matches[0] : null;
+}
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
   if(!box) return;
@@ -211,9 +240,18 @@ async function loginAdmin(){
   const btn=$('pin-ok');
   if(btn) btn.disabled=true;
   try{
-  const id=(($('admin-name-select')||{}).value||'').trim();
+  const innRaw=(($('admin-login-inn')||{}).value||'').trim();
   const pin=(($('pin-input')||{}).value||'').trim();
-  const admPre=state.admins.find(a=>a.id===id);
+  const inn=normalizeLoginInn(innRaw);
+  if(!inn){
+    if(pinErr) pinErr.textContent='Укажите ИНН организации (10 или 12 цифр)';
+    return;
+  }
+  if(inn.length!==10 && inn.length!==12){
+    if(pinErr) pinErr.textContent='ИНН: 10 цифр для организации или 12 для ИП';
+    return;
+  }
+  const admPre=findAdminByInnAndPin(inn, pin);
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
       const rec=await fetchServerState(3500, {
@@ -227,15 +265,16 @@ async function loginAdmin(){
         migrateSpaces();
         migrateDriverPins();
         persistLocalOnly();
-        fillAdminLoginSelect();
       }
     }
   }catch(_){}
-  const adm=state.admins.find(a=>a.id===id);
+  const adm=findAdminByInnAndPin(inn, pin);
   if(!adm){
-    if(pinErr) pinErr.textContent=state.admins.length
-      ? 'Выберите администратора'
-      : 'Нет учётных записей — попросите супер-админа восстановить доступ и обновите страницу';
+    if(pinErr){
+      pinErr.textContent=spaceIdsForLoginInn(inn).size
+        ? 'Неверный PIN для этой организации'
+        : 'Организация с таким ИНН не найдена. Проверьте цифры или обратитесь к супер-админу';
+    }
     return;
   }
   if(pin!==String(adm.pin)){

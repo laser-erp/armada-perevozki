@@ -4130,7 +4130,8 @@ async function openAdminLoginAsync(){
     return;
   }
   if(adminEntryRequiresPin()) currentAdmin=null;
-  fillAdminLoginSelect();
+  const innIn=$('admin-login-inn');
+  if(innIn) innIn.value='';
   const pinIn=$('pin-input');
   if(pinIn) pinIn.value='';
   const pinErr=$('pin-error');
@@ -4138,28 +4139,24 @@ async function openAdminLoginAsync(){
   show('admin-pin');
   wireAdminLoginHandlers();
   try{ applyEntrySkin('admin-pin'); }catch(err){ console.warn('applyEntrySkin', err); }
-  const sel=$('admin-name-select');
   const btn=$('pin-ok');
   if(btn) btn.disabled=false;
   let synced=false;
   try{
-    if(sel) sel.disabled=true;
+    if(btn) btn.disabled=true;
     if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
       synced=await Promise.race([
         refreshAdminListForLogin(),
         new Promise(resolve=>setTimeout(()=>resolve(false), 4500))
       ]);
     }
-    fillAdminLoginSelect();
     if(!synced && pinErr){
       pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
     }
   }catch(err){
     console.warn('admin login list', err);
-    fillAdminLoginSelect();
-    if(pinErr) pinErr.textContent='Ошибка загрузки списка — попробуйте войти';
+    if(pinErr) pinErr.textContent='Ошибка загрузки с сервера — попробуйте войти';
   }finally{
-    if(sel) sel.disabled=false;
     if(btn) btn.disabled=false;
   }
 }
@@ -4172,6 +4169,12 @@ function wireAdminLoginHandlers(){
   const pin=$('pin-input');
   if(pin){
     pin.onkeydown=e=>{
+      if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); }
+    };
+  }
+  const inn=$('admin-login-inn');
+  if(inn){
+    inn.onkeydown=e=>{
       if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); }
     };
   }
