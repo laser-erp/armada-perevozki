@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-copy-order4317";
+const APP_BUILD="2026-08-31-admin-inbox-notify4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2661,6 +2661,7 @@ async function pullRemoteUpdates(reason){
       else if(document.querySelector('#admin-driver-card.show') && state._driverCardId) openDriverCard(state._driverCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
       else if(document.querySelector('#admin.show')) scheduleAdminRerender();
+      if(typeof maybeNotifyAdminInboxUpdates==='function') maybeNotifyAdminInboxUpdates();
     } else if(typeof currentCustomer!=='undefined' && currentCustomer || document.querySelector('#customer-portal.show')){
       if(typeof restoreCustomerSession==='function') restoreCustomerSession();
       if(typeof renderCustomerPortal==='function') renderCustomerPortal();
@@ -2726,6 +2727,7 @@ if(typeof document!=='undefined'){
         if(typeof updateSyncHint==='function') updateSyncHint();
         if(typeof updateDriverNetHint==='function') updateDriverNetHint();
         if(currentAdmin) scheduleAdminRerender();
+        if(typeof maybeNotifyAdminInboxUpdates==='function') maybeNotifyAdminInboxUpdates();
         if(DRIVER && typeof renderDriverBanner==='function') renderDriverBanner();
         if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
         if(typeof currentCustomer!=='undefined' && currentCustomer && typeof renderCustomerPortal==='function') renderCustomerPortal();

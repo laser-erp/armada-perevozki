@@ -1163,6 +1163,21 @@
     .filters{background:var(--surface);border-bottom:1px solid var(--border);gap:6px;padding:8px 10px}
     .filters button{background:var(--field);border:1px solid var(--border);color:var(--text);font-weight:600}
     .filters button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+    .admin-filter-inbox{position:relative;padding-right:10px}
+    .admin-filter-inbox.has-unread{padding-right:22px}
+    .admin-filter-badge{
+      position:absolute;top:2px;right:4px;min-width:18px;height:18px;padding:0 5px;
+      border-radius:999px;background:#dc2626;color:#fff;font-size:.62rem;font-weight:800;line-height:18px;text-align:center;
+      box-shadow:0 0 0 2px var(--surface,#fff)
+    }
+    .filters button.on .admin-filter-badge{box-shadow:0 0 0 2px var(--accent)}
+    .admin-top-notify{
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--field);
+      width:40px;height:40px;padding:0;font-size:1rem;cursor:pointer;flex:0 0 auto
+    }
+    .admin-top-notify.on{background:rgba(37,99,235,.12);border-color:rgba(37,99,235,.35)}
+    .admin-inbox-banner{cursor:pointer}
+    .admin-inbox-banner strong{color:var(--accent)}
     button.secondary{border:1px solid var(--border)}
     .swipe-front{background:var(--surface);border:1px solid var(--border)}
     .item-card{background:var(--surface);border:1px solid var(--border)}

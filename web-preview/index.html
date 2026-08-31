@@ -553,17 +553,19 @@
             <button type="button" class="on" data-park-ex="park" id="admin-goto-park">Парк</button>
             <button type="button" data-park-ex="exchange" id="admin-goto-exchange">Биржа</button>
           </div>
+          <button type="button" class="admin-top-notify" id="admin-notify-toggle" title="Уведомления о входящих заявках">🔔</button>
           <button type="button" class="admin-top-cta" id="admin-new">+ Заказ</button>
         </header>
         <div class="filters" id="admin-filters">
           <button data-filter="all" class="on">Все</button>
-          <button data-filter="inbox">Входящие</button>
+          <button data-filter="inbox" class="admin-filter-inbox">Входящие<span class="admin-filter-badge" id="admin-inbox-badge" hidden></span></button>
           <button data-filter="assigned">Назначен</button>
           <button data-filter="progress">В работе</button>
           <button data-filter="closed">Закрыт</button>
         </div>
         <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
         <div class="hint" id="admin-billing-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);font-size:.78rem"></div>
+        <div class="hint admin-inbox-banner" id="admin-inbox-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.28);font-size:.78rem"></div>
         <div class="table-wrap admin-content" id="admin-list"></div>
       </div>
     </div>

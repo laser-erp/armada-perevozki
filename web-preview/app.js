@@ -2799,16 +2799,23 @@ function canArriveMessage(orderId){
 }
 const DRIVER_NOTIFY_KEY='armada_driver_notify_v1';
 const CUSTOMER_NOTIFY_KEY_SHARED='armada_customer_notify_v1';
+const ADMIN_NOTIFY_KEY='armada_admin_notify_v1';
 const driverNotifyLastAt={};
 const armadaNotifyLastAt={};
 function notifyRoleWanted(role){
   if(role==='customer'){
     try{ return localStorage.getItem(CUSTOMER_NOTIFY_KEY_SHARED)==='1'; }catch(_){ return false; }
   }
+  if(role==='admin'){
+    try{ return localStorage.getItem(ADMIN_NOTIFY_KEY)==='1'; }catch(_){ return false; }
+  }
   return driverNotifyWanted();
 }
 function setNotifyRoleWanted(role, on){
   if(role==='customer') setCustomerNotifyWanted(on);
+  else if(role==='admin'){
+    try{ localStorage.setItem(ADMIN_NOTIFY_KEY, on?'1':'0'); }catch(_){}
+  }
   else setDriverNotifyWanted(on);
 }
 function armadaNotifySupported(){
@@ -2833,6 +2840,7 @@ function armadaShowNotification(title, body, tag, role){
   const r=role||'driver';
   if(r==='driver' && !DRIVER) return;
   if(r==='customer' && typeof currentCustomer!=='undefined' && !currentCustomer) return;
+  if(r==='admin' && typeof currentAdmin!=='undefined' && !currentAdmin) return;
   if(!armadaNotifyActive(r)) return;
   const now=Date.now();
   const key=tag||'armada';
@@ -4755,6 +4763,14 @@ function wireShellHandlers(){
     else openAdminSidebar();
   });
   $('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
+  $('admin-notify-toggle')&&($('admin-notify-toggle').onclick=async()=>{
+    if(typeof adminNotifyActive==='function' && adminNotifyActive()){
+      if(typeof setAdminNotifyWanted==='function') setAdminNotifyWanted(false);
+      if(typeof syncAdminNotifyToggle==='function') syncAdminNotifyToggle();
+      return;
+    }
+    if(typeof enableAdminNotifications==='function') await enableAdminNotifications();
+  });
   document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
     b.onclick=()=>setAdminNav(b.dataset.nav);
   });
@@ -4773,6 +4789,7 @@ function wireShellHandlers(){
   document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
     state.adminFilter=b.dataset.filter;
     document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
+    if(b.dataset.filter==='inbox' && typeof markAllAdminInboxSeen==='function') markAllAdminInboxSeen();
     renderAdmin();
   });
   if(typeof bindAdminCreate==='function') bindAdminCreate();
@@ -4795,8 +4812,14 @@ wireShellHandlers();
 window.addEventListener('online',()=>flushDriverSyncWhenOnline());
 window.addEventListener('offline',()=>{ syncStatus='error'; updateDriverNetHint(); });
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden) maybeDriverActionNotify(true);
-  else { updateDriverNetHint(); renderDriverBanner(); }
+  if(document.hidden){
+    maybeDriverActionNotify(true);
+    if(typeof maybeNotifyAdminInboxUpdates==='function') maybeNotifyAdminInboxUpdates(true);
+  }else{
+    updateDriverNetHint();
+    renderDriverBanner();
+    if(typeof updateAdminInboxBadge==='function') updateAdminInboxBadge();
+  }
 });
 if('serviceWorker' in navigator){
   let reloading=false;

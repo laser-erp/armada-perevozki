@@ -165,6 +165,156 @@ function closeAdminSidebar(){
   if(sb) sb.classList.remove('open');
   if(bd){ bd.classList.remove('show'); bd.hidden=true; }
 }
+const ADMIN_INBOX_SEEN_KEY='armada_admin_inbox_seen_v1';
+const ADMIN_NOTIFY_KEY='armada_admin_notify_v1';
+let adminInboxNotifySnapshot=null;
+function adminInboxOrders(){
+  return (state.orders||[]).filter(o=>o&&canAdminSeeOrder(o)&&matchesOwnerFilter(o)
+    && typeof isLogistInboxOrder==='function'&&isLogistInboxOrder(o));
+}
+function adminInboxOrderTag(o){
+  if(!o) return '';
+  return `${o.id}|${o.createdAt||''}|${o.bookStatus||''}|${o.bookConfirmedAt||''}|${o.priceForClient||''}|${o.customerSubmitted?'1':'0'}`;
+}
+function loadAdminInboxSeen(){
+  const adminId=currentAdmin&&currentAdmin.id;
+  if(!adminId) return {};
+  try{
+    const all=JSON.parse(localStorage.getItem(ADMIN_INBOX_SEEN_KEY)||'{}');
+    return all[adminId]||{};
+  }catch(_){ return {}; }
+}
+function saveAdminInboxSeen(map){
+  const adminId=currentAdmin&&currentAdmin.id;
+  if(!adminId) return;
+  try{
+    const all=JSON.parse(localStorage.getItem(ADMIN_INBOX_SEEN_KEY)||'{}');
+    all[adminId]=map||{};
+    localStorage.setItem(ADMIN_INBOX_SEEN_KEY, JSON.stringify(all));
+  }catch(_){}
+}
+function adminInboxUnreadOrders(){
+  const seen=loadAdminInboxSeen();
+  return adminInboxOrders().filter(o=>seen[o.id]!==adminInboxOrderTag(o));
+}
+function adminInboxUnreadCount(){
+  return adminInboxUnreadOrders().length;
+}
+function markAdminInboxOrdersSeen(orders){
+  const seen=loadAdminInboxSeen();
+  (orders||[]).forEach(o=>{ if(o&&o.id) seen[o.id]=adminInboxOrderTag(o); });
+  saveAdminInboxSeen(seen);
+  updateAdminInboxBadge();
+  updateAdminInboxBanner();
+}
+function markAllAdminInboxSeen(){
+  markAdminInboxOrdersSeen(adminInboxOrders());
+}
+function seedAdminInboxNotifySnapshot(){
+  const snap={};
+  adminInboxOrders().forEach(o=>{ if(o&&o.id) snap[o.id]=adminInboxOrderTag(o); });
+  adminInboxNotifySnapshot=snap;
+}
+function adminNotifyWanted(){
+  try{ return localStorage.getItem(ADMIN_NOTIFY_KEY)==='1'; }catch(_){ return false; }
+}
+function setAdminNotifyWanted(on){
+  try{ localStorage.setItem(ADMIN_NOTIFY_KEY, on?'1':'0'); }catch(_){}
+}
+function adminNotifyActive(){
+  return typeof armadaNotifyActive==='function' && armadaNotifyActive('admin');
+}
+async function enableAdminNotifications(){
+  if(typeof armadaRequestNotifyPermission!=='function'){
+    alert('Уведомления недоступны'); return false;
+  }
+  const ok=await armadaRequestNotifyPermission('admin');
+  if(ok) setAdminNotifyWanted(true);
+  else alert('Разрешите уведомления в настройках браузера');
+  syncAdminNotifyToggle();
+  return ok;
+}
+function syncAdminNotifyToggle(){
+  const btn=$('admin-notify-toggle');
+  if(!btn) return;
+  const on=adminNotifyActive();
+  btn.classList.toggle('on', on);
+  btn.title=on?'Уведомления о входящих: вкл':'Включить уведомления о входящих заявках';
+}
+function updateAdminInboxBadge(){
+  const badge=$('admin-inbox-badge');
+  const btn=document.querySelector('#admin-filters button[data-filter="inbox"]');
+  const n=currentAdmin?adminInboxUnreadCount():0;
+  if(badge){
+    if(n>0){
+      badge.textContent=n>99?'99+':String(n);
+      badge.hidden=false;
+      badge.setAttribute('aria-label', `${n} непросмотренных`);
+    }else{
+      badge.hidden=true;
+      badge.removeAttribute('aria-label');
+    }
+  }
+  if(btn) btn.classList.toggle('has-unread', n>0);
+}
+function updateAdminInboxBanner(){
+  const el=$('admin-inbox-banner');
+  if(!el) return;
+  const n=adminInboxUnreadCount();
+  const onInbox=(state.adminFilter||'all')==='inbox';
+  if(!n || onInbox || !document.querySelector('#admin.show')){
+    el.style.display='none';
+    el.textContent='';
+    return;
+  }
+  el.style.display='block';
+  el.innerHTML=`<strong>${n}</strong> ${n===1?'новая входящая заявка':'новых входящих заявок'} — нажмите, чтобы открыть «Входящие»`;
+  if(!el._wired){
+    el._wired=true;
+    el.onclick=()=>{
+      state.adminFilter='inbox';
+      document.querySelectorAll('#admin-filters button').forEach(x=>{
+        x.classList.toggle('on', x.dataset.filter==='inbox');
+      });
+      markAllAdminInboxSeen();
+      show('admin');
+      renderAdmin();
+    };
+  }
+}
+function adminInboxNotifyLine(o, prevTag){
+  const num=o.sequentialNumber||'—';
+  const cust=String(o.customer||'заказчик').trim();
+  const route=typeof routeText==='function'?routeText(o):'';
+  if(!prevTag) return `№${num}: ${cust}${route?` · ${route.slice(0,48)}`:''}`;
+  if(typeof isBookingRequested==='function' && isBookingRequested(o)) return `№${num}: запрос брони · ${cust}`;
+  return `№${num}: ${typeof statusText==='function'?statusText(o):'обновление'}`;
+}
+function maybeNotifyAdminInboxUpdates(force){
+  if(!currentAdmin) return;
+  if(!adminInboxNotifySnapshot) seedAdminInboxNotifySnapshot();
+  const seen=loadAdminInboxSeen();
+  const snap=adminInboxNotifySnapshot||{};
+  const msgs=[];
+  adminInboxOrders().forEach(o=>{
+    if(!o||!o.id) return;
+    const tag=adminInboxOrderTag(o);
+    const prev=snap[o.id];
+    const unread=seen[o.id]!==tag;
+    if(unread && prev!==tag){
+      msgs.push(adminInboxNotifyLine(o, prev));
+    }
+    snap[o.id]=tag;
+  });
+  adminInboxNotifySnapshot=snap;
+  updateAdminInboxBadge();
+  updateAdminInboxBanner();
+  if(!msgs.length) return;
+  const showPush=adminNotifyActive() && (force || document.hidden || (state.adminFilter||'all')!=='inbox' || !document.querySelector('#admin.show'));
+  if(showPush && msgs.length && typeof armadaShowNotification==='function'){
+    armadaShowNotification('АРМАДА · входящие', msgs.slice(0,2).join(' · '), 'admin-inbox', 'admin');
+  }
+}
 function openAdminSidebar(){
   const sb=$('admin-sidebar');
   const bd=$('admin-sidebar-backdrop');
@@ -240,6 +390,9 @@ function updateAdminChrome(){
     const kind=typeof currentLogistKind==='function'?currentLogistKind():'';
     const kindLabel=kind==='broker'?'диспетчер':'';
     if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}${kindLabel?' · '+kindLabel:''}`;
+    syncAdminNotifyToggle();
+    updateAdminInboxBadge();
+    updateAdminInboxBanner();
     const etoNav=document.querySelector('.admin-nav-item[data-nav="eto"]');
     const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(typeof currentOwnCompany==='function'?currentOwnCompany():null);
     if(etoNav) etoNav.style.display=hasPark?'':'none';
@@ -272,6 +425,8 @@ function restoreAdminSession(){
   try{ touchAdminPresence('admin'); }catch(_){}
   try{ startPresenceHeartbeat(); }catch(_){}
   updateAdminChrome();
+  seedAdminInboxNotifySnapshot();
+  syncAdminNotifyToggle();
   return true;
 }
 async function loginAdmin(){
@@ -339,6 +494,8 @@ async function loginAdmin(){
   updateAdminChrome();
   show('admin');
   renderAdmin();
+  seedAdminInboxNotifySnapshot();
+  syncAdminNotifyToggle();
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
   }finally{
     if(btn) btn.disabled=false;
@@ -2461,6 +2618,9 @@ function renderAdminDebounced(){
   renderAdminDebounceTimer=setTimeout(()=>renderAdmin(), 100);
 }
 function renderAdmin(){
+  updateAdminInboxBadge();
+  updateAdminInboxBanner();
+  maybeNotifyAdminInboxUpdates();
   const billBanner=$('admin-billing-banner');
   if(billBanner){
     const txt=billingBannerForAdmin();
@@ -2500,6 +2660,7 @@ function renderAdmin(){
       btn.onclick=e=>{ e.stopPropagation(); adminOrdersSelectDay(btn.dataset.adminCalDay); };
     });
     wireAdminOrderDeleteUi(orders);
+    markAllAdminInboxSeen();
     return;
   }
   if(!orders.length){
@@ -3041,6 +3202,7 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
 function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
+  if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) markAdminInboxOrdersSeen([o]);
   if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
   recomputeOrderTimes(ensureOrderTimeStamps(o));
   const m=metrics(o);
