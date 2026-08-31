@@ -37,6 +37,7 @@
 
 ## Связанные разделы
 
+- Лендинги и КП по ролям → [LANDING_PLAN.md](LANDING_PLAN.md)
 - Документы платформы и перевозчиков → [DOCUMENTS_PLAN.md](DOCUMENTS_PLAN.md)
 - Кабинет диспетчера → [ADMIN_PLAN.md](ADMIN_PLAN.md)
 
