@@ -2500,6 +2500,31 @@ function customerChatApplyCargoItemsToForm(items){
   syncCustomerPayloadTons();
   syncCustomerCargoKind();
 }
+function customerChatCargoItemUserLabel(it){
+  if(!it) return '';
+  const meta=customerChatCargoItemMeta(it);
+  return meta?`${it.text} · ${meta}`:it.text;
+}
+function customerChatSyncCargoTextFromCompose(){
+  const inp=$('cust-chat-input');
+  const hidden=$('cust-chat-cargo-text');
+  if(inp && hidden) hidden.value=inp.value;
+}
+function customerChatPushCargoUserBubble(item){
+  if(!item) return;
+  customerChatAddUser(customerChatCargoItemUserLabel(item));
+  saveCustomerChatState();
+}
+function customerChatTryAddCargoFromDraft(){
+  if(!customerChatAddCargoItemFromDraft()) return false;
+  const items=customerChat.data.cargoItems||[];
+  const added=items[items.length-1];
+  customerChatPushCargoUserBubble(added);
+  const inp=$('cust-chat-input');
+  if(inp) inp.value='';
+  customerChatRenderAll();
+  return true;
+}
 function customerChatCargoAdvanceLabel(items){
   items=items||[];
   if(!items.length) return '';
@@ -2923,11 +2948,8 @@ function customerChatRenderWidgets(){
   if(step.id==='cargo'){
     customerChatMigrateData(customerChat.data);
     const items=customerChat.data.cargoItems||[];
-    widget=`<p class="chat-step-lead">Заполните данные груза и нажмите «Добавить». Можно несколько позиций.</p>
+    widget=`<input type="hidden" id="cust-chat-cargo-text" value="" aria-hidden="true" />
     <div class="chat-cargo-editor">
-      <div class="chat-widget">
-        <input id="cust-chat-cargo-text" placeholder="Наименование: паллеты, оборудование…" aria-label="Наименование груза" />
-      </div>
       <div class="chat-widget-row">
         <input id="cust-chat-cargo-weight" inputmode="decimal" placeholder="Вес" aria-label="Вес груза" />
         <select id="cust-chat-cargo-weight-unit" aria-label="Единица веса"><option value="t">т</option><option value="kg">кг</option></select>
@@ -2942,12 +2964,10 @@ function customerChatRenderWidgets(){
         <input id="cust-chat-cargo-volume" inputmode="decimal" placeholder="Объём, м³" aria-label="Объём, м³" />
       </div>
       <div class="chat-step-actions">
-        <button type="button" class="chat-chip muted" id="cust-chat-cargo-add">+ Добавить груз</button>
-      </div>
-      <div id="cust-chat-cargo-list-wrap">${customerChatCargoListHtml(items)}</div>
-      <div class="chat-step-actions">
+        <button type="button" class="chat-chip muted" id="cust-chat-cargo-add">+ Добавить</button>
         <button type="button" class="chat-chip primary" id="cust-chat-cargo-next"${items.length?'':' disabled'}>${items.length?`Далее → (${items.length})`:'Далее →'}</button>
       </div>
+      <div id="cust-chat-cargo-list-wrap">${customerChatCargoListHtml(items)}</div>
     </div>`;
   }else if(step.id==='when'){
     const pendingWhen=customerChat.data.pendingWhen||'';
@@ -3038,6 +3058,7 @@ function customerChatRenderWidgets(){
     tray.hidden=false;
     tray.innerHTML=`<div class="chat-step-panel">${widget}</div>`;
   }
+  if(step.id==='cargo') customerChatSyncCargoTextFromCompose();
   customerChatWireWidgets(step.id);
   customerChatScrollBottom();
 }
@@ -3106,13 +3127,12 @@ function customerChatWireWidgets(stepId){
   if(stepId==='cargo'){
     const add=$('cust-chat-cargo-add');
     const next=$('cust-chat-cargo-next');
-    if(add) add.onclick=()=>{
-      if(customerChatAddCargoItemFromDraft()) customerChatRenderAll();
-    };
+    if(add) add.onclick=()=>{ customerChatSyncCargoTextFromCompose(); customerChatTryAddCargoFromDraft(); };
     if(next) next.onclick=()=>{
+      customerChatSyncCargoTextFromCompose();
       const draft=customerChatReadCargoDraft();
       const hasDraft=draft.text||draft.weightValue;
-      if(hasDraft && !customerChatAddCargoItemFromDraft()) return;
+      if(hasDraft && !customerChatTryAddCargoFromDraft()) return;
       const items=customerChat.data.cargoItems||[];
       if(!items.length){
         const err=$('cust-chat-error');
@@ -3123,7 +3143,7 @@ function customerChatWireWidgets(stepId){
       if(err) err.textContent='';
       customerChatApplyCargoItemsToForm(items);
       saveCustomerChatState();
-      customerChatAdvance(customerChatCargoAdvanceLabel(items));
+      customerChatAdvance('');
     };
     document.querySelectorAll('[data-cargo-remove]').forEach(btn=>{
       btn.onclick=()=>{
@@ -3135,8 +3155,6 @@ function customerChatWireWidgets(stepId){
         customerChatRenderAll();
       };
     });
-    const focusEl=$('cust-chat-cargo-text');
-    if(focusEl) setTimeout(()=>customerChatFocus(focusEl), 80);
   }
   if(stepId==='load' || stepId==='unload'){
     const submitAddr=addr=>{
@@ -3404,7 +3422,11 @@ function customerChatWireComposeInput(step){
       onBlur:()=>{ if(typeof customerRouteBump==='function') customerRouteBump(); }
     });
   }
-  const textSteps=['load','unload','loadContact','unloadContact'];
+  if(step && step.id==='cargo' && !inp.dataset.cargoSyncWired){
+    inp.dataset.cargoSyncWired='1';
+    inp.addEventListener('input', customerChatSyncCargoTextFromCompose);
+  }
+  const textSteps=['cargo','load','unload','loadContact','unloadContact'];
   if(step && textSteps.includes(step.id)){
     setTimeout(()=>customerChatFocus(inp), 80);
   }
@@ -3412,11 +3434,13 @@ function customerChatWireComposeInput(step){
 function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
-  const textSteps=['load','unload','loadContact','unloadContact'];
+  const textSteps=['cargo','load','unload','loadContact','unloadContact'];
   const show=step && textSteps.includes(step.id) && !customerChat.summaryReady && !customerChat.messages.some(m=>m.stepId==='submitted');
   const inp=$('cust-chat-input');
   if(inp && step){
-    if(step.id==='load'){
+    if(step.id==='cargo'){
+      inp.placeholder='Наименование: паллеты, оборудование…';
+    }else if(step.id==='load'){
       inp.placeholder='Город, улица, дом…';
       if(!inp.matches(':focus')) inp.value=customerChat.data.load||'';
     }else if(step.id==='unload'){
@@ -3472,6 +3496,25 @@ function customerChatHandleTextInput(){
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
   if(!step) return;
   const err=$('cust-chat-error');
+  if(step.id==='cargo'){
+    customerChatSyncCargoTextFromCompose();
+    const items=customerChat.data.cargoItems||[];
+    if(!raw && items.length){
+      if(err) err.textContent='';
+      customerChatApplyCargoItemsToForm(items);
+      saveCustomerChatState();
+      customerChatAdvance('');
+      return;
+    }
+    if(!raw) return;
+    const draft=customerChatReadCargoDraft();
+    if(customerChatNum(draft.weightValue)){
+      customerChatTryAddCargoFromDraft();
+      return;
+    }
+    if(err) err.textContent='Укажите вес в панели выше и нажмите ➤';
+    return;
+  }
   if(step.id==='load' || step.id==='unload'){
     if(raw.length<4){
       if(err) err.textContent='Укажите адрес (минимум 4 символа)';

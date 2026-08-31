@@ -8,6 +8,8 @@
 4. **Стабильная высота** — в режиме чата shell на flex (`cust-order-chat-mode`), прокручивается только thread; tray и footer `flex-shrink:0`.
 5. **iOS без зума** — все `input`/`select` в чате **font-size: 16px** минимум.
 6. **focus** — без красной обводки на поле; лёгкая тень, `outline: none`.
+7. **Footer всегда на текстовых шагах** — `cargo`, `load`, `unload`, контакты: нижняя строка ➤ видна; наименование груза только в compose, не дублировать в tray.
+8. **Mobile full-bleed** — в `cust-order-chat-mode` чат на всю высоту, без «Шаг X из Y» и без boxed-контейнера.
 
 ## Антипаттерны (уже ломали прод)
 

@@ -1128,8 +1128,9 @@
       background:#e8edea;
     }
     .chat-action-tray{
-      flex:0 0 auto;flex-shrink:0;max-height:min(42vh,320px);overflow-y:auto;overflow-x:hidden;
-      background:#f4f7f5;border-top:1px solid color-mix(in srgb,var(--border) 85%,transparent);
+      flex:0 0 auto;flex-shrink:0;max-height:min(36vh,240px);overflow-y:auto;overflow-x:hidden;
+      background:#fff;border-top:1px solid rgba(15,23,42,.08);
+      border-radius:14px 14px 0 0;box-shadow:0 -6px 20px rgba(15,23,42,.1);
       -webkit-overflow-scrolling:touch;
     }
     .chat-action-tray[hidden]{display:none!important}
@@ -1167,7 +1168,12 @@
     .chat-method-label{flex:1;min-width:0;word-break:break-word}
     .chat-step-actions{display:flex;gap:8px;margin-top:10px}
     .chat-step-actions .chat-chip{flex:1;min-height:44px;padding:10px 14px;font-size:.8rem}
-    .chat-cargo-editor{display:flex;flex-direction:column;gap:8px;width:100%}
+    .chat-cargo-editor{display:flex;flex-direction:column;gap:6px;width:100%}
+    .chat-cargo-editor .chat-widget-row input,.chat-cargo-editor .chat-widget-row select{
+      padding:8px 10px;border-radius:12px;border:1px solid var(--border,#e2e8e4);background:#f8faf9;
+    }
+    .chat-cargo-editor .chat-step-actions{margin-top:4px;gap:6px}
+    .chat-cargo-editor .chat-step-actions .chat-chip{min-height:40px;padding:8px 12px;font-size:.78rem}
     .chat-cargo-editor .chat-widget{margin-top:0;padding-left:0}
     .chat-cargo-editor .chat-widget-row{margin-top:0}
     .chat-cargo-editor select{
@@ -1241,20 +1247,29 @@
       #customer-portal.cust-order-chat-mode #cust-portal-sub,
       #customer-portal.cust-order-chat-mode #cust-armada-source-banner{display:none}
       #customer-portal.cust-order-chat-mode #cust-portal-scroll{
-        overflow:hidden;flex:1;min-height:0;padding:10px 8px 0;
+        overflow:hidden;flex:1;min-height:0;padding:0;
       }
       #customer-portal.cust-order-chat-mode #cust-tab-new{
         flex:1;min-height:0;display:flex;flex-direction:column;min-width:0;
       }
       #customer-portal.cust-order-chat-mode #cust-order-form{
-        flex:1;min-height:0;display:flex;flex-direction:column;padding-top:0;border-bottom:0;min-width:0;
+        flex:1;min-height:0;display:flex;flex-direction:column;padding:0;border-bottom:0;min-width:0;
       }
-      #customer-portal.cust-order-chat-mode .cust-order-head{flex-shrink:0;padding-top:4px}
+      #customer-portal.cust-order-chat-mode .cust-order-head{
+        flex-shrink:0;padding:8px 10px 4px;margin:0;border-bottom:1px solid var(--border,#e2e8e4);
+      }
       #customer-portal.cust-order-chat-mode .cust-chat-shell{
-        flex:1;min-height:0;height:auto;max-height:none;margin-top:4px;border-radius:12px;
+        flex:1;min-height:0;height:auto;max-height:none;margin:0;border-radius:0;border:0;border-top:1px solid var(--border,#e2e8e4);
       }
-      #customer-portal.cust-order-chat-mode .chat-thread{padding:8px 8px 4px;background:#e8edea}
-      #customer-portal.cust-order-chat-mode .chat-action-tray{max-height:min(38vh,280px)}
+      #customer-portal.cust-order-chat-mode .chat-progress,
+      #customer-portal.cust-order-chat-mode .chat-step-hint{display:none}
+      #customer-portal.cust-order-chat-mode .chat-thread{
+        flex:1;min-height:0;padding:10px 10px 4px;background:#e8edea;
+      }
+      #customer-portal.cust-order-chat-mode .chat-action-tray{max-height:min(34vh,220px)}
+      #customer-portal.cust-order-chat-mode .cust-chat-footer{
+        padding-bottom:env(safe-area-inset-bottom,0);
+      }
       #customer-portal.cust-order-chat-mode .chat-chips{padding-left:0}
       #customer-portal.cust-order-chat-mode .chat-widget{padding-left:0}
       #customer-portal.cust-order-chat-mode .chat-vtype-hint{padding-left:0}
