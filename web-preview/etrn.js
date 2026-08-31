@@ -432,6 +432,14 @@ async function fetchEtrnFromApi(orderId){
   const data=await res.json().catch(()=>({}));
   return data.etrn||null;
 }
+function etrnApiErrorHint(data, status){
+  const code=String(data&&data.error||'').trim();
+  const hint=String(data&&data.hint||'').trim();
+  if(code==='order_not_closed'){
+    return 'ЭТрН нужен в пути (после выезда), а armada-api пока принимает только закрытые заказы — создаём локальный черновик.';
+  }
+  return hint||code||`HTTP ${status||'?'}`;
+}
 async function requestCreateEtrn(order){
   const ctx=etrnFleetContext();
   const spaceId=order.spaceId||currentSpaceId();
@@ -450,7 +458,15 @@ async function requestCreateEtrn(order){
       body:JSON.stringify({ order, spaceId, ...ctx, billingSpace:billingPayload.billingSpace, usage:billingPayload.usage })
     });
     const data=await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(data.error||data.message||`HTTP ${res.status}`);
+    if(!res.ok){
+      if(data.error==='order_not_closed'){
+        if(typeof logOpsEvent==='function'){
+          logOpsEvent('etrn-warn','API order_not_closed → локальный черновик',{ orderId:order.id, hint:data.hint||'' });
+        }
+        return sandboxCreateEtrnLocal(order);
+      }
+      throw new Error(etrnApiErrorHint(data, res.status));
+    }
     return data.etrn;
   }
   return sandboxCreateEtrnLocal(order);
@@ -476,6 +492,11 @@ async function createEtrnForOrder(orderId){
     bumpDataEpoch('etrn-create');
     upsertOrder(o);
     persist();
+    if(statusEl){
+      statusEl.textContent=etrn.sandbox&&!looksClosedOrder(o)
+        ? 'Черновик (sandbox) — QR и подписи работают'
+        : 'Создан';
+    }
     if(typeof openDetail==='function') openDetail(orderId);
   }catch(err){
     if(typeof logOpsEvent==='function') logOpsEvent('etrn-error',String(err.message||err),{ orderId });
