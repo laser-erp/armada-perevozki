@@ -549,6 +549,255 @@ function suggestCustomerOrderPrice(draft){
     logistFeePercent:feePct
   };
 }
+let createRouteKm=null;
+let createRouteBusy=false;
+let createRouteTimer=null;
+function createExecMode(){
+  return ($('create-exec-mode')||{}).value||'own';
+}
+function createFulfillmentForPrice(){
+  return createExecMode()==='exchange'?'logist':'direct';
+}
+function buildCreateDraftFromForm(){
+  const ownId=(($('create-own-company')||{}).value)||(currentOwnCompany()||{}).id;
+  const fin=financeForCompanyId(ownId);
+  const km=createRouteKm>0?createRouteKm:null;
+  const trip=km?inferTripMode(km, fin):null;
+  const reqs=typeof readOrderRequirementsFromCreate==='function'?readOrderRequirementsFromCreate():{};
+  const mode=createExecMode();
+  const ownCo=findCompanyById(ownId);
+  let plate=(($('create-plate')||{}).value||'').trim();
+  let driver=(($('create-driver')||{}).value||'').trim();
+  let driverPct=0;
+  let carrierCoId=null;
+  if(mode==='carrier'){
+    carrierCoId=(($('create-carrier-company')||{}).value)||null;
+    const carrierCo=findCompanyById(carrierCoId);
+    const drv=(carrierCo&&carrierCo.drivers||[]).find(d=>d.id===(($('create-carrier-driver')||{}).value));
+    if(drv) driver=drv.name;
+    const veh=(carrierCo&&carrierCo.vehicles||[]).find(v=>v.id===(($('create-carrier-vehicle')||{}).value));
+    if(veh) plate=veh.plate;
+  }else if(mode==='own'&&driver&&ownCo){
+    driverPct=driverPercent(driver, ownCo.id);
+  }
+  return {
+    ownCompanyId:ownId||null,
+    estimateKm:km,
+    routeKm:km,
+    tripMode:trip,
+    fulfillment:createFulfillmentForPrice(),
+    execMode:mode,
+    reqPayloadTons:reqs.reqPayloadTons,
+    reqBodyType:null,
+    estimateWorkHours:fin.minWorkHours||4,
+    emptyKmBefore:0,
+    vehiclePlate:plate||null,
+    driverName:driver||null,
+    driverPercent:driverPct,
+    carrierCompanyId:carrierCoId,
+    ratePerKmCash:fin.defaultRatePerKmCash,
+    ratePerHourWork:fin.defaultRatePerHourWork
+  };
+}
+function createOrderCostPreview(draft){
+  if(!draft||!draft.ownCompanyId) return null;
+  const km=+(draft.routeKm||draft.estimateKm||0);
+  const plate=draft.vehiclePlate||'—';
+  const fin=financeForCompanyId(draft.ownCompanyId);
+  const cons=vehicle(plate, draft.ownCompanyId).consumptionPer100Km;
+  const fuelPrice=(typeof resolveFuelPriceWithoutRefuel==='function'?resolveFuelPriceWithoutRefuel(plate,null):null)||55;
+  const fuelLiters=km>0?round2(km*cons/100):null;
+  const fuelCost=fuelLiters!=null&&fuelPrice!=null?round2(fuelLiters*fuelPrice):0;
+  const percent=draft.driverPercent??30;
+  const fixed=round2(fuelCost);
+  const markup=fin.markupPercent??15;
+  const be=breakEvenRate(fixed, percent);
+  const rec=recommendedRate(fixed, percent, markup);
+  const pseudo={
+    ownCompanyId:draft.ownCompanyId,
+    vehiclePlate:plate,
+    driverName:draft.driverName||'Водитель',
+    driverPercent:percent,
+    estimateKm:km||null,
+    loadedKm:km>0?km:null,
+    emptyKmBefore:0,
+    rateCash:rec||be||0,
+    fuelPricePerLiter:fuelPrice,
+    vehicleRent:0,
+    salaryBonus:0
+  };
+  const m=metrics(pseudo);
+  return {
+    km, cons, fuelPrice, fuelLiters, fuelCost, fixed,
+    breakEven:be, recommended:rec, markupPercent:markup, percent,
+    driverPay:m.driverPay, cushion:m.cushion, totalCost:m.totalCost
+  };
+}
+function suggestDispatcherOrderPrice(draft){
+  if(!draft||!draft.ownCompanyId) return null;
+  const tariff=suggestCustomerOrderPrice(draft);
+  const costs=createOrderCostPreview(draft);
+  const tariffMin=tariff&&tariff.minimumCash>0?tariff.minimumCash:0;
+  const costRec=costs&&costs.recommended>0?costs.recommended:0;
+  const totalCash=Math.max(tariffMin, costRec);
+  if(!(totalCash>0)) return null;
+  const t=fillRatesFrom('cash', totalCash);
+  const feePct=draft.fulfillment!=='direct'?(tariff&&tariff.logistFeePercent)||+(financeForCompanyId(draft.ownCompanyId).logistFeePercent||0):0;
+  const parts=[];
+  if(tariff&&tariff.summary) parts.push(tariff.summary);
+  if(costs&&costs.recommended>0){
+    parts.push(`затраты: ГСМ ${fmt(costs.fuelCost)} ₽ + ЗП/подушка → рекомендация ${fmt(costs.recommended)} ₽ (+${Math.round(costs.markupPercent)}%)`);
+  }
+  return {
+    minimumCash:totalCash,
+    cash:t.cash,
+    withoutVat:t.withoutVat,
+    withVat:t.withVat,
+    summary:parts.filter(Boolean).join(' · '),
+    tripMode:draft.tripMode||(tariff&&tariff.tripMode)||null,
+    routeKm:draft.routeKm||null,
+    logistFeePercent:feePct,
+    tariffMin:tariffMin||null,
+    costRecommended:costRec||null,
+    costs
+  };
+}
+function createCarrierForPrice(draft){
+  if(!draft) return null;
+  if(draft.execMode==='carrier'&&draft.carrierCompanyId) return findCompanyById(draft.carrierCompanyId);
+  return findCompanyById(draft.ownCompanyId);
+}
+function updateCreatePricePreview(){
+  const box=$('create-price-preview');
+  if(!box) return;
+  const draft=buildCreateDraftFromForm();
+  if(!draft.ownCompanyId){
+    box.innerHTML='<div class="hint">Выберите нашу фирму — тариф возьмём из справочника.</div>';
+    return;
+  }
+  const fin=financeForCompanyId(draft.ownCompanyId);
+  const bits=[];
+  if(draft.tripMode) bits.push(tripModeLabel(draft.tripMode));
+  if(draft.routeKm) bits.push(`≈ ${draft.routeKm} км`);
+  if(draft.reqPayloadTons) bits.push(draft.reqPayloadTons+' т');
+  const s=suggestDispatcherOrderPrice(draft);
+  if(!s){
+    box.innerHTML=`
+      <div class="hint">${esc(bits.join(' · ')||'Заполните маршрут')}</div>
+      <div class="hint">Ориентир цены появится после расчёта км по адресам или если в тарифе заданы ₽/час.</div>`;
+    return;
+  }
+  const clientAmount=Math.round(s.minimumCash);
+  const carrier=createCarrierForPrice(draft);
+  let carrierAmount=null;
+  if(draft.execMode==='exchange'){
+    carrierAmount=typeof customerCarrierPriceAmount==='function'
+      ?Math.round(customerCarrierPriceAmount(s, carrier))
+      :Math.round(s.minimumCash/(s.logistFeePercent>0?1+s.logistFeePercent/100:1));
+  }else if(draft.execMode==='carrier'){
+    const base=Math.max(+(s.tariffMin||0), +(s.costs&&s.costs.breakEven||0));
+    if(base>0){
+      const form=typeof customerCarrierPaymentForm==='function'?customerCarrierPaymentForm(carrier):'withoutVat';
+      const t=fillRatesFrom('cash', base);
+      carrierAmount=Math.round(form==='withVat'?t.withVat:(form==='withoutVat'?t.withoutVat:t.cash));
+    }
+  }
+  const payLabel=typeof customerCarrierPriceLabel==='function'&&carrier?customerCarrierPriceLabel(carrier):'';
+  const feeNote=draft.fulfillment!=='direct'&&s.logistFeePercent>0?` (ставка логиста ${s.logistFeePercent}%)`:'';
+  const costRows=s.costs?`
+    <div class="hint" style="margin-top:6px">Себестоимость</div>
+    <div class="calc-row"><span>ГСМ</span><span>${fmt(s.costs.fuelLiters)} л × ${fmt(s.costs.fuelPrice)} ₽ = ${fmt(s.costs.fuelCost)} ₽</span></div>
+    <div class="calc-row"><span>Безубыток</span><span>${fmt(s.costs.breakEven)} ₽</span></div>
+    <div class="calc-row"><span>Рекомендация +${Math.round(s.costs.markupPercent)}%</span><span>${fmt(s.costs.recommended)} ₽</span></div>`:'';
+  box.innerHTML=`
+    <div class="calc-row"><span>Цена заказчику (нал)</span><span><b>${fmt(clientAmount)} ₽</b>${feeNote}</span></div>
+    <div class="calc-row"><span>Без НДС</span><span>${fmt(s.withoutVat)} ₽</span></div>
+    <div class="calc-row"><span>С НДС (22%)</span><span>${fmt(s.withVat)} ₽</span></div>
+    ${carrierAmount!=null?`<div class="calc-row"><span>К оплате перевозчику</span><span><b>${fmt(carrierAmount)} ₽</b>${payLabel?` (${payLabel})`:''}</span></div>`:''}
+    ${costRows}
+    <div class="hint">${esc(bits.concat([s.summary||'']).filter(Boolean).join(' · '))}</div>`;
+  const clientEl=$('create-price-client');
+  const carrierEl=$('create-price-carrier');
+  if(clientEl&&clientEl.dataset.auto!=='0'){
+    clientEl.value=String(clientAmount);
+    clientEl.dataset.auto='1';
+  }
+  if(carrierEl&&carrierEl.dataset.auto!=='0'&&carrierAmount!=null){
+    carrierEl.value=String(carrierAmount);
+    carrierEl.dataset.auto='1';
+  }
+}
+async function refreshCreateRouteKm(){
+  const hint=$('create-route-km-hint');
+  const load=(($('create-load')||{}).value||'').trim();
+  const unload=(($('create-unload')||{}).value||'').trim();
+  if(!load||!unload){
+    createRouteKm=null;
+    if(hint) hint.textContent='Укажите адреса — построим маршрут для расчёта км и стоимости.';
+    updateCreatePricePreview();
+    return;
+  }
+  if(createRouteBusy) return;
+  createRouteBusy=true;
+  if(hint) hint.textContent='Строим маршрут для грузового транспорта…';
+  try{
+    const geom=typeof estimateRouteGeometry==='function'?await estimateRouteGeometry(load, unload):null;
+    createRouteKm=geom&&geom.km>0?geom.km:null;
+    const ownId=(($('create-own-company')||{}).value)||(currentOwnCompany()||{}).id;
+    const fin=financeForCompanyId(ownId);
+    if(hint){
+      hint.textContent=createRouteKm
+        ?`≈ ${createRouteKm} км · ${tripModeLabel(inferTripMode(createRouteKm, fin))}. Маршрут для грузовиков (ориентир).`
+        :'Маршрут не определился — стоимость посчитаем по тарифу ₽/час, если задан.';
+    }
+  }catch(_){
+    createRouteKm=null;
+    if(hint) hint.textContent='Маршрут не определился — стоимость посчитаем по тарифу ₽/час, если задан.';
+  }
+  createRouteBusy=false;
+  updateCreatePricePreview();
+}
+function scheduleCreateRouteEstimate(){
+  clearTimeout(createRouteTimer);
+  createRouteTimer=setTimeout(()=>{ refreshCreateRouteKm(); }, 450);
+}
+function resetCreatePriceState(){
+  createRouteKm=null;
+  createRouteBusy=false;
+  clearTimeout(createRouteTimer);
+  const hint=$('create-route-km-hint');
+  if(hint) hint.textContent='Укажите адреса — построим маршрут для расчёта км и стоимости.';
+  const prev=$('create-price-preview');
+  if(prev) prev.innerHTML='';
+  ['create-price-client','create-price-carrier'].forEach(id=>{
+    const el=$(id);
+    if(el){ el.value=''; el.dataset.auto='1'; }
+  });
+}
+function wireCreatePricePreview(){
+  if(wireCreatePricePreview._done) return;
+  wireCreatePricePreview._done=true;
+  const bump=()=>updateCreatePricePreview();
+  const routeBump=()=>scheduleCreateRouteEstimate();
+  ['create-load','create-unload'].forEach(id=>{
+    const el=$(id);
+    if(el){
+      el.oninput=routeBump;
+      el.onchange=routeBump;
+    }
+  });
+  ['create-own-company','create-req-pay','create-req-l','create-req-w','create-req-h',
+   'create-plate','create-driver','create-carrier-company','create-carrier-driver','create-carrier-vehicle'].forEach(id=>{
+    const el=$(id);
+    if(el) el.onchange=bump;
+  });
+  ['create-price-client','create-price-carrier'].forEach(id=>{
+    const el=$(id);
+    if(el){
+      el.oninput=()=>{ el.dataset.auto='0'; };
+    }
+  });
+}
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
 function companyInMySpace(c){
   if(!c) return false;
@@ -1489,7 +1738,13 @@ function readVehicleAtFromDom(prefix){
   return null;
 }
 function wireVehicleAtHint(prefix, onChange){
-  const upd=()=>{ if(onChange) onChange(); else if(prefix==='create') updateCreateFreeHint(); };
+  const upd=()=>{
+    if(onChange) onChange();
+    else if(prefix==='create'){
+      updateCreateFreeHint();
+      if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+    }
+  };
   const dateEl=$(`${prefix}-vehicle-date`);
   const timeEl=$(`${prefix}-vehicle-time`);
   if(dateEl){
@@ -1646,6 +1901,7 @@ function fillExecutorUI(){
           const s=$('create-exec-mode');
           if(s) s.value=b.dataset.exec;
           fillExecutorUI();
+          if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
         };
       }
     });
@@ -1660,6 +1916,7 @@ function fillExecutorUI(){
       const s=$('create-exec-mode');
       if(s) s.value='carrier';
       fillExecutorUI();
+      if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
     };
   }
   if(carBtn) carBtn.classList.toggle('on-link', mode==='carrier');

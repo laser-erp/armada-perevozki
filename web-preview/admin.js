@@ -2683,7 +2683,11 @@ function fillCreateSelects(){
   fillOwnCompanySelect('create-own-company', preferred);
   const ownEl=$('create-own-company');
   if(ownEl){
-    ownEl.onchange=()=>{ fillCreateFleetSelects(); if(typeof fillExecutorUI==='function') fillExecutorUI(); };
+    ownEl.onchange=()=>{
+      fillCreateFleetSelects();
+      if(typeof fillExecutorUI==='function') fillExecutorUI();
+      if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+    };
   }
   fillCreateFleetSelects();
 }
@@ -2719,7 +2723,11 @@ function bindAdminCreate(){
     }
     ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
     if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
-    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay();
+    if(typeof resetCreatePriceState==='function') resetCreatePriceState();
+    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn();
+    if(typeof wireCreatePricePreview==='function') wireCreatePricePreview();
+    if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+    show('admin-create'); highlightDay();
     const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
@@ -2820,6 +2828,11 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
   const customerInn=String((($('create-customer-inn')||{}).value||'')).replace(/\D/g,'');
   const priceForClient=numOrNull(($('create-price-client')||{}).value);
   const priceForCarrier=numOrNull(($('create-price-carrier')||{}).value);
+  const draft=typeof buildCreateDraftFromForm==='function'?buildCreateDraftFromForm():null;
+  const quote=typeof suggestDispatcherOrderPrice==='function'&&draft?suggestDispatcherOrderPrice(draft):null;
+  const carrier=typeof createCarrierForPrice==='function'&&draft?createCarrierForPrice(draft):ownCo;
+  const payForm=typeof customerCarrierPaymentForm==='function'?customerCarrierPaymentForm(carrier):'withoutVat';
+  const offered=priceForClient!=null&&priceForClient>0?priceForClient:(quote&&quote.minimumCash>0?Math.round(quote.minimumCash):null);
   const company=upsertCompany({name:customer, inn:customerInn, roles:['customer'], spaceId:orderSpaceId});
   const order={
     id:uuid(), sequentialNumber:seqNo, dayNumber:createDay,
@@ -2831,7 +2844,7 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
     customer,
     customerInn:customerInn||(company&&company.inn)||'',
     customerId:company?company.id:null,
-    priceForClient:priceForClient!=null&&priceForClient>0?priceForClient:null,
+    priceForClient:offered,
     priceForCarrier:priceForCarrier!=null&&priceForCarrier>0?priceForCarrier:null,
     ownCompanyId:ownCo.id,
     ownCompanyName:ownCo.name,
@@ -2850,10 +2863,25 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
     reqLengthM:reqs.reqLengthM,
     reqWidthM:reqs.reqWidthM,
     reqHeightM:reqs.reqHeightM,
+    tripMode:draft&&draft.tripMode||(quote&&quote.tripMode)||null,
+    routeKm:draft&&draft.routeKm||(quote&&quote.routeKm)||null,
+    estimateKm:draft&&draft.routeKm||(quote&&quote.routeKm)||null,
+    estimateWorkHours:draft&&draft.estimateWorkHours||null,
+    paymentForm:payForm,
     transportApp:null,
     partnerSpaceId:null,
     executorAdminId:null
   };
+  if(offered){
+    const t=fillRatesFrom(payForm, offered);
+    order.rateWithoutVat=t.withoutVat;
+    order.rateWithVat=t.withVat;
+    order.rateCash=t.cash;
+    order.freight=payForm==='withVat'?t.withVat:(payForm==='withoutVat'?t.withoutVat:t.cash);
+    if(!order.priceForCarrier&&quote&&quote.logistFeePercent>0&&mode==='exchange'){
+      order.priceForCarrier=Math.round(offered/(1+quote.logistFeePercent/100));
+    }
+  }
   if(shouldCheckDriverDocs(driver)&&plate&&plate!=='—'){
     const drvRec=findDriverRecord(driver, ownCo.id);
     if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)) return;
