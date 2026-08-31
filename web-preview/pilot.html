@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Пилот 30 дней — АРМАДА</title>
+  <meta name="description" content="Заявка на бесплатный пилот кабинета АРМАДА на 30 дней для логиста или перевозчика." />
+  <meta name="theme-color" content="#1e5aa8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/landing.css?v=2026-08-31-pilot4317" />
+</head>
+<body class="landing landing--logist landing--pilot">
+  <header class="landing-top">
+    <div class="landing-top-inner">
+      <a class="landing-brand" href="/landing.html">
+        <img src="/logo.png" alt="" width="36" height="36" />
+        АРМАДА
+      </a>
+      <nav class="landing-role-nav" aria-label="Роли">
+        <a href="/kp-logist.html">Логист</a>
+        <a href="/kp.html">Перевозчик</a>
+        <a href="/kp-zakaz.html">Заказчик</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="landing-wrap">
+    <section class="landing-hero landing-hero--order">
+      <div>
+        <span class="landing-hero-badge" id="pilot-badge">Пилот 30 дней</span>
+        <h1 id="pilot-title">Заявка на пилот</h1>
+        <p class="landing-hero-lead" id="pilot-lead">Оставьте контакты — подключим кабинет, поможем с запуском, протестируете на реальных заявках. Без обязательств продлевать после пилота.</p>
+        <p class="landing-hero-note">Уже есть доступ? <a href="/a/" id="pilot-login-link">Войти в кабинет</a></p>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <div class="landing-card landing-order-card">
+        <form id="pilot-form" class="landing-lead-form landing-order-form">
+          <label>Компания или ФИО <span class="req">*</span>
+            <input type="text" id="pilot-company" name="company" required autocomplete="organization" placeholder="ООО «…» или Иван И." />
+          </label>
+          <label>Телефон <span class="req">*</span>
+            <input type="tel" id="pilot-phone" name="phone" required autocomplete="tel" placeholder="+7 …" />
+          </label>
+          <label>Контактное лицо
+            <input type="text" id="pilot-name" name="contactName" autocomplete="name" placeholder="Если отличается от ФИО выше" />
+          </label>
+          <label>Город / регион
+            <input type="text" id="pilot-city" name="city" placeholder="Москва, Тверская обл. …" />
+          </label>
+          <label>Машин в парке (ориентир)
+            <input type="text" id="pilot-fleet" name="fleetSize" inputmode="numeric" placeholder="6" />
+          </label>
+          <label>Комментарий
+            <textarea id="pilot-comment" name="comment" rows="3" placeholder="Роль, задачи, сроки запуска…"></textarea>
+          </label>
+          <p class="landing-lead-status" id="pilot-status" hidden></p>
+          <button type="submit" class="landing-btn landing-btn-primary" id="pilot-submit">Отправить заявку на пилот</button>
+          <p class="landing-order-legal">Нажимая «Отправить», вы соглашаетесь на обработку данных для связи по заявке. <a href="/legal.html#privacy">Политика ПДн</a></p>
+        </form>
+
+        <div class="landing-lead-success landing-order-success" id="pilot-success" hidden>
+          <p><strong>Заявка принята.</strong> Мы свяжемся в рабочее время и подключим пилот на 30 дней.</p>
+          <p class="landing-lead-intro">Телефон: <a href="tel:+79650730002">+7 (965) 073-00-02</a> · <a href="mailto:hello@armada.sx">hello@armada.sx</a></p>
+          <div class="landing-hero-cta">
+            <a class="landing-btn landing-btn-secondary" href="/kp-logist.html">Вернуться на страницу логиста</a>
+            <button type="button" class="landing-btn landing-btn-ghost" id="pilot-again">Ещё одна заявка</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-wrap landing-footer">
+    <p><a href="/help.html?role=admin">Инструкция для логиста</a> · <a href="/legal.html">Оферта</a> · <a href="/landing.html">Все роли</a></p>
+    <p>АРМАДА · app.armada.sx</p>
+  </footer>
+  <script src="/pilot-request.js?v=2026-08-31-pilot4317"></script>
+</body>
+</html>

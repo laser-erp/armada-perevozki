@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-entry-links4317";
+const APP_BUILD="2026-08-31-pilot4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -371,7 +371,7 @@ function portalScopeCarrierLabel(scope){
 function isDedicatedEntryUrl(){
   try{
     const path=(location.pathname||'').toLowerCase();
-    return /\/(v|a|z)(\/|$)/.test(path)
+    return /^\/(v|a|z)(?:\/|$)/.test(path)
       || /(driver|admin|zakaz)\.html$/i.test(path);
   }catch(_){ return false; }
 }
@@ -1167,16 +1167,23 @@ function nextSequentialNumber(){
 }
 function normalizeCustomerPortalLead(raw){
   if(!raw||typeof raw!=='object') return null;
-  const kind=raw.kind==='transport'?'transport':'portal';
+  const kindRaw=String(raw.kind||'portal').trim().toLowerCase();
+  const kind=kindRaw==='transport'?'transport':kindRaw==='pilot'?'pilot':'portal';
   const company=String(raw.company||raw.companyName||'').trim();
   const phone=typeof formatPhone==='function'?formatPhone(raw.phone||''):String(raw.phone||'').trim();
   const contactName=String(raw.contactName||raw.name||'').trim();
   if(kind==='transport'){
     if(!phone) return null;
     if(!company && !contactName) return null;
+  }else if(kind==='pilot'){
+    if(!phone) return null;
+    if(!company && !contactName) return null;
   }else if(!company||!phone) return null;
   const inn=String(raw.inn||'').replace(/\D/g,'');
   const vehicleTypeId=normalizeArmadaSxVtype(raw.vehicleTypeId||raw.vtype||'');
+  const pilotRole=String(raw.pilotRole||raw.role||'').trim().toLowerCase()||null;
+  const city=String(raw.city||'').trim()||null;
+  const fleetSize=String(raw.fleetSize||raw.vehicles||raw.fleet||'').trim()||null;
   return {
     id:raw.id||uuid(),
     kind,
@@ -1186,6 +1193,9 @@ function normalizeCustomerPortalLead(raw){
     contactName:contactName||null,
     comment:String(raw.comment||'').trim()||null,
     carrierHint:String(raw.carrierHint||raw.carrier||'').trim()||null,
+    pilotRole,
+    city,
+    fleetSize,
     vehicleTypeId:vehicleTypeId||null,
     loadAddress:String(raw.loadAddress||raw.address||'').trim()||null,
     unloadAddress:String(raw.unloadAddress||'').trim()||null,
@@ -1414,7 +1424,10 @@ function pendingTransportOrders(){
   return pendingCustomerPortalLeads().filter(l=>l.kind==='transport');
 }
 function pendingPortalAccessLeads(){
-  return pendingCustomerPortalLeads().filter(l=>l.kind!=='transport');
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='portal');
+}
+function pendingPilotLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot');
 }
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;

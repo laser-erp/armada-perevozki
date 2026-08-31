@@ -747,7 +747,8 @@ function renderAdminActivity(){
   const ops=(state.opsLog||[]).slice(0,25);
   const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
   const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
-  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind!=='transport');
+  const pilotLeads=typeof pendingPilotLeads==='function'?pendingPilotLeads():leads.filter(l=>l.kind==='pilot');
+  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind==='portal');
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
     <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
@@ -774,6 +775,27 @@ function renderAdminActivity(){
             ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
             <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
               ${l.orderId?`<button type="button" class="primary lead-open-order-btn" data-order-id="${esc(l.orderId)}">Открыть заявку</button>`:''}
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </section>`:''}
+    ${pilotLeads.length?`<section class="form-section">
+      <h2 class="form-section-title">Заявки на пилот 30 дней</h2>
+      <p class="cat-panel-hint">С <a href="/pilot.html" target="_blank" rel="noopener">pilot.html</a> — логист или перевозчик. Подключите кабинет и отметьте «Обработано».</p>
+      <div class="cat-list">
+        ${pilotLeads.map(l=>{
+          const roleLbl=l.pilotRole==='carrier'?'перевозчик':l.pilotRole==='logist'?'логист':(l.pilotRole||'—');
+          return `
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)} · пилот · ${esc(roleLbl)}</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            <div class="row" style="margin-top:8px">
               <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
             </div>
           </div>`;
