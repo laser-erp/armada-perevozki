@@ -65,3 +65,4 @@
 - `KNOWLEDGE_BASE.md` — для людей; только по запросу
 - Письма на бланке: `docs/operator-letters/`, `.cursor/stores/self/armada-letterhead.md`
 - Шаблон задачи: `TASK_TEMPLATE.md`
+- **Чат заказчика (mobile):** `.cursor/rules/customer-chat-mobile.mdc` — WhatsApp-модель: один ввод снизу, tray для форм, thread только пузыри
