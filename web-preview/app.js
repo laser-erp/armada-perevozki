@@ -559,6 +559,10 @@ function normalizeAdmin(a){
   if(!pin) return null;
   const out={id:a.id||uuid(), name, pin, isSuper:!!a.isSuper, spaceId:a.spaceId||null};
   if(a.mustChangePin) out.mustChangePin=true;
+  const phone=typeof formatPhone==='function'?formatPhone(a.phone||''):String(a.phone||'').trim();
+  if(phone) out.phone=phone;
+  if(String(a.loginBy||'').trim().toLowerCase()==='phone') out.loginBy='phone';
+  else if(a.loginBy==='inn') out.loginBy='inn';
   return out;
 }
 function migrateAdmins(){
@@ -585,6 +589,15 @@ function migrateAdmins(){
     }
     const pin=String(a.pin||'').trim();
     if(WEAK_ADMIN_PINS.has(pin)) a.mustChangePin=true;
+    const drv=(state.drivers||[]).find(d=>samePersonName(d.name,a.name));
+    if(!a.phone && drv&&drv.phone){
+      const ph=typeof formatPhone==='function'?formatPhone(drv.phone):String(drv.phone||'').trim();
+      if(ph) a.phone=ph;
+    }
+    if(!a.loginBy){
+      if(samePersonName(a.name,'Нечаев А.С.') && (a.phone || (drv&&drv.phone))) a.loginBy='phone';
+      else a.loginBy='inn';
+    }
   });
   if(!state.admins.some(a=>a.isSuper)){
     const first=state.admins[0];

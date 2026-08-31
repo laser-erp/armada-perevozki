@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-admin-inn-login4317";
+const APP_BUILD="2026-08-31-admin-phone-login4317";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -1313,11 +1313,13 @@ function syncAdminAuthToDrivers(adm){
     name:driverName, companyId:co.id, companyName:co.name,
     spaceId:adm.spaceId||co.spaceId||null,
     ownerAdminId:adm.id, ownerAdminName:adm.name,
-    pin:pin.length>=4?pin:''
+    pin:pin.length>=4?pin:'',
+    phone:adm.phone||''
   })) changed=true;
   (state.drivers||[]).forEach(d=>{
     if(!samePersonName(d.name, adm.name)) return;
     if(pin.length>=4 && String(d.pin||'').trim()!==pin){ d.pin=pin; changed=true; }
+    if(adm.phone && formatPhone(d.phone||'')!==formatPhone(adm.phone)){ d.phone=formatPhone(adm.phone); changed=true; }
     if(!d.ownerAdminId){ d.ownerAdminId=adm.id; d.ownerAdminName=adm.name; changed=true; }
     if(adm.spaceId && co && (!d.companyId || d.companyId===co.id || d.ownerAdminId===adm.id)){
       if(d.spaceId!==adm.spaceId){ d.spaceId=adm.spaceId; changed=true; }

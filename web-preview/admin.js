@@ -24,10 +24,50 @@ function findAdminByInnAndPin(innRaw, pin){
   const spaceIds=spaceIdsForLoginInn(inn);
   if(!spaceIds.size) return null;
   const matches=(state.admins||[]).filter(a=>{
+    if(a.loginBy==='phone') return false;
     if(String(a.pin||'').trim()!==pinStr) return false;
     return !!(a.spaceId && spaceIds.has(a.spaceId));
   });
   return matches.length===1 ? matches[0] : null;
+}
+function adminLoginPhone(a){
+  if(!a) return '';
+  const own=typeof formatPhone==='function'?formatPhone(a.phone||''):String(a.phone||'').trim();
+  if(own) return own;
+  const drv=(state.drivers||[]).find(d=>samePersonName(d.name,a.name));
+  return typeof formatPhone==='function'?formatPhone(drv&&drv.phone||''):String(drv&&drv.phone||'').trim();
+}
+function looksLikeAdminPhoneInput(raw){
+  const s=String(raw||'').trim();
+  if(!s) return false;
+  if(s.startsWith('+')) return true;
+  const d=s.replace(/\D/g,'');
+  if(d.length===11 && d[0]==='7') return true;
+  if(d.length===10 && d[0]==='9') return true;
+  return false;
+}
+function findAdminByPhoneAndPin(phoneRaw, pin){
+  const pinStr=String(pin||'').trim();
+  if(!pinStr) return null;
+  const phone=typeof formatPhone==='function'?formatPhone(phoneRaw):String(phoneRaw||'').trim();
+  if(!phone) return null;
+  const matches=(state.admins||[]).filter(a=>{
+    if(a.loginBy!=='phone') return false;
+    if(String(a.pin||'').trim()!==pinStr) return false;
+    return adminLoginPhone(a)===phone;
+  });
+  return matches.length===1 ? matches[0] : null;
+}
+function findAdminByLoginAndPin(loginRaw, pin){
+  const raw=String(loginRaw||'').trim();
+  if(!raw) return null;
+  if(looksLikeAdminPhoneInput(raw)){
+    const byPhone=findAdminByPhoneAndPin(raw, pin);
+    if(byPhone) return byPhone;
+  }
+  const inn=normalizeLoginInn(raw);
+  if(inn && (inn.length===10 || inn.length===12)) return findAdminByInnAndPin(inn, pin);
+  return findAdminByPhoneAndPin(raw, pin);
 }
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
@@ -240,18 +280,18 @@ async function loginAdmin(){
   const btn=$('pin-ok');
   if(btn) btn.disabled=true;
   try{
-  const innRaw=(($('admin-login-inn')||{}).value||'').trim();
+  const loginRaw=(($('admin-login-inn')||{}).value||'').trim();
   const pin=(($('pin-input')||{}).value||'').trim();
-  const inn=normalizeLoginInn(innRaw);
-  if(!inn){
-    if(pinErr) pinErr.textContent='Укажите ИНН организации (10 или 12 цифр)';
+  if(!loginRaw){
+    if(pinErr) pinErr.textContent='Укажите телефон или ИНН организации';
     return;
   }
-  if(inn.length!==10 && inn.length!==12){
+  const inn=normalizeLoginInn(loginRaw);
+  if(!looksLikeAdminPhoneInput(loginRaw) && inn && inn.length!==10 && inn.length!==12){
     if(pinErr) pinErr.textContent='ИНН: 10 цифр для организации или 12 для ИП';
     return;
   }
-  const admPre=findAdminByInnAndPin(inn, pin);
+  const admPre=findAdminByLoginAndPin(loginRaw, pin);
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
       const rec=await fetchServerState(3500, {
@@ -268,12 +308,16 @@ async function loginAdmin(){
       }
     }
   }catch(_){}
-  const adm=findAdminByInnAndPin(inn, pin);
+  const adm=findAdminByLoginAndPin(loginRaw, pin);
   if(!adm){
     if(pinErr){
-      pinErr.textContent=spaceIdsForLoginInn(inn).size
-        ? 'Неверный PIN для этой организации'
-        : 'Организация с таким ИНН не найдена. Проверьте цифры или обратитесь к супер-админу';
+      if(looksLikeAdminPhoneInput(loginRaw)){
+        pinErr.textContent='Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
+      }else{
+        pinErr.textContent=spaceIdsForLoginInn(inn).size
+          ? 'Неверный PIN для этой организации'
+          : 'Организация с таким ИНН не найдена. Проверьте цифры или обратитесь к супер-админу';
+      }
     }
     return;
   }
@@ -566,6 +610,13 @@ function renderAdminActivity(){
         <input id="new-adm-name" placeholder="Имя администратора" style="flex:1.3" />
         <input id="new-adm-pin" inputmode="numeric" maxlength="8" placeholder="PIN" style="flex:0 0 72px;text-align:center" />
       </div>
+      <label>Телефон (если вход по телефону)</label>
+      <input id="new-adm-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+      <label>Вход в кабинет</label>
+      <select id="new-adm-login-by">
+        <option value="inn">ИНН организации + PIN</option>
+        <option value="phone">Телефон + PIN</option>
+      </select>
       <label>Название фирмы</label>
       <input id="new-firm-name" placeholder="ООО «…» / ИП …" />
       <label>ИНН</label>
@@ -631,6 +682,13 @@ function renderAdminActivity(){
             <div class="item-mid">
               <input id="adm-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(a.pin)}" placeholder="PIN" />
               <label class="check"><input type="checkbox" id="adm-super-${i}" ${a.isSuper?'checked':''}/> Супер</label>
+            </div>
+            <div class="item-mid">
+              <input id="adm-phone-${i}" inputmode="tel" value="${esc(a.phone||adminLoginPhone(a)||'')}" placeholder="Телефон для входа" style="flex:1.2" />
+              <select id="adm-login-by-${i}" style="flex:1">
+                <option value="inn" ${a.loginBy!=='phone'?'selected':''}>ИНН + PIN</option>
+                <option value="phone" ${a.loginBy==='phone'?'selected':''}>Телефон + PIN</option>
+              </select>
             </div>
             <div class="item-actions">
               <button type="button" class="primary" data-save-adm="${i}">Сохранить</button>
@@ -702,7 +760,15 @@ function renderAdminActivity(){
     if(state.admins.some(a=>samePersonName(a.name, name))){ alert('Такое имя уже есть'); return; }
     const inn=(($('new-firm-inn')||{}).value||'').replace(/\D/g,'');
     if(inn && !isValidInn(inn)){ alert('Некорректный ИНН'); return; }
-    const adm={id:uuid(), name, pin, isSuper, spaceId:null};
+    const loginBy=(($('new-adm-login-by')||{}).value||'inn')==='phone'?'phone':'inn';
+    const phoneRaw=(($('new-adm-phone')||{}).value||'').trim();
+    const phone=typeof formatPhone==='function'?formatPhone(phoneRaw):phoneRaw;
+    if(loginBy==='phone' && !phone){ alert('Для входа по телефону укажите номер'); return; }
+    if(loginBy==='phone' && phone && state.admins.some(a=>a.loginBy==='phone' && adminLoginPhone(a)===phone)){
+      alert('Этот телефон уже привязан к другому админу'); return;
+    }
+    const adm={id:uuid(), name, pin, isSuper, spaceId:null, loginBy};
+    if(phone) adm.phone=phone;
     state.admins.push(adm);
     createSpaceForAdmin(adm, {
       name:firmName,
@@ -733,8 +799,18 @@ function renderAdminActivity(){
     const i=+b.dataset.saveAdm;
     const pin=(($('adm-pin-'+i)||{}).value||'').trim();
     const isSuper=!!(($('adm-super-'+i)||{}).checked);
+    const loginBy=(($('adm-login-by-'+i)||{}).value||'inn')==='phone'?'phone':'inn';
+    const phoneRaw=(($('adm-phone-'+i)||{}).value||'').trim();
+    const phone=typeof formatPhone==='function'?formatPhone(phoneRaw):phoneRaw;
     if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
+    if(loginBy==='phone' && !phone){ alert('Для входа по телефону укажите номер'); return; }
+    if(loginBy==='phone' && phone && state.admins.some((a,j)=>j!==i && a.loginBy==='phone' && adminLoginPhone(a)===phone)){
+      alert('Этот телефон уже привязан к другому админу'); return;
+    }
     state.admins[i].pin=pin;
+    state.admins[i].loginBy=loginBy;
+    if(phone) state.admins[i].phone=phone;
+    else delete state.admins[i].phone;
     const isSuperRow=!!state.admins[i].isSuper || state.admins[i].id==='admin-super';
     const weak=typeof isRecoveryOrWeakAdminPin==='function'?isRecoveryOrWeakAdminPin(pin)
       :(typeof WEAK_ADMIN_PINS!=='undefined' && WEAK_ADMIN_PINS.has(pin));
