@@ -2799,7 +2799,6 @@ function canArriveMessage(orderId){
 }
 const DRIVER_NOTIFY_KEY='armada_driver_notify_v1';
 const CUSTOMER_NOTIFY_KEY_SHARED='armada_customer_notify_v1';
-const ADMIN_NOTIFY_KEY='armada_admin_notify_v1';
 const driverNotifyLastAt={};
 const armadaNotifyLastAt={};
 function notifyRoleWanted(role){
@@ -2807,14 +2806,14 @@ function notifyRoleWanted(role){
     try{ return localStorage.getItem(CUSTOMER_NOTIFY_KEY_SHARED)==='1'; }catch(_){ return false; }
   }
   if(role==='admin'){
-    try{ return localStorage.getItem(ADMIN_NOTIFY_KEY)==='1'; }catch(_){ return false; }
+    return typeof adminNotifyWanted==='function'?adminNotifyWanted():false;
   }
   return driverNotifyWanted();
 }
 function setNotifyRoleWanted(role, on){
   if(role==='customer') setCustomerNotifyWanted(on);
   else if(role==='admin'){
-    try{ localStorage.setItem(ADMIN_NOTIFY_KEY, on?'1':'0'); }catch(_){}
+    if(typeof setAdminNotifyWanted==='function') setAdminNotifyWanted(on);
   }
   else setDriverNotifyWanted(on);
 }
