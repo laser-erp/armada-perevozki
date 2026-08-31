@@ -1282,6 +1282,23 @@ function openVehicleCard(vehicleId){
     openVehicleCard(v.id);
   };
 }
+function flashDriverCardOk(msg){
+  const box=$('driver-card-form');
+  if(!box) return;
+  let el=$('drv-card-ok');
+  if(!el){
+    el=document.createElement('div');
+    el.id='drv-card-ok';
+    el.className='toast-ok';
+    el.style.display='none';
+    el.style.marginBottom='8px';
+    box.insertBefore(el, box.firstChild);
+  }
+  el.textContent=msg||'Сохранено';
+  el.style.display='block';
+  clearTimeout(flashDriverCardOk._t);
+  flashDriverCardOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, 2400);
+}
 function resolveDriverCardIndex(key){
   const drivers=state.drivers||[];
   if(key==null||key==='') return -1;
@@ -1381,13 +1398,15 @@ function openDriverCard(driverKey){
   bindPhoto('dc-pass-photo','dc-pass-photo-clear','passportPhoto');
   bindPhoto('dc-pass-reg','dc-pass-reg-clear','passportRegPhoto');
   $('drv-card-back').onclick=()=>{ catalogTab='drivers'; openCatalogs(); };
-  $('dc-save').onclick=()=>{
+  const saveBtn=$('dc-save');
+  if(saveBtn) saveBtn.onclick=()=>{
     d.phone=formatPhone((($('dc-phone')||{}).value||'').trim());
     const pin=(($('dc-pin')||{}).value||'').trim();
     if(pin && pin.length<4){ alert('PIN — от 4 цифр'); return; }
     if(pin) d.pin=pin;
     else if(!d.pin) d.pin=resolveDriverPin(d);
-    if(pct>=0){
+    const pct=+(($('dc-pct')||{}).value||'').replace(',','.');
+    if(!Number.isNaN(pct) && pct>=0){
       d.salaryPercent=pct;
       (state.orders||[]).filter(o=>samePersonName(o.driverName, d.name)).forEach(o=>{ o.driverPercent=pct; });
     }
@@ -1404,7 +1423,7 @@ function openDriverCard(driverKey){
     }
     bumpDataEpoch('drv-card-save');
     persist();
-    flashCatOk('Водитель сохранён');
+    flashDriverCardOk('Водитель сохранён');
     refresh();
   };
   $('dc-invite').onclick=async ()=>{
