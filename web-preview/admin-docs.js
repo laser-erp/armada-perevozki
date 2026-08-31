@@ -193,10 +193,11 @@ function adminDocsLettersPanelHtml() {
   const ops = (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG : []).map(t => {
     const custom = typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(t.id);
     const pdf = t.pdf ? `/downloads/${esc(t.pdf)}` : '';
+    const outMeta = typeof operatorLetterOutMetaLine === 'function' ? operatorLetterOutMetaLine(t.id) : '';
     return `<div class="adm-doc-card">
       <div>
         <h3>${esc(t.title)}</h3>
-        <p class="meta">${esc(t.hint)}${custom ? ' · изменено' : ''}</p>
+        <p class="meta">${esc(t.hint)}${custom ? ' · изменено' : ''}${outMeta ? `<br>${esc(outMeta)}` : ''}</p>
       </div>
       <div class="adm-doc-actions adm-doc-actions--stack">
         <button type="button" class="secondary adm-op-letter-edit" data-op-letter="${esc(t.id)}">Редактировать</button>
@@ -206,7 +207,7 @@ function adminDocsLettersPanelHtml() {
     </div>`;
   }).join('');
   const editHint = typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
-    ? 'Текст писем операторам редактирует супер-админ в «Конструкторе» или кнопкой «Редактировать».'
+    ? 'Текст писем операторам редактирует супер-админ. Исходящий № и дата проставляются автоматически при печати.'
     : 'Просмотр и печать. Редактирование — только супер-админ.';
   return `<p class="cat-panel-hint">${editHint} Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
     <div class="adm-doc-card">
@@ -248,10 +249,14 @@ function adminDocsConstructorPanelHtml() {
   const vars = !isOp && (typeof DOC_TEMPLATE_VARS !== 'undefined' ? DOC_TEMPLATE_VARS : []).map(v =>
     `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
   ).join('');
-  const opVars = isOp ? `<button type="button" class="adm-tpl-var" data-adm-tpl-var="{{today}}" title="Сегодня">{{today}}</button>` : '';
+  const opVars = isOp && typeof OPERATOR_LETTER_VARS !== 'undefined'
+    ? OPERATOR_LETTER_VARS.map(v =>
+      `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
+    ).join('')
+    : (isOp ? `<button type="button" class="adm-tpl-var" data-adm-tpl-var="{{today}}" title="Сегодня">{{today}}</button>` : '');
   const readOnlyHint = canEdit
     ? isOp
-      ? '<p class="cat-panel-hint">Письмо платформы ООО «АРМАДА» оператору ЭТрН. Сохранение синхронизируется на сервер.</p>'
+      ? '<p class="cat-panel-hint">Письмо платформы ООО «АРМАДА» оператору ЭТрН. Исходящий номер и дата присваиваются при первой печати. Сохранение синхронизируется на сервер.</p>'
       : `<p class="cat-panel-hint">Шаблоны фирмы «${esc(sp && sp.name || sid)}». После сохранения подстановка полей используется при печати документов.</p>`
     : isOp
       ? '<p class="hint">Просмотр письма оператору. Редактировать может только супер-админ.</p>'
@@ -381,7 +386,17 @@ function wireAdminDocsConstructor() {
     printBtn.onclick = () => {
       const tplId = adminDocsConstructorTpl || 'application';
       if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
-        if (typeof openOperatorLetterPrint === 'function') openOperatorLetterPrint(tplId);
+        if (typeof ensureOperatorLetterOutNo === 'function') ensureOperatorLetterOutNo(tplId);
+        const ta = $('adm-tpl-editor');
+        const body = ta ? ta.value : (typeof getOperatorLetterBody === 'function' ? getOperatorLetterBody(tplId) : '');
+        if (typeof openPrintHtml === 'function' && typeof renderOperatorLetterPreviewHtml === 'function') {
+          const meta = typeof operatorLetterMeta === 'function' ? operatorLetterMeta(tplId) : null;
+          openPrintHtml(
+            (meta && meta.title) || 'Письмо оператору',
+            renderOperatorLetterPreviewHtml(tplId, body, { assign: true })
+          );
+        }
+        renderAdminDocsBody();
         return;
       }
       const sid = adminDocsSpaceId();
@@ -445,7 +460,10 @@ function wireAdminDocsPanel() {
   document.querySelectorAll('.adm-op-letter-print').forEach(btn => {
     btn.onclick = () => {
       const id = btn.dataset.opLetter;
-      if (id && typeof openOperatorLetterPrint === 'function') openOperatorLetterPrint(id);
+      if (id && typeof openOperatorLetterPrint === 'function') {
+        openOperatorLetterPrint(id);
+        renderAdminDocsBody();
+      }
     };
   });
   document.querySelectorAll('.adm-doc-open').forEach(btn => {

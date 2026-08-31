@@ -16,6 +16,12 @@ const OPERATOR_LETTER_CATALOG = [
   }
 ];
 
+const OPERATOR_LETTER_VARS = [
+  { key: '{{letter.outNo}}', label: 'Исходящий номер (авто при печати)' },
+  { key: '{{letter.outDate}}', label: 'Дата исходящего (авто)' },
+  { key: '{{today}}', label: 'Сегодня (ДД.ММ.ГГГГ)' }
+];
+
 const ARMADA_PLATFORM_PARTY = {
   brand: 'АРМАДА',
   full: 'Общество с ограниченной ответственностью «АРМАДА»',
@@ -46,10 +52,79 @@ function operatorLetterPlatformRoot() {
   return state.docTemplates.platform;
 }
 
+function operatorOutgoingRegistry() {
+  operatorLetterPlatformRoot();
+  const root = state.docTemplates.platform;
+  if (!root._outgoing || typeof root._outgoing !== 'object') {
+    root._outgoing = { nextSeq: 1, byId: {} };
+  }
+  if (!root._outgoing.byId || typeof root._outgoing.byId !== 'object') root._outgoing.byId = {};
+  if (!Number.isFinite(Number(root._outgoing.nextSeq)) || Number(root._outgoing.nextSeq) < 1) {
+    root._outgoing.nextSeq = 1;
+  }
+  return root._outgoing;
+}
+
+function operatorLetterOutDateRu(iso) {
+  const months = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  ];
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return '—';
+  return `«${d.getDate()}» ${months[d.getMonth()]} ${d.getFullYear()} г.`;
+}
+
+function operatorLetterOutRecord(templateId) {
+  const reg = operatorOutgoingRegistry();
+  const rec = reg.byId[templateId];
+  if (!rec || rec.seq == null) return null;
+  return rec;
+}
+
+function peekOperatorLetterOutNo(templateId) {
+  const reg = operatorOutgoingRegistry();
+  const rec = reg.byId[templateId];
+  if (rec && rec.seq != null) return { seq: rec.seq, date: rec.date || rec.issuedAt, assigned: true };
+  return { seq: reg.nextSeq, date: new Date().toISOString(), assigned: false };
+}
+
+function ensureOperatorLetterOutNo(templateId) {
+  if (!templateId) return null;
+  const reg = operatorOutgoingRegistry();
+  const existing = reg.byId[templateId];
+  if (existing && existing.seq != null) return existing;
+  const seq = reg.nextSeq;
+  const issued = {
+    seq,
+    date: new Date().toISOString(),
+    issuedAt: new Date().toISOString()
+  };
+  reg.byId[templateId] = issued;
+  reg.nextSeq = seq + 1;
+  if (typeof bumpDataEpoch === 'function') bumpDataEpoch('operator-letter-outno');
+  if (typeof persist === 'function') persist();
+  return issued;
+}
+
+function operatorLetterOutNoText(templateId) {
+  const peek = peekOperatorLetterOutNo(templateId);
+  return peek.seq != null ? String(peek.seq) : '—';
+}
+
+function operatorLetterOutMetaLine(templateId) {
+  const peek = peekOperatorLetterOutNo(templateId);
+  if (peek.seq == null) return '';
+  const dateRu = operatorLetterOutDateRu(peek.date);
+  if (peek.assigned) return `Исх. № ${peek.seq} от ${dateRu}`;
+  return `Исх. № ${peek.seq} от ${dateRu} (присвоится при печати)`;
+}
+
 function defaultOperatorLetterBody(templateId) {
   const contact = `Контактное лицо с нашей стороны: ${ARMADA_PLATFORM_PARTY.director}, тел. ${ARMADA_PLATFORM_PARTY.phone}, e-mail: ${ARMADA_PLATFORM_PARTY.email}.`;
+  const header = 'Исх. № {{letter.outNo}} от {{letter.outDate}}';
   const bodies = {
-    etrnKontur: `Исх. № _____ от {{today}}
+    etrnKontur: `${header}
 
 Кому: Акционерному обществу «Производственная фирма «СКБ Контур»
 сервис «Контур.Логистика» (оператор ИС ЭПД)
@@ -71,7 +146,7 @@ ${contact}
 ${ARMADA_PLATFORM_PARTY.directorShort}
 Генеральный директор
 ООО «АРМАДА»`,
-    etrnKaluga: `Исх. № _____ от {{today}}
+    etrnKaluga: `${header}
 
 Кому: Обществу с ограниченной ответственностью «Калуга Астрал»
 сервис 1С-ЭПД (оператор ИС ЭПД)
@@ -125,11 +200,35 @@ function canEditOperatorLetters() {
   return typeof isSuperAdmin === 'function' && isSuperAdmin();
 }
 
-function operatorLetterContext() {
+function operatorLetterContext(templateId, opts) {
+  const options = opts && typeof opts === 'object' ? opts : {};
+  const issued = options.assign ? ensureOperatorLetterOutNo(templateId) : peekOperatorLetterOutNo(templateId);
   const today = typeof dayOnly === 'function'
     ? dayOnly(new Date().toISOString())
     : new Date().toLocaleDateString('ru-RU');
-  return { '{{today}}': today };
+  const outNo = issued && issued.seq != null ? String(issued.seq) : '—';
+  const outDate = operatorLetterOutDateRu(issued && (issued.date || issued.issuedAt));
+  return {
+    '{{today}}': today,
+    '{{letter.outNo}}': outNo,
+    '{{letter.outDate}}': outDate
+  };
+}
+
+function fillOperatorLetterBody(body, templateId, opts) {
+  const ctx = operatorLetterContext(templateId, opts);
+  let out = typeof substituteDocTemplate === 'function'
+    ? substituteDocTemplate(body, ctx)
+    : String(body || '');
+  if (ctx['{{letter.outNo}}'] && ctx['{{letter.outNo}}'] !== '—') {
+    out = out.replace(/(Исх\.\s*№\s*)_+(?=\s+от)/i, `$1${ctx['{{letter.outNo}}']}`);
+    out = out.replace(/(Исх\.\s*№\s*)\{\{letter\.outNo\}\}/i, `$1${ctx['{{letter.outNo}}']}`);
+  }
+  if (ctx['{{letter.outDate}}'] && ctx['{{letter.outDate}}'] !== '—') {
+    out = out.replace(/(от\s+)\{\{today\}\}/i, `$1${ctx['{{letter.outDate}}']}`);
+    out = out.replace(/(от\s+)__+[^\n]*/i, `от ${ctx['{{letter.outDate}}']}`);
+  }
+  return out;
 }
 
 function platformArmadaLetterheadHtml() {
@@ -150,25 +249,28 @@ function platformArmadaLetterheadHtml() {
   </header>`;
 }
 
-function renderOperatorLetterPreviewHtml(templateId, body) {
+function renderOperatorLetterPreviewHtml(templateId, body, opts) {
   const meta = operatorLetterMeta(templateId);
-  const filled = typeof substituteDocTemplate === 'function'
-    ? substituteDocTemplate(body, operatorLetterContext())
-    : String(body || '');
+  const filled = fillOperatorLetterBody(body, templateId, opts);
   const inner = typeof renderDocTemplateTextToHtml === 'function'
     ? renderDocTemplateTextToHtml(filled)
     : `<p>${esc(filled)}</p>`;
+  const outHint = !operatorLetterOutRecord(templateId) && !(opts && opts.assign)
+    ? '<p class="hint adm-operator-out-hint">Номер и дата исходящего присваиваются автоматически при первой печати.</p>'
+    : '';
   return `<article class="adm-letter-page adm-tpl-preview adm-operator-letter">
     ${platformArmadaLetterheadHtml()}
     ${meta ? `<p class="adm-tpl-cat">Письмо оператору · ${esc(meta.title)}</p>` : ''}
+    ${outHint}
     <div class="adm-tpl-body adm-operator-letter-body">${inner}</div>
     <footer class="adm-tpl-foot">ООО «АРМАДА» · ИНН ${esc(ARMADA_PLATFORM_PARTY.inn)} · ${esc(ARMADA_PLATFORM_PARTY.site)}</footer>
   </article>`;
 }
 
 function openOperatorLetterPrint(templateId) {
+  ensureOperatorLetterOutNo(templateId);
   const body = getOperatorLetterBody(templateId);
-  const html = renderOperatorLetterPreviewHtml(templateId, body);
+  const html = renderOperatorLetterPreviewHtml(templateId, body, { assign: true });
   const title = (operatorLetterMeta(templateId) || {}).title || 'Письмо оператору';
   if (typeof openPrintHtml === 'function') openPrintHtml(title, html);
 }
@@ -176,7 +278,16 @@ function openOperatorLetterPrint(templateId) {
 function applyOperatorLettersPlatform(platform) {
   if (!platform || typeof platform !== 'object') return;
   operatorLetterPlatformRoot();
+  if (platform._outgoing && typeof platform._outgoing === 'object') {
+    operatorOutgoingRegistry();
+    state.docTemplates.platform._outgoing = Object.assign(
+      { nextSeq: 1, byId: {} },
+      state.docTemplates.platform._outgoing,
+      structuredClone(platform._outgoing)
+    );
+  }
   Object.keys(platform).forEach(id => {
+    if (id === '_outgoing') return;
     const rec = platform[id];
     if (!rec || typeof rec !== 'object' || !rec.body) return;
     state.docTemplates.platform[id] = { body: String(rec.body), updatedAt: rec.updatedAt || null };
