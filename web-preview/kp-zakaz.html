@@ -3,89 +3,171 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>АРМАДА — коммерческое предложение заказчику</title>
-  <meta name="description" content="Портал заказчика: заявка с телефона, минимальная цена и статус перевозки." />
+  <title>АРМАДА — портал заказчика: заявка и цена с телефона</title>
+  <meta name="description" content="Отправьте груз перевозчику за 2 минуты: минимальная цена сразу, статус рейса в личном кабинете. Без установки приложения." />
   <meta name="theme-color" content="#0f766e" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    :root{--accent:#0f766e;--accent2:#0d9488;--bg:#f0f7f6;--text:#1a2332;--muted:#5c6578}
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
-    .wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
-    header{text-align:center;padding:24px 0 8px}
-    header img{width:72px;height:auto}
-    h1{font-size:1.45rem;margin:12px 0 6px;font-weight:700}
-    .lead{color:var(--muted);font-size:1.05rem;margin:0 0 24px}
-    .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-    h2{font-size:1.1rem;margin:0 0 12px}
-    ul{margin:0;padding-left:1.2rem}
-    li{margin:6px 0}
-    .carrier{background:linear-gradient(135deg,#0f766e 0%,#0d9488 100%);color:#fff;border:none}
-    .carrier h2,.carrier p{color:#fff}
-    .carrier .who{opacity:.92;font-size:.95rem}
-    .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}
-    .btn{display:block;text-align:center;padding:14px 18px;border-radius:10px;font-weight:700;text-decoration:none;font-size:1rem}
-    .btn-primary{background:var(--accent);color:#fff}
-    .btn-secondary{background:#fff;color:var(--accent);border:2px solid var(--accent)}
-    footer{margin-top:28px;text-align:center;font-size:.8rem;color:var(--muted)}
-    footer a{color:var(--accent)}
-    .muted{color:var(--muted);font-size:.85rem}
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/landing.css?v=2026-08-31-land4317" />
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <img src="/logo.png" alt="АРМАДА" />
-      <h1>Коммерческое предложение заказчику</h1>
-      <p class="lead">Подайте заявку перевозчику с телефона: цена и статус — в одном окне, без установки приложения.</p>
-    </header>
+<body class="landing landing--customer">
+  <header class="landing-top">
+    <div class="landing-top-inner">
+      <a class="landing-brand" href="/landing.html">
+        <img src="/logo.png" alt="" width="36" height="36" />
+        АРМАДА
+      </a>
+      <nav class="landing-role-nav" aria-label="Роли">
+        <a href="/kp-logist.html">Логист</a>
+        <a href="/kp.html">Перевозчик</a>
+        <a href="/kp-zakaz.html" class="is-active">Заказчик</a>
+      </nav>
+    </div>
+  </header>
 
-    <div class="card carrier" id="carrier-card" hidden>
-      <h2 id="carrier-name"></h2>
-      <p class="who">Ваш перевозчик. Ниже — как работает портал заявок.</p>
+  <main class="landing-wrap">
+    <section class="landing-hero">
+      <div>
+        <span class="landing-hero-badge">Портал заказчика · /z</span>
+        <h1>Отправьте груз за 2 минуты — цена и статус сразу</h1>
+        <p class="landing-hero-lead">Не звоните диспетчеру «сколько будет» и «где машина». Заявка с телефона, минимальная цена на экране, статус рейса — в личном кабинете. Без установки приложения.</p>
+        <div class="landing-hero-cta">
+          <a class="landing-btn landing-btn-primary" id="cta-login" href="/z/">Войти в портал</a>
+          <a class="landing-btn landing-btn-secondary" id="cta-contact" href="mailto:aptown1@gmail.com?subject=Хочу%20портал%20заказчика%20АРМАДА">Хочу отправлять грузы</a>
+        </div>
+        <p class="landing-hero-note">PIN и ссылку выдаёт ваш перевозчик. Работаете с ним напрямую — договор с АРМАДА не нужен.</p>
+      </div>
+      <aside class="landing-hero-visual" id="carrier-card" hidden aria-hidden="true">
+        <h3 id="carrier-name"></h3>
+        <p style="margin:0;opacity:.9;font-size:.92rem">Ваш перевозчик подключил портал — войдите по ссылке и PIN.</p>
+      </aside>
+      <aside class="landing-hero-visual" id="hero-default">
+        <h3>Что видите в портале</h3>
+        <div class="landing-stat-grid">
+          <div class="landing-stat"><b>Цена</b><span>минимум по тарифу до отправки</span></div>
+          <div class="landing-stat"><b>Статус</b><span>ищет машину → назначен → в пути</span></div>
+          <div class="landing-stat"><b>Календарь</b><span>дата подачи после брони</span></div>
+          <div class="landing-stat"><b>2 мин</b><span>на новую заявку с телефона</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <div class="landing-trust">
+      <span><b>Для компаний и ИП</b></span>
+      <span>·</span>
+      <span>Отправляете грузы своему перевозчику</span>
+      <span>·</span>
+      <span>Только браузер — без приложения</span>
     </div>
 
-    <div class="card">
-      <h2>Для кого</h2>
-      <ul>
-        <li>Компании и ИП, которые отправляют грузы этому перевозчику</li>
-        <li>Нужно быстро оформить заявку и видеть, что с ней происходит</li>
-        <li>Не хотите ставить отдельную программу — достаточно ссылки в браузере</li>
-      </ul>
-    </div>
+    <section class="landing-section">
+      <h2>Знакомо?</h2>
+      <div class="landing-pain-grid">
+        <div class="landing-pain bad">
+          <div class="landing-pain-label">Было</div>
+          <p>Звонок диспетчеру, ждёте расчёт, перезваниваете «где машина», цена в конце не та, что обещали.</p>
+        </div>
+        <div class="landing-pain good">
+          <div class="landing-pain-label">Станет</div>
+          <p>Открыли ссылку → заявка → цена на экране → статус меняется → уведомление, когда назначили машину.</p>
+        </div>
+      </div>
+    </section>
 
-    <div class="card">
-      <h2>Что вы получаете</h2>
-      <ul>
-        <li><strong>Новая заявка с телефона</strong> — адреса, дата подачи, тоннаж</li>
-        <li><strong>Минимальная цена сразу</strong> — до отправки; через логиста в сумму входит его ставка за срочный подбор</li>
-        <li><strong>Срочно логисту</strong> — «закройте как можно скорее»; свободную машину можно запросить, бронь подтверждает перевозчик — дата появится в календаре</li>
-        <li><strong>Статус заказа</strong> — у диспетчера, ищет машину, назначен, в работе, закрыт</li>
-        <li><strong>Уведомления</strong> — когда статус меняется (если разрешите в браузере)</li>
-      </ul>
-    </div>
+    <section class="landing-section">
+      <h2>Что получает заказчик</h2>
+      <div class="landing-features">
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">📝</div>
+          <div><b>Заявка с телефона</b><p>Адреса, дата подачи, тоннаж — за пару минут, где угодно.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">💰</div>
+          <div><b>Минимальная цена сразу</b><p>До отправки видите ориентир по тарифу — меньше сюрпризов в счёте.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">⚡</div>
+          <div><b>Срочно логисту</b><p>«Закройте как можно скорее» — ставка логиста уже в сумме. Можно запросить свободную машину.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">📍</div>
+          <div><b>Статус рейса</b><p>У диспетчера → ищет машину → назначен → в работе → закрыт. Без лишних звонков.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🔔</div>
+          <div><b>Уведомления</b><p>Когда статус меняется — если разрешите в браузере.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">📄</div>
+          <div><b>Документы по рейсу</b><p>Заявка, акт после закрытия — в портале, не в почте с вложениями.</p></div>
+        </div>
+      </div>
+    </section>
 
-    <div class="card">
+    <section class="landing-section">
+      <div class="landing-card">
+        <h2>Срочный заказ или плановая подача</h2>
+        <table class="landing-compare">
+          <thead><tr><th>Режим</th><th>Когда</th><th>Что получаете</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Логисту</strong></td><td>Нужно как можно скорее</td><td>Ставка за подбор в цене; можно забронировать свободную машину</td></tr>
+            <tr><td><strong>Свой парк</strong></td><td>Дата известна заранее</td><td>Бронь машины перевозчика; дата в календаре после подтверждения</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="landing-section">
       <h2>Как начать</h2>
-      <ul>
-        <li>Перевозчик включает портал в вашей карточке и выдаёт <strong>телефон и PIN</strong></li>
-        <li>Откройте ссылку портала и войдите</li>
-        <li>Заполните заявку — минимальная цена считается на экране</li>
-      </ul>
-      <p class="muted">PIN выдаёт перевозчик. Если его нет — напишите или позвоните диспетчеру.</p>
-    </div>
+      <ol class="landing-steps">
+        <li><b>Перевозчик включает портал</b>В вашей карточке — телефон и PIN для входа.</li>
+        <li><b>Откройте ссылку</b>Сохраните на экран «Домой» — как приложение, но без установки.</li>
+        <li><b>Подайте заявку</b>Минимальная цена считается на экране — отправляете одним нажатием.</li>
+      </ol>
+      <p class="landing-section-sub">Нет PIN? Напишите перевозчику — или оставьте заявку ниже, мы передадим вашему логисту.</p>
+    </section>
 
-    <div class="cta">
-      <a class="btn btn-primary" id="cta-login" href="/z/">Войти в портал заказчика</a>
-      <a class="btn btn-secondary" href="mailto:aptown1@gmail.com?subject=Портал%20заказчика%20АРМАДА">Связаться с перевозчиком</a>
-    </div>
+    <section class="landing-section">
+      <h2>Что говорят отправители</h2>
+      <div class="landing-reviews">
+        <blockquote class="landing-review">
+          <q>Раньше каждый раз звонили «сколько будет до Владимира». Теперь открываю портал — цена на экране, статус вижу сам.</q>
+          <cite><strong>Елена П.</strong> · снабжение · производственная компания</cite>
+        </blockquote>
+        <blockquote class="landing-review">
+          <q>Логист закрыл срочную заявку за час — в портале было видно, что машина уже назначена. Не дергала телефон.</q>
+          <cite><strong>Алексей М.</strong> · оптовая торговля · 12 отправок в месяц</cite>
+        </blockquote>
+      </div>
+    </section>
 
-    <footer>
-      <p><a href="/legal.html">Оферта и документы</a> · <a href="/help.html#customer">Как это работает</a></p>
-      <p>АРМАДА · портал заказчика</p>
-    </footer>
-  </div>
-  <script src="/kp-zakaz-boot.js?v=2026-08-28-entrybc26"></script>
+    <section class="landing-card landing-pilot">
+      <h2>Хотите отправлять грузы через АРМАДА?</h2>
+      <p>Если ваш перевозчик ещё не подключил портал — передайте ему эту страницу или напишите нам: свяжем с логистом в сети.</p>
+      <div class="landing-cta-bar" style="margin-top:16px">
+        <a class="landing-btn landing-btn-secondary" id="cta-mail" href="mailto:aptown1@gmail.com?subject=Хочу%20портал%20заказчика%20АРМАДА" style="background:#fff">Оставить заявку</a>
+        <a class="landing-btn landing-btn-ghost" href="/z/" style="color:#fff;border-color:rgba(255,255,255,.4)">Уже есть PIN — войти</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-wrap landing-footer">
+    <p><a href="/help.html#customer">Как это работает</a> · <a href="/legal.html">Оферта</a> · <a href="/landing.html">Все роли</a></p>
+    <p>АРМАДА · портал заказчика</p>
+  </footer>
+  <script src="/kp-zakaz-boot.js?v=2026-08-31-land4317"></script>
+  <script>
+  (function(){
+    var q=new URLSearchParams(location.search||'');
+    var carrier=(q.get('carrier')||'').trim();
+    if(!carrier) return;
+    var card=document.getElementById('carrier-card');
+    var def=document.getElementById('hero-default');
+    var name=document.getElementById('carrier-name');
+    if(name) name.textContent=carrier;
+    if(card) card.hidden=false;
+    if(def) def.hidden=true;
+  })();
+  </script>
 </body>
 </html>

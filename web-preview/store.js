@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-30-driver-docs-warn4317";
+const APP_BUILD="2026-08-31-role-landings4317";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -413,7 +413,8 @@ function backFromEntryLogin(opts){
   }
   const m=getEntryMode();
   if(m==='customer'){ location.href=customerKpPageUrl(); return; }
-  if(m==='admin'||m==='driver'){ location.href='/kp.html'; return; }
+  if(m==='admin'){ location.href='/kp-logist.html'; return; }
+  if(m==='driver'){ location.href='/kp.html'; return; }
   if(typeof show==='function') show('roles');
 }
 /** Прод-хосты: VPS и основной домен приложения. */

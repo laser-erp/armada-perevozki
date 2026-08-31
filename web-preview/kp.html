@@ -3,137 +3,174 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>АРМАДА — учёт перевозок для микро-парка</title>
-  <meta name="description" content="Заказы, водитель в дороге, внутренняя биржа, портал заказчика. Для парка 1–15 машин." />
-  <meta name="theme-color" content="#1e5aa8" />
+  <title>АРМАДА — для перевозчика: заказы без обзвона</title>
+  <meta name="description" content="Логист даёт заявки — вы везёте. Биржа АРМАДА: забираете заказ кнопкой, ставка прозрачна, водитель ведёт рейс с телефона." />
+  <meta name="theme-color" content="#dc2626" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    :root{--accent:#1e5aa8;--accent2:#EF4444;--bg:#f0f4f8;--text:#1a2332;--muted:#5c6578}
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
-    .wrap{max-width:720px;margin:0 auto;padding:20px 16px 48px}
-    header{text-align:center;padding:24px 0 8px}
-    header img{width:72px;height:auto}
-    h1{font-size:1.45rem;margin:12px 0 6px;font-weight:700}
-    .lead{color:var(--muted);font-size:1.05rem;margin:0 0 24px}
-    .card{background:#fff;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-    h2{font-size:1.1rem;margin:0 0 12px}
-    ul{margin:0;padding-left:1.2rem}
-    li{margin:6px 0}
-    .tariffs{display:grid;gap:12px}
-    @media(min-width:560px){.tariffs{grid-template-columns:1fr 1fr}}
-    .tariff{border:1px solid #e2e8f0;border-radius:12px;padding:16px}
-    .tariff strong{display:block;font-size:1.15rem;color:var(--accent)}
-    .tariff .price{font-size:1.35rem;font-weight:700;margin:8px 0}
-    .tariff .muted{font-size:.85rem;color:var(--muted)}
-    .cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}
-    .btn{display:block;text-align:center;padding:14px 18px;border-radius:10px;font-weight:700;text-decoration:none;font-size:1rem}
-    .btn-primary{background:var(--accent);color:#fff}
-    .btn-secondary{background:#fff;color:var(--accent);border:2px solid var(--accent)}
-    .pilot{background:linear-gradient(135deg,#1e5aa8 0%,#2563b8 100%);color:#fff;border:none}
-    .pilot h2{color:#fff}
-    .reviews{display:grid;gap:12px}
-    .review{border:1px solid #e8ecf2;border-radius:12px;padding:14px 16px;background:#fafbfc}
-    .review p{margin:0 0 8px;font-size:.95rem}
-    .review .who{font-size:.82rem;color:var(--muted);margin:0}
-    .review .who strong{color:var(--text)}
-    footer{margin-top:28px;text-align:center;font-size:.8rem;color:var(--muted)}
-    footer a{color:var(--accent)}
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/landing.css?v=2026-08-31-land4317" />
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <img src="logo.png" alt="АРМАДА" />
-      <h1>АРМАДА</h1>
-      <p class="lead">Учёт перевозок для микро-парка и экспедитора с своим парком — заказы, водитель, биржа между перевозчиками.</p>
-    </header>
+<body class="landing landing--carrier">
+  <header class="landing-top">
+    <div class="landing-top-inner">
+      <a class="landing-brand" href="/landing.html">
+        <img src="/logo.png" alt="" width="36" height="36" />
+        АРМАДА
+      </a>
+      <nav class="landing-role-nav" aria-label="Роли">
+        <a href="/kp-logist.html">Логист</a>
+        <a href="/kp.html" class="is-active">Перевозчик</a>
+        <a href="/kp-zakaz.html">Заказчик</a>
+      </nav>
+    </div>
+  </header>
 
-    <div class="card">
-      <h2>Для кого</h2>
-      <ul>
-        <li>Малый парк: <strong>1–15 машин</strong></li>
-        <li>Владелец 1–3 машин, который <strong>сам за рулём</strong>: логист даёт заказы, вы везёте</li>
-        <li>Региональные перевозчики, штатный логист парка и диспетчер-посредник без своих машин</li>
-        <li>Не замена ATI и не огромная TMS — пакетный сервис «всё в одном»</li>
-      </ul>
+  <main class="landing-wrap">
+    <section class="landing-hero">
+      <div>
+        <span class="landing-hero-badge">Парк 1–15 машин · партнёр биржи</span>
+        <h1>Заказы от логистов — без обзвона и ATI</h1>
+        <p class="landing-hero-lead">Владелец 1–3 машин, который сам за рулём, или региональный перевозчик: логист даёт заявки, вы забираете их в кабинете. Ставка видна сразу — не «на словах».</p>
+        <div class="landing-hero-cta">
+          <a class="landing-btn landing-btn-primary" href="/a/">Войти в кабинет</a>
+          <a class="landing-btn landing-btn-secondary" href="mailto:aptown1@gmail.com?subject=Подключение%20перевозчика%20АРМАДА">Подключить парк</a>
+        </div>
+        <p class="landing-hero-note">Работаете с логистом в АРМАДА? Войдите по ссылке приглашения или попросите PIN у диспетчера.</p>
+      </div>
+      <aside class="landing-hero-visual" aria-hidden="true">
+        <h3>Выгода перевозчика</h3>
+        <div class="landing-stat-grid">
+          <div class="landing-stat"><b>0 часов</b><span>на поиск заявок — логист присылает</span></div>
+          <div class="landing-stat"><b>1 кнопка</b><span>«Забрать» — договор-заявка готов</span></div>
+          <div class="landing-stat"><b>Ставка</b><span>в заявке, не переговоры в чате</span></div>
+          <div class="landing-stat"><b>Водитель</b><span>рейс с телефона, без приложения</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <div class="landing-trust">
+      <span><b>1–15 машин</b></span>
+      <span>·</span>
+      <span>Часто владелец сам за рулём</span>
+      <span>·</span>
+      <span>Партнёр на бирже логиста</span>
     </div>
 
-    <div class="card">
-      <h2>Что внутри</h2>
-      <ul>
-        <li>Заявки и заказы, смены, ЕТО водителя</li>
-        <li>Кабинет водителя на телефоне</li>
-        <li><strong>Внутренняя биржа</strong> — штатный логист сначала грузит свои машины; остаток отдаёт на биржу, где его фирма заказчик</li>
-        <li>Портал заказчика (заявка и расчёт с телефона)</li>
-        <li>Электронные накладные ЭТрН — в тарифах «Бизнес» и выше (пилот 2026)</li>
-        <li>Тарифы, пробный период, учёт лимитов</li>
-      </ul>
-    </div>
+    <section class="landing-section">
+      <h2>Два сценария — одна программа</h2>
+      <div class="landing-features">
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🏢</div>
+          <div><b>Свой парк и свои заказчики</b><p>Кабинет перевозчика: заявки, водители, портал для клиентов, тарифы. Как мини-TMS «всё в одном».</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🤝</div>
+          <div><b>Партнёр логиста на бирже</b><p>Логист выставляет остаток — вы видите заявку, если ТС подходит. Забираете — везёте своим водителем.</p></div>
+        </div>
+      </div>
+    </section>
 
-    <div class="card">
-      <h2>Тарифы (ориентир)</h2>
-      <div class="tariffs">
-        <div class="tariff">
+    <section class="landing-section">
+      <h2>Знакомо?</h2>
+      <div class="landing-pain-grid">
+        <div class="landing-pain bad">
+          <div class="landing-pain-label">Было</div>
+          <p>Утро — обзвон ATI и чатов, полдня на поиск заявки. Ставку обещали одну — в документах другая. Водитель звонит каждый час.</p>
+        </div>
+        <div class="landing-pain good">
+          <div class="landing-pain-label">Станет</div>
+          <p>Заявка от логиста в кабинете → «Забрать» → водитель видит маршрут → закрыли рейс → акт и оплата по правилам.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <h2>Что получает перевозчик</h2>
+      <div class="landing-features">
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">📥</div>
+          <div><b>Логист даёт заказы</b><p>Не тратите смену на поиск — заявки приходят от партнёров в сети АРМАДА.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">👁</div>
+          <div><b>Чужие заявки на бирже</b><p>Тоннаж и маршрут видны заранее — берёте только подходящее.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">✅</div>
+          <div><b>Забрать кнопкой</b><p>Договор-заявка с логистом создаётся сразу — не ждёте «скинут потом».</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">🚚</div>
+          <div><b>Свой водитель и авто</b><p>Рейс ведёт ваш парк — часто вы сами за рулём. Назначение в два клика.</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">💵</div>
+          <div><b>Ставка прозрачна</b><p>Цена перевозчику в заявке — не переговоры «на берегу».</p></div>
+        </div>
+        <div class="landing-feature">
+          <div class="landing-feature-icon" aria-hidden="true">📲</div>
+          <div><b>Водитель без приложения</b><p>Ссылка в SMS: смена, ЕТО, одометры, статусы — на экране телефона.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <h2>Как подключиться</h2>
+      <ol class="landing-steps">
+        <li><b>Приглашение от логиста</b>Или заявка на пилот — подключаем кабинет под ваш парк.</li>
+        <li><b>Заводите машины и водителей</b>Раздаёте ссылки — водители входят с телефона.</li>
+        <li><b>Берёте заявки</b>С биржи или от своих заказчиков через портал — ведёте рейсы до закрытия.</li>
+      </ol>
+    </section>
+
+    <section class="landing-section">
+      <h2>Отзывы перевозчиков</h2>
+      <div class="landing-reviews">
+        <blockquote class="landing-review">
+          <q>Биржа между кабинетами — главная фишка. Сдали заявку коллеге из соседнего города, не в ATI и не по телефону в неизвестность. Комиссия прозрачная.</q>
+          <cite><strong>Ирина В.</strong> · экспедитор · 4 ТС</cite>
+        </blockquote>
+        <blockquote class="landing-review">
+          <q>Водители быстро разобрались: смена, ЕТО, заказы. Ссылка для входа — без установки отдельного приложения, для нас это важно.</q>
+          <cite><strong>Олег С.</strong> · ИП, 3 машины · собственник за рулём</cite>
+        </blockquote>
+        <blockquote class="landing-review">
+          <q>Смотрели Cargo.run — для нас дорого и тяжело. АРМАДА по деньгам и по простоте подошла: пилот без страха подписки на год.</q>
+          <cite><strong>Дмитрий Л.</strong> · Ярославль, 5 ТС</cite>
+        </blockquote>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <h2>Тарифы для своего парка</h2>
+      <div class="landing-tariffs">
+        <div class="landing-tariff">
           <strong>Старт</strong>
           <div class="price">2 990 ₽/мес</div>
-          <div class="muted">Малый парк, без биржи и ЭТрН</div>
+          <div class="muted">Свой парк, водитель, портал заказчика.</div>
         </div>
-        <div class="tariff">
+        <div class="landing-tariff featured">
           <strong>Бизнес</strong>
           <div class="price">7 990 ₽/мес</div>
-          <div class="muted">Биржа, ЭТрН, больше водителей и машин</div>
+          <div class="muted">Биржа, ЭТрН, больше машин и водителей.</div>
         </div>
       </div>
-      <p class="muted" style="margin-top:12px;font-size:.85rem">Точные лимиты — в программе и оферте. Оператор ЭТрН — отдельно по тарифам оператора.</p>
-    </div>
+    </section>
 
-    <div class="card">
-      <h2>Отзывы</h2>
-      <p class="muted" style="font-size:.85rem;margin:0 0 14px">Участники пилота и первые пользователи</p>
-      <div class="reviews">
-        <blockquote class="review">
-          <p>Раньше заявки в Excel и в WhatsApp — постоянно терялись детали. Сейчас всё в одном месте: водитель видит заказ в дороге, я закрываю смену без звонков вечером.</p>
-          <p class="who"><strong>Андрей К.</strong> · перевозчик, 6 машин · Тверская область</p>
-        </blockquote>
-        <blockquote class="review">
-          <p>Биржа между кабинетами — главная фишка. Сдали заявку коллеге из соседнего города, не в ATI и не по телефону в неизвестность. Комиссия прозрачная, в программе видно.</p>
-          <p class="who"><strong>Ирина В.</strong> · экспедитор со своим парком · 4 ТС</p>
-        </blockquote>
-        <blockquote class="review">
-          <p>Заказчик сам кидает заявку с телефона — меньше «перезвоните, сколько будет». Минимальная цена считается, споров меньше.</p>
-          <p class="who"><strong>Михаил Н.</strong> · ООО «СеверЛогистик» · 8 машин</p>
-        </blockquote>
-        <blockquote class="review">
-          <p>Водители быстро разобрались: смена, ЕТО, заказы. Ссылка для входа — без установки отдельного приложения, для нас это важно.</p>
-          <p class="who"><strong>Олег С.</strong> · собственник · ИП, 3 машины грузовые</p>
-        </blockquote>
-        <blockquote class="review">
-          <p>Смотрели Cargo.run — для нас дорого и тяжело. АРМАДА по деньгам и по простоте подошла: пилот без страха, что сразу подписка на год.</p>
-          <p class="who"><strong>Дмитрий Л.</strong> · перевозчик · Ярославль, 5 ТС</p>
-        </blockquote>
+    <section class="landing-card landing-pilot">
+      <h2>Хотите возить с логистом в АРМАДА?</h2>
+      <p>Напишите — подключим кабинет или передадим заявку вашему партнёру-логисту. Пилот 30 дней для новых парков.</p>
+      <p><strong>Связь:</strong> <a href="mailto:aptown1@gmail.com">aptown1@gmail.com</a></p>
+      <div class="landing-cta-bar" style="margin-top:16px">
+        <a class="landing-btn landing-btn-secondary" href="mailto:aptown1@gmail.com?subject=Подключение%20перевозчика%20АРМАДА" style="background:#fff">Оставить заявку</a>
+        <a class="landing-btn landing-btn-ghost" href="/v/" style="color:#fff;border-color:rgba(255,255,255,.4)">Вход водителя</a>
       </div>
-      <p class="muted" style="font-size:.78rem;margin:12px 0 0">Шаблоны для пилота. Перед публичной рекламой замените на реальные отзывы с разрешением клиентов.</p>
-    </div>
+    </section>
+  </main>
 
-    <div class="card pilot">
-      <h2>Пилот 30 дней</h2>
-      <p>Для 2–3 партнёров: подключаем кабинет, пробный период, помощь с запуском. Вы тестируете на реальных заявках.</p>
-      <p><strong>Связь:</strong> aptown1@gmail.com</p>
-    </div>
-
-    <div class="cta">
-      <a class="btn btn-primary" href="/a">Войти в программу</a>
-      <a class="btn btn-secondary" href="/v">Вход водителя</a>
-      <a class="btn btn-secondary" href="/z">Портал заказчика</a>
-      <a class="btn btn-secondary" href="mailto:aptown1@gmail.com?subject=Пилот%20АРМАДА">Запросить пилот</a>
-    </div>
-
-    <footer>
-      <p><a href="legal.html">Оферта и документы</a> · <a href="/a">Админ</a> · <a href="/v">Водитель</a> · <a href="/z">Заказчик</a></p>
-      <p>АРМАДА · aptown1.fvds.ru</p>
-    </footer>
-  </div>
+  <footer class="landing-wrap landing-footer">
+    <p><a href="/kp-logist.html">Для логиста</a> · <a href="/help.html">Помощь</a> · <a href="/legal.html">Оферта</a></p>
+    <p>АРМАДА · app.armada.sx</p>
+  </footer>
 </body>
 </html>
