@@ -4286,6 +4286,10 @@ try{
     }
   }finally{
     window.__armadaBootDone=true;
+    if(document.querySelector('#splash.show') && !document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show') && !document.querySelector('#customer-portal.show')){
+      if(typeof showAfterSplash==='function' && typeof showDefaultAfterSplash==='function') showAfterSplash(showDefaultAfterSplash);
+      else if(typeof show==='function') show('roles');
+    }
   }
 })();
 function wireShellHandlers(){

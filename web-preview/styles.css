@@ -56,6 +56,78 @@
     .splash-hero .splash-accent{animation:splashRise .55s ease .2s both, splashPulse 1.25s ease .75s infinite}
     .roles-hero{gap:10px;max-width:360px;width:100%;margin:0 auto}
     .roles-hero .logo{width:72px}
+    .roles-hub{
+      gap:14px;max-width:420px;width:100%;margin:0 auto;padding:12px 0 24px;
+      align-items:stretch;text-align:left
+    }
+    .roles-hub-head{text-align:center;margin-bottom:4px}
+    .roles-hub-head .logo{width:64px;margin-bottom:8px}
+    .roles-hub-title{
+      margin:0 0 8px;font-size:clamp(1.25rem,4.5vw,1.55rem);font-weight:800;line-height:1.2;
+      color:var(--text);letter-spacing:-.02em
+    }
+    .roles-hub-lead{margin:0 auto;font-size:.92rem;line-height:1.45;color:var(--muted);max-width:340px}
+    .role-hub-stack{display:flex;flex-direction:column;gap:12px;width:100%}
+    .role-hub-card{
+      display:flex;gap:14px;align-items:flex-start;text-decoration:none;color:inherit;
+      padding:16px 16px 16px 14px;border-radius:16px;background:#fff;
+      border:1px solid rgba(15,23,42,.08);
+      box-shadow:0 4px 20px rgba(15,23,42,.07),0 1px 3px rgba(15,23,42,.04);
+      transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+      position:relative;overflow:hidden
+    }
+    .role-hub-card::before{
+      content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:16px 0 0 16px
+    }
+    .role-hub-logist::before{background:linear-gradient(180deg,#2563eb,#1e5aa8)}
+    .role-hub-carrier::before{background:linear-gradient(180deg,#ef4444,#dc2626)}
+    .role-hub-customer::before{background:linear-gradient(180deg,#14b8a6,#0f766e)}
+    .role-hub-card:active{transform:scale(.985)}
+    @media(hover:hover){
+      .role-hub-card:hover{
+        transform:translateY(-3px);
+        box-shadow:0 12px 32px rgba(15,23,42,.12),0 2px 8px rgba(15,23,42,.06);
+        border-color:rgba(15,23,42,.12)
+      }
+    }
+    .role-hub-icon{
+      flex:0 0 44px;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+      font-size:1.35rem;background:rgba(15,23,42,.04)
+    }
+    .role-hub-logist .role-hub-icon{background:rgba(30,90,168,.1)}
+    .role-hub-carrier .role-hub-icon{background:rgba(220,38,38,.1)}
+    .role-hub-customer .role-hub-icon{background:rgba(15,118,110,.1)}
+    .role-hub-body{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+    .role-hub-badge{
+      font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em
+    }
+    .role-hub-logist .role-hub-badge{color:#1e5aa8}
+    .role-hub-carrier .role-hub-badge{color:#dc2626}
+    .role-hub-customer .role-hub-badge{color:#0f766e}
+    .role-hub-name{font-size:1.02rem;font-weight:700;line-height:1.25;color:var(--text)}
+    .role-hub-teaser{font-size:.84rem;line-height:1.4;color:var(--muted)}
+    .role-hub-cta{font-size:.82rem;font-weight:700;margin-top:4px}
+    .role-hub-logist .role-hub-cta{color:#1e5aa8}
+    .role-hub-carrier .role-hub-cta{color:#dc2626}
+    .role-hub-customer .role-hub-cta{color:#0f766e}
+    .role-hub-login{
+      margin-top:6px;padding:14px 12px;border-radius:14px;
+      background:rgba(15,23,42,.03);border:1px solid rgba(15,23,42,.06);text-align:center
+    }
+    .role-hub-login-label{margin:0 0 10px;font-size:.8rem;color:var(--muted);font-weight:600}
+    .role-hub-login-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+    .role-hub-login-btn{
+      flex:1 1 auto;min-width:96px;padding:10px 14px;border-radius:10px;font-weight:700;font-size:.85rem;
+      font-family:inherit;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text)
+    }
+    .role-hub-login-admin{background:var(--accent);color:#fff;border-color:var(--accent)}
+    #roles.show .roles-hub-head .logo{animation:splashRise .45s ease both}
+    #roles.show .roles-hub-title{animation:splashRise .45s ease .05s both}
+    #roles.show .roles-hub-lead{animation:splashRise .45s ease .1s both}
+    #roles.show .role-hub-stack .role-hub-card:nth-child(1){animation:splashRise .5s ease .14s both}
+    #roles.show .role-hub-stack .role-hub-card:nth-child(2){animation:splashRise .5s ease .2s both}
+    #roles.show .role-hub-stack .role-hub-card:nth-child(3){animation:splashRise .5s ease .26s both}
+    #roles.show .role-hub-login{animation:splashRise .5s ease .32s both}
     .roles-hero .brand{
       font-size:clamp(1.65rem,5.2vw,1.95rem);letter-spacing:.14em;color:var(--ink);line-height:1.05
     }
@@ -1171,9 +1243,11 @@
     }
     #splash,#roles,#driver-login,#admin-pin{
       background:
-        radial-gradient(ellipse at 50% 0%, rgba(239,68,68,.08), transparent 55%),
-        linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 50%)
+        radial-gradient(ellipse at 50% 0%, rgba(239,68,68,.07), transparent 55%),
+        radial-gradient(ellipse at 80% 100%, rgba(30,90,168,.05), transparent 45%),
+        linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 55%)
     }
+    #roles.show .center.roles-hub{justify-content:flex-start;padding-top:16px;padding-bottom:28px}
     .auth-back{
       border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;
       padding:6px 0;min-height:36px;font-size:.85rem;font-family:inherit

@@ -1,26 +1,28 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-08-30-docs-filter4317e';
+  var APP_BUILD = '2026-08-31-splash-hub4317';
 
   window.__armadaBootDone = false;
   setTimeout(function () {
-    if (window.__armadaBootDone) return;
-    if (typeof showDefaultAfterSplash === 'function') {
+    var sp = document.getElementById('splash');
+    if (!sp || !sp.classList.contains('show')) return;
+    if (typeof showAfterSplash === 'function' && typeof showDefaultAfterSplash === 'function') {
       showAfterSplash(showDefaultAfterSplash);
+      return;
+    }
+    if (typeof showAfterSplash === 'function') {
+      showAfterSplash('roles');
       return;
     }
     if (typeof show === 'function') {
       show('roles');
       return;
     }
-    var sp = document.getElementById('splash');
-    if (sp && sp.classList.contains('show')) {
-      document.querySelectorAll('.phone > .screen').forEach(function (s) {
-        s.classList.remove('show');
-      });
-      var roles = document.getElementById('roles');
-      if (roles) roles.classList.add('show');
-    }
+    document.querySelectorAll('.phone > .screen').forEach(function (s) {
+      s.classList.remove('show');
+    });
+    var roles = document.getElementById('roles');
+    if (roles) roles.classList.add('show');
   }, 5000);
 
   function loadScript(src) {

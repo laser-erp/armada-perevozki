@@ -19,8 +19,8 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <meta http-equiv="Cache-Control" content="no-cache" />
-    <link rel="stylesheet" href="/styles.css?v=2026-08-28-yandex-map-load-types4317a" />
-    <link rel="stylesheet" href="/entry.css?v=2026-08-28-yandex-map-load-types4317a" />
+    <link rel="stylesheet" href="/styles.css?v=2026-08-31-splash-hub4317" />
+    <link rel="stylesheet" href="/entry.css?v=2026-08-31-splash-hub4317" />
 
 </head>
 <body>
@@ -32,33 +32,52 @@
     <div class="splash-accent" aria-hidden="true"></div>
   </div></div>
 
-  <div id="roles" class="screen"><div class="center roles-hero">
-    <img class="logo" src="/logo.png" alt="АРМАДА" />
-    <div class="brand">АРМАДА</div>
-    <div class="sub">Выберите роль</div>
-    <div class="hint" id="sync-hint" style="display:none;margin-bottom:8px"></div>
-    <div class="stack roles-stack">
-      <button type="button" class="primary role-btn" id="role-driver">
-        <span class="role-btn-title">Водитель</span>
-        <span class="role-btn-desc">Смена, ЕТО и заказы в дороге</span>
-      </button>
-      <button type="button" class="secondary role-btn" id="role-admin">
-        <span class="role-btn-title">Администратор</span>
-        <span class="role-btn-desc">Парк, биржа и справочники</span>
-      </button>
-      <button type="button" class="secondary role-btn" id="role-customer">
-        <span class="role-btn-title">Заказчик</span>
-        <span class="role-btn-desc">Своя заявка и расчёт цены</span>
-      </button>
+  <div id="roles" class="screen"><div class="center roles-hub">
+    <div class="roles-hub-head">
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
+      <h1 class="roles-hub-title">Учёт перевозок — каждому своя выгода</h1>
+      <p class="roles-hub-lead">Заявки, парк, биржа и портал заказчика. Нажмите на роль — расскажем, что получите.</p>
+      <div class="hint" id="sync-hint" style="display:none;margin-bottom:4px"></div>
     </div>
-    <p class="hint" style="margin-top:8px;font-size:.8rem">
-      Отдельные входы: <a href="/v/">водитель</a> · <a href="/a/">администратор</a> · <a href="/z/">заказчик</a>
-      · <a href="landing.html">О сервисе</a> · <a href="help.html">Помощь</a>
-    </p>
-    <p class="hint legal-notice" style="margin-top:14px;font-size:.72rem;line-height:1.4;max-width:320px">
-      Использование сервиса — по <a href="legal.html#offer">оферте</a>.
-      ПДн — по <a href="legal.html#privacy">политике</a>.
-      Данные в браузере: <a href="legal.html#tech">localStorage</a>.
+    <div class="role-hub-stack">
+      <a class="role-hub-card role-hub-logist" href="/kp-logist.html">
+        <span class="role-hub-icon" aria-hidden="true">📋</span>
+        <div class="role-hub-body">
+          <span class="role-hub-badge">Логист / диспетчер</span>
+          <strong class="role-hub-name">Кабинет · заявки и биржа</strong>
+          <span class="role-hub-teaser">Все заявки в одном месте — без Excel и WhatsApp. Свой парк, остаток партнёрам.</span>
+          <span class="role-hub-cta">Читать для логиста →</span>
+        </div>
+      </a>
+      <a class="role-hub-card role-hub-carrier" href="/kp.html">
+        <span class="role-hub-icon" aria-hidden="true">🚛</span>
+        <div class="role-hub-body">
+          <span class="role-hub-badge">Перевозчик</span>
+          <strong class="role-hub-name">Парк и заказы от логистов</strong>
+          <span class="role-hub-teaser">Забираете заявку кнопкой — ставка в цифрах, водитель ведёт рейс с телефона.</span>
+          <span class="role-hub-cta">Читать для перевозчика →</span>
+        </div>
+      </a>
+      <a class="role-hub-card role-hub-customer" href="/kp-zakaz.html">
+        <span class="role-hub-icon" aria-hidden="true">📦</span>
+        <div class="role-hub-body">
+          <span class="role-hub-badge">Заказчик</span>
+          <strong class="role-hub-name">Портал · заявка с телефона</strong>
+          <span class="role-hub-teaser">Цена и статус сразу — без звонков «где машина» и «сколько будет».</span>
+          <span class="role-hub-cta">Читать для заказчика →</span>
+        </div>
+      </a>
+    </div>
+    <div class="role-hub-login">
+      <p class="role-hub-login-label">Уже подключены — войти</p>
+      <div class="role-hub-login-row">
+        <button type="button" class="role-hub-login-btn role-hub-login-admin" id="role-admin">Кабинет</button>
+        <button type="button" class="role-hub-login-btn" id="role-driver">Водитель</button>
+        <button type="button" class="role-hub-login-btn" id="role-customer">Заказчик</button>
+      </div>
+    </div>
+    <p class="hint" style="margin-top:10px;font-size:.78rem">
+      <a href="/help.html">Помощь</a> · <a href="/legal.html">Оферта</a>
     </p>
   </div></div>
 
@@ -861,6 +880,6 @@
     </div>
   </div>
 </div>
-  <script src="/boot-loader.js?v=2026-08-30-docs-filter4317e"></script>
+  <script src="/boot-loader.js?v=2026-08-31-splash-hub4317"></script>
 </body>
 </html>
