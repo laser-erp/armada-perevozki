@@ -564,6 +564,7 @@ function buildCreateDraftFromForm(){
   const km=createRouteKm>0?createRouteKm:null;
   const trip=km?inferTripMode(km, fin):null;
   const reqs=typeof readOrderRequirementsFromCreate==='function'?readOrderRequirementsFromCreate():{};
+  const cargo=typeof readCreateCargoFromForm==='function'?readCreateCargoFromForm():{};
   const mode=createExecMode();
   const ownCo=findCompanyById(ownId);
   let plate=(($('create-plate')||{}).value||'').trim();
@@ -589,6 +590,8 @@ function buildCreateDraftFromForm(){
     execMode:mode,
     reqPayloadTons:reqs.reqPayloadTons,
     reqBodyType:null,
+    cargoKind:cargo.cargoKind||null,
+    cargoDescription:cargo.cargoDescription||'',
     estimateWorkHours:fin.minWorkHours||4,
     emptyKmBefore:0,
     vehiclePlate:plate||null,
@@ -1364,6 +1367,37 @@ function readOrderRequirementsFromCreate(){
     reqWidthM:numOrNull(($('create-req-w')||{}).value),
     reqHeightM:numOrNull(($('create-req-h')||{}).value)
   };
+}
+function readCreateCargoFromForm(){
+  const kind=(($('create-cargo-kind')||{}).value||'').trim();
+  return {
+    cargoDescription:(($('create-cargo-desc')||{}).value||'').trim(),
+    cargoKind:kind||null
+  };
+}
+function fillCreateCargoKindSelect(){
+  const sel=$('create-cargo-kind');
+  if(!sel) return;
+  const cur=sel.value;
+  const kinds=typeof CARGO_KINDS!=='undefined'?CARGO_KINDS:[];
+  sel.innerHTML=`<option value="">— не указан —</option>`+
+    kinds.map(t=>`<option value="${esc(t.id)}">${esc(t.label)}</option>`).join('');
+  if(cur && kinds.some(t=>t.id===cur)) sel.value=cur;
+}
+function wireCreateAddressFields(){
+  const bumpRoute=()=>{
+    if(typeof scheduleCreateRouteEstimate==='function') scheduleCreateRouteEstimate();
+  };
+  const attach=(id)=>{
+    const el=$(id);
+    if(!el || el.dataset.addrHooked) return;
+    el.dataset.addrHooked='1';
+    if(typeof wireAddressAutocomplete==='function'){
+      wireAddressAutocomplete(el, { onSelect:bumpRoute, onBlur:bumpRoute, minLen:3 });
+    }
+  };
+  attach('create-load');
+  attach('create-unload');
 }
 /** Пространство фирмы заказа: spaceId, иначе через компанию или админа. */
 function orderSpaceId(o){

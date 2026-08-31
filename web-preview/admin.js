@@ -2721,10 +2721,13 @@ function bindAdminCreate(){
       const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(co);
       $('create-exec-mode').value=hasPark?'own':(dispatcher?'exchange':'carrier');
     }
-    ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
+    ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-cargo-desc','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
+    const cargoKindEl=$('create-cargo-kind'); if(cargoKindEl) cargoKindEl.value='';
     if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
     if(typeof resetCreatePriceState==='function') resetCreatePriceState();
+    if(typeof fillCreateCargoKindSelect==='function') fillCreateCargoKindSelect();
     fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn();
+    if(typeof wireCreateAddressFields==='function') wireCreateAddressFields();
     if(typeof wireCreatePricePreview==='function') wireCreatePricePreview();
     if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
     show('admin-create'); highlightDay();
@@ -2805,6 +2808,7 @@ function saveDispatcherOrder(){
     driverPercentVal=0;
   }
   const reqs=readOrderRequirementsFromCreate();
+  const cargo=typeof readCreateCargoFromForm==='function'?readCreateCargoFromForm():{};
   if(mode==='exchange' && !(reqs.reqPayloadTons>0)){
     $('create-error').textContent='Для биржи укажите грузоподъёмность (т) в требованиях к ТС'; return;
   }
@@ -2863,6 +2867,8 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
     reqLengthM:reqs.reqLengthM,
     reqWidthM:reqs.reqWidthM,
     reqHeightM:reqs.reqHeightM,
+    cargoDescription:cargo.cargoDescription||'',
+    cargoKind:cargo.cargoKind||null,
     tripMode:draft&&draft.tripMode||(quote&&quote.tripMode)||null,
     routeKm:draft&&draft.routeKm||(quote&&quote.routeKm)||null,
     estimateKm:draft&&draft.routeKm||(quote&&quote.routeKm)||null,

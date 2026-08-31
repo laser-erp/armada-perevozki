@@ -631,7 +631,7 @@
             <div class="cust-form-block-head">4. Маршрут</div>
             <div class="cust-form-block-body">
               <label for="create-load">Адрес загрузки</label>
-              <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
+              <textarea id="create-load" rows="2" placeholder="Город, улица, дом" autocomplete="off"></textarea>
               <label for="create-loading-contact-name">Контакт на загрузке</label>
               <div class="form-pair">
                 <div><input id="create-loading-contact-name" placeholder="ФИО" /></div>
@@ -641,7 +641,7 @@
                 </div>
               </div>
               <label for="create-unload">Адрес выгрузки</label>
-              <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
+              <textarea id="create-unload" rows="2" placeholder="Город, улица, дом" autocomplete="off"></textarea>
               <label for="create-unloading-contact-name">Контакт на выгрузке</label>
               <div class="form-pair">
                 <div><input id="create-unloading-contact-name" placeholder="ФИО" /></div>
@@ -656,6 +656,12 @@
           <div class="cust-form-block" data-admin-step="cargo" id="create-req-block">
             <div class="cust-form-block-head">5. Груз и ТС</div>
             <div class="cust-form-block-body">
+              <label for="create-cargo-desc">Наименование груза</label>
+              <input id="create-cargo-desc" placeholder="Паллеты, оборудование, продукты…" autocomplete="off" />
+              <label for="create-cargo-kind">Тип груза</label>
+              <select id="create-cargo-kind">
+                <option value="">— не указан —</option>
+              </select>
               <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
               <label>Грузоподъёмность и кузов (т / Д × Ш × В)</label>
               <div class="form-triple cust-cargo-dims-row">
