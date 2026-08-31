@@ -238,3 +238,27 @@ body.landing{
 .landing-lead-status.is-err{color:#dc2626}
 .landing-lead-success p{margin:0 0 10px}
 body.landing-modal-open{overflow:hidden}
+
+/* order.html — заявка с armada.sx */
+.landing-hero--order{margin-bottom:8px}
+.landing-order-card{max-width:640px;margin:0 auto}
+.landing-order-form fieldset{border:none;margin:0;padding:0}
+.landing-order-form legend{font-size:.82rem;font-weight:600;color:var(--muted);margin-bottom:8px;padding:0}
+.landing-order-vtype-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:4px}
+.landing-order-vtype{display:block;cursor:pointer}
+.landing-order-vtype input{position:absolute;opacity:0;pointer-events:none}
+.landing-order-vtype span{
+  display:block;padding:10px 12px;border:1px solid var(--border,#e2e8f0);border-radius:10px;
+  font-size:.88rem;font-weight:600;text-align:center;background:#fff;transition:border-color .15s,background .15s
+}
+.landing-order-vtype input:checked+span{
+  border-color:var(--brand,#0f766e);background:rgba(15,118,110,.08);color:var(--brand,#0f766e)
+}
+.landing-order-datetime{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.landing-order-legal{margin:8px 0 0;font-size:.78rem;color:var(--muted)}
+.landing-order-legal a{color:inherit}
+.landing-order-success{margin-top:0}
+@media(max-width:520px){
+  .landing-order-datetime{grid-template-columns:1fr}
+  .landing-order-vtype-grid{grid-template-columns:repeat(2,1fr)}
+}

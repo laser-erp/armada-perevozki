@@ -5,7 +5,52 @@ if(typeof globalThis.esc!=='function'){
   };
 }
 const CUSTOMER_SESSION_KEY='armada_customer_session_v1';
+const CUST_URL_PREF_KEY='armada_cust_url_pref_v1';
 let currentCustomer=null; // { companyId, name, phone, spaceId }
+
+function readCustomerPortalUrlParams(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    return {
+      vtype:String(q.get('vtype')||q.get('type')||'').trim().toLowerCase(),
+      source:String(q.get('source')||'').trim()
+    };
+  }catch(_){ return {vtype:'', source:''}; }
+}
+function stashCustomerPortalUrlParams(){
+  const p=readCustomerPortalUrlParams();
+  if(!p.vtype&&!p.source) return;
+  try{ sessionStorage.setItem(CUST_URL_PREF_KEY, JSON.stringify(p)); }catch(_){}
+}
+function loadCustomerPortalUrlParams(){
+  const fromUrl=readCustomerPortalUrlParams();
+  if(fromUrl.vtype||fromUrl.source) return fromUrl;
+  try{
+    const raw=JSON.parse(sessionStorage.getItem(CUST_URL_PREF_KEY)||'null');
+    return raw&&typeof raw==='object'?raw:{vtype:'', source:''};
+  }catch(_){ return {vtype:'', source:''}; }
+}
+function applyCustomerPortalUrlParams(){
+  const prefs=loadCustomerPortalUrlParams();
+  const vtype=typeof normalizeArmadaSxVtype==='function'?normalizeArmadaSxVtype(prefs.vtype):prefs.vtype;
+  if(!vtype) return;
+  if(!customerPortalFormIsEmpty()) return;
+  let el=document.querySelector(`#cust-vehicle-types [data-vtype="${vtype}"]`);
+  if(!el){
+    if(typeof initCustomerVtypeExtraList==='function') initCustomerVtypeExtraList();
+    el=document.querySelector(`#cust-vehicle-types [data-vtype="${vtype}"]`);
+  }
+  if(!el) return;
+  document.querySelectorAll('#cust-vehicle-types [data-vtype]').forEach(box=>{ box.checked=false; });
+  el.checked=true;
+  wireCustomerVehicleTypeChange(el);
+  const banner=$('cust-armada-source-banner');
+  if(banner && prefs.source){
+    const vLabel=typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(vtype):vtype;
+    banner.textContent=`Заявка с ${prefs.source}: ${vLabel}. Заполните адрес и отправьте.`;
+    banner.hidden=false;
+  }
+}
 
 function findCustomerPortalCompany(phone, pin, scope){
   const ph=formatPhone(phone);
@@ -49,6 +94,7 @@ function restoreCustomerSession(){
 
 function openCustomerLogin(){
   initPortalScopeFromPage();
+  stashCustomerPortalUrlParams();
   currentCustomer=null;
   clearCustomerSession();
   const err=$('cust-login-error'); if(err) err.textContent='';
@@ -58,8 +104,14 @@ function openCustomerLogin(){
   const scopeHint=$('cust-login-scope');
   if(scopeHint){
     const label=portalScopeCarrierLabel();
-    scopeHint.textContent=label?`Портал перевозчика: ${label}`:'';
-    scopeHint.style.display=label?'block':'none';
+    const prefs=loadCustomerPortalUrlParams();
+    let extra='';
+    if(prefs.vtype){
+      const vLabel=typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(prefs.vtype):prefs.vtype;
+      if(vLabel) extra=` · тип: ${vLabel}`;
+    }
+    scopeHint.textContent=label?`Портал перевозчика: ${label}${extra}`:(extra?`После входа${extra}`:'');
+    scopeHint.style.display=(label||extra)?'block':'none';
   }
   $('cust-login-back').onclick=()=>backFromEntryLogin();
   show('customer-login');
@@ -1241,6 +1293,7 @@ function renderCustomerPortal(){
   if(loadEl && !hasPendingDraft && co&&co.loadingAddresses&&co.loadingAddresses[0] && !loadEl.value) loadEl.value=co.loadingAddresses[0];
   if(unloadEl && !hasPendingDraft && co&&co.unloadingAddresses&&co.unloadingAddresses[0] && !unloadEl.value) unloadEl.value=co.unloadingAddresses[0];
   syncCustomerVehicleTypeUi();
+  applyCustomerPortalUrlParams();
   syncCustomerVehicleDateCalVisibility();
   syncCustomerTempField();
   if(typeof wireVehicleAtHint==='function') wireVehicleAtHint('cust', ()=>{

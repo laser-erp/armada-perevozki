@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-customer-lead4317";
+const APP_BUILD="2026-08-31-armada-order4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -424,6 +424,49 @@ function customerKpPageUrl(){
   }catch(_){}
   const qs=q.toString();
   return `${origin}/kp-zakaz.html${qs?'?'+qs:''}`;
+}
+/** Типы транспорта для кнопок «Заказать» на armada.sx → app.armada.sx/order.html */
+const ARMADA_SX_ORDER_VTYPES=[
+  {id:'shalanda', label:'Шаланда'},
+  {id:'manipulator', label:'Манипулятор'},
+  {id:'tent', label:'Тентованный'},
+  {id:'dump', label:'Самосвал'},
+  {id:'tral', label:'Трал'},
+  {id:'board', label:'Бортовой'}
+];
+function armadaPublicOrderUrl(opts){
+  const o=opts&&typeof opts==='object'?opts:{};
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:ARMADA_LIVE_ORIGIN;
+  const q=new URLSearchParams();
+  const vtype=String(o.vtype||o.type||'').trim().toLowerCase();
+  if(vtype) q.set('vtype', vtype);
+  q.set('source', String(o.source||'armada.sx').trim()||'armada.sx');
+  const qs=q.toString();
+  return `${origin}/order.html${qs?'?'+qs:''}`;
+}
+function armadaCustomerPortalOrderUrl(opts){
+  const o=opts&&typeof opts==='object'?opts:{};
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:ARMADA_LIVE_ORIGIN;
+  const q=new URLSearchParams();
+  const vtype=String(o.vtype||o.type||'').trim().toLowerCase();
+  if(vtype) q.set('vtype', vtype);
+  const source=String(o.source||'armada.sx').trim();
+  if(source) q.set('source', source);
+  let base=`${origin}/z/`;
+  try{
+    const sc=typeof getPortalScope==='function'?getPortalScope():null;
+    if(sc&&sc.portalSlug) base=`${origin}/z/${encodeURIComponent(sc.portalSlug)}/`;
+  }catch(_){}
+  const qs=q.toString();
+  return qs?`${base}?${qs}`:base;
+}
+function normalizeArmadaSxVtype(raw){
+  const id=String(raw||'').trim().toLowerCase();
+  if(!id) return '';
+  if(id==='other') return 'other';
+  if(typeof custVehicleTypeMeta==='function' && custVehicleTypeMeta(id)) return id;
+  const hit=ARMADA_SX_ORDER_VTYPES.find(x=>x.id===id);
+  return hit?hit.id:'';
 }
 function backFromEntryLogin(opts){
   const fromAdmin=opts&&opts.fromAdmin;
@@ -1101,18 +1144,30 @@ function nextSequentialNumber(){
 }
 function normalizeCustomerPortalLead(raw){
   if(!raw||typeof raw!=='object') return null;
+  const kind=raw.kind==='transport'?'transport':'portal';
   const company=String(raw.company||raw.companyName||'').trim();
   const phone=typeof formatPhone==='function'?formatPhone(raw.phone||''):String(raw.phone||'').trim();
-  if(!company||!phone) return null;
+  const contactName=String(raw.contactName||raw.name||'').trim();
+  if(kind==='transport'){
+    if(!phone) return null;
+    if(!company && !contactName) return null;
+  }else if(!company||!phone) return null;
   const inn=String(raw.inn||'').replace(/\D/g,'');
+  const vehicleTypeId=normalizeArmadaSxVtype(raw.vehicleTypeId||raw.vtype||'');
   return {
     id:raw.id||uuid(),
-    company,
+    kind,
+    company:company||contactName||'—',
     inn:inn||null,
     phone,
-    contactName:String(raw.contactName||raw.name||'').trim()||null,
+    contactName:contactName||null,
     comment:String(raw.comment||'').trim()||null,
     carrierHint:String(raw.carrierHint||raw.carrier||'').trim()||null,
+    vehicleTypeId:vehicleTypeId||null,
+    loadAddress:String(raw.loadAddress||raw.address||'').trim()||null,
+    unloadAddress:String(raw.unloadAddress||'').trim()||null,
+    vehicleAt:String(raw.vehicleAt||'').trim()||null,
+    source:String(raw.source||'').trim()||null,
     status:raw.status==='done'?'done':'pending',
     createdAt:raw.createdAt||new Date().toISOString(),
     doneAt:raw.doneAt||null
@@ -1153,6 +1208,12 @@ function markCustomerPortalLeadDone(leadId){
 function pendingCustomerPortalLeads(){
   migrateCustomerPortalLeads();
   return (state.customerPortalLeads||[]).filter(l=>l.status==='pending');
+}
+function pendingTransportOrders(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='transport');
+}
+function pendingPortalAccessLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind!=='transport');
 }
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;

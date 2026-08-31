@@ -562,14 +562,40 @@ function renderAdminActivity(){
   const log=(state.adminLogins||[]).slice(0,40);
   const ops=(state.opsLog||[]).slice(0,25);
   const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
+  const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
+  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind!=='transport');
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
     <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
-    ${leads.length?`<section class="form-section">
+    ${transportLeads.length?`<section class="form-section">
+      <h2 class="form-section-title">Заявки на транспорт · armada.sx</h2>
+      <p class="cat-panel-hint">С публичной формы <a href="/order.html" target="_blank" rel="noopener">order.html</a> и кнопок на armada.sx. Создайте заявку в кабинете или перезвоните клиенту.</p>
+      <div class="cat-list">
+        ${transportLeads.map(l=>{
+          const vLabel=l.vehicleTypeId&&typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(l.vehicleTypeId):(l.vehicleTypeId||'—');
+          return `
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)} · ${esc(vLabel)}</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.source?` · ${esc(l.source)}`:''}</div>
+            ${l.loadAddress?`<div class="hint">Подача: ${esc(l.loadAddress)}</div>`:''}
+            ${l.unloadAddress?`<div class="hint">Выгрузка: ${esc(l.unloadAddress)}</div>`:''}
+            ${l.vehicleAt?`<div class="hint">Когда: ${esc(typeof dateTime==='function'?dateTime(l.vehicleAt):l.vehicleAt)}</div>`:''}
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </section>`:''}
+    ${portalLeads.length?`<section class="form-section">
       <h2 class="form-section-title">Заявки заказчиков · портал</h2>
       <p class="cat-panel-hint">С kp-zakaz.html — «Хочу отправлять грузы». Включите портал в карточке компании и выдайте PIN.</p>
       <div class="cat-list">
-        ${leads.map(l=>`
+        ${portalLeads.map(l=>`
           <div class="item-card" data-lead-id="${esc(l.id)}">
             <div class="item-top">
               <div class="item-name">${esc(l.company)}</div>

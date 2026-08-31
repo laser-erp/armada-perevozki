@@ -47,6 +47,8 @@ aptown1.fvds.ru {
 	redir /driver.html /v/ permanent
 	redir /admin.html /a/ permanent
 	redir /zakaz.html /z/ permanent
+	redir /order /order.html permanent
+	redir /order/ /order.html permanent
 
 	header {
 		X-Content-Type-Options "nosniff"

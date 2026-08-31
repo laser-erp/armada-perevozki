@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Заказать транспорт — ООО «Армада» · app.armada.sx</title>
+  <meta name="description" content="Заявка на шаланду, манипулятор или другой транспорт ООО «Армада». Укажите адрес и время — диспетчер свяжется с вами." />
+  <meta name="theme-color" content="#0f766e" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/landing.css?v=2026-08-31-armada-order4317" />
+</head>
+<body class="landing landing--customer landing--order">
+  <header class="landing-top">
+    <div class="landing-top-inner">
+      <a class="landing-brand" href="https://armada.sx" rel="noopener">
+        <img src="/logo.png" alt="" width="36" height="36" />
+        АРМАДА
+      </a>
+      <nav class="landing-role-nav" aria-label="Навигация">
+        <a href="https://armada.sx" rel="noopener">armada.sx</a>
+        <a href="/kp-zakaz.html">Портал заказчика</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="landing-wrap">
+    <section class="landing-hero landing-hero--order">
+      <div>
+        <span class="landing-hero-badge" id="order-badge">Заявка на транспорт</span>
+        <h1 id="order-title">Заказать транспорт</h1>
+        <p class="landing-hero-lead" id="order-lead">Оставьте заявку — диспетчер ООО «Армада» перезвонит, уточнит детали и подтвердит подачу. Без регистрации и PIN.</p>
+        <p class="landing-hero-note">Уже работаете через портал? <a href="/z/" id="order-portal-link">Войти с PIN</a> — там статус заявки и документы.</p>
+      </div>
+    </section>
+
+    <section class="landing-section">
+      <div class="landing-card landing-order-card">
+        <form id="order-form" class="landing-lead-form landing-order-form">
+          <fieldset class="landing-order-vtypes">
+            <legend>Тип транспорта <span class="req">*</span></legend>
+            <div class="landing-order-vtype-grid" id="order-vtype-grid" role="radiogroup" aria-label="Тип транспорта"></div>
+          </fieldset>
+
+          <label>Компания или ФИО <span class="req">*</span>
+            <input type="text" id="order-company" name="company" required autocomplete="organization" placeholder="ООО «…» или Иван И." />
+          </label>
+          <label>Телефон <span class="req">*</span>
+            <input type="tel" id="order-phone" name="phone" required autocomplete="tel" placeholder="+7 …" />
+          </label>
+          <label>Контактное лицо
+            <input type="text" id="order-name" name="contactName" autocomplete="name" placeholder="Если отличается от ФИО выше" />
+          </label>
+          <label id="order-address-label">Адрес подачи <span class="req">*</span>
+            <input type="text" id="order-address" name="loadAddress" required placeholder="Город, улица, объект" />
+          </label>
+          <label id="order-unload-wrap">Адрес выгрузки
+            <input type="text" id="order-unload" name="unloadAddress" placeholder="Если нужна перевозка между точками" />
+          </label>
+          <div class="landing-order-datetime">
+            <label>Дата подачи <span class="req">*</span>
+              <input type="date" id="order-date" name="date" required />
+            </label>
+            <label>Время
+              <input type="time" id="order-time" name="time" />
+            </label>
+          </div>
+          <label>Что перевозим / комментарий
+            <textarea id="order-comment" name="comment" rows="3" placeholder="Груз, тоннаж, особенности погрузки…"></textarea>
+          </label>
+          <p class="landing-lead-status" id="order-status" hidden></p>
+          <button type="submit" class="landing-btn landing-btn-primary" id="order-submit">Отправить заявку</button>
+          <p class="landing-order-legal">Нажимая «Отправить», вы соглашаетесь на обработку данных для связи по заявке. <a href="/legal.html#privacy">Политика ПДн</a></p>
+        </form>
+
+        <div class="landing-lead-success landing-order-success" id="order-success" hidden>
+          <p><strong>Заявка принята.</strong> Диспетчер свяжется с вами в рабочее время.</p>
+          <p class="landing-lead-intro">Телефон: <a href="tel:+79650730002">+7 (965) 073-00-02</a> · <a href="mailto:hello@armada.sx">hello@armada.sx</a></p>
+          <div class="landing-hero-cta">
+            <a class="landing-btn landing-btn-primary" href="https://armada.sx" rel="noopener">На сайт armada.sx</a>
+            <button type="button" class="landing-btn landing-btn-ghost" id="order-again">Ещё одна заявка</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="landing-wrap landing-footer">
+    <p><a href="/help.html?role=customer">Как это работает</a> · <a href="/legal.html">Оферта</a> · <a href="/kp-zakaz.html">Портал заказчика</a></p>
+    <p><a href="mailto:hello@armada.sx">hello@armada.sx</a> · <a href="tel:+79650730002">+7 (965) 073-00-02</a></p>
+    <p>ООО «Армада» · app.armada.sx</p>
+  </footer>
+
+  <script src="/order-public.js?v=2026-08-31-armada-order4317"></script>
+</body>
+</html>
