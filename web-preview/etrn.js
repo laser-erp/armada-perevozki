@@ -268,14 +268,24 @@ function customerEtrnT1SignHtml(o){
     </div>
   </div>`;
 }
-function customerEtrnT1BannerHtml(){
+function customerEtrnT1BannerHtml(opts){
+  opts=opts||{};
   if(typeof customerOrders!=='function') return '';
   const pending=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o));
   if(!pending.length) return '';
   const btns=pending.map(o=>
-    `<button type="button" class="secondary cust-etrn-t1-sign" data-order-id="${esc(o.id)}">№ ${esc(o.sequentialNumber||'—')}</button>`
-  ).join(' ');
-  return `<div class="cust-etrn-banner"><strong>ЭТрН:</strong> подпишите T1 (вы — грузоотправитель) ${btns}</div>`;
+    `<button type="button" class="secondary cust-alert-btn cust-etrn-t1-sign" data-order-id="${esc(o.id)}">№ ${esc(o.sequentialNumber||'—')}</button>`
+  ).join('');
+  if(opts.compact){
+    return `<div class="cust-alert-strip cust-alert-strip--etrn">
+      <div class="cust-alert-strip-text">
+        <strong class="cust-alert-strip-title">ЭТrН · T1</strong>
+        <span class="hint">Подпишите на погрузке</span>
+      </div>
+      <div class="cust-alert-strip-actions">${btns}</div>
+    </div>`;
+  }
+  return `<div class="cust-etrn-banner"><strong>ЭТrН:</strong> подпишите T1 (вы — грузоотправитель) ${btns}</div>`;
 }
 function wireCustomerEtrnT1(root){
   (root||document).querySelectorAll('.cust-etrn-t1-sign').forEach(btn=>{
@@ -579,7 +589,7 @@ async function openDriverEtrnSign(orderId){
   }
   const pendingTitul=t.t4==='pending'?'t4':(t.t3==='pending'?'t3':(t.t2==='pending'?'t2':null));
   if(pendingTitul&&typeof openEpdTitulSign==='function'){
-    await openEpdTitulSign(orderId, pendingTitul, epdRoleForTitul?epdRoleForTitul(pendingTitul):'driver');
+    await openEpdTitulSign(orderId, pendingTitul, typeof epdRoleForTitul==='function'?epdRoleForTitul(pendingTitul):'driver');
     renderDriverBanner();
     return;
   }

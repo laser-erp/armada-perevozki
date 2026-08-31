@@ -272,7 +272,7 @@
 
   function openEpdSandboxPanel(html, opts){
     opts=opts||{};
-    epdShellOpts={ mode:'sandbox', onClose:opts.onClose, title:opts.title||'Подпись (тест)' };
+    epdShellOpts={ mode:'sandbox', kind:'sandbox', onClose:opts.onClose, title:opts.title||'Подпись (тест)' };
     const shell=ensureEpdOperatorShell();
     const title=$('epd-operator-title');
     const frame=$('epd-operator-frame');
@@ -472,16 +472,49 @@
     </div>`;
   }
 
-  function epdSignActionsHtml(st, role, ctx, kindLabel){
+  function epdSignButtonsHtml(st, role, ctx, kindLabel){
     const issueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить ${esc(kindLabel)}</button>`;
-    const continueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Продолжить выпуск</button>`;
+    const continueBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Продолжить</button>`;
     const renewBtn=`<button type="button" class="primary epd-sign-open" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Выпустить заново</button>`;
-    const checkBtn=`<button type="button" class="secondary epd-sign-check" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Проверить статус</button>`;
-    const resetBtn=`<button type="button" class="hint epd-sign-reset" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Сбросить статус</button>`;
-    if(st==='active') return `<div class="epd-sign-card-actions">${checkBtn}${resetBtn}</div>`;
-    if(st==='pending') return `<div class="epd-sign-card-actions">${continueBtn}${checkBtn}</div>`;
-    if(st==='expired') return `<div class="epd-sign-card-actions">${renewBtn}</div>`;
-    return `<div class="epd-sign-card-actions">${issueBtn}</div>`;
+    const checkBtn=`<button type="button" class="secondary epd-sign-check" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Проверить</button>`;
+    const resetBtn=`<button type="button" class="hint epd-sign-reset" data-epd-sign-role="${esc(role)}" data-epd-entity-id="${esc(ctx.entityId||'')}">Сбросить</button>`;
+    if(st==='active') return `${checkBtn}${resetBtn}`;
+    if(st==='pending') return `${continueBtn}${checkBtn}`;
+    if(st==='expired') return `${renewBtn}`;
+    return `${issueBtn}`;
+  }
+
+  function epdSignActionsHtml(st, role, ctx, kindLabel){
+    return `<div class="epd-sign-card-actions">${epdSignButtonsHtml(st, role, ctx, kindLabel)}</div>`;
+  }
+
+  function epdSignCustomerStripHtml(){
+    if(typeof currentCustomer==='undefined'||!currentCustomer) return '';
+    const role='customer';
+    const meta=EPD_SIGN_ROLES[role];
+    const ctx=epdSignContextForRole(role);
+    if(!ctx.entityId) return '';
+    const prof=getEpdSignProfile(role, ctx.entityId);
+    const st=prof&&prof.status||'none';
+    const kindLabel=meta.kind==='pep'?'ПЭП':'КЭП';
+    if(st==='active'){
+      return `<div class="cust-alert-strip cust-alert-strip--sign cust-alert-strip--ok" data-epd-sign-role="${esc(role)}">
+        <div class="cust-alert-strip-text">
+          <span class="cust-alert-chip cust-alert-chip--ok">✓ ${esc(kindLabel)} активна</span>
+          <span class="hint">ЭТrН T1 и бухдоки</span>
+        </div>
+        <div class="cust-alert-strip-actions">${epdSignButtonsHtml(st, role, ctx, kindLabel)}</div>
+      </div>`;
+    }
+    const titles={ none:`${kindLabel} не оформлена`, pending:'Оформление не завершено', expired:`${kindLabel} истекла` };
+    const title=titles[st]||titles.none;
+    return `<div class="cust-alert-strip cust-alert-strip--sign" data-epd-sign-role="${esc(role)}">
+      <div class="cust-alert-strip-text">
+        <strong class="cust-alert-strip-title">${esc(title)}</strong>
+        <span class="hint">Через оператора · T1</span>
+      </div>
+      <div class="cust-alert-strip-actions">${epdSignButtonsHtml(st, role, ctx, kindLabel)}</div>
+    </div>`;
   }
 
   function epdSignCardHtml(role, opts){
@@ -548,9 +581,11 @@
   }
 
   function renderCustomerEpdSignCard(){
-    const host=$('cust-epd-sign-slot');
+    if(typeof renderCustomerDocsAlerts==='function'){ renderCustomerDocsAlerts(); return; }
+    const host=$('cust-docs-alerts')||$('cust-epd-sign-slot');
     if(!host||!currentCustomer) return;
-    host.innerHTML=epdSignCardHtml('customer');
+    host.innerHTML=epdSignCustomerStripHtml()||epdSignCardHtml('customer');
+    host.hidden=!host.innerHTML.trim();
     wireEpdSignCard(host);
   }
 
@@ -567,6 +602,7 @@
   globalThis.getEpdSignProfile=getEpdSignProfile;
   globalThis.upsertEpdSignProfile=upsertEpdSignProfile;
   globalThis.epdSignCardHtml=epdSignCardHtml;
+  globalThis.epdSignCustomerStripHtml=epdSignCustomerStripHtml;
   globalThis.wireEpdSignCard=wireEpdSignCard;
   globalThis.openEpdSignUp=openEpdSignUp;
   globalThis.openEpdTitulSign=openEpdTitulSign;

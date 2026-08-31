@@ -93,10 +93,42 @@ function customerDocsTabBadgeCount(){
     const st=customerFrameworkContractStatus(co);
     if(st==='pending') n++;
   }
+  if(typeof epdSignNeedsAttention==='function'&&currentCustomer&&epdSignNeedsAttention('customer', currentCustomer.companyId)) n++;
   if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'&&typeof customerCanSignEtrnT1==='function'){
     n+=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o)).length;
   }
   return n;
+}
+function renderCustomerDocsAlerts(co, carrier){
+  const host=$('cust-docs-alerts');
+  if(!host||!currentCustomer) return;
+  if(!co) co=findCompanyById(currentCustomer.companyId);
+  if(!carrier&&co) carrier=carrierOwnCompanyForSpace(co.spaceId);
+  const parts=[];
+  if(co&&typeof customerFrameworkContractBannerHtml==='function'){
+    const contractHtml=customerFrameworkContractBannerHtml(co, carrier, { compact:true });
+    if(contractHtml) parts.push(contractHtml);
+  }
+  if(typeof epdSignCustomerStripHtml==='function'){
+    const signHtml=epdSignCustomerStripHtml();
+    if(signHtml) parts.push(signHtml);
+  }
+  if(typeof customerEtrnT1BannerHtml==='function'){
+    const etrnHtml=customerEtrnT1BannerHtml({ compact:true });
+    if(etrnHtml) parts.push(etrnHtml);
+  }
+  if(parts.length){
+    host.hidden=false;
+    host.innerHTML=parts.join('');
+    if(co&&$('cust-contract-banner')&&typeof wireCustomerFrameworkContractBanner==='function'){
+      wireCustomerFrameworkContractBanner(co, carrier);
+    }
+    if(typeof wireEpdSignCard==='function') wireEpdSignCard(host);
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(host);
+  }else{
+    host.hidden=true;
+    host.innerHTML='';
+  }
 }
 function syncCustomerDocsTabBadge(){
   const badge=$('cust-docs-badge');
@@ -1361,11 +1393,6 @@ function renderCustomerPortal(){
   else updateCustomerTripModeDisplay(carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance));
   paintCustomerFleetOptions();
   paintCustomerBookingCal();
-  const etrnBanner=$('cust-etrn-banner');
-  if(etrnBanner){
-    etrnBanner.innerHTML=typeof customerEtrnT1BannerHtml==='function'?customerEtrnT1BannerHtml():'';
-    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(etrnBanner);
-  }
   const list=$('cust-orders-list');
   if(list){
     const orders=customerOrders().slice(0,20);
@@ -1406,16 +1433,7 @@ function renderCustomerPortal(){
       btn.onclick=()=>setCustomerPortalTab('docs');
     });
   }
-  const contractSlot=$('cust-tab-docs-contract');
-  if(contractSlot && typeof customerFrameworkContractBannerHtml==='function'){
-    const bannerHtml=customerFrameworkContractBannerHtml(co, carrier);
-    if(bannerHtml){
-      if(!$('cust-contract-banner')){
-        contractSlot.innerHTML=bannerHtml;
-        if(typeof wireCustomerFrameworkContractBanner==='function') wireCustomerFrameworkContractBanner(co, carrier);
-      }
-    }else contractSlot.innerHTML='';
-  }
+  renderCustomerDocsAlerts(co, carrier);
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
   if(notifyBtn) notifyBtn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
@@ -1425,7 +1443,6 @@ function renderCustomerPortal(){
   renderCustomerDocsByOrder();
   syncCustomerPortalTabUi();
   syncCustomerDocsTabBadge();
-  if(typeof renderCustomerEpdSignCard==='function') renderCustomerEpdSignCard();
 }
 
 function renderCustomerInvoicesList(){

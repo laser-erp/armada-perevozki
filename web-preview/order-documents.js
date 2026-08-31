@@ -1082,11 +1082,25 @@ function wireCustomerOrderDocuments(root){
     };
   });
 }
-function customerFrameworkContractBannerHtml(customerCo, carrierCo){
+function customerFrameworkContractBannerHtml(customerCo, carrierCo, opts){
+  opts=opts||{};
   if(!customerCo) return '';
   const st=customerFrameworkContractStatus(customerCo);
   if(st==='signed') return '';
   const carrierName=carrierCo&&carrierCo.name||'перевозчиком';
+  if(opts.compact){
+    return `<div class="cust-alert-strip cust-alert-strip--contract" id="cust-contract-banner">
+      <div class="cust-alert-strip-text">
+        <strong class="cust-alert-strip-title">Рамочный договор</strong>
+        <span class="hint">Для работы с ${esc(carrierName)}</span>
+      </div>
+      <div class="cust-alert-strip-actions cust-contract-actions">
+        <button type="button" class="secondary cust-alert-btn" id="cust-contract-preview">Просмотр</button>
+        <label class="cust-check-item cust-alert-check"><input type="checkbox" id="cust-contract-agree"/> Согласен</label>
+        <button type="button" class="primary cust-alert-btn" id="cust-contract-sign" disabled>Подписать</button>
+      </div>
+    </div>`;
+  }
   return `<section class="form-section cust-contract-banner" id="cust-contract-banner">
     <h2 class="form-section-title">Рамочный договор</h2>
     <p class="hint">Для работы с ${esc(carrierName)} нужен договор на перевозку. Прочитайте условия и подтвердите согласие — или подключите Контур/Диадoc позже.</p>

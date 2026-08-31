@@ -442,6 +442,30 @@
     .cust-doc-row button{width:auto;flex:0 0 auto;padding:6px 10px;font-size:.78rem}
     .cust-etrn-banner{margin-bottom:10px;padding:10px 12px;border:1px solid var(--accent);border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 8%,var(--surface));font-size:.82rem}
     .cust-etrn-banner button{margin:0 4px 4px 0;font-size:.78rem;padding:4px 8px}
+    .cust-docs-alerts{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
+    .cust-docs-alerts[hidden]{display:none!important}
+    .cust-alert-strip{
+      display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;
+      padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);
+      background:var(--surface);font-size:.78rem;line-height:1.3;
+    }
+    .cust-alert-strip-text{
+      flex:1 1 120px;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;
+    }
+    .cust-alert-strip-title{font-size:.82rem;line-height:1.25}
+    .cust-alert-strip-text .hint{font-size:.72rem;margin:0;line-height:1.25}
+    .cust-alert-strip-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:0 1 auto}
+    .cust-alert-btn,.cust-alert-strip-actions .primary,.cust-alert-strip-actions .secondary,.cust-alert-strip-actions .hint{
+      width:auto!important;flex:0 0 auto!important;padding:5px 10px!important;font-size:.76rem!important;margin:0!important;text-decoration:none
+    }
+    .cust-alert-check{font-size:.74rem;margin:0;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+    .cust-alert-check input{margin:0;vertical-align:middle}
+    .cust-alert-strip--contract{border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06)}
+    .cust-alert-strip--sign{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+    .cust-alert-strip--sign.cust-alert-strip--ok{border-color:color-mix(in srgb,#16a34a 35%,var(--border));background:color-mix(in srgb,#16a34a 6%,var(--surface))}
+    .cust-alert-strip--etrn{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+    .cust-alert-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:.72rem;font-weight:700;line-height:1.3}
+    .cust-alert-chip--ok{background:#16a34a;color:#fff}
     .cust-etrn-t1-block{margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 6%,var(--surface));font-size:.82rem}
     .cust-etrn-t1-block .hint{margin:4px 0 8px;font-size:.75rem}
     .cust-etrn-t1-block button{font-size:.82rem;padding:6px 12px;width:auto}
