@@ -1,22 +1,34 @@
 /* АРМАДА — профиль администратора: печать и подпись для документов */
 const DEFAULT_PLATFORM_STAMP = '/assets/armada-stamp.png';
+const DEFAULT_PLATFORM_SIGNATURE = '/assets/armada-signature.png';
 
 function findAdminRecord(adminId) {
   return (state.admins || []).find(a => a.id === adminId) || null;
 }
 
-function defaultPlatformStampUrl() {
+function defaultPlatformAssetUrl(path) {
   const origin = typeof location !== 'undefined' && location.origin ? location.origin : '';
-  return origin ? `${origin}${DEFAULT_PLATFORM_STAMP}` : DEFAULT_PLATFORM_STAMP;
+  return origin ? `${origin}${path}` : path;
+}
+
+function defaultPlatformStampUrl() {
+  return defaultPlatformAssetUrl(DEFAULT_PLATFORM_STAMP);
+}
+
+function defaultPlatformSignatureUrl() {
+  return defaultPlatformAssetUrl(DEFAULT_PLATFORM_SIGNATURE);
 }
 
 function adminDocAssets(adminId, opts) {
   opts = opts || {};
   const adm = adminId ? findAdminRecord(adminId) : null;
   const adminStamp = adminDocImageOrNull(adm && adm.stampDataUrl);
-  const signature = adminDocImageOrNull(adm && adm.signatureDataUrl);
+  let signature = adminDocImageOrNull(adm && adm.signatureDataUrl);
   let stamp = adminStamp;
   if (!stamp && opts.platformStamp) stamp = defaultPlatformStampUrl();
+  if (!signature && (opts.platformSignature || (adm && adm.id === 'admin-super'))) {
+    signature = defaultPlatformSignatureUrl();
+  }
   return { stamp, signature, admin: adm };
 }
 
@@ -81,10 +93,10 @@ function renderAdminProfile() {
       ${docPhotoUploadRow('Печать организации', stamp, 'id="adm-profile-stamp"', 'id="adm-profile-stamp-clear"')}
       ${docPhotoUploadRow('Подпись', signature, 'id="adm-profile-signature"', 'id="adm-profile-signature-clear"')}
     </div>
-    <p class="hint">Письма операторам ЭТрН используют печать ООО «АРМАДА» по умолчанию, если вы не загрузили свою. Остальные документы — только ваши файлы.</p>
+    <p class="hint">Письма операторам ЭТрН и документы генерального директора используют печать и подпись ООО «АРМАДА» по умолчанию, если вы не загрузили свои. Остальные администраторы — только свои файлы.</p>
     <div class="admin-profile-preview">
       <p class="meta">Пример на печати</p>
-      <div class="admin-profile-sample">${adminDocSignMarksHtml({ stamp: stamp || defaultPlatformStampUrl(), signature })}</div>
+      <div class="admin-profile-sample">${adminDocSignMarksHtml(adminDocAssets(currentAdmin.id, { platformStamp: true, platformSignature: true }))}</div>
     </div>
   </section>`;
 

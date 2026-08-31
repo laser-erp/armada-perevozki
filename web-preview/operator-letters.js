@@ -385,7 +385,7 @@ function operatorLetterBodyToPrintHtml(filled) {
 
 function operatorLetterSignMarksHtml() {
   const assets = typeof currentAdminDocAssets === 'function'
-    ? currentAdminDocAssets({ platformStamp: true })
+    ? currentAdminDocAssets({ platformStamp: true, platformSignature: true })
     : { stamp: null, signature: null };
   const stamp = assets && assets.stamp;
   const signature = assets && assets.signature;
