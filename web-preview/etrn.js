@@ -432,10 +432,15 @@ async function fetchEtrnFromApi(orderId){
   const data=await res.json().catch(()=>({}));
   return data.etrn||null;
 }
+function etrnApiOrderNotClosed(data){
+  const code=String(data&&data.error||'').trim();
+  const hint=String(data&&data.hint||'').trim().toLowerCase();
+  return code==='order_not_closed'||hint.includes('only after order close');
+}
 function etrnApiErrorHint(data, status){
   const code=String(data&&data.error||'').trim();
   const hint=String(data&&data.hint||'').trim();
-  if(code==='order_not_closed'){
+  if(etrnApiOrderNotClosed(data)){
     return 'ЭТрН нужен в пути (после выезда), а armada-api пока принимает только закрытые заказы — создаём локальный черновик.';
   }
   return hint||code||`HTTP ${status||'?'}`;
@@ -459,7 +464,7 @@ async function requestCreateEtrn(order){
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){
-      if(data.error==='order_not_closed'){
+      if(etrnApiOrderNotClosed(data)){
         if(typeof logOpsEvent==='function'){
           logOpsEvent('etrn-warn','API order_not_closed → локальный черновик',{ orderId:order.id, hint:data.hint||'' });
         }
