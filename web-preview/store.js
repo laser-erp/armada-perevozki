@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-splash-hub4317";
+const APP_BUILD="2026-08-31-hub-first4317";
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){
@@ -219,12 +219,27 @@ function initEntryFromPage(){
   const fromUrl=readEntryFromUrl();
   if(fromUrl) setEntryMode(fromUrl);
 }
+function entryFromQueryOnly(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    return normalizeEntryMode(q.get('entry'));
+  }catch(_){ return null; }
+}
 function entryLoginScreenId(){
-  const m=getEntryMode();
+  const m=entryFromQueryOnly();
   if(m==='driver') return 'driver-login';
   if(m==='admin') return 'admin-pin';
   if(m==='customer') return 'customer-login';
   return 'roles';
+}
+function showRoleHub(){
+  if(typeof clearEntrySkin==='function') clearEntrySkin();
+  if(typeof show==='function') show('roles');
+  if(window.ArmadaOnboarding) ArmadaOnboarding.showRolesWelcome();
+}
+function showHubAfterSplash(){
+  if(document.querySelector('#splash.show') && typeof showAfterSplash==='function') showAfterSplash(showRoleHub);
+  else showRoleHub();
 }
 function entryPathWithSlash(path){
   const p=String(path||'/');
@@ -404,11 +419,9 @@ function backFromEntryLogin(opts){
     if(typeof renderAdmin==='function') renderAdmin();
     return;
   }
-  const m=getEntryMode();
-  if(m==='customer'){ location.href=customerKpPageUrl(); return; }
-  if(m==='admin'){ location.href='/kp-logist.html'; return; }
-  if(m==='driver'){ location.href='/kp.html'; return; }
-  if(typeof show==='function') show('roles');
+  setEntryMode(null);
+  if(typeof showRoleHub==='function') showRoleHub();
+  else if(typeof show==='function') show('roles');
 }
 /** Прод-хосты: VPS и основной домен приложения. */
 function isArmadaProdHost(hostname){
