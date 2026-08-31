@@ -3274,12 +3274,15 @@ function flashCatOk(msg){
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
   const companies=(state.companies||[]).filter(companyInMySpace);
-  const myCo=currentOwnCompany();
+  const drvCo=typeof catalogDriverCompany==='function'?catalogDriverCompany():currentOwnCompany();
   const drivers=(state.drivers||[]).map((d,i)=>({d,i})).filter(({d})=>{
-    if(isSuperAdmin()) return true;
+    if(isSuperAdmin()){
+      if(drvCo) return d.companyId===drvCo.id;
+      return true;
+    }
     if(!currentAdmin) return false;
-    if(myCo && d.companyId===myCo.id) return true;
-    return d.spaceId===currentAdmin.spaceId || d.ownerAdminId===currentAdmin.id;
+    if(drvCo) return d.companyId===drvCo.id;
+    return d.ownerAdminId===currentAdmin.id;
   });
   const vehicles=(state.vehicles||[]).map((v,i)=>({v,i})).filter(({v})=>{
     if(isSuperAdmin()) return true;
@@ -3334,11 +3337,13 @@ function openCatalogs(){
       <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
       </div>
+      <div class="drv-lic-row">
+        <label>Номер ВУ<input id="drv-lic-num-${i}" inputmode="numeric" placeholder="Серия и номер водительского *" value="${esc(d.licenseNo||'')}" title="Номер водительского удостоверения" /></label>
+      </div>
       <details class="drv-docs">
-        <summary>Паспорт и ВУ${!String(d.licenseNo||'').trim()?' · <span class="drv-docs-miss">нет номера ВУ</span>':''}</summary>
+        <summary>Паспорт и снимки${!String(d.licenseNo||'').trim()?' · <span class="drv-docs-miss">заполните номер ВУ выше</span>':''}</summary>
         <div class="drv-docs-grid">
-          <input id="drv-lic-num-${i}" inputmode="numeric" placeholder="Номер ВУ *" value="${esc(d.licenseNo||'')}" title="Номер водительского удостоверения" />
-          <input id="drv-lic-at-${i}" placeholder="ВУ выдано" value="${esc(d.licenseIssuedAt||'')}" title="Дата выдачи ВУ" />
+          <input id="drv-lic-at-${i}" placeholder="ВУ выдано (дата)" value="${esc(d.licenseIssuedAt||'')}" title="Дата выдачи ВУ" />
           <input id="drv-pass-ser-${i}" inputmode="numeric" maxlength="4" placeholder="Серия паспорта" value="${esc(d.passportSeries||'')}" title="Серия паспорта" />
           <input id="drv-pass-num-${i}" inputmode="numeric" maxlength="6" placeholder="Номер паспорта" value="${esc(d.passportNumber||'')}" title="Номер паспорта" />
           <input id="drv-pass-by-${i}" placeholder="Кем выдан" value="${esc(d.passportIssuedBy||'')}" title="Кем выдан" class="drv-docs-span2" />
@@ -3408,7 +3413,17 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='drivers'?'on':''}" data-cat-panel="drivers">
-      <p class="cat-panel-hint">${(()=>{ const co=currentOwnCompany(); return co?`Водители «${esc(co.name)}» — они же в заявке «+ Заказ»`:(isSuperAdmin()?'Водители привязаны к «нашей фирме» админа':'Сначала нужна ваша фирма'); })()}</p>
+      ${(()=>{
+        const owns=ownCompaniesList().filter(c=>companyInMySpace(c));
+        const active=drvCo;
+        const firmPick=owns.length>1
+          ? `<label class="svc-full">Фирма (парк)<select id="drv-company-pick">${owns.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
+          : '';
+        const hint=active
+          ? `Водители «${esc(active.name)}» — только эта фирма; после правок нажмите ✓`
+          : (isSuperAdmin()?'Выберите фирму или добавьте «нашу»':'Сначала нужна ваша фирма');
+        return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
+      })()}
       <div class="cat-quick drv-add">
         <div class="row">
           <input id="own-drv-name" placeholder="ФИО" style="flex:1.2" />
@@ -3935,6 +3950,7 @@ function openCatalogs(){
     if(!confirm(`Удалить водителя ${name} из «${firm}»?\nВ других фирмах он останется.`)) return;
     const sameFirm=(state.drivers||[]).filter(x=>d.companyId?x.companyId===d.companyId:(d.spaceId?x.spaceId===d.spaceId:true));
     if(sameFirm.length<=1){ alert('В этой фирме должен остаться хотя бы один водитель'); return; }
+    if(typeof markDriverDeleted==='function') markDriverDeleted(d);
     state.drivers.splice(i,1);
     bumpDataEpoch('del-driver');
     persist(); openCatalogs();
@@ -3954,14 +3970,17 @@ function openCatalogs(){
     if(pin.length<4){ alert('PIN от 4 цифр'); return; }
     if(Number.isNaN(pct) || pct<0) pct=30;
     const owner=resolveAdminOwner(currentAdmin.id);
-    if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
-    if(driverExistsInCompany(name, owner.companyId)){ alert('Такой водитель уже есть в вашей фирме'); return; }
+    const drvCo=typeof catalogDriverCompany==='function'?catalogDriverCompany():null;
+    const companyId=(drvCo&&drvCo.id)||owner.companyId;
+    const companyName=(drvCo&&drvCo.name)||owner.companyName;
+    if(!companyId){ alert('Выберите фирму (парк) для водителя'); return; }
+    if(driverExistsInCompany(name, companyId)){ alert('Такой водитель уже есть в этой фирме'); return; }
     state.drivers.push({
       name, salaryPercent:pct, phone, pin, exchangeEnabled,
       id:uuid(),
       ownerAdminId:owner.ownerAdminId, ownerAdminName:owner.ownerAdminName,
       spaceId:owner.spaceId||null,
-      companyId:owner.companyId, companyName:owner.companyName
+      companyId, companyName
     });
     bumpDataEpoch('add-driver');
     persist(); openCatalogs();
@@ -3972,6 +3991,14 @@ function openCatalogs(){
     finCoSel.onchange=()=>{
       catalogFinanceCompanyId=finCoSel.value||null;
       catalogTab='finance';
+      openCatalogs();
+    };
+  }
+  const drvCoSel=$('drv-company-pick');
+  if(drvCoSel){
+    drvCoSel.onchange=()=>{
+      catalogDriverCompanyId=drvCoSel.value||null;
+      catalogTab='drivers';
       openCatalogs();
     };
   }

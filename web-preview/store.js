@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-driver-docs4317";
+const APP_BUILD="2026-08-31-driver-fleet4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -992,6 +992,7 @@ let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой
 let presenceTimer=null;
 let catalogTab='companies'; // companies | drivers | vehicles | finance
 let catalogFinanceCompanyId=null; // какая «наша фирма» правится во вкладке Тариф
+let catalogDriverCompanyId=null; // какая «наша фирма» во вкладке Водители
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
   if(!id){ id=uuid(); localStorage.setItem(DEVICE_KEY, id); }
@@ -1432,6 +1433,7 @@ function snapshot(){
     spaces:state.spaces,
     settings:state.settings,
     deletedOrderIds:Array.from(deletedOrderIdSet()),
+    deletedDriverKeys:Array.isArray(state.deletedDriverKeys)?state.deletedDriverKeys:[],
     driverInvites:Array.isArray(state.driverInvites)?state.driverInvites:[],
     dataEpoch:Number(state.dataEpoch)||0,
     billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
@@ -1454,6 +1456,7 @@ function applyPayload(p, opts){
   const keepOrders=opts&&opts.keepOrders;
   // Сначала tombstone (+ RETIRED), потом фильтр заказов — иначе дубль снова попадает в список
   unionDeletedOrderIds(p.deletedOrderIds||[]);
+  state.deletedDriverKeys=Array.isArray(p.deletedDriverKeys)?p.deletedDriverKeys:[];
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
   (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
   // Явный массив orders с сервера (в т.ч. []) — закон. Не поднимаем заказы из смен.
@@ -1527,6 +1530,7 @@ function applyPayload(p, opts){
   healOrphanOrdersIntoShifts();
   healAllOrders();
   purgeCancelledOrders();
+  purgeDeletedDrivers();
   compactSequentialNumbers();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -1693,6 +1697,7 @@ function ensureDriverInCompany(opts){
   const companyId=opts.companyId;
   if(!name||!companyId) return false;
   if(driverExistsInCompany(name, companyId)) return false;
+  if(isDriverDeleted(name, companyId)) return false;
   state.drivers.push({
     id:uuid(),
     name,
@@ -1830,7 +1835,7 @@ function ensureFleetPerSpaces(){
     if(!co) return;
     if(co.spaceId!==sp.id){ co.spaceId=sp.id; changed=true; }
     (state.drivers||[]).forEach(d=>{
-      if(d.spaceId===sp.id && d.companyId!==co.id){
+      if(d.spaceId===sp.id && !d.companyId){
         d.companyId=co.id; d.companyName=co.name; changed=true;
       }
     });
@@ -1842,17 +1847,6 @@ function ensureFleetPerSpaces(){
     });
     const adm=(state.admins||[]).find(a=>a.id===sp.adminId)
       || (state.admins||[]).find(a=>a.spaceId===sp.id);
-    // В каждую фирму — известные водители (копии), чтобы не вводить заново
-    DEFAULT_DRIVERS.forEach(def=>{
-      if(ensureDriverInCompany({
-        name:def.name,
-        salaryPercent:def.salaryPercent??30,
-        exchangeEnabled:!!def.exchangeEnabled,
-        phone:def.phone||'',
-        companyId:co.id, companyName:co.name, spaceId:sp.id,
-        ownerAdminId:adm?adm.id:null, ownerAdminName:adm?adm.name:null
-      })) changed=true;
-    });
     if(adm && ensureDriverInCompany({
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
@@ -1930,6 +1924,36 @@ function financeForOrder(o){
   const my=currentOwnCompany();
   if(my) return financeForCompanyId(my.id);
   return normalizeFinance(state.finance);
+}
+function driverTombstoneKey(name, companyId){
+  return `${String(name||'').trim().toLowerCase()}|${companyId||''}`;
+}
+function markDriverDeleted(d){
+  if(!d) return;
+  if(!Array.isArray(state.deletedDriverKeys)) state.deletedDriverKeys=[];
+  const key=driverTombstoneKey(d.name, d.companyId);
+  if(!state.deletedDriverKeys.includes(key)) state.deletedDriverKeys.push(key);
+}
+function isDriverDeleted(name, companyId){
+  return (state.deletedDriverKeys||[]).includes(driverTombstoneKey(name, companyId));
+}
+function purgeDeletedDrivers(){
+  if(!Array.isArray(state.drivers)) return false;
+  const before=state.drivers.length;
+  state.drivers=state.drivers.filter(d=>!isDriverDeleted(d.name, d.companyId));
+  return state.drivers.length!==before;
+}
+/** Водители как во вкладке «Справочники → Водители». */
+function catalogDriverCompany(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  const owns=(typeof ownCompaniesList==='function'?ownCompaniesList():[]).filter(inSpace);
+  if(catalogDriverCompanyId){
+    const hit=findCompanyById(catalogDriverCompanyId);
+    if(hit && companyHasRole(hit,'own') && inSpace(hit)) return hit;
+  }
+  const my=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(my) return my;
+  return owns[0]||null;
 }
 function catalogFinanceCompany(){
   if(!isSuperAdmin()) return currentOwnCompany();
