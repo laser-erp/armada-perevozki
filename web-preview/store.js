@@ -179,7 +179,21 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-08-31-admin-phone-login4317";
+const APP_BUILD="2026-08-31-armada-mail4317";
+/** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
+const ARMADA_MAIL={
+  info:'info@armada.sx',
+  hello:'hello@armada.sx',
+  support:'support@armada.sx',
+  pilot:'pilot@armada.sx',
+  noreply:'noreply@armada.sx'
+};
+function armadaMail(kind){ return ARMADA_MAIL[kind]||ARMADA_MAIL.info; }
+function armadaMailto(kind, subject){
+  const addr=armadaMail(kind);
+  if(!subject) return 'mailto:'+addr;
+  return 'mailto:'+addr+'?subject='+encodeURIComponent(String(subject));
+}
 const ENTRY_MODES=['driver','admin','customer'];
 const ENTRY_SESSION_KEY='armada_entry_mode_v1';
 function normalizeEntryMode(v){

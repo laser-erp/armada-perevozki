@@ -1,5 +1,5 @@
 {
-	email aptown1@gmail.com
+	email hello@armada.sx
 }
 
 # IP → канонический домен
@@ -85,7 +85,7 @@ aptown1.fvds.ru {
 		uri strip_prefix /geo-nominatim
 		reverse_proxy https://nominatim.openstreetmap.org {
 			header_up Host nominatim.openstreetmap.org
-			header_up User-Agent "ARMADA/1.0 (aptown1@gmail.com)"
+			header_up User-Agent "ARMADA/1.0 (hello@armada.sx)"
 			header_up Accept-Language "ru"
 		}
 	}
@@ -100,7 +100,7 @@ aptown1.fvds.ru {
 		uri strip_prefix /map-osm
 		reverse_proxy https://tile.openstreetmap.org {
 			header_up Host tile.openstreetmap.org
-			header_up User-Agent "ARMADA/1.0 (aptown1@gmail.com)"
+			header_up User-Agent "ARMADA/1.0 (hello@armada.sx)"
 		}
 	}
 

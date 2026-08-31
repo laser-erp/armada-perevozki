@@ -37,7 +37,7 @@ function adminDocsLetterheadHtml(co, sp) {
     <div class="adm-letterhead__brand">
       <p class="adm-letterhead__name">${esc(p.name)}</p>
       ${req ? `<p class="adm-letterhead__req">${req}</p>` : ''}
-      <p class="adm-letterhead__contacts">app.armada.sx · документы АРМАДА</p>
+      <p class="adm-letterhead__contacts">${esc(typeof armadaMail==='function'?armadaMail('hello'):'hello@armada.sx')} · app.armada.sx · документы АРМАДА</p>
     </div>
   </header>`;
 }
