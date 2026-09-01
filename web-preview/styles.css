@@ -294,6 +294,8 @@
     .orders-board-head .cat-panel-hint{margin:0;color:var(--muted);font-size:.8rem;line-height:1.35}
     .admin-bulk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:10px 0 8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
     .admin-bulk-bar .hint{font-size:.75rem;color:var(--muted)}
+    .admin-bulk-bar .bulk-assign-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+    .admin-bulk-bar .bulk-assign-group select{min-width:120px;max-width:160px;font-size:.82rem;padding:6px 8px}
     .bulk-pick-all{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;cursor:pointer}
     .order-card-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:2px}
     .order-card-head h3,.ex-card .order-card-head h3{margin:0;flex:1}

@@ -1825,25 +1825,130 @@ function adminOrderPickCount(){
 function adminOrderPickHtml(o){
   const sel=ensureAdminOrderSelection();
   const on=!!sel[o.id];
-  return `<label class="order-pick" title="Выбрать для удаления" onclick="event.stopPropagation()">
+  return `<label class="order-pick" title="Выбрать для массовых операций" onclick="event.stopPropagation()">
     <input type="checkbox" class="admin-order-pick" data-id="${esc(o.id)}"${on?' checked':''} />
   </label>`;
 }
 function adminOrdersBulkBarHtml(){
   const n=adminOrderPickCount();
+  const myCo=currentOwnCompany();
+  const firmId=myCo?myCo.id:'';
+  const drvList=firmId?fleetDriversForCompany(firmId):[];
+  const vehList=firmId?fleetVehiclesForCompany(firmId):[];
+  const showAssign=!!firmId && drvList.length && vehList.length;
+  const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+  const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}</option>`).join('');
   return `<div class="admin-bulk-bar" id="admin-orders-bulk">
     <label class="bulk-pick-all"><input type="checkbox" id="admin-orders-select-page" /> На экране</label>
-    <button type="button" class="secondary" id="admin-orders-delete-selected"${n?'':' disabled'}>Удалить выбранные (${n})</button>
-    <span class="hint">Удаляются заказ, смена, биржа, документы, комиссия</span>
+    ${showAssign?`<div class="bulk-assign-group">
+      <select id="admin-bulk-driver" title="Водитель">${drvOpts||'<option value="">— водитель —</option>'}</select>
+      <select id="admin-bulk-plate" title="ТС">${plateOpts||'<option value="">— авто —</option>'}</select>
+      <button type="button" class="primary" id="admin-orders-assign-selected"${n?'':' disabled'}>Назначить (${n})</button>
+    </div>`:''}
+    <button type="button" class="secondary" id="admin-orders-delete-selected"${n?'':' disabled'}>Удалить (${n})</button>
+    <span class="hint">${showAssign?'Массовое назначение — только свои заказы до выезда. ':''}Удаление — заказ, смена, биржа, документы</span>
   </div>`;
 }
 function updateAdminOrderPickUi(){
   const n=adminOrderPickCount();
-  const btn=$('admin-orders-delete-selected');
-  if(btn){
-    btn.disabled=!n;
-    btn.textContent=`Удалить выбранные (${n})`;
+  const delBtn=$('admin-orders-delete-selected');
+  if(delBtn){
+    delBtn.disabled=!n;
+    delBtn.textContent=`Удалить (${n})`;
   }
+  const assignBtn=$('admin-orders-assign-selected');
+  if(assignBtn){
+    assignBtn.disabled=!n;
+    assignBtn.textContent=`Назначить (${n})`;
+  }
+}
+function orderCanBulkAssign(o){
+  if(!o||looksClosedOrder(o)||o.cancelledAt||o.startOdometer!=null) return false;
+  if(o.executorType==='partner') return false;
+  if(!isMyFirmOrder(o)&&!isSuperAdmin()) return false;
+  return true;
+}
+function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
+  const skipDocsConfirm=opts&&opts.skipDocsConfirm;
+  if(!o||!driver||!plate) return {ok:false, message:'Нет водителя или авто'};
+  if(!fleetDriversForCompany(firmId).some(d=>samePersonName(d.name,driver))){
+    return {ok:false, message:`Водитель ${driver} не из парка фирмы`};
+  }
+  const veh=fleetVehiclesForCompany(firmId).find(v=>v.plate===plate);
+  if(!veh) return {ok:false, message:`Авто ${plate} не из парка фирмы`};
+  if(!vehicleFitsOrder(veh, o)) return {ok:false, message:`${plate} не подходит по т/габаритам для №${o.sequentialNumber}`};
+  if(!skipDocsConfirm){
+    const drvRec=findDriverRecord(driver, firmId);
+    if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)){
+      return {ok:false, message:'Назначение отменено'};
+    }
+  }
+  o.onExchange=false;
+  o.executorType='own';
+  o.driverName=driver;
+  o.vehiclePlate=plate;
+  o.driverPercent=driverPercent(driver, firmId);
+  o.driverPhone=driverPhone(driver, firmId);
+  o.carrierCompanyId=null;
+  o.carrierDriverId=null;
+  o.carrierVehicleId=null;
+  o.carrierCompanyName='';
+  o.partnerSpaceId=null;
+  o.executorAdminId=currentAdmin?currentAdmin.id:null;
+  if(typeof clearOrderBooking==='function') clearOrderBooking(o);
+  if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
+  stampOrderDriverPhone(o);
+  if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
+  return {ok:true};
+}
+function adminBulkAssignSelectedOrders(){
+  const sel=ensureAdminOrderSelection();
+  const visible=new Set(currentFilteredOrderIds());
+  const ids=Object.keys(sel).filter(id=>sel[id] && visible.has(id));
+  if(!ids.length){ alert('Отметьте заказы галочкой'); return; }
+  const driver=(($('admin-bulk-driver')||{}).value||'').trim();
+  const plate=(($('admin-bulk-plate')||{}).value||'').trim();
+  if(!driver){ alert('Выберите водителя'); return; }
+  if(!plate){ alert('Выберите авто'); return; }
+  const orders=ids.map(id=>(state.orders||[]).find(o=>o.id===id)).filter(Boolean);
+  const blocked=orders.filter(o=>!orderCanBulkAssign(o));
+  const okOrders=orders.filter(o=>orderCanBulkAssign(o));
+  if(!okOrders.length){
+    alert(blocked.length
+      ? 'Ни один выбранный заказ нельзя назначить (закрыт, в работе, чужой или уже у партнёра)'
+      : 'Нет заказов для назначения');
+    return;
+  }
+  const myCo=currentOwnCompany();
+  const firmId=myCo?myCo.id:(okOrders[0]&&okOrders[0].ownCompanyId);
+  if(firmId){
+    const drvRec=findDriverRecord(driver, firmId);
+    if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)) return;
+  }
+  const nums=okOrders.map(o=>o.sequentialNumber).sort((a,b)=>a-b);
+  if(!confirm(`Назначить ${driver} · ${plate} на ${okOrders.length} заказ(ов)? № ${nums.join(', ')}`)) return;
+  let assigned=0;
+  const skipped=[];
+  okOrders.forEach(o=>{
+    const orderFirmId=o.ownCompanyId||(myCo&&myCo.id);
+    if(!orderFirmId){ skipped.push(o.sequentialNumber); return; }
+    if(!isSuperAdmin() && myCo && orderFirmId!==myCo.id){ skipped.push(o.sequentialNumber); return; }
+    const res=applyOwnFleetAssignment(o, driver, plate, orderFirmId, {skipDocsConfirm:true});
+    if(res.ok){
+      upsertOrder(o);
+      assigned++;
+    } else skipped.push(o.sequentialNumber);
+  });
+  if(assigned){
+    bumpDataEpoch('bulk-assign');
+    if(typeof persist==='function') persist();
+  }
+  let msg=`Назначено: ${assigned} из ${orders.length}`;
+  if(blocked.length) msg+=`\nПропущено (статус): ${blocked.map(o=>o.sequentialNumber).join(', ')}`;
+  if(skipped.length) msg+=`\nНе назначено: ${skipped.join(', ')}`;
+  alert(msg);
+  Object.keys(sel).forEach(id=>delete sel[id]);
+  renderAdmin();
 }
 function wireAdminOrderDeleteUi(visibleOrders){
   const sel=ensureAdminOrderSelection();
@@ -1873,6 +1978,8 @@ function wireAdminOrderDeleteUi(visibleOrders){
   }
   const delBtn=$('admin-orders-delete-selected');
   if(delBtn) delBtn.onclick=()=>adminDeleteSelectedOrders();
+  const assignBtn=$('admin-orders-assign-selected');
+  if(assignBtn) assignBtn.onclick=()=>adminBulkAssignSelectedOrders();
 }
 function adminDeleteSelectedOrders(){
   const sel=ensureAdminOrderSelection();
@@ -2313,24 +2420,8 @@ function assignExchangeToOwn(id){
   if(!driver){ alert('Выберите водителя'); return; }
   if(!plate){ alert('Выберите авто'); return; }
   const firmId=o.ownCompanyId || (currentOwnCompany()||{}).id;
-  const veh=fleetVehiclesForCompany(firmId).find(v=>v.plate===plate);
-  if(firmId && !fleetDriversForCompany(firmId).some(d=>samePersonName(d.name,driver))){
-    alert('Водитель не из парка фирмы этой заявки'); return;
-  }
-  if(!veh){ alert('Авто не из парка фирмы этой заявки'); return; }
-  if(!vehicleFitsOrder(veh, o)){ alert('Авто не подходит по грузоподъёмности/габаритам'); return; }
-  const drvRec=findDriverRecord(driver, firmId);
-  if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)) return;
-  o.onExchange=false;
-  o.executorType='own';
-  o.driverName=driver;
-  o.vehiclePlate=plate;
-  o.driverPercent=driverPercent(driver, firmId);
-  o.driverPhone=driverPhone(driver, firmId);
-  o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
-  if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
-  stampOrderDriverPhone(o);
-  if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
+  const res=applyOwnFleetAssignment(o, driver, plate, firmId);
+  if(!res.ok){ alert(res.message||'Не удалось назначить'); return; }
   bumpDataEpoch('assign-exchange-own');
   upsertOrder(o);
   renderAdmin();
@@ -2873,6 +2964,7 @@ function fillCreateSelects(){
   if(ownEl){
     ownEl.onchange=()=>{
       fillCreateFleetSelects();
+      fillCreateRouteTemplateSelect('');
       if(typeof fillExecutorUI==='function') fillExecutorUI();
       if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
     };
@@ -2925,6 +3017,82 @@ function fillCreateCopySelect(selectedId){
   if(cur && list.some(o=>o.id===cur)) sel.value=cur;
   else if(!cur) sel.value='';
 }
+function createFormSpaceId(){
+  const ownCo=findCompanyById((($('create-own-company')||{}).value)||'');
+  return (ownCo&&ownCo.spaceId)||currentSpaceId();
+}
+function fillCreateRouteTemplateSelect(selectedId){
+  const sel=$('create-route-template');
+  if(!sel) return;
+  const spaceId=createFormSpaceId();
+  const list=typeof routeTemplatesForSpace==='function'?routeTemplatesForSpace(spaceId):[];
+  const cur=selectedId!=null?selectedId:sel.value;
+  sel.innerHTML=`<option value="">— выберите шаблон —</option>`+
+    list.map(t=>{
+      const route=`${t.loadingAddress} → ${t.unloadingAddress}`.slice(0,90);
+      return `<option value="${esc(t.id)}">${esc(t.name)} · ${esc(route)}</option>`;
+    }).join('');
+  if(cur && list.some(t=>t.id===cur)) sel.value=cur;
+  else sel.value='';
+}
+function applyRouteTemplateToCreateForm(templateId){
+  const spaceId=createFormSpaceId();
+  const tpl=(typeof routeTemplatesForSpace==='function'?routeTemplatesForSpace(spaceId):[])
+    .find(t=>t.id===templateId);
+  if(!tpl){ alert('Шаблон не найден'); return; }
+  const set=(id,v)=>{ const el=$(id); if(el) el.value=v!=null&&v!==''?String(v):''; };
+  set('create-load', tpl.loadingAddress);
+  set('create-unload', tpl.unloadingAddress);
+  ['create-load','create-unload'].forEach(id=>{ const el=$(id); if(el){ delete el.dataset.lat; delete el.dataset.lon; } });
+  set('create-loading-contact-name', tpl.loadingContactName);
+  set('create-loading-contact-phone', tpl.loadingContactPhone);
+  set('create-unloading-contact-name', tpl.unloadingContactName);
+  set('create-unloading-contact-phone', tpl.unloadingContactPhone);
+  const hint=$('create-route-template-hint');
+  if(hint) hint.textContent=`Шаблон «${tpl.name}» — проверьте адреса и контакты.`;
+  if(typeof scheduleCreateRouteEstimate==='function') scheduleCreateRouteEstimate();
+  if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
+}
+function saveRouteTemplateFromCreateForm(){
+  const spaceId=createFormSpaceId();
+  if(!spaceId){ alert('Сначала выберите нашу фирму'); return; }
+  const load=(($('create-load')||{}).value||'').trim();
+  const unload=(($('create-unload')||{}).value||'').trim();
+  if(!load||!unload){ alert('Заполните адреса загрузки и выгрузки'); return; }
+  const autoName=`${load.split(/[,\n]/)[0].trim()} → ${unload.split(/[,\n]/)[0].trim()}`.slice(0,80);
+  const name=String(prompt('Название шаблона маршрута', autoName)||'').trim();
+  if(!name) return;
+  const existing=(typeof routeTemplatesForSpace==='function'?routeTemplatesForSpace(spaceId):[])
+    .find(t=>String(t.name).toLowerCase()===name.toLowerCase());
+  const res=typeof upsertRouteTemplate==='function'?upsertRouteTemplate(spaceId, {
+    id:existing?existing.id:undefined,
+    name,
+    loadingAddress:load,
+    unloadingAddress:unload,
+    loadingContactName:(($('create-loading-contact-name')||{}).value||'').trim(),
+    loadingContactPhone:(($('create-loading-contact-phone')||{}).value||'').trim(),
+    unloadingContactName:(($('create-unloading-contact-name')||{}).value||'').trim(),
+    unloadingContactPhone:(($('create-unloading-contact-phone')||{}).value||'').trim()
+  }):{ok:false, message:'Функция недоступна'};
+  if(!res.ok){ alert(res.message||'Не удалось сохранить'); return; }
+  fillCreateRouteTemplateSelect(res.template.id);
+  const hint=$('create-route-template-hint');
+  if(hint) hint.textContent=`Сохранён шаблон «${name}». Доступен при создании заказов этой фирмы.`;
+}
+function deleteSelectedRouteTemplate(){
+  const sel=$('create-route-template');
+  const id=sel&&sel.value;
+  if(!id){ alert('Выберите шаблон для удаления'); return; }
+  const spaceId=createFormSpaceId();
+  const tpl=(typeof routeTemplatesForSpace==='function'?routeTemplatesForSpace(spaceId):[]).find(t=>t.id===id);
+  if(!tpl){ alert('Шаблон не найден'); return; }
+  if(!confirm(`Удалить шаблон «${tpl.name}»?`)) return;
+  const res=typeof deleteRouteTemplate==='function'?deleteRouteTemplate(spaceId, id):{ok:false};
+  if(!res.ok){ alert(res.message||'Не удалось удалить'); return; }
+  fillCreateRouteTemplateSelect('');
+  const hint=$('create-route-template-hint');
+  if(hint) hint.textContent='Типовые маршруты фирмы — быстрее, чем копировать из прошлого заказа.';
+}
 function resetCreateFormFields(){
   if($('create-exec-mode')){
     const co=currentOwnCompany();
@@ -2946,6 +3114,8 @@ function resetCreateFormFields(){
   const cargoKindEl=$('create-cargo-kind'); if(cargoKindEl) cargoKindEl.value='';
   if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
   if($('create-copy-hint')) $('create-copy-hint').textContent='Выберите заказ — подставим заказчика, маршрут, груз и цены. Дату подачи и водителя укажите заново.';
+  if($('create-route-template-hint')) $('create-route-template-hint').textContent='Типовые маршруты фирмы — быстрее, чем копировать из прошлого заказа.';
+  const routeTpl=$('create-route-template'); if(routeTpl) routeTpl.value='';
   if($('create-error')) $('create-error').textContent='';
   if(typeof resetCreatePriceState==='function') resetCreatePriceState();
   if(typeof fillCreateCargoKindSelect==='function') fillCreateCargoKindSelect();
@@ -2993,6 +3163,7 @@ function fillCreateFormFromOrder(o){
   fillExecutorUI();
   fillContactPickers(o.customer||'');
   fillCreateCopySelect(o.id);
+  fillCreateRouteTemplateSelect('');
   const hint=$('create-copy-hint');
   if(hint) hint.textContent=`Скопировано с заказа №${o.sequentialNumber||'—'}. Проверьте дату подачи, водителя и цены.`;
   if(typeof scheduleCreateRouteEstimate==='function') scheduleCreateRouteEstimate();
@@ -3007,6 +3178,7 @@ async function openAdminCreateScreen(opts){
   resetCreateFormFields();
   fillCreateSelects();
   fillCustomerPickers();
+  fillCreateRouteTemplateSelect('');
   if(fromOrderId){
     const src=(state.orders||[]).find(x=>x.id===fromOrderId);
     if(src){
@@ -3045,6 +3217,7 @@ function bindAdminCreate(){
         fillCustomerPickers();
         fillAddressPickers('');
         fillContactPickers('');
+        fillCreateRouteTemplateSelect('');
         fillExecutorUI();
         if(typeof updateCreatePricePreview==='function') updateCreatePricePreview();
         updateCreateFreeHint();
@@ -3053,6 +3226,32 @@ function bindAdminCreate(){
       const o=(state.orders||[]).find(x=>x.id===id);
       if(o) fillCreateFormFromOrder(o);
     };
+  }
+  const routeTplSel=$('create-route-template');
+  if(routeTplSel && !routeTplSel._wired){
+    routeTplSel._wired=true;
+    routeTplSel.onchange=()=>{
+      if(routeTplSel.value) applyRouteTemplateToCreateForm(routeTplSel.value);
+    };
+  }
+  const routeTplApply=$('create-route-template-apply');
+  if(routeTplApply && !routeTplApply._wired){
+    routeTplApply._wired=true;
+    routeTplApply.onclick=()=>{
+      const id=(routeTplSel&&routeTplSel.value)||'';
+      if(!id){ alert('Выберите шаблон'); return; }
+      applyRouteTemplateToCreateForm(id);
+    };
+  }
+  const routeTplSave=$('create-route-template-save');
+  if(routeTplSave && !routeTplSave._wired){
+    routeTplSave._wired=true;
+    routeTplSave.onclick=saveRouteTemplateFromCreateForm;
+  }
+  const routeTplDel=$('create-route-template-del');
+  if(routeTplDel && !routeTplDel._wired){
+    routeTplDel._wired=true;
+    routeTplDel.onclick=deleteSelectedRouteTemplate;
   }
 }
 function highlightDay(){

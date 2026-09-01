@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-legal4317";
+const APP_BUILD="2026-09-01-park4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1648,6 +1648,53 @@ function findSpaceByPortalSlug(slug){
   if(!s) return null;
   return (state.spaces||[]).find(sp=>String(sp.portalSlug||'').toLowerCase()===s)||null;
 }
+function normalizeRouteTemplate(t){
+  if(!t||typeof t!=='object') return null;
+  const load=String(t.loadingAddress||'').trim();
+  const unload=String(t.unloadingAddress||'').trim();
+  const name=String(t.name||'').trim();
+  if(!name||!load||!unload) return null;
+  return {
+    id:t.id||uuid(),
+    name,
+    loadingAddress:load,
+    unloadingAddress:unload,
+    loadingContactName:String(t.loadingContactName||'').trim(),
+    loadingContactPhone:String(t.loadingContactPhone||'').trim(),
+    unloadingContactName:String(t.unloadingContactName||'').trim(),
+    unloadingContactPhone:String(t.unloadingContactPhone||'').trim(),
+    createdAt:t.createdAt||new Date().toISOString()
+  };
+}
+function routeTemplatesForSpace(spaceId){
+  const sp=findSpaceById(spaceId);
+  if(!sp) return [];
+  return (Array.isArray(sp.routeTemplates)?sp.routeTemplates:[])
+    .map(normalizeRouteTemplate).filter(Boolean)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+}
+function upsertRouteTemplate(spaceId, raw){
+  const sp=findSpaceById(spaceId);
+  if(!sp) return {ok:false, message:'Нет пространства фирмы'};
+  const tpl=normalizeRouteTemplate(Object.assign({}, raw, {id:raw&&raw.id||uuid()}));
+  if(!tpl) return {ok:false, message:'Укажите название и оба адреса'};
+  const list=routeTemplatesForSpace(spaceId).filter(t=>t.id!==tpl.id);
+  list.push(tpl);
+  sp.routeTemplates=list;
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('route-template');
+  if(typeof persist==='function') persist();
+  return {ok:true, template:tpl};
+}
+function deleteRouteTemplate(spaceId, templateId){
+  const sp=findSpaceById(spaceId);
+  if(!sp) return {ok:false, message:'Нет пространства фирмы'};
+  const before=routeTemplatesForSpace(spaceId).length;
+  sp.routeTemplates=routeTemplatesForSpace(spaceId).filter(t=>t.id!==templateId);
+  if(sp.routeTemplates.length===before) return {ok:false, message:'Шаблон не найден'};
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('route-template');
+  if(typeof persist==='function') persist();
+  return {ok:true};
+}
 function normalizeSpace(s){
   if(!s||typeof s!=='object') return null;
   const id=s.id||uuid();
@@ -1656,6 +1703,8 @@ function normalizeSpace(s){
     .replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'').slice(0,32);
   if(!portalSlug) portalSlug=slugifyPortalSlug(name, id);
   const portalLogo=String(s.portalLogo||'').trim();
+  const routeTemplates=(Array.isArray(s.routeTemplates)?s.routeTemplates:[])
+    .map(normalizeRouteTemplate).filter(Boolean);
   return {
     id, name,
     portalSlug,
@@ -1668,6 +1717,7 @@ function normalizeSpace(s){
     adminId:s.adminId||null,
     adminName:String(s.adminName||'').trim(),
     ownCompanyId:s.ownCompanyId||null,
+    routeTemplates,
     createdAt:s.createdAt||new Date().toISOString()
   };
 }

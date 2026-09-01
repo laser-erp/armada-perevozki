@@ -657,6 +657,14 @@
           <div class="cust-form-block" data-admin-step="route">
             <div class="cust-form-block-head">4. Маршрут</div>
             <div class="cust-form-block-body">
+              <label for="create-route-template">Шаблон маршрута</label>
+              <div class="row bulk-route-row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+                <select id="create-route-template" style="flex:1;min-width:160px"><option value="">— выберите шаблон —</option></select>
+                <button type="button" class="secondary" id="create-route-template-apply" style="width:auto;flex:0 0 auto;padding:8px 12px">Применить</button>
+                <button type="button" class="secondary" id="create-route-template-save" style="width:auto;flex:0 0 auto;padding:8px 12px">Сохранить</button>
+                <button type="button" class="secondary" id="create-route-template-del" style="width:auto;flex:0 0 auto;padding:8px 12px" title="Удалить выбранный шаблон">✕</button>
+              </div>
+              <p class="hint" id="create-route-template-hint">Типовые маршруты фирмы — быстрее, чем копировать из прошлого заказа.</p>
               <label for="create-load">Адрес загрузки</label>
               <textarea id="create-load" rows="2" placeholder="Город, улица, дом" autocomplete="off"></textarea>
               <label for="create-loading-contact-name">Контакт на загрузке</label>
