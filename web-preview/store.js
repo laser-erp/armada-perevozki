@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-ownrole4317";
+const APP_BUILD="2026-09-01-pilot4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2172,7 +2172,8 @@ function createSpaceForAdmin(admin, firm){
     createdAt:new Date().toISOString()
   });
   state.spaces=(state.spaces||[]).concat([space]);
-  if(typeof getBillingForSpace==='function') getBillingForSpace(space.id);
+  if(typeof bootstrapPilotSpace==='function') bootstrapPilotSpace(space.id);
+  else if(typeof getBillingForSpace==='function') getBillingForSpace(space.id);
   admin.spaceId=space.id;
   const co=ensureOwnCompanyForSpace(space);
   if(co){

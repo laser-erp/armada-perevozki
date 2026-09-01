@@ -636,7 +636,9 @@ function renderAdminBilling(){
   });
   form.querySelectorAll('[data-bill-trial]').forEach(btn=>{
     btn.onclick=()=>{
-      extendSpaceTrial(btn.dataset.billTrial, 30);
+      const sid=btn.dataset.billTrial;
+      if(typeof bootstrapPilotSpace==='function') bootstrapPilotSpace(sid, {extendDays:30});
+      else extendSpaceTrial(sid, 30);
       persist();
       renderAdminBilling();
     };
@@ -2725,7 +2727,33 @@ function renderAdminInboxBoard(orders){
   }).join('');
   return `${head}<div class="admin-cards">${cards}</div>`;
 }
-let renderAdminDebounceTimer=null;
+function pilotSetupChecklistHtml(){
+  const co=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(!co) return '';
+  const sid=co.spaceId||currentSpaceId();
+  const veh=(typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(co.id):[]).length;
+  const drv=(typeof fleetDriversForCompany==='function'?fleetDriversForCompany(co.id):[]).length;
+  const cust=(state.companies||[]).filter(c=>c.spaceId===sid && typeof companyHasRole==='function' && companyHasRole(c,'customer')).length;
+  const fin=typeof financeForCompanyId==='function'?financeForCompanyId(co.id):null;
+  const hasTariff=fin&&(+(fin.defaultRatePerKmCash||0)>0 || +(fin.defaultRatePerHourWork||0)>0);
+  const orders=(state.orders||[]).filter(o=>o&&o.spaceId===sid).length;
+  if(orders>0 && veh>0 && drv>0 && cust>0 && hasTariff) return '';
+  const items=[
+    {ok:veh>0, label:'Авто в парке (Справочники → Авто)'},
+    {ok:drv>0, label:'Водители с PIN (Справочники → Водители)'},
+    {ok:cust>0, label:'Заказчик (Справочники → Контрагенты → роль «Заказчик»)'},
+    {ok:hasTariff, label:'Тариф ₽/км или ₽/ч (Справочники → Тарифы)'},
+    {ok:orders>0, label:'Первый заказ (+ Заказ или портал заказчика)'}
+  ];
+  const rows=items.map(it=>`<li class="${it.ok?'done':''}">${it.ok?'✓':'○'} ${esc(it.label)}</li>`).join('');
+  const portal=typeof customerPortalPageUrl==='function'?customerPortalPageUrl({spaceId:sid}):'';
+  return `<div class="pilot-setup-card">
+    <h3>Старт пилота — чеклист</h3>
+    <p class="hint">Кабинет новый: тот же функционал, что у Армады, но данные нужно завести здесь. Заказы Стройтеха и прочие — в другом space, они сюда не копируются.</p>
+    <ul class="pilot-setup-list">${rows}</ul>
+    ${portal?`<p class="hint">Портал заказчика: <a href="${esc(portal)}" target="_blank" rel="noopener">${esc(portal)}</a> (раздел «Ссылки»)</p>`:''}
+  </div>`;
+}
 function renderAdminDebounced(){
   clearTimeout(renderAdminDebounceTimer);
   renderAdminDebounceTimer=setTimeout(()=>renderAdmin(), 100);
@@ -2777,10 +2805,11 @@ function renderAdmin(){
     return;
   }
   if(!orders.length){
+    const checklist=(!isSuperAdmin()&&typeof pilotSetupChecklistHtml==='function')?pilotSetupChecklistHtml():'';
     const emptyHint=isSuperAdmin()
       ? 'Пока нет заявок. Нажмите + Заказ'
-      : 'Пока нет заявок в вашей зоне (созданные вами или вашими водителями). Нажмите + Заказ';
-    $('admin-list').innerHTML=`<div class="empty">${emptyHint}</div>`;
+      : 'Пока нет заявок. Пройдите чеклист ниже и нажмите + Заказ';
+    $('admin-list').innerHTML=`${checklist}<div class="empty">${emptyHint}</div>`;
     return;
   }
   const exCount=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.closedAt && o.onExchange && o.startOdometer==null).length;

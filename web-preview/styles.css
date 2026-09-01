@@ -296,6 +296,10 @@
     .admin-bulk-bar .hint{font-size:.75rem;color:var(--muted)}
     .admin-bulk-bar .bulk-assign-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
     .admin-bulk-bar .bulk-assign-group select{min-width:120px;max-width:160px;font-size:.82rem;padding:6px 8px}
+    .pilot-setup-card{margin:10px 12px 8px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+    .pilot-setup-card h3{margin:0 0 6px;font-size:.95rem}
+    .pilot-setup-list{margin:8px 0 0;padding-left:18px;font-size:.84rem;line-height:1.5}
+    .pilot-setup-list li.done{color:var(--muted);text-decoration:line-through}
     .bulk-pick-all{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;cursor:pointer}
     .order-card-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:2px}
     .order-card-head h3,.ex-card .order-card-head h3{margin:0;flex:1}

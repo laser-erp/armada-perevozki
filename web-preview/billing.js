@@ -386,11 +386,30 @@ function setSpaceBillingPlan(spaceId, planId, opts){
   b.planId=planId;
   const plan=billingPlan(planId);
   b.exchangeEnabled=plan.exchange;
+  b.etrnEnabled=!!plan.etrn;
   if(plan.commissionRate!=null) b.commissionRate=plan.commissionRate;
   if(opts&&opts.trialEndsAt) b.trialEndsAt=opts.trialEndsAt;
   if(opts&&opts.subscriptionEndsAt) b.subscriptionEndsAt=opts.subscriptionEndsAt;
   if(opts&&opts.status) b.status=opts.status;
   bumpDataEpoch('billing-plan');
+  return true;
+}
+
+/** Пилот: тариф «Бизнес», биржа и ЭТрН на время trial. */
+function bootstrapPilotSpace(spaceId, opts){
+  opts=opts||{};
+  if(!spaceId) return false;
+  const planId=opts.planId||'business';
+  if(!BILLING_PLANS[planId]) return false;
+  const extendDays=opts.extendDays!=null?opts.extendDays:BILLING_TRIAL_DAYS;
+  setSpaceBillingPlan(spaceId, planId, {status:'trial'});
+  const b=getBillingForSpace(spaceId);
+  if(b){
+    b.exchangeEnabled=true;
+    b.etrnEnabled=true;
+  }
+  if(extendDays>0) extendSpaceTrial(spaceId, extendDays);
+  bumpDataEpoch('bootstrap-pilot');
   return true;
 }
 
