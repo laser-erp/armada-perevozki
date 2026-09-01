@@ -1173,7 +1173,8 @@
       padding:8px 10px;border-radius:12px;border:1px solid var(--border,#e2e8e4);background:#f8faf9;
     }
     .chat-cargo-editor .chat-step-actions{margin-top:4px;gap:6px}
-    .chat-cargo-editor .chat-step-actions .chat-chip{min-height:40px;padding:8px 12px;font-size:.78rem}
+    .chat-cargo-tray{padding:4px 0 2px}
+    .chat-cargo-tray .chat-chips{padding-left:0;margin-top:6px}
     .chat-cargo-editor .chat-widget{margin-top:0;padding-left:0}
     .chat-cargo-editor .chat-widget-row{margin-top:0}
     .chat-cargo-editor select{

@@ -2411,10 +2411,60 @@ function customerChatValidateCargoDraft(draft){
     return false;
   }
   if(!customerChatNum(draft.weightValue)){
-    if(err) err.textContent='Укажите вес груза';
+    if(err) err.textContent='Укажите вес, например: 3 т';
     return false;
   }
   if(err) err.textContent='';
+  return true;
+}
+function customerChatParseCargoInput(raw){
+  let s=String(raw||'').trim();
+  const out={
+    text:'', weightValue:'', weightUnit:'t',
+    reqLengthM:'', reqWidthM:'', reqHeightM:'',
+    places:'', volume:''
+  };
+  if(!s) return out;
+  const dimM=s.match(/(\d+[.,]?\d*)\s*[x×Xх*]\s*(\d+[.,]?\d*)\s*[x×Xх*]\s*(\d+[.,]?\d*)/);
+  if(dimM){
+    out.reqLengthM=dimM[1].replace(',','.');
+    out.reqWidthM=dimM[2].replace(',','.');
+    out.reqHeightM=dimM[3].replace(',','.');
+    s=s.replace(dimM[0],' ').trim();
+  }
+  const wKg=s.match(/(\d+[.,]?\d*)\s*(?:кг|kg)\b/i);
+  if(wKg){
+    out.weightValue=wKg[1].replace(',','.');
+    out.weightUnit='kg';
+    s=s.replace(wKg[0],' ').trim();
+  }else{
+    const wT=s.match(/(\d+[.,]?\d*)\s*(?:тонн(?:ы|а)?|т(?=\s|$|,|\.))/i);
+    if(wT){
+      out.weightValue=wT[1].replace(',','.');
+      out.weightUnit='t';
+      s=s.replace(wT[0],' ').trim();
+    }
+  }
+  const pl=s.match(/(\d+)\s*(?:мест(?:а|о)?|шт(?:\.|ук)?)\b/i);
+  if(pl){
+    out.places=pl[1];
+    s=s.replace(pl[0],' ').trim();
+  }
+  const vol=s.match(/(\d+[.,]?\d*)\s*(?:м³|м3|m3|куб\.?\s*м)/i);
+  if(vol){
+    out.volume=vol[1].replace(',','.');
+    s=s.replace(vol[0],' ').trim();
+  }
+  out.text=s.replace(/^[,;:\-\s]+|[,;:\-\s]+$/g,'').replace(/\s+/g,' ').trim();
+  return out;
+}
+function customerChatAddCargoItemFromObject(draft){
+  if(!customerChatValidateCargoDraft(draft)) return false;
+  if(!Array.isArray(customerChat.data.cargoItems)) customerChat.data.cargoItems=[];
+  customerChat.data.cargoItems.push(customerChatNormalizeCargoItem(draft));
+  customerChatApplyCargoItemsToForm(customerChat.data.cargoItems);
+  saveCustomerChatState();
+  scheduleCustomerOrderDraftSave();
   return true;
 }
 function customerChatNormalizeCargoItem(draft){
@@ -2515,15 +2565,59 @@ function customerChatPushCargoUserBubble(item){
   customerChatAddUser(customerChatCargoItemUserLabel(item));
   saveCustomerChatState();
 }
-function customerChatTryAddCargoFromDraft(){
-  if(!customerChatAddCargoItemFromDraft()) return false;
+function customerChatTryAddCargoFromParsed(parsed){
+  const draft={
+    text:String(parsed.text||'').trim(),
+    weightValue:String(parsed.weightValue||'').replace(',','.').trim(),
+    weightUnit:parsed.weightUnit==='kg'?'kg':'t',
+    reqLengthM:parsed.reqLengthM||'',
+    reqWidthM:parsed.reqWidthM||'',
+    reqHeightM:parsed.reqHeightM||'',
+    places:parsed.places||'',
+    volume:parsed.volume||'',
+  };
+  if(!customerChatAddCargoItemFromObject(draft)) return false;
   const items=customerChat.data.cargoItems||[];
-  const added=items[items.length-1];
-  customerChatPushCargoUserBubble(added);
+  customerChatPushCargoUserBubble(items[items.length-1]);
   const inp=$('cust-chat-input');
   if(inp) inp.value='';
+  delete customerChat.data.cargoPendingName;
   customerChatRenderAll();
   return true;
+}
+function customerChatHandleCargoCompose(raw){
+  const err=$('cust-chat-error');
+  const inp=$('cust-chat-input');
+  const items=customerChat.data.cargoItems||[];
+  if(!raw){
+    if(items.length){
+      if(err) err.textContent='';
+      customerChatApplyCargoItemsToForm(items);
+      saveCustomerChatState();
+      customerChatAdvance('');
+    }
+    return;
+  }
+  let parsed;
+  const pending=customerChat.data.cargoPendingName||'';
+  if(pending){
+    parsed=customerChatParseCargoInput(`${pending} ${raw}`);
+    delete customerChat.data.cargoPendingName;
+  }else{
+    parsed=customerChatParseCargoInput(raw);
+  }
+  if(!parsed.text){
+    if(err) err.textContent='Укажите название груза';
+    return;
+  }
+  if(!customerChatNum(parsed.weightValue)){
+    customerChat.data.cargoPendingName=parsed.text;
+    if(err) err.textContent='';
+    if(inp) inp.value='';
+    customerChatUpdateCompose();
+    return;
+  }
+  customerChatTryAddCargoFromParsed(parsed);
 }
 function customerChatCargoAdvanceLabel(items){
   items=items||[];
@@ -2724,8 +2818,8 @@ function customerChatNamePrefix(){
 function customerChatBotPrompt(stepId){
   const who=customerChatNamePrefix();
   if(stepId==='cargo'){
-    if(who) return `${who}здравствуйте! Оформим заявку. <strong>Что перевозим?</strong> Можно добавить несколько грузов — у каждого свои вес и габариты.`;
-    return 'Здравствуйте! Оформим заявку. <strong>Что перевозим?</strong> Можно добавить несколько грузов — у каждого свои вес и габариты.';
+    if(who) return `${who}здравствуйте! Оформим заявку. <strong>Что перевозим?</strong> Напишите ниже, например: <strong>Паллеты, 3 т</strong>. Можно несколько грузов.`;
+    return 'Здравствуйте! Оформим заявку. <strong>Что перевозим?</strong> Напишите ниже, например: <strong>Паллеты, 3 т</strong>. Можно несколько грузов.';
   }
   if(stepId==='when'){
     if(who) return `${who}<strong>когда подать машину?</strong>`;
@@ -2948,27 +3042,12 @@ function customerChatRenderWidgets(){
   if(step.id==='cargo'){
     customerChatMigrateData(customerChat.data);
     const items=customerChat.data.cargoItems||[];
-    widget=`<input type="hidden" id="cust-chat-cargo-text" value="" aria-hidden="true" />
-    <div class="chat-cargo-editor">
-      <div class="chat-widget-row">
-        <input id="cust-chat-cargo-weight" inputmode="decimal" placeholder="Вес" aria-label="Вес груза" />
-        <select id="cust-chat-cargo-weight-unit" aria-label="Единица веса"><option value="t">т</option><option value="kg">кг</option></select>
-      </div>
-      <div class="chat-widget-row chat-dims-row">
-        <input id="cust-chat-cargo-dim-l" inputmode="decimal" placeholder="Д, м" aria-label="Длина, м" />
-        <input id="cust-chat-cargo-dim-w" inputmode="decimal" placeholder="Ш, м" aria-label="Ширина, м" />
-        <input id="cust-chat-cargo-dim-h" inputmode="decimal" placeholder="В, м" aria-label="Высота, м" />
-      </div>
-      <div class="chat-widget-row">
-        <input id="cust-chat-cargo-places" inputmode="numeric" placeholder="Мест" aria-label="Количество мест" />
-        <input id="cust-chat-cargo-volume" inputmode="decimal" placeholder="Объём, м³" aria-label="Объём, м³" />
-      </div>
-      <div class="chat-step-actions">
-        <button type="button" class="chat-chip muted" id="cust-chat-cargo-add">+ Добавить</button>
-        <button type="button" class="chat-chip primary" id="cust-chat-cargo-next"${items.length?'':' disabled'}>${items.length?`Далее → (${items.length})`:'Далее →'}</button>
-      </div>
+    if(items.length){
+      widget=`<div class="chat-cargo-tray">
       <div id="cust-chat-cargo-list-wrap">${customerChatCargoListHtml(items)}</div>
+      <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-cargo-next">Далее → (${items.length})</button></div>
     </div>`;
+    }
   }else if(step.id==='when'){
     const pendingWhen=customerChat.data.pendingWhen||'';
     widget=`<div class="chat-chips" id="cust-chat-chips">
@@ -3058,7 +3137,6 @@ function customerChatRenderWidgets(){
     tray.hidden=false;
     tray.innerHTML=`<div class="chat-step-panel">${widget}</div>`;
   }
-  if(step.id==='cargo') customerChatSyncCargoTextFromCompose();
   customerChatWireWidgets(step.id);
   customerChatScrollBottom();
 }
@@ -3125,18 +3203,12 @@ function customerChatWireWidgets(stepId){
     }
   }
   if(stepId==='cargo'){
-    const add=$('cust-chat-cargo-add');
     const next=$('cust-chat-cargo-next');
-    if(add) add.onclick=()=>{ customerChatSyncCargoTextFromCompose(); customerChatTryAddCargoFromDraft(); };
     if(next) next.onclick=()=>{
-      customerChatSyncCargoTextFromCompose();
-      const draft=customerChatReadCargoDraft();
-      const hasDraft=draft.text||draft.weightValue;
-      if(hasDraft && !customerChatTryAddCargoFromDraft()) return;
       const items=customerChat.data.cargoItems||[];
       if(!items.length){
         const err=$('cust-chat-error');
-        if(err) err.textContent='Добавьте хотя бы один груз';
+        if(err) err.textContent='Напишите груз внизу, например: Паллеты, 3 т';
         return;
       }
       const err=$('cust-chat-error');
@@ -3424,7 +3496,6 @@ function customerChatWireComposeInput(step){
   }
   if(step && step.id==='cargo' && !inp.dataset.cargoSyncWired){
     inp.dataset.cargoSyncWired='1';
-    inp.addEventListener('input', customerChatSyncCargoTextFromCompose);
   }
   const textSteps=['cargo','load','unload','loadContact','unloadContact'];
   if(step && textSteps.includes(step.id)){
@@ -3439,7 +3510,11 @@ function customerChatUpdateCompose(){
   const inp=$('cust-chat-input');
   if(inp && step){
     if(step.id==='cargo'){
-      inp.placeholder='Наименование: паллеты, оборудование…';
+      const pending=customerChat.data.cargoPendingName||'';
+      const n=(customerChat.data.cargoItems||[]).length;
+      if(pending) inp.placeholder=`Вес для «${pending}»: 3 т`;
+      else if(n) inp.placeholder='Ещё груз: паллеты, 3 т';
+      else inp.placeholder='Паллеты, 3 т';
     }else if(step.id==='load'){
       inp.placeholder='Город, улица, дом…';
       if(!inp.matches(':focus')) inp.value=customerChat.data.load||'';
@@ -3459,6 +3534,7 @@ function customerChatUpdateCompose(){
 }
 function customerChatAdvance(userText){
   const err=$('cust-chat-error'); if(err) err.textContent='';
+  delete customerChat.data.cargoPendingName;
   if(userText) customerChatAddUser(userText);
   customerChat.stepIndex++;
   saveCustomerChatState();
@@ -3492,29 +3568,14 @@ function customerChatAdvance(userText){
 function customerChatHandleTextInput(){
   const inp=$('cust-chat-input');
   const raw=(inp&&inp.value||'').trim();
-  if(!raw) return;
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
   if(!step) return;
-  const err=$('cust-chat-error');
   if(step.id==='cargo'){
-    customerChatSyncCargoTextFromCompose();
-    const items=customerChat.data.cargoItems||[];
-    if(!raw && items.length){
-      if(err) err.textContent='';
-      customerChatApplyCargoItemsToForm(items);
-      saveCustomerChatState();
-      customerChatAdvance('');
-      return;
-    }
-    if(!raw) return;
-    const draft=customerChatReadCargoDraft();
-    if(customerChatNum(draft.weightValue)){
-      customerChatTryAddCargoFromDraft();
-      return;
-    }
-    if(err) err.textContent='Укажите вес в панели выше и нажмите ➤';
+    customerChatHandleCargoCompose(raw);
     return;
   }
+  if(!raw) return;
+  const err=$('cust-chat-error');
   if(step.id==='load' || step.id==='unload'){
     if(raw.length<4){
       if(err) err.textContent='Укажите адрес (минимум 4 символа)';
