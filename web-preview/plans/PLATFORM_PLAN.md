@@ -12,6 +12,7 @@
 
 - ✅ Тарифы, trial, баланс, комиссия биржи
 - ✅ Guard API (лимиты водителей / ТС / ЕТрН)
+- 📋 План M1–M3: [BILLING_SUBSCRIPTION_PLAN.md](BILLING_SUBSCRIPTION_PLAN.md)
 - ⬜ Онлайн-оплата (ЮKassa / счёт)
 - ⬜ Автопродление подписки
 

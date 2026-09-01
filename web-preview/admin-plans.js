@@ -4,6 +4,7 @@ const ADMIN_PLAN_ITEMS = [
   { id: 'admin', file: 'ADMIN_PLAN.md', title: 'Админ', short: 'Кабинет /a' },
   { id: 'driver', file: 'DRIVER_PLAN.md', title: 'Водитель', short: 'Вход /v' },
   { id: 'customer', file: 'CUSTOMER_PLAN.md', title: 'Заказчик', short: 'Портал /z' },
+  { id: 'billing', file: 'BILLING_SUBSCRIPTION_PLAN.md', title: 'Биллинг SaaS', short: 'Счета · подписка · активация' },
   { id: 'platform', file: 'PLATFORM_PLAN.md', title: 'Платформа', short: 'Супер-админ' },
   { id: 'documents', file: 'DOCUMENTS_PLAN.md', title: 'Документы', short: 'Юр. · бух. · письма' }
 ];
