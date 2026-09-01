@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-fleet4317b";
+const APP_BUILD="2026-09-01-fleet4317c";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2033,22 +2033,7 @@ function ensureFleetPerSpaces(){
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
     })) changed=true;
-    // У каждой «нашей фирмы» должен быть хотя бы один автомобиль для смены/ЕТО
-    if(!fleetVehiclesForCompany(co.id).length){
-      const nm=(co.name||'').toLowerCase();
-      const seedPlate=nm.includes('нечаев')?'К 001 КК 47'
-        :(nm.includes('армада')?(DEFAULT_VEHICLES[0]&&DEFAULT_VEHICLES[0].plate)||'О 535 МВ 198'
-        :`Х ${String(100+((co.id||co.name||'').length*17)%900).padStart(3,'0')} ХХ 47`);
-      const def=DEFAULT_VEHICLES[0]||{consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2};
-      state.vehicles.push(normalizeFleetVehicle({
-        plate:seedPlate,
-        consumptionPer100Km:def.consumptionPer100Km||20,
-        payloadTons:def.payloadTons||5,
-        bodyLengthM:def.bodyLengthM||6, bodyWidthM:def.bodyWidthM||2.4, bodyHeightM:def.bodyHeightM||2.2,
-        makeModel:'', spaceId:sp.id, companyId:co.id, companyName:co.name
-      }));
-      changed=true;
-    }
+    // Пустой парк — нормально; авто добавляют вручную в «Справочники → Авто».
   });
   // Телефоны: из контактов «нашей фирмы» / других копий того же ФИО
   (state.drivers||[]).forEach(d=>{
@@ -2238,6 +2223,39 @@ function createSpaceForAdmin(admin, firm){
   return space;
 }
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
+/** Автозаглушки парка (legacy seed) — не настоящие машины. */
+function isAutoSeedVehiclePlate(plate){
+  const p=typeof normPlateKey==='function'?normPlateKey(plate):String(plate||'').toLowerCase().replace(/\s+/g,'');
+  if(!p) return false;
+  if(p==='к001кк47') return true;
+  return /^х\d{3}хх47$/.test(p);
+}
+function vehiclePlateInUse(plate){
+  const key=typeof normPlateKey==='function'?normPlateKey(plate):String(plate||'').toLowerCase().replace(/\s+/g,'');
+  if(!key) return false;
+  const matchPl=(p)=>typeof normPlateKey==='function'?normPlateKey(p)===key:String(p||'').toLowerCase().replace(/\s+/g,'')===key;
+  if((state.orders||[]).some(o=>matchPl(o.vehiclePlate)||matchPl(o.bookedPlate))) return true;
+  if((state.shifts||[]).some(s=>matchPl(s.vehiclePlate))) return true;
+  if((state.drivers||[]).some(d=>{
+    if(!d.vehicleId) return false;
+    const v=(state.vehicles||[]).find(x=>x.id===d.vehicleId);
+    return v&&matchPl(v.plate);
+  })) return true;
+  return false;
+}
+/** Удалить автосозданные заглушки без заказов и смен. */
+function migrateRemoveAutoSeedVehicles(){
+  let changed=false;
+  const before=(state.vehicles||[]).length;
+  state.vehicles=(state.vehicles||[]).filter(v=>{
+    if(!v||!isAutoSeedVehiclePlate(v.plate)) return true;
+    if(vehiclePlateInUse(v.plate)) return true;
+    changed=true;
+    return false;
+  });
+  if(changed && typeof bumpDataEpoch==='function') bumpDataEpoch('purge-auto-seed-vehicles');
+  return changed || before!==(state.vehicles||[]).length;
+}
 /** Водитель с ФИО админа другого кабинета не должен висеть в чужом space (legacy). */
 function migratePurgeCrossTenantGhostDrivers(){
   let changed=false;
@@ -2341,6 +2359,11 @@ function migrateSpaces(){
     }
   });
   (state.vehicles||[]).forEach(v=>{
+    if(!v) return;
+    if(!v.spaceId && v.companyId){
+      const co=findCompanyById(v.companyId);
+      if(co&&co.spaceId){ v.spaceId=co.spaceId; changed=true; }
+    }
     if(!v.spaceId && fallbackSpace){ v.spaceId=fallbackSpace; changed=true; }
     if(!v.companyId && v.spaceId){
       const co=ownCompanyForSpaceId(v.spaceId);
@@ -2354,6 +2377,7 @@ function migrateSpaces(){
     else if(fallbackSpace){ o.spaceId=fallbackSpace; changed=true; }
   });
   if(ensureFleetPerSpaces()) changed=true;
+  if(migrateRemoveAutoSeedVehicles()) changed=true;
   if(migratePurgeCrossTenantGhostDrivers()) changed=true;
   if(migrateStripSpuriousOwnRoles()) changed=true;
   return changed;
