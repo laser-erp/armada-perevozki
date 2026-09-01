@@ -10,7 +10,7 @@ alwaysApply: true
 На `https://app.armada.sx/` (и `/index.html`) **всегда** показывается экран `#roles` с тремя карточками и кнопками «Кабинет / Водитель / Заказчик`.
 
 **Запрещено на корне:**
-- автologin по `localStorage` (`LAST_ROLE_KEY` / lastRole)
+- автologin по `localStorage` (`LAST_ROLE_KEY` / lastRole) — ключ может писаться, но boot его не читает
 - автologin по сохранённой сессии admin/driver/customer
 - редирект на `/z/` или `customer-login`
 

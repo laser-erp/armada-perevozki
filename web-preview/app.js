@@ -4661,9 +4661,6 @@ try{
     persistLocalOnly();
   }
   updateSyncHint();
-  // Восстановить роль без PIN — сразу из localStorage, сеть в фоне
-  let lastRole='';
-  try{ lastRole=localStorage.getItem(LAST_ROLE_KEY)||''; }catch(_){}
   const tryDriver=async()=>{
     if(!restoreDriverSession()) return false;
     const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID)||findDriverRecord(DRIVER, null);
@@ -4679,8 +4676,7 @@ try{
     if(typeof showCustomerPortal==='function') showCustomerPortal();
     else if(typeof openCustomerLogin==='function') openCustomerLogin();
   } else if(urlEntry==='driver'){
-    if(lastRole==='driver' && (await tryDriver())){ /* ok */ }
-    else if(restoreDriverSession() && (await tryDriver())){ /* ok */ }
+    if(await tryDriver()){ /* ok */ }
     else openDedicatedEntryScreen();
   } else if(urlEntry==='admin'){
     if(canAutoRestoreAdmin()){
@@ -4688,20 +4684,11 @@ try{
       renderAdmin();
       if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     }else openDedicatedEntryScreen();
-  } else if(onRoleHub){
+  } else if(onRoleHub || !urlEntry){
     if(!document.querySelector('#roles.show') && !isArmadaEntryScreenVisible()){
       if(document.querySelector('#splash.show')) showAfterSplash(showRoleHub);
       else showRoleHub();
     }
-  } else if(lastRole==='driver'){
-    if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
-  } else if(lastRole==='customer'){
-    if(typeof showCustomerPortal==='function') showCustomerPortal();
-    else if(restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
-  } else if(restoreAdminSession()){
-    show('admin');
-    renderAdmin();
-    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
   } else if(!(await tryDriver())){
     if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show')){
       if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
