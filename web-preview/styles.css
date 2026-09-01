@@ -228,10 +228,10 @@
     .ex-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px}
     .ex-actions .row{gap:6px}
     .ex-actions button{flex:1}
-    #admin-owner-filters{display:none;border-top:1px solid var(--border);padding-top:4px}
-    #admin-owner-filters.show{display:flex}
-    #admin-owner-filters button{font-size:.68rem;padding:5px 10px;min-height:28px;background:var(--field)}
-    #admin-owner-filters button.on{background:var(--accent);color:#fff}
+    #admin-owner-filters,#cat-owner-filters{display:none;border-top:1px solid var(--border);padding-top:4px}
+    #admin-owner-filters.show,#cat-owner-filters.show{display:flex;flex-wrap:wrap}
+    #admin-owner-filters button,#cat-owner-filters button{font-size:.68rem;padding:5px 10px;min-height:28px;background:var(--field)}
+    #admin-owner-filters button.on,#cat-owner-filters button.on{background:var(--accent);color:#fff}
     .admin-owner-filter-hint{flex:1 1 100%;margin:4px 0 0;font-size:.72rem;color:var(--muted)}
     .table-wrap{flex:1;overflow:auto;padding:0 0 12px;-webkit-overflow-scrolling:touch}
     table.admin{border-collapse:collapse;min-width:1800px;font-size:11px}

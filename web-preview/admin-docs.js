@@ -85,7 +85,7 @@ function adminDocsBuhToolbarHtml() {
   if (superAll) {
     const spaces = (state.spaces || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
     firmOpts = `<select id="adm-docs-firm" aria-label="Фирма">
-      <option value="all"${firmFilter === 'all' ? ' selected' : ''}>Все фирмы (супер-админ)</option>
+      <option value="all"${firmFilter === 'all' ? ' selected' : ''}>Все кабинеты (супер-админ)</option>
       ${spaces.map(s => `<option value="${esc(s.id)}"${firmFilter === s.id ? ' selected' : ''}>${esc(s.name || s.id)}</option>`).join('')}
     </select>`;
   }

@@ -69,8 +69,7 @@ function findAdminByLoginAndPin(loginRaw, pin){
   if(inn && (inn.length===10 || inn.length===12)) return findAdminByInnAndPin(inn, pin);
   return findAdminByPhoneAndPin(raw, pin);
 }
-function paintAdminOwnerFilters(){
-  const box=$('admin-owner-filters');
+function paintOwnerFiltersBox(box, onPick){
   if(!box) return;
   if(!isSuperAdmin()){
     box.classList.remove('show');
@@ -85,13 +84,22 @@ function paintAdminOwnerFilters(){
     ...spaces.map(s=>`<button type="button" data-owner="${esc(s.id)}" class="${cur===s.id?'on':''}" title="Кабинет ${esc(s.name)}">${esc(s.name)}</button>`),
     `<button type="button" data-owner="_none" class="${cur==='_none'?'on':''}">Без кабинета</button>`
   ];
-  box.innerHTML=btns.join('')+`<p class="hint admin-owner-filter-hint">Отдельный админ и парк у каждого кабинета. «ИП Нечаев», «МБН» — не фирмы Армады, а другие перевозчики.</p>`;
+  box.innerHTML=btns.join('')+`<p class="hint admin-owner-filter-hint">Кабинет справочника и парка. «ИП Нечаев», «МБН» — другие перевозчики, не контрагенты Армады.</p>`;
   box.querySelectorAll('button[data-owner]').forEach(b=>{
     b.onclick=()=>{
       state.adminOwnerFilter=b.dataset.owner||'all';
       paintAdminOwnerFilters();
-      renderAdmin();
+      paintCatalogOwnerFilters();
+      if(typeof onPick==='function') onPick();
     };
+  });
+}
+function paintAdminOwnerFilters(){
+  paintOwnerFiltersBox($('admin-owner-filters'), ()=>{ renderAdmin(); });
+}
+function paintCatalogOwnerFilters(){
+  paintOwnerFiltersBox($('cat-owner-filters'), ()=>{
+    if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
   });
 }
 function fillAdminLoginSelect(){
@@ -485,6 +493,7 @@ async function loginAdmin(){
     alert('Смените PIN: «Активность» → блок администраторов. Слабый или устаревший PIN из истории проекта.');
   }
   currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
+  if(adm.isSuper&&adm.spaceId) state.adminOwnerFilter=adm.spaceId;
   saveAdminSession();
   markAdminPinOk();
   pushAdminLogin('login');
@@ -4061,6 +4070,7 @@ function flashCatOk(msg){
 }
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
+  paintCatalogOwnerFilters();
   const companies=(state.companies||[]).filter(companyInMySpace);
   const drvCo=typeof catalogDriverCompany==='function'?catalogDriverCompany():currentOwnCompany();
   const drivers=(state.drivers||[]).map((d,i)=>({d,i})).filter(({d})=>{
@@ -4317,12 +4327,12 @@ function openCatalogs(){
       </div>
       <label>Юр. адрес</label><input id="co-address" value="${esc(c.address||'')}" />
       <div class="role-toggles">
-        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}${lockOwnRole?' disabled':''}/> Наша firma</label>
+        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}${lockOwnRole?' disabled':''}/> Наша фирма</label>
         <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
         <label class="role-tog"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
       </div>
-      ${foreignOwn&&foreignSpace?`<p class="hint">Это «наша firma» кабинета «${esc(foreignSpace.name)}», не контрагент текущего справочника. Чтобы добавить МБН/Нечаева как партнёра в Армаду — создайте <strong>новую</strong> карточку (+) в фильтре «ООО «Армада»».</p>`:''}
-      ${canonicalOwn&&!foreignOwn?`<p class="hint">Это основная «наша firma» кабинета — роль нельзя снять. Для пилота партнёра создайте отдельного админа в «Активность».</p>`:''}
+      ${foreignOwn&&foreignSpace?`<p class="hint">Это «наша фирма» кабинета «${esc(foreignSpace.name)}», не контрагент текущего справочника. Чтобы добавить МБН/Нечаева как партнёра в Армаду — создайте <strong>новую</strong> карточку (+) в фильтре «ООО «Армада»».</p>`:''}
+      ${canonicalOwn&&!foreignOwn?`<p class="hint">Это основная «наша фирма» кабинета — роль нельзя снять. Для пилота партнёра создайте отдельного админа в «Активность».</p>`:''}
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>
       <div class="hint" style="margin:0 0 4px">Телефон контакта — в карточке компании; у водителя с тем же ФИО подтянется сам</div>
@@ -4502,11 +4512,11 @@ function openCatalogs(){
       if($('co-role-r').checked) roles.push('carrier');
       if(typeof isForeignCanonicalOwnCompany==='function'&&isForeignCanonicalOwnCompany(c)&&!roles.includes('own')){
         const sp=typeof spaceForCanonicalOwnCompany==='function'?spaceForCanonicalOwnCompany(c):null;
-        alert(`Нельзя снять «Наша firma» — это кабинет «${sp&&sp.name||'другого перевозчика'}». Для контрагента в Армаде создайте новую карточку (+) в фильтре «ООО «Армада»».`);
+        alert(`Нельзя снять «Наша фирма» — это кабинет «${sp&&sp.name||'другого перевозчика'}». Для контрагента в Армаде создайте новую карточку (+) в фильтре «ООО «Армада»».`);
         return;
       }
       if(typeof isCanonicalOwnCompany==='function'&&isCanonicalOwnCompany(c)&&!roles.includes('own')){
-        alert('Нельзя снять «Наша firma» у основной компании кабинета. Для партнёра — отдельный админ в «Активность».');
+        alert('Нельзя снять «Наша фирма» у основной компании кабинета. Для партнёра — отдельный админ в «Активность».');
         return;
       }
       if(!roles.length){ alert('Выберите роль: наша фирма / заказчик / перевозчик'); return; }
