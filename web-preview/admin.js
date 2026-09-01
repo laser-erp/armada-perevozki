@@ -4078,9 +4078,14 @@ function openCatalogs(){
     if(myCo && v.companyId===myCo.id) return true;
     return !v.spaceId || v.spaceId===currentAdmin.spaceId;
   });
+  const catalogHint=(isSuperAdmin()&&(state.adminOwnerFilter||'all')==='all')
+    ? '<p class="cat-panel-hint">Показаны компании <strong>всех кабинетов</strong>. Справочник Армады — выберите «ООО «Армада»» в фильтре «Все кабинеты» сверху. «Наша фирма» у МБН и Нечаева — их кабинеты, не контрагенты Армады.</p>'
+    : '';
   const companyCards=companies.map(c=>{
     const roles=roleLabels(c);
+    const spLbl=typeof companySpaceLabel==='function'?companySpaceLabel(c):'';
     const chips=[
+      spLbl&&(state.adminOwnerFilter||'all')==='all'?`<span class="chip">${esc(spLbl)}</span>`:'',
       companyHasRole(c,'own')?'<span class="chip hot">наша</span>':'',
       companyHasRole(c,'own')?(typeof isDispatcherCompany==='function' && isDispatcherCompany(c)?'<span class="chip">диспетчер</span>':''):'',
       companyHasRole(c,'customer')?'<span class="chip">заказчик</span>':'',
@@ -4173,6 +4178,7 @@ function openCatalogs(){
   }
   $('catalogs-form').innerHTML=`
     <div class="cat-panel ${tab==='companies'?'on':''}" data-cat-panel="companies">
+      ${catalogHint}
       <div class="row" style="gap:6px">
         <input class="cat-search" id="co-search" placeholder="Поиск: название или ИНН…" style="flex:1;margin:0" />
         <button type="button" class="primary cat-add-btn" id="co-new" style="width:auto;flex:0 0 auto;padding:8px 12px!important">+</button>
@@ -4279,9 +4285,9 @@ function openCatalogs(){
       return Object.assign({
         id:uuid(), name:'', roles:['customer'], note:'', phones:[], contacts:[],
         loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
-        spaceId:currentSpaceId(), inn:'', ogrn:'', kpp:'', address:''
+        spaceId:typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId(), inn:'', ogrn:'', kpp:'', address:''
       }, company, { name:String(company.name||'').trim() });
-    })():{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:currentSpaceId(),inn:'',ogrn:'',kpp:'',address:''};
+    })():{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId(),inn:'',ogrn:'',kpp:'',address:''};
     const box=$('co-editor');
     box.classList.add('show');
     try{ box.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){}
@@ -4289,6 +4295,10 @@ function openCatalogs(){
     const isCust=companyHasRole(c,'customer');
     const isCarr=companyHasRole(c,'carrier');
     const canonicalOwn=typeof isCanonicalOwnCompany==='function'&&isCanonicalOwnCompany(c);
+    const foreignOwn=typeof isForeignCanonicalOwnCompany==='function'&&isForeignCanonicalOwnCompany(c);
+    const foreignSpace=foreignOwn&&typeof spaceForCanonicalOwnCompany==='function'?spaceForCanonicalOwnCompany(c):null;
+    const lockOwnRole=canonicalOwn||foreignOwn;
+    const catalogSid=typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId();
     box.innerHTML=`
       <div class="row" style="align-items:center;margin-bottom:4px">
         <h3 style="margin:0;flex:1;font-size:.95rem">${company?'Карточка':'Новая компания'}</h3>
@@ -4307,11 +4317,12 @@ function openCatalogs(){
       </div>
       <label>Юр. адрес</label><input id="co-address" value="${esc(c.address||'')}" />
       <div class="role-toggles">
-        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}${canonicalOwn?' disabled':''}/> Наша фирма</label>
+        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}${lockOwnRole?' disabled':''}/> Наша firma</label>
         <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
         <label class="role-tog"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
       </div>
-      ${canonicalOwn?`<p class="hint">Это основная «наша фирма» кабинета — роль нельзя снять. Для пилота партнёра создайте отдельного админа в «Активность».</p>`:''}
+      ${foreignOwn&&foreignSpace?`<p class="hint">Это «наша firma» кабинета «${esc(foreignSpace.name)}», не контрагент текущего справочника. Чтобы добавить МБН/Нечаева как партнёра в Армаду — создайте <strong>новую</strong> карточку (+) в фильтре «ООО «Армада»».</p>`:''}
+      ${canonicalOwn&&!foreignOwn?`<p class="hint">Это основная «наша firma» кабинета — роль нельзя снять. Для пилота партнёра создайте отдельного админа в «Активность».</p>`:''}
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>
       <div class="hint" style="margin:0 0 4px">Телефон контакта — в карточке компании; у водителя с тем же ФИО подтянется сам</div>
@@ -4482,15 +4493,20 @@ function openCatalogs(){
         if(st) st.textContent=String(err.message||err);
       }
     });
-    $('co-save').onclick=()=>{
+    $('co-save').onclick=async()=>{
       const name=($('co-name').value||'').trim();
       if(!name){ alert('Укажите название'); return; }
       const roles=[];
       if($('co-role-o')&&$('co-role-o').checked) roles.push('own');
       if($('co-role-c').checked) roles.push('customer');
       if($('co-role-r').checked) roles.push('carrier');
+      if(typeof isForeignCanonicalOwnCompany==='function'&&isForeignCanonicalOwnCompany(c)&&!roles.includes('own')){
+        const sp=typeof spaceForCanonicalOwnCompany==='function'?spaceForCanonicalOwnCompany(c):null;
+        alert(`Нельзя снять «Наша firma» — это кабинет «${sp&&sp.name||'другого перевозчика'}». Для контрагента в Армаде создайте новую карточку (+) в фильтре «ООО «Армада»».`);
+        return;
+      }
       if(typeof isCanonicalOwnCompany==='function'&&isCanonicalOwnCompany(c)&&!roles.includes('own')){
-        alert('Нельзя снять «Наша фирма» у основной компании кабинета. Для партнёра — отдельный админ в «Активность».');
+        alert('Нельзя снять «Наша firma» у основной компании кабинета. Для партнёра — отдельный админ в «Активность».');
         return;
       }
       if(!roles.length){ alert('Выберите роль: наша фирма / заказчик / перевозчик'); return; }
@@ -4557,7 +4573,7 @@ function openCatalogs(){
         loadingAddresses:roles.includes('customer')?loads:[],
         unloadingAddresses:roles.includes('customer')?unloads:[],
         phones:c.phones||[],
-        spaceId:c.spaceId||currentSpaceId(),
+        spaceId:c.spaceId||catalogSid||currentSpaceId(),
         logistKind:roles.includes('own')?(($('co-dispatcher')||{}).checked?'broker':'staff'):null,
         vatPayer:roles.includes('own')?(($('co-vat-payer')||{}).value==='vat'?'vat':'none'):null,
         portalEnabled:roles.includes('customer')&&!!($('co-portal-enabled')&&$('co-portal-enabled').checked),
@@ -4574,9 +4590,22 @@ function openCatalogs(){
       });
       if(typeof migrateStripSpuriousOwnRoles==='function') migrateStripSpuriousOwnRoles();
       bumpDataEpoch('save-company');
-      persist();
+      const saveBtn=$('co-save');
+      const prevLabel=saveBtn&&saveBtn.textContent;
+      if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='…'; }
+      let saveResult={ ok:navigator.onLine!==false, offline:navigator.onLine===false };
+      if(typeof persistCompanyImmediate==='function'){
+        saveResult=await persistCompanyImmediate();
+      } else {
+        persist();
+      }
+      if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent=prevLabel||'Сохранить'; }
       openCatalogs();
-      flashCatOk('Сохранено');
+      if(saveResult.ok){
+        flashCatOk('Сохранено');
+      } else {
+        flashCatOk(saveResult.offline?'Сохранено локально — нет связи с сервером':'Сохранено локально — не синхронизировано с сервером', true);
+      }
       const saved=findCompanyById(savedId);
       if(saved) openEditor(saved);
     };

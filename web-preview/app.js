@@ -491,6 +491,37 @@ function isCanonicalOwnCompany(co){
   if(!co||!co.id) return false;
   return (state.spaces||[]).some(sp=>sp.ownCompanyId===co.id);
 }
+function spaceForCanonicalOwnCompany(co){
+  if(!co||!co.id) return null;
+  return (state.spaces||[]).find(sp=>sp.ownCompanyId===co.id)||null;
+}
+/** Кабинет, чей справочник сейчас открыт (фильтр супер-админа или space текущего админа). */
+function catalogViewSpaceId(){
+  if(typeof isSuperAdmin==='function'&&isSuperAdmin()){
+    const f=state.adminOwnerFilter||'all';
+    if(f&&f!=='all'&&f!=='_none') return f;
+  }
+  return typeof currentSpaceId==='function'?currentSpaceId():null;
+}
+/** «Наша фирма» другого кабинета — не контрагент текущего пространства. */
+function isForeignCanonicalOwnCompany(co){
+  if(!isCanonicalOwnCompany(co)) return false;
+  const sp=spaceForCanonicalOwnCompany(co);
+  const view=catalogViewSpaceId();
+  if(!sp||!view) return false;
+  return sp.id!==view;
+}
+function companyMatchScope(rawSpaceId, existing){
+  const sid=rawSpaceId||null;
+  const xs=existing&&existing.spaceId||null;
+  if(!sid||!xs) return true;
+  return sid===xs;
+}
+function companySpaceLabel(co){
+  if(!co||!co.spaceId||typeof findSpaceById!=='function') return '';
+  const sp=findSpaceById(co.spaceId);
+  return sp&&sp.name||'';
+}
 /** Минимальная и рекомендуемая цена заявки заказчика (по тарифу перевозчика) */
 function quoteBodyCargoMultiplier(draft, fin){
   const s=normalizeFinance(fin||{});
@@ -813,7 +844,12 @@ function wireCreatePricePreview(){
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
 function companyInMySpace(c){
   if(!c) return false;
-  if(isSuperAdmin()) return true;
+  if(isSuperAdmin()){
+    const f=state.adminOwnerFilter||'all';
+    if(f==='all') return true;
+    if(f==='_none') return !c.spaceId;
+    return c.spaceId===f;
+  }
   const sid=currentSpaceId();
   if(!sid) return !c.spaceId;
   return !c.spaceId || c.spaceId===sid;
@@ -839,10 +875,11 @@ function findCustomer(name){
 function upsertCompany(raw){
   const c=normalizeCompany(raw); if(!c) return null;
   const innKey=String(c.inn||'').replace(/\D/g,'');
+  const rawSpaceId=(raw&&raw.spaceId)||c.spaceId||null;
   const i=(state.companies||[]).findIndex(x=>{
-    if(x.id===c.id) return true;
-    if(innKey && String(x.inn||'').replace(/\D/g,'')===innKey) return true;
-    return String(x.name).toLowerCase()===c.name.toLowerCase();
+    if(c.id && x.id===c.id) return true;
+    if(innKey && String(x.inn||'').replace(/\D/g,'')===innKey && companyMatchScope(rawSpaceId, x)) return true;
+    return String(x.name).toLowerCase()===c.name.toLowerCase() && companyMatchScope(rawSpaceId, x);
   });
   if(i>=0){
     // merge addresses/contacts lightly

@@ -2748,6 +2748,10 @@ async function persistAdminPinImmediate(){
   if(typeof updateSyncHint==='function') updateSyncHint();
   return { ok:false, offline:false, err:lastErr };
 }
+/** Сохранить справочник компаний на сервер сразу (без debounce). */
+async function persistCompanyImmediate(){
+  return persistAdminPinImmediate();
+}
 async function initCloudSync(){
   syncStatus='syncing';
   try{
