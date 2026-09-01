@@ -1471,6 +1471,43 @@ function matchesOwnerFilter(o){
   if(f==='_none') return !sid;
   return sid===f;
 }
+/** Название фирмы водителя для UI (companyName → company → space → админ). */
+function driverCompanyLabel(d){
+  if(!d) return '';
+  const cn=String(d.companyName||'').trim();
+  if(cn) return cn;
+  const cid=d.companyId||null;
+  if(cid){
+    const co=findCompanyById(cid);
+    if(co&&(co.name||'').trim()) return String(co.name).trim();
+  }
+  if(d.spaceId){
+    const sp=findSpaceById(d.spaceId);
+    if(sp&&(sp.name||'').trim()) return String(sp.name).trim();
+  }
+  const adm=d.ownerAdminId&&(state.admins||[]).find(a=>a.id===d.ownerAdminId);
+  if(adm&&adm.spaceId){
+    const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(adm.spaceId):null;
+    if(co&&(co.name||'').trim()) return String(co.name).trim();
+    const sp=findSpaceById(adm.spaceId);
+    if(sp&&(sp.name||'').trim()) return String(sp.name).trim();
+  }
+  const home=(state.admins||[]).find(a=>samePersonName(a.name, d.name));
+  if(home&&home.spaceId){
+    const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(home.spaceId):null;
+    if(co&&(co.name||'').trim()) return String(co.name).trim();
+  }
+  return '';
+}
+/** Фирма активной сессии водителя. */
+function driverSessionCompanyLabel(companyId, driverName){
+  if(companyId){
+    const co=findCompanyById(companyId);
+    if(co&&(co.name||'').trim()) return String(co.name).trim();
+  }
+  const rec=typeof findDriverRecord==='function'?findDriverRecord(driverName, companyId):null;
+  return rec?driverCompanyLabel(rec):'';
+}
 /** Парк конкретной «нашей фирмы» — то, что уходит в заявку. */
 function fleetDriversForCompany(companyId){
   if(!companyId) return [];

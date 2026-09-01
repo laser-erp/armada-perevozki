@@ -1557,7 +1557,7 @@ function openDriverCard(driverKey){
   if(!d.id) d.id=uuid();
   state._driverCardIndex=i;
   state._driverCardId=d.id;
-  const firm=d.companyName||(findCompanyById(d.companyId)||{}).name||'';
+  const firm=typeof driverCompanyLabel==='function'?driverCompanyLabel(d):(d.companyName||(findCompanyById(d.companyId)||{}).name||'');
   const veh=typeof vehicleForDriver==='function'?vehicleForDriver(d):null;
   const miss=typeof driverDocsMissingItems==='function'?driverDocsMissingItems(d):[];
   const titleEl=$('drv-card-title');
@@ -4130,15 +4130,15 @@ function openCatalogs(){
   }).join('') || `<div class="hint">Пока пусто — нажмите «+ Компания»</div>`;
 
   const driverCards=drivers.map(({d,i})=>{
-    const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'';
+    const firm=typeof driverCompanyLabel==='function'?driverCompanyLabel(d):(d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'');
     const veh=typeof vehicleForDriver==='function'?vehicleForDriver(d):null;
     const miss=typeof driverDocsMissingItems==='function'?driverDocsMissingItems(d):[];
     const openKey=d.id||String(i);
-    const meta=[formatPhone(d.phone||''), d.licenseNo?`ВУ ${d.licenseNo}`:null, veh?`🚛 ${veh.plate}`:null].filter(Boolean).join(' · ');
+    const meta=[firm||null, formatPhone(d.phone||''), d.licenseNo?`ВУ ${d.licenseNo}`:null, veh?`🚛 ${veh.plate}`:null].filter(Boolean).join(' · ');
     return `<div class="item-card drv-list-card">
       <button type="button" class="drv-list-open" data-open-drv="${esc(openKey)}">
         <div class="item-top" style="pointer-events:none">
-          <div class="item-name">${esc(d.name)}${isSuperAdmin()&&firm?` <span class="drv-firm">${esc(firm)}</span>`:''}</div>
+          <div class="item-name">${esc(d.name)}${firm?` <span class="drv-firm">${esc(firm)}</span>`:''}</div>
           ${miss.length?`<span class="drv-docs-badge warn">${miss.length} не заполнено</span>`:`<span class="drv-docs-badge ok">док. ок</span>`}
         </div>
         <div class="meta">${esc(meta||'Телефон и документы не заполнены')}</div>

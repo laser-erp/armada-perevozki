@@ -102,6 +102,15 @@ function restoreDriverSession(){
   if(!rec){ clearDriverSession(); return false; }
   DRIVER=rec.name;
   DRIVER_COMPANY_ID=rec.companyId||raw.companyId||null;
+  if(!DRIVER_COMPANY_ID){
+    const bind=typeof resolveDriverOrderBinding==='function'?resolveDriverOrderBinding(rec.name, ''):{};
+    DRIVER_COMPANY_ID=bind.ownCompanyId||null;
+  }
+  if(DRIVER_COMPANY_ID && !rec.companyId){
+    rec.companyId=DRIVER_COMPANY_ID;
+    const co=findCompanyById(DRIVER_COMPANY_ID);
+    if(co && !rec.companyName) rec.companyName=co.name;
+  }
   return true;
 }
 function peekAdminSessionName(){
@@ -205,7 +214,8 @@ function updateDriverChrome(){
     renderDriverHome();
     return;
   }
-  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const firm=typeof driverSessionCompanyLabel==='function'?driverSessionCompanyLabel(DRIVER_COMPANY_ID, DRIVER)
+    :(DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'');
   if(t){ t.textContent=DRIVER; t.title=firm?`${DRIVER} · ${firm}`:DRIVER; }
   if(sub) sub.textContent=firm||'';
   if(chip){
@@ -285,7 +295,7 @@ function showDriverPickStep(list){
   if(!pick||!listEl) return;
   pick.style.display='block';
   listEl.innerHTML=driverLoginCandidates.map((d,i)=>{
-    const firm=d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'';
+    const firm=typeof driverCompanyLabel==='function'?driverCompanyLabel(d):(d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'');
     return `<button type="button" class="secondary role-btn" data-drv-pick="${i}" style="margin-bottom:8px">
       <span class="role-btn-title">${esc(d.name||'—')}</span>
       <span class="role-btn-desc">${esc(firm||'фирма')}</span>
@@ -444,7 +454,8 @@ async function enterAsDriver(rec){
   setDriverNav('btn-home');
   state.shift=null;
   resetChat();
-  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const firm=typeof driverSessionCompanyLabel==='function'?driverSessionCompanyLabel(DRIVER_COMPANY_ID, DRIVER)
+    :(DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'');
   if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
     state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}.`});
   }
@@ -1495,7 +1506,8 @@ function showCabinet(){
   const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const pending=mine.filter(o=>looksClosedOrder(o) && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const total=paid.reduce((s,o)=>s+(effectivePay(o)||0),0);
-  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const firm=typeof driverSessionCompanyLabel==='function'?driverSessionCompanyLabel(DRIVER_COMPANY_ID, DRIVER)
+    :(DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'');
   const phone=formatPhone(driverPhone(DRIVER, DRIVER_COMPANY_ID)||'')||'—';
   const plate=driverProfilePlate();
   const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);

@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-fleet4317";
+const APP_BUILD="2026-09-01-fleet4317b";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1973,9 +1973,30 @@ function pickDriverHomeRecord(list){
   });
   return home||list[0];
 }
+/** Подтянуть companyName/spaceId у водителей и авто из справочника компаний. */
+function migrateSyncDriverCompanyNames(){
+  let changed=false;
+  (state.drivers||[]).forEach(d=>{
+    if(!d) return;
+    const co=d.companyId&&findCompanyById(d.companyId);
+    if(co){
+      if(d.companyName!==co.name){ d.companyName=co.name; changed=true; }
+      if(co.spaceId && d.spaceId!==co.spaceId){ d.spaceId=co.spaceId; changed=true; }
+      return;
+    }
+    if(d.companyId && !co){ d.companyId=null; d.companyName=null; changed=true; }
+  });
+  (state.vehicles||[]).forEach(v=>{
+    if(!v||!v.companyId) return;
+    const co=findCompanyById(v.companyId);
+    if(co && v.companyName!==co.name){ v.companyName=co.name; changed=true; }
+  });
+  return changed;
+}
 /** Парк (водители/авто) — отдельно на каждую «нашу фирму». */
 function ensureFleetPerSpaces(){
   let changed=false;
+  if(migrateSyncDriverCompanyNames()) changed=true;
   // Старые «общие» водители без фирмы — привязать к фирме владельца/админа с тем же ФИО
   (state.drivers||[]).forEach(d=>{
     if(d.companyId && findCompanyById(d.companyId)) return;
