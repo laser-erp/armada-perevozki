@@ -1627,7 +1627,7 @@ function migrateCompanies(){
     if(!(hit.bodyWidthM>0) && def.bodyWidthM) hit.bodyWidthM=def.bodyWidthM;
     if(!(hit.bodyHeightM>0) && def.bodyHeightM) hit.bodyHeightM=def.bodyHeightM;
   });
-  // наши фирмы (ООО «Армада», ИП Нечаев А.С.)
+  // наши фирмы оператора — отдельные кабинеты создаются через createSpaceForAdmin
   DEFAULT_OWN_COMPANIES.forEach(def=>{
     const existing=findCompanyByName(def.name);
     if(!existing){

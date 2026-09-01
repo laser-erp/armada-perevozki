@@ -232,6 +232,7 @@
     #admin-owner-filters.show{display:flex}
     #admin-owner-filters button{font-size:.68rem;padding:5px 10px;min-height:28px;background:var(--field)}
     #admin-owner-filters button.on{background:var(--accent);color:#fff}
+    .admin-owner-filter-hint{flex:1 1 100%;margin:4px 0 0;font-size:.72rem;color:var(--muted)}
     .table-wrap{flex:1;overflow:auto;padding:0 0 12px;-webkit-overflow-scrolling:touch}
     table.admin{border-collapse:collapse;min-width:1800px;font-size:11px}
     table.admin th,table.admin td{border:1px solid var(--border);padding:6px 5px;text-align:left;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;background:var(--surface);color:var(--text)}

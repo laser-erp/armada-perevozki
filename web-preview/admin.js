@@ -81,11 +81,11 @@ function paintAdminOwnerFilters(){
   const spaces=(state.spaces||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
   const cur=state.adminOwnerFilter||'all';
   const btns=[
-    `<button type="button" data-owner="all" class="${cur==='all'?'on':''}">Все фирмы</button>`,
-    ...spaces.map(s=>`<button type="button" data-owner="${esc(s.id)}" class="${cur===s.id?'on':''}">${esc(s.name)}</button>`),
-    `<button type="button" data-owner="_none" class="${cur==='_none'?'on':''}">Без фирмы</button>`
+    `<button type="button" data-owner="all" class="${cur==='all'?'on':''}" title="Все перевозчики на платформе">Все кабинеты</button>`,
+    ...spaces.map(s=>`<button type="button" data-owner="${esc(s.id)}" class="${cur===s.id?'on':''}" title="Кабинет ${esc(s.name)}">${esc(s.name)}</button>`),
+    `<button type="button" data-owner="_none" class="${cur==='_none'?'on':''}">Без кабинета</button>`
   ];
-  box.innerHTML=btns.join('');
+  box.innerHTML=btns.join('')+`<p class="hint admin-owner-filter-hint">Отдельный админ и парк у каждого кабинета. «ИП Нечаев», «МБН» — не фирмы Армады, а другие перевозчики.</p>`;
   box.querySelectorAll('button[data-owner]').forEach(b=>{
     b.onclick=()=>{
       state.adminOwnerFilter=b.dataset.owner||'all';

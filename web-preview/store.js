@@ -163,8 +163,7 @@ function gaz33104LubeTableHtml(){
   </details>`;
 }
 const DEFAULT_DRIVERS=[
-  {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
-  {name:"Нечаев А.С.",salaryPercent:30,exchangeEnabled:false,phone:""}
+  {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""}
 ];
 const FLUIDS=["Максимум","Середина","Минимум"];
 /** Активный водитель сессии (выбирается на экране «Водитель»). */
@@ -179,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-pilot4317";
+const APP_BUILD="2026-09-01-tenant4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -933,8 +932,7 @@ async function estimateRouteGeometry(fromAddr, toAddr){
   };
 }
 const DEFAULT_OWN_COMPANIES=[
-  {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
-  {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
+  {name:"ООО «Армада»", roles:["own"], note:"Оператор платформы — свой кабинет"}
 ];
 const DEFAULT_ADMINS=[
   {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"", isSuper:true}
@@ -2185,6 +2183,28 @@ function createSpaceForAdmin(admin, firm){
   return space;
 }
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
+/** Водитель с ФИО админа другого кабинета не должен висеть в чужом space (legacy). */
+function migratePurgeCrossTenantGhostDrivers(){
+  let changed=false;
+  const admins=(state.admins||[]).filter(a=>a&&a.spaceId);
+  (state.drivers||[]).slice().forEach(d=>{
+    if(!d||!d.name) return;
+    const home=admins.find(a=>samePersonName(a.name, d.name));
+    if(!home||!home.spaceId) return;
+    if(d.spaceId===home.spaceId) return;
+    const hasHomeCopy=(state.drivers||[]).some(x=>x!==d && samePersonName(x.name,d.name) && x.spaceId===home.spaceId);
+    if(!hasHomeCopy && d.ownerAdminId===home.id){
+      d.spaceId=home.spaceId;
+      const co=ownCompanyForSpaceId(home.spaceId);
+      if(co){ d.companyId=co.id; d.companyName=co.name; }
+      changed=true;
+      return;
+    }
+    state.drivers=state.drivers.filter(x=>x!==d);
+    changed=true;
+  });
+  return changed;
+}
 function migrateSpaces(){
   state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
@@ -2255,6 +2275,7 @@ function migrateSpaces(){
     else if(fallbackSpace){ o.spaceId=fallbackSpace; changed=true; }
   });
   if(ensureFleetPerSpaces()) changed=true;
+  if(migratePurgeCrossTenantGhostDrivers()) changed=true;
   return changed;
 }
 function isValidInn(inn){
