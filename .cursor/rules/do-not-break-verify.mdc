@@ -29,6 +29,7 @@ alwaysApply: true
 | API / sync | `curl` health + `/armada-api/auth/login` + `/state` |
 | Деплой | `APP_BUILD` на проде совпадает с коммитом |
 | UI-кнопка / форма | Реальный клик/ввод (Playwright/puppeteer или ручной сценарий), **не** «по коду должно работать» |
+| Данные / справочники / роли | `curl …/armada-api/state` → id, spaceId, roles; цикл сохранить→список→выход→re-login (см. `investigate-before-fix.mdc`) |
 
 Скрипты: `scripts/verify-admin-list-prod.sh`, `scripts/verify-prod-web-sync.sh`, smoke из `deploy-fvds.sh`.
 
