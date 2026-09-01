@@ -208,7 +208,7 @@ function adminDocsLettersPanelHtml() {
   const editHint = typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
     ? 'Текст писем операторам редактирует супер-админ. Исходящий № и дата проставляются автоматически при печати.'
     : 'Просмотр и печать. Редактирование — только супер-админ.';
-  return `<p class="cat-panel-hint">${editHint} <strong>Печать</strong> — бланк для подписи от руки. <strong>PDF</strong> — с печатью и подписью для отправки. Исходящие номера сквозные: Контур — первый, Калуга — второй. Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
+  return `<p class="cat-panel-hint">${editHint} <strong>Печать</strong> — бланк для подписи от руки. <strong>PDF</strong> — с печатью и подписью для отправки. Исходящие номера сквозные по порядку шаблонов (заявка → ключи → Калуга). Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
     <div class="adm-doc-card">
       <div><h3>Пустой фирменный бланк</h3><p class="meta">Новое письмо · реквизиты из «Наша фирма»</p></div>
       <div class="adm-doc-actions"><button type="button" class="primary" id="adm-letter-blank">Открыть</button></div>

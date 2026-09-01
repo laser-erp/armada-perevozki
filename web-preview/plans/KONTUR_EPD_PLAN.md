@@ -116,7 +116,7 @@ curl -sS -X POST https://app.armada.sx/armada-api/epd/webhook \
 | Блокер | Кто |
 |--------|-----|
 | SSH на VPS (прописать `.env`) | пароль `FVDS_SSH_PASSWORD` или ключ |
-| Ключ разработчика + boxId | ответ Контура на письмо (`operator-letters.js` → `etrnKontur`) |
+| Ключ разработчика + boxId | ответ Контура на письмо (`operator-letters.js` → `etrnKonturKeys`) |
 | Исходники armada-api в git | опционально, для CI |
 
 ---
