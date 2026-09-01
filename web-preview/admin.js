@@ -98,11 +98,14 @@ function paintAdminOwnerFilters(){
   paintOwnerFiltersBox($('admin-owner-filters'), ()=>{ renderAdmin(); });
 }
 function paintCatalogOwnerFilters(){
-  paintOwnerFiltersBox($('cat-owner-filters'), ()=>{
+  const onPick=()=>{
     catalogActiveCompanyId=null;
     catalogDriverCompanyId=null;
+    if(document.querySelector('#admin-cabinet-settings-screen.show')&&typeof openCabinetSettings==='function') openCabinetSettings(typeof cabinetSettingsView==='string'?cabinetSettingsView:'hub');
     if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
-  });
+  };
+  paintOwnerFiltersBox($('cat-owner-filters'), onPick);
+  paintOwnerFiltersBox($('cabinet-owner-filters'), onPick);
 }
 function fillAdminLoginSelect(){
   migrateAdmins();
@@ -360,7 +363,7 @@ function syncAdminNav(){
 function setAdminNav(nav){
   if(!currentAdmin && !canAutoRestoreAdmin()){ show('admin-pin'); return; }
   closeAdminSidebar();
-  if(nav==='catalogs'){ openCatalogs(); return; }
+  if(nav==='settings'||nav==='catalogs'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
   if(nav==='plans'){ openAdminPlans(); return; }
@@ -2828,7 +2831,7 @@ function renderAdmin(){
     return;
   }
   if(!orders.length){
-    const checklist=(!isSuperAdmin()&&typeof pilotSetupChecklistHtml==='function')?pilotSetupChecklistHtml():'';
+    const checklist='';
     const emptyHint=isSuperAdmin()
       ? 'Пока нет заявок. Нажмите + Заказ'
       : 'Пока нет заявок. Пройдите чеклист ниже и нажмите + Заказ';
@@ -4083,6 +4086,9 @@ function flashCatOk(msg){
 }
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
+  if(typeof markCabinetSettingsNavOn==='function') markCabinetSettingsNavOn();
+  const catTitle=$('cat-title');
+  if(catTitle) catTitle.textContent=cabinetSettingsFromHub?'Свой автопарк':'Справочники';
   paintCatalogOwnerFilters();
   if(catalogActiveCompanyId){
     const hit=findCompanyById(catalogActiveCompanyId);
@@ -4314,7 +4320,10 @@ function openCatalogs(){
       });
     };
   }
-  $('cat-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  $('cat-back').onclick=()=>{
+    if(cabinetSettingsFromHub&&typeof cabinetSettingsBackFromCatalogs==='function'){ cabinetSettingsBackFromCatalogs(); return; }
+    show('admin'); renderAdmin();
+  };
 
     const openEditor=(company)=>{
     showCatalogTab('companies');
@@ -4335,7 +4344,7 @@ function openCatalogs(){
         loadingAddresses:[], unloadingAddresses:[], vehicles:[], drivers:[],
         spaceId:typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId(), inn:'', ogrn:'', kpp:'', address:''
       }, company, { name:String(company.name||'').trim() });
-    })():{id:uuid(),name:'',roles:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId(),inn:'',ogrn:'',kpp:'',address:''};
+    })():{id:uuid(),name:'',roles:(typeof cabinetSettingsPartnerRole==='string'&&cabinetSettingsPartnerRole)?[cabinetSettingsPartnerRole]:['customer'],note:'',phones:[],contacts:[],loadingAddresses:[],unloadingAddresses:[],vehicles:[],drivers:[],spaceId:typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId(),inn:'',ogrn:'',kpp:'',address:''};
     const box=$('co-editor');
     box.classList.add('show');
     try{ box.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(_){}
@@ -4412,14 +4421,7 @@ function openCatalogs(){
         <p class="hint">Ссылка для этого заказчика: <a href="${esc(customerPortalPageUrl({companyId:c.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({companyId:c.id}))}</a></p>
         <p class="hint">Заявки идут на биржу с проверкой минимальной цены.</p>
         <h4>Рамочный договор</h4>
-        ${(()=>{
-          const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(c):'none';
-          const fcLbl=typeof customerFrameworkContractLabel==='function'?customerFrameworkContractLabel(fcSt):'—';
-          const fc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(c.frameworkContract):{};
-          const signedAt=fc.signedAt?` · ${dateTime(fc.signedAt)}`:'' ;
-          return `<p class="hint">Статус: <strong>${esc(fcLbl)}</strong>${signedAt}${fc.signedBy?` · ${esc(fc.signedBy)}`:''}</p>
-        <label class="check"><input type="checkbox" id="co-contract-signed" ${fcSt==='signed'?'checked':''}/> Договор подписан (вручную / через портал)</label>`;
-        })()}
+        <div id="co-framework-contract">${typeof frameworkContractPanelHtml==='function'?frameworkContractPanelHtml(c):''}</div>
         <h4>Адреса заказчика</h4>
         <label>Загрузки (каждый с новой строки)</label>
         <textarea id="co-loads" rows="3">${esc((c.loadingAddresses||[]).join('\n'))}</textarea>
@@ -4538,6 +4540,7 @@ function openCatalogs(){
       document.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{ drivers.splice(+b.dataset.ddel,1); paintDrivers(); });
     };
     paintContacts(); paintOwnDrivers(); paintOwnVehicles(); paintVehicles(); paintDrivers();
+    if(isCust&&typeof wireFrameworkContractPanel==='function') wireFrameworkContractPanel(c, box);
     const syncRoleVisibility=()=>{
       $('co-customer-fields').style.display=$('co-role-c').checked?'block':'none';
       $('co-carrier-fields').style.display=$('co-role-r').checked?'block':'none';
@@ -4631,14 +4634,10 @@ function openCatalogs(){
       const loads=uniqAddrs((($('co-loads')||{}).value||'').split(/\n/));
       const unloads=uniqAddrs((($('co-unloads')||{}).value||'').split(/\n/));
       const innRaw=String((($('co-inn')||{}).value||'')).replace(/\D/g,'');
-      const contractSigned=roles.includes('customer')&&!!($('co-contract-signed')&&$('co-contract-signed').checked);
-      const prevFc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(c.frameworkContract):{status:'none'};
-      const frameworkContract=contractSigned?{
-        ...prevFc,
-        status:'signed',
-        signedAt:prevFc.signedAt||new Date().toISOString(),
-        signedBy:prevFc.signedBy||name
-      }:prevFc;
+      const liveCo=findCompanyById(c.id);
+      const contractSigned=roles.includes('customer')&&liveCo&&typeof customerFrameworkContractSigned==='function'?customerFrameworkContractSigned(liveCo):false;
+      const prevFc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(liveCo&&liveCo.frameworkContract||c.frameworkContract):{status:'none'};
+      const frameworkContract=prevFc;
       if(roles.includes('customer') && $('co-portal-enabled')&&$('co-portal-enabled').checked){
         const pp=(($('co-portal-pin')||{}).value||'').trim();
         if(pp.length<4){ alert('Для портала заказчика PIN от 4 цифр'); return; }
@@ -4682,14 +4681,22 @@ function openCatalogs(){
         persist();
       }
       if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent=prevLabel||'Сохранить'; }
-      openCatalogs();
+      if(typeof cabinetSettingsPartnerRole==='string'){
+        const pr=cabinetSettingsPartnerRole;
+        cabinetSettingsPartnerRole=null;
+        cabinetSettingsFromHub=true;
+        if(typeof openCabinetSettings==='function') openCabinetSettings(pr==='customer'?'partners-customers':'partners-carriers');
+        else openCatalogs();
+      } else {
+        openCatalogs();
+      }
       if(saveResult.ok){
         flashCatOk('Сохранено');
       } else {
         flashCatOk(saveResult.offline?'Сохранено локально — нет связи с сервером':'Сохранено локально — не синхронизировано с сервером', true);
       }
       const saved=findCompanyById(savedId);
-      if(saved) openEditor(saved);
+      if(saved&&!cabinetSettingsFromHub) openEditor(saved);
     };
   };
 

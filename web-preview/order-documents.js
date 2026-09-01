@@ -598,14 +598,134 @@ function normalizeFrameworkContract(raw){
   const fc=raw&&typeof raw==='object'?raw:{};
   let status=fc.status||'none';
   if(raw===true || fc.signed===true) status='signed';
-  if(status!=='none'&&status!=='pending'&&status!=='signed') status='none';
+  if(status!=='none'&&status!=='pending'&&status!=='pending_sign'&&status!=='signed') status='none';
+  const signMethod=fc.signMethod==='paper'||fc.signMethod==='edo'?fc.signMethod:null;
   return {
     status,
     carrierId:fc.carrierId||null,
     carrierName:String(fc.carrierName||'').trim(),
     sentAt:fc.sentAt||null,
     signedAt:fc.signedAt||null,
-    signedBy:String(fc.signedBy||'').trim()
+    signedBy:String(fc.signedBy||'').trim(),
+    signMethod,
+    documentGeneratedAt:fc.documentGeneratedAt||null,
+    ourSignedAt:fc.ourSignedAt||null,
+    ourSignedBy:String(fc.ourSignedBy||'').trim(),
+    partnerSignedAt:fc.partnerSignedAt||null,
+    partnerSignedBy:String(fc.partnerSignedBy||'').trim(),
+    edoOperator:fc.edoOperator||null
+  };
+}
+function syncFrameworkContractSignedState(fc){
+  const n=normalizeFrameworkContract(fc);
+  if(n.ourSignedAt&&n.partnerSignedAt){
+    n.status='signed';
+    n.signMethod=n.signMethod||'paper';
+    n.signedAt=n.signedAt||n.partnerSignedAt||n.ourSignedAt;
+    n.signedBy=[n.ourSignedBy,n.partnerSignedBy].filter(Boolean).join(' / ');
+  } else if(n.ourSignedAt||n.partnerSignedAt){
+    n.status='pending_sign';
+  }
+  return n;
+}
+function frameworkContractStatusLabel(co){
+  const st=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(co):'none';
+  const fc=normalizeFrameworkContract(co&&co.frameworkContract);
+  if(st==='signed'){
+    return fc.signMethod==='edo'?'Подписан (ЭДО)':fc.signMethod==='paper'?'Подписан (бумага)':'Подписан';
+  }
+  if(fc.ourSignedAt&&!fc.partnerSignedAt) return 'Ожидает подписи заказчика';
+  if(!fc.ourSignedAt&&fc.partnerSignedAt) return 'Ожидает нашей подписи';
+  if(fc.status==='pending'||fc.status==='pending_sign') return 'PDF готов · ожидает подписи';
+  if(fc.documentGeneratedAt) return 'PDF сформирован';
+  return 'Не оформлен';
+}
+function markFrameworkContractPaperSigned(customerCo, side, signedByName){
+  if(!customerCo) return null;
+  const carrier=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  let fc=normalizeFrameworkContract(customerCo.frameworkContract);
+  if(!fc.carrierId&&carrier) fc.carrierId=carrier.id;
+  if(!fc.carrierName&&carrier) fc.carrierName=carrier.name||'';
+  fc.documentGeneratedAt=fc.documentGeneratedAt||new Date().toISOString();
+  const who=String(signedByName||'').trim()||(typeof currentAdmin!=='undefined'&&currentAdmin&&currentAdmin.name)||'';
+  const at=new Date().toISOString();
+  if(side==='partner'||side==='customer'){
+    fc.partnerSignedAt=at;
+    fc.partnerSignedBy=who;
+  } else {
+    fc.ourSignedAt=at;
+    fc.ourSignedBy=who;
+  }
+  fc=syncFrameworkContractSignedState(fc);
+  if(fc.status==='signed') fc.signMethod=fc.signMethod||'paper';
+  customerCo.frameworkContract=fc;
+  customerCo.contractSigned=fc.status==='signed';
+  upsertCompany(customerCo);
+  bumpDataEpoch('framework-contract-paper');
+  if(typeof persist==='function') persist();
+  return customerCo;
+}
+function frameworkContractPanelHtml(customerCo){
+  if(!customerCo) return '';
+  const fc=normalizeFrameworkContract(customerCo.frameworkContract);
+  const lbl=frameworkContractStatusLabel(customerCo);
+  const lines=[
+    fc.documentGeneratedAt?`PDF: ${typeof dateTime==='function'?dateTime(fc.documentGeneratedAt):fc.documentGeneratedAt}`:null,
+    fc.ourSignedAt?`Мы: ${typeof dateTime==='function'?dateTime(fc.ourSignedAt):fc.ourSignedAt}${fc.ourSignedBy?` · ${fc.ourSignedBy}`:''}`:null,
+    fc.partnerSignedAt?`Заказчик: ${typeof dateTime==='function'?dateTime(fc.partnerSignedAt):fc.partnerSignedAt}${fc.partnerSignedBy?` · ${fc.partnerSignedBy}`:''}`:null
+  ].filter(Boolean).join('<br>');
+  const edoReady=!!(state.settings&&state.settings.epdOperator);
+  return `<p class="hint">Статус: <strong>${esc(lbl)}</strong></p>
+    ${lines?`<p class="hint">${lines}</p>`:''}
+    <p class="hint">PDF → печать → подпись с печатью. ЭДО — когда оператор подключён.</p>
+    <div class="framework-contract-actions">
+      <button type="button" class="secondary" data-fw-pdf="${esc(customerCo.id)}">PDF договора</button>
+      <button type="button" class="secondary" data-fw-print="${esc(customerCo.id)}">Печать</button>
+      <button type="button" class="secondary" data-fw-our-sign="${esc(customerCo.id)}" ${fc.ourSignedAt?'disabled':''}>Мы подписали (бумага)</button>
+      <button type="button" class="secondary" data-fw-partner-sign="${esc(customerCo.id)}" ${fc.partnerSignedAt?'disabled':''}>Заказчик подписал</button>
+      <button type="button" class="secondary" data-fw-edo="${esc(customerCo.id)}" ${edoReady?'':'disabled'} title="${edoReady?'':'Подключите оператора ЭДО'}">Через ЭДО</button>
+    </div>`;
+}
+function wireFrameworkContractPanel(customerCo, root){
+  const box=root||document;
+  if(!customerCo||!customerCo.id) return;
+  const carrier=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  const coId=customerCo.id;
+  const refresh=()=>{
+    const host=$('co-framework-contract');
+    const fresh=findCompanyById(coId)||customerCo;
+    if(host&&typeof frameworkContractPanelHtml==='function') host.innerHTML=frameworkContractPanelHtml(fresh);
+    wireFrameworkContractPanel(fresh, root);
+  };
+  const pdfBtn=box.querySelector(`[data-fw-pdf="${coId}"]`);
+  if(pdfBtn) pdfBtn.onclick=()=>{
+    const co=findCompanyById(coId);
+    if(!co) return;
+    let fc=normalizeFrameworkContract(co.frameworkContract);
+    fc.documentGeneratedAt=new Date().toISOString();
+    if(carrier){ fc.carrierId=carrier.id; fc.carrierName=carrier.name||''; }
+    co.frameworkContract=fc;
+    upsertCompany(co);
+    if(typeof persist==='function') persist();
+    openFrameworkContractPrint(co, carrier);
+    refresh();
+  };
+  const prBtn=box.querySelector(`[data-fw-print="${coId}"]`);
+  if(prBtn) prBtn.onclick=()=>{ const co=findCompanyById(coId); if(co) openFrameworkContractPrint(co, carrier); };
+  const ourBtn=box.querySelector(`[data-fw-our-sign="${coId}"]`);
+  if(ourBtn) ourBtn.onclick=()=>{
+    markFrameworkContractPaperSigned(findCompanyById(coId), 'our', typeof currentAdmin!=='undefined'&&currentAdmin&&currentAdmin.name);
+    refresh();
+  };
+  const ptBtn=box.querySelector(`[data-fw-partner-sign="${coId}"]`);
+  if(ptBtn) ptBtn.onclick=()=>{
+    const nm=prompt('ФИО подписанта заказчика (необязательно)')||'';
+    markFrameworkContractPaperSigned(findCompanyById(coId), 'partner', nm);
+    refresh();
+  };
+  const edoBtn=box.querySelector(`[data-fw-edo="${coId}"]`);
+  if(edoBtn) edoBtn.onclick=()=>{
+    alert('Подписание рамочного договора через ЭДО — в следующем обновлении. Пока: PDF и подпись на бумаге с печатью.');
   };
 }
 function customerFrameworkContractSigned(co){
@@ -617,7 +737,7 @@ function customerFrameworkContractSigned(co){
 function customerFrameworkContractStatus(co){
   if(customerFrameworkContractSigned(co)) return 'signed';
   const fc=normalizeFrameworkContract(co&&co.frameworkContract);
-  if(fc.status==='pending') return 'pending';
+  if(fc.status==='pending'||fc.status==='pending_sign') return 'pending';
   return 'none';
 }
 function customerFrameworkContractLabel(st){
@@ -695,8 +815,8 @@ function buildFrameworkContractBody(customerCo, carrierCo){
     <h2>6. Срок</h2>
     <p>Договор действует с даты подписания до расторжения любой из сторон с уведомлением за 30 календарных дней.</p>
     <div class="sign">
-      <div>Заказчик _______________ / _______________</div>
-      <div>Перевозчик _______________ / _______________</div>
+      <div>Заказчик _______________ / _______________ <span class="muted">(печать)</span></div>
+      <div>Перевозчик _______________ / _______________ <span class="muted">(печать)</span></div>
     </div>`;
 }
 function openFrameworkContractPrint(customerCo, carrierCo){

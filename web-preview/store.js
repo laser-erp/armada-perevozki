@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-unified-company-card4317";
+const APP_BUILD="2026-09-01-cabinet-settings4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',

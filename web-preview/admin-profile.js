@@ -267,6 +267,14 @@ function openAdminProfile() {
   });
   renderAdminProfile();
   const back = $('profile-back');
-  if (back) back.onclick = () => { show('admin'); renderAdmin(); };
+  if (back) back.onclick = () => {
+    if (typeof cabinetSettingsOpenProfile !== 'undefined' && cabinetSettingsOpenProfile) {
+      cabinetSettingsOpenProfile = false;
+      if (typeof openCabinetSettings === 'function') openCabinetSettings('staff');
+      return;
+    }
+    show('admin');
+    renderAdmin();
+  };
   show('admin-profile-screen');
 }
