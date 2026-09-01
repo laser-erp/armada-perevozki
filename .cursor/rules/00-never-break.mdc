@@ -37,4 +37,4 @@ priority: 1000
 | Деплой | `APP_BUILD` на проде = коммит |
 | UI | Puppeteer или реальный клик |
 
-Подробнее: `.cursor/rules/do-not-break-verify.mdc` · `AGENTS.md`
+Подробнее: `.cursor/rules/do-not-break-verify.mdc` · `.cursor/rules/investigate-before-fix.mdc` · `AGENTS.md`
