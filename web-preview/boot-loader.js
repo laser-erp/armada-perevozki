@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-01-single-boot4317';
+  var APP_BUILD = '2026-09-01-legal4317';
 
   window.__armadaBootDone = false;
 
@@ -91,14 +91,25 @@
   function finishBoot() {
     window.__armadaBootDone = true;
     var early = dedicatedScreenId();
-    if (!early) return;
-    showScreenEarly(early);
-    if (early === 'admin-pin' && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
-    if (early === 'admin-pin') {
-      var loginBtn = document.getElementById('pin-ok');
-      if (loginBtn) loginBtn.disabled = false;
+    if (early) {
+      showScreenEarly(early);
+      if (early === 'admin-pin' && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
+      if (early === 'admin-pin') {
+        var loginBtn = document.getElementById('pin-ok');
+        if (loginBtn) loginBtn.disabled = false;
+      }
+      if (typeof openDedicatedEntryScreen === 'function') openDedicatedEntryScreen();
+      return;
     }
-    if (typeof openDedicatedEntryScreen === 'function') openDedicatedEntryScreen();
+    setTimeout(function () {
+      var sp = document.getElementById('splash');
+      if (!sp || !sp.classList.contains('show') || window.__armadaSplashDone) return;
+      if (typeof finishSplashOnce === 'function' && typeof showRoleHub === 'function') {
+        finishSplashOnce(showRoleHub);
+      } else if (typeof show === 'function') {
+        show('roles');
+      }
+    }, 6000);
   }
 
   var chain = Promise.resolve();

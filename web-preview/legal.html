@@ -2,68 +2,146 @@
 <html lang="ru" class="doc-page">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>АРМАДА — правовая информация</title>
-  <link rel="stylesheet" href="styles.css?v=2026-08-31-help-scroll4317b" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Публичная оферта — АРМАДА</title>
+  <meta name="theme-color" content="#EF4444" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2026-09-01-legal4317" />
   <style>
-    body { background:#f0f4f8; padding:16px; font-family:Inter,system-ui,sans-serif; }
-    .legal-wrap { max-width:720px; margin:0 auto; background:#fff; padding:20px 24px; border-radius:12px; }
-    .legal-wrap h1 { font-size:1.25rem; }
-    .legal-wrap h2 { font-size:1rem; margin:18px 0 8px; color:#1e5aa8; }
-    .legal-wrap a.doc { display:block; padding:10px 12px; margin:6px 0; background:#f5f8fc; border-radius:8px; text-decoration:none; color:#1a2332; border:1px solid #d8dee8; }
-    .legal-wrap a.doc:hover { background:#e8f1fb; }
-    .legal-wrap .pdf { font-size:.8rem; color:#5c6573; }
-    .muted { font-size:.85rem; color:#666; }
-    .start-here { background:#e8f1fb; border:1px solid #1e5aa8; padding:12px; border-radius:8px; margin:12px 0; }
+    body{background:var(--bg0);padding:16px;max-width:760px;margin:0 auto;font-family:Inter,system-ui,sans-serif}
+    .legal-wrap{padding-bottom:40px}
+    .legal-back{display:inline-block;margin-bottom:16px;color:var(--accent);font-weight:600;text-decoration:none;font-size:.9rem}
+    .legal-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #1e5aa8}
+    .legal-head img{width:56px;height:56px;border-radius:10px}
+    .legal-head h1{margin:0;font-size:1.2rem;line-height:1.3}
+    .legal-req{font-size:.78rem;color:var(--muted);margin:6px 0 0;line-height:1.45}
+    .legal-meta{font-size:.82rem;color:var(--muted);margin:0 0 20px}
+    .legal-body{font-size:.9rem;line-height:1.55;color:var(--text)}
+    .legal-body h2{font-size:1rem;margin:28px 0 10px;color:#1e5aa8}
+    .legal-body h3{font-size:.92rem;margin:18px 0 8px}
+    .legal-body p{margin:0 0 10px;text-align:justify}
+    .legal-body p.no-indent{text-align:left}
+    .legal-body ul,.legal-body ol{margin:8px 0 12px;padding-left:1.35rem}
+    .legal-body li{margin-bottom:6px}
+    .legal-body table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.85rem}
+    .legal-body th,.legal-body td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+    .legal-body th{background:#f5f8fc;font-weight:600}
+    .legal-note{padding:10px 12px;border-radius:8px;background:rgba(30,90,168,.08);border:1px solid rgba(30,90,168,.25);font-size:.85rem;margin:16px 0}
+    .legal-foot{margin-top:28px;padding-top:12px;border-top:1px solid var(--border);font-size:.82rem;color:var(--muted)}
+    .legal-nav{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 24px}
+    .legal-nav a{padding:8px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);text-decoration:none;color:var(--text);font-size:.82rem;font-weight:600}
   </style>
 </head>
 <body class="doc-page">
-  <div class="legal-wrap">
-    <p><a href="driver.html">← Вход водителя</a></p>
-    <h1>Правовая информация</h1>
-    <p class="muted">Проект для юриста · 24.08.2026. Перед подписанием заполнить [___] в PDF.</p>
+  <a class="legal-back" href="/">← На главную</a>
+  <article class="legal-wrap">
+    <header class="legal-head">
+      <img src="logo.png" alt="АРМАДА" width="56" height="56" />
+      <div>
+        <h1>Публичная оферта на оказание услуг по предоставлению доступа к сервису «АРМАДА»</h1>
+        <p class="legal-req">ООО «АРМАДА» · ИНН 7802655283 · КПП 781001001 · ОГРН 1187847037608<br />
+          196006, г. Санкт-Петербург, ул. Цветочная, д. 6, литера Ж, этаж 3, помещ. 1Н<br />
+          hello@armada.sx · app.armada.sx</p>
+      </div>
+    </header>
 
-    <div class="start-here">
-      <strong>С чего начать:</strong> откройте один файл —
-      <a href="legal-pdf/ARMADA_Legal_Package_Full.pdf"><strong>полный пакет PDF</strong></a>
-      (все 7 документов). Или по отдельности ниже.
+    <p class="legal-meta">Редакция от 01.09.2026 · действует для пользователей сервиса на app.armada.sx</p>
+
+    <nav class="legal-nav" aria-label="Разделы">
+      <a href="#offer">Оферта</a>
+      <a href="#privacy">Политика ПДн</a>
+      <a href="#tariffs">Тарифы</a>
+    </nav>
+
+    <div class="legal-body" id="offer">
+      <p class="no-indent">Настоящий документ является официальным предложением Общества с ограниченной ответственностью «АРМАДА» (далее — <strong>Исполнитель</strong>) заключить договор на условиях, изложенных ниже, с любым дееспособным лицом или организацией (далее — <strong>Заказчик</strong>), принявшим условия оферты.</p>
+
+      <h2>1. Термины</h2>
+      <p><strong>Сервис «АРМАДА»</strong> — программный комплекс для учёта грузовых перевозок, размещённый по адресу https://app.armada.sx, включающий кабинет перевозчика (логиста), приложение водителя, портал заказчика и связанные функции (учёт заявок, парка, смен, документов, биржа между перевозчиками, модуль ЭТрН при подключении оператора ЭПД).</p>
+      <p><strong>Аккаунт (space)</strong> — изолированная область данных Заказчика в Сервисе (организация-перевозчик или экспедитор).</p>
+      <p><strong>Тариф</strong> — опубликованный на сайте или в Сервисе набор функций, лимитов и стоимости подписки.</p>
+
+      <h2>2. Предмет договора</h2>
+      <p>2.1. Исполнитель предоставляет Заказчику неисключительное право доступа к Сервису в объёме выбранного Тарифа, а Заказчик обязуется соблюдать условия оферты и оплачивать услуги при переходе на платный период.</p>
+      <p>2.2. Исполнитель оказывает услуги дистанционно через сеть «Интернет». Установка отдельного программного обеспечения на устройства Заказчика не требуется (доступ через браузер).</p>
+      <p>2.3. Сервис не заменяет договор перевозки между Заказчиком и его клиентами. Документы по конкретным перевозкам (заявки, счета, акты, ЭТrН) формируются в рамках отношений Заказчика с контрагентами; Исполнитель предоставляет инструменты для их подготовки и хранения.</p>
+
+      <h2>3. Акцепт оферты</h2>
+      <p>3.1. Акцептом оферты считается любое из действий: регистрация и первый вход в Сервис; оплата подписки; фактическое использование функций Сервиса после получения доступа; нажатие «Согласен» при подключении пилота.</p>
+      <p>3.2. С момента акцепта договор считается заключённым на условиях настоящей оферты.</p>
+
+      <h2 id="tariffs">4. Тарифы и оплата</h2>
+      <p>4.1. Актуальные тарифы (ориентиры на дату редакции):</p>
+      <table>
+        <thead><tr><th>Тариф</th><th>Цена</th><th>Назначение</th></tr></thead>
+        <tbody>
+          <tr><td>Старт</td><td>2 990 ₽/мес</td><td>Малый парк, портал заказчика, без биржи и ЭТрН</td></tr>
+          <tr><td>Бизнес</td><td>7 990 ₽/мес</td><td>Биржа, ЭТrН в Сервисе, расширенные лимиты</td></tr>
+          <tr><td>Профи</td><td>14 990 ₽/мес</td><td>Крупнее парк и команда</td></tr>
+          <tr><td>Корпорат</td><td>от 25 000 ₽/мес</td><td>Индивидуальные лимиты</td></tr>
+          <tr><td>Биржа Lite</td><td>1 990 ₽/мес</td><td>Только биржа между перевозчиками</td></tr>
+        </tbody>
+      </table>
+      <p>4.2. Пилотный период — 30 календарных дней с момента подключения, если иное не согласовано письменно. По окончании пилота доступ к функциям записи может быть ограничен до оплаты.</p>
+      <p>4.3. Комиссия за сделки через биржу Сервиса — от 3% до 5% от суммы заказа (минимум 500 ₽, максимум 15 000 ₽ за сделку), если применимо к тарифу. Подробности — в дополнении «Комиссия биржи» по запросу.</p>
+      <p>4.4. Услуги оператора электронных перевозочных документов (Контур, СБИС и др.), квалифицированная электронная подпись и тарификация документов у оператора оплачиваются Заказчиком оператору напрямую, если иное не предусмотрено отдельным договором.</p>
+      <p>4.5. Оплата подписки Сервиса производится по счёту Исполнителя или иным способом, указанным в личном кабинете / счёте. Доступ предоставляется после поступления оплаты, если не действует пилот или иная договорённость.</p>
+
+      <h2>5. Права и обязанности сторон</h2>
+      <p>5.1. Исполнитель обязуется обеспечивать работоспособность Сервиса в разумных пределах, за исключением профилактики и обстоятельств непреодолимой силы.</p>
+      <p>5.2. Заказчик обязуется: предоставлять достоверные данные; не нарушать законодательство РФ; не передавать учётные данные третьим лицам; обеспечивать законность обработки персональных данных своих сотрудников, водителей и заказчиков при использовании Сервиса.</p>
+      <p>5.3. Заказчик несёт ответственность за содержание введённых в Сервис данных (заявки, ставки, реквизиты контрагентов).</p>
+
+      <h2>6. Персональные данные</h2>
+      <p>6.1. Обработка персональных данных пользователей Сервиса осуществляется в соответствии с <a href="#privacy">Политикой конфиденциальности</a> и законодательством РФ (152-ФЗ).</p>
+      <p>6.2. Заказчик, загружая данные своих контрагентов, подтверждает наличие правовых оснований для их передачи Исполнителю как оператору по поручению либо самостоятельному оператору — в зависимости от роли данных.</p>
+
+      <h2>7. Интеллектуальная собственность</h2>
+      <p>Исключительные права на Сервис, дизайн, программный код и товарный знак «АРМАДА» принадлежат Исполнителю. Заказчику предоставляется ограниченное право использования на срок действия договора.</p>
+
+      <h2>8. Ограничение ответственности</h2>
+      <p>8.1. Сервис предоставляется «как есть». Исполнитель не отвечает за упущенную выгоду, простой транспорта Заказчика, ошибки в данных, введённых Заказчиком или его пользователями.</p>
+      <p>8.2. Совокупная ответственность Исполнителя по договору ограничена суммой, фактически уплаченной Заказчиком за последние 3 месяца пользования Сервисом, если иное не установлено императивными нормами закона.</p>
+
+      <h2>9. Срок и расторжение</h2>
+      <p>9.1. Договор действует с момента акцепта до прекращения доступа.</p>
+      <p>9.2. Заказчик может прекратить использование и запросить удаление аккаунта, направив обращение на hello@armada.sx.</p>
+      <p>9.3. Исполнитель вправе приостановить доступ при нарушении оферты, неоплате или по требованию уполномоченных органов.</p>
+
+      <h2>10. Заключительные положения</h2>
+      <p>10.1. Исполнитель вправе изменять оферту, публикуя новую редакцию на данной странице. Продолжение использования Сервиса после публикации означает согласие с изменениями.</p>
+      <p>10.2. Применимое право — законодательство Российской Федерации. Споры подлежат рассмотрению в суде по месту нахождения Исполнителя после претензионного порядка (срок ответа на претензию — 30 календарных дней).</p>
+      <p>10.3. Реквизиты Исполнителя: ООО «АРМАДА», ИНН 7802655283, КПП 781001001, ОГРН 1187847037608, e-mail: hello@armada.sx.</p>
     </div>
 
-    <h2>Коммерческое предложение (не юридический договор)</h2>
-    <a class="doc" href="legal-pdf/ARMADA_Commercial_Proposal.pdf" target="_blank" rel="noopener">
-      <strong>КП для рассылки партнёрам</strong>
-    </a>
+    <div class="legal-body" id="privacy">
+      <h2>Политика конфиденциальности (152-ФЗ)</h2>
+      <p class="no-indent">Оператор персональных данных: ООО «АРМАДА» (реквизиты указаны выше).</p>
+      <h3>Какие данные обрабатываем</h3>
+      <ul>
+        <li>Данные учётной записи: ФИО, телефон, PIN, ИНН организации, должность.</li>
+        <li>Данные перевозок: адреса, контакты, описание груза, ставки, одометры, фото документов.</li>
+        <li>Технические данные: IP, cookies, localStorage, журнал действий в Сервисе.</li>
+      </ul>
+      <h3>Цели</h3>
+      <p>Предоставление Сервиса, учёт заявок и смен, связь с пользователями, исполнение договора, улучшение работы платформы, соблюдение требований закона.</p>
+      <h3>Хранение и защита</h3>
+      <p>Данные хранятся на серверах в РФ (VPS). Применяются организационные и технические меры защиты (HTTPS, разграничение доступа, резервное копирование).</p>
+      <h3>Права субъекта</h3>
+      <p>Вы вправе запросить уточнение, блокирование или удаление данных, направив запрос на hello@armada.sx с указанием организации и контакта.</p>
+      <h3>Cookies и localStorage</h3>
+      <p>Сервис использует localStorage и sessionStorage для входа, черновиков заявок и настроек. Продолжая пользоваться сайтом, вы соглашаетесь с таким использованием.</p>
+    </div>
 
-    <h2>Юридический пакет (PDF)</h2>
-    <a class="doc" href="legal-pdf/ARMADA_Legal_Package_Full.pdf" target="_blank" rel="noopener">
-      <strong>Полный пакет — откройте этот</strong>
-      <span class="pdf">ARMADA_Legal_Package_Full.pdf</span>
-    </a>
-    <a class="doc" href="legal-pdf/01-public-offer.pdf" target="_blank" rel="noopener">
-      <strong>01. Публичная оферта SaaS</strong> — главный договор с клиентом
-    </a>
-    <a class="doc" href="legal-pdf/02-privacy-policy.pdf" target="_blank" rel="noopener">
-      <strong>02. Политика ПДн (152-ФЗ)</strong> — для юриста и сайта
-    </a>
-    <a class="doc" href="legal-pdf/03-pd-consent.pdf" target="_blank" rel="noopener">
-      <strong>03. Согласие на ПДн</strong> — форма для портала заказчика
-    </a>
-    <a class="doc" href="legal-pdf/04-cookie-notice.pdf" target="_blank" rel="noopener">
-      <strong>04. Cookies / localStorage</strong>
-    </a>
-    <a class="doc" href="legal-pdf/05-exchange-agency.pdf" target="_blank" rel="noopener">
-      <strong>05. Комиссия биржи</strong> — дополнение к оферте
-    </a>
-    <a class="doc" href="legal-pdf/06-pilot-agreement.pdf" target="_blank" rel="noopener">
-      <strong>06. Соглашение о пилоте</strong> — шаблон для партнёра
-    </a>
-    <a class="doc" href="legal-pdf/07-pd-processing-order.pdf" target="_blank" rel="noopener">
-      <strong>07. Поручение на обработку ПДн</strong> — SaaS / 152-ФЗ
-    </a>
+    <div class="legal-note">
+      Оферта SaaS — договор с платформой «АРМАДА». Договоры перевозки между перевозчиком и его заказчиками оформляются отдельно в Сервисе или на бумаге.
+    </div>
 
-    <h2>Кратко</h2>
-    <p>Оферта SaaS ≠ договор экспедиции с клиентами перевозчика.</p>
-    <p class="muted" style="margin-top:20px">Контакт: <a href="mailto:hello@armada.sx">hello@armada.sx</a> · <a href="mailto:support@armada.sx">support@armada.sx</a></p>
-  </div>
+    <footer class="legal-foot">
+      <p><a href="/">app.armada.sx</a> · <a href="help.html">Помощь</a> · <a href="mailto:hello@armada.sx">hello@armada.sx</a> · <a href="mailto:support@armada.sx">support@armada.sx</a></p>
+    </footer>
+  </article>
 </body>
 </html>
