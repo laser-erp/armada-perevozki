@@ -2192,6 +2192,8 @@ function syncCustomerOrderModeUi(){
     btn.setAttribute('aria-selected', on?'true':'false');
   });
   if(formPanel) formPanel.hidden=mode==='chat';
+  const checklist=$('cust-form-checklist');
+  if(checklist) checklist.hidden=mode==='chat';
   const vtypeSearchWrap=$('cust-vtype-search-wrap');
   if(vtypeSearchWrap) vtypeSearchWrap.hidden=mode==='chat';
   const portal=$('customer-portal');
@@ -2822,15 +2824,15 @@ function customerChatBotPrompt(stepId){
     return 'Здравствуйте! Оформим заявку. <strong>Что перевозим?</strong> Напишите ниже, например: <strong>Паллеты, 3 т</strong>. Можно несколько грузов.';
   }
   if(stepId==='when'){
-    if(who) return `${who}<strong>когда подать машину?</strong>`;
-    return '<strong>Когда подать машину?</strong>';
+    if(who) return `${who}<strong>когда подать машину?</strong> Нажмите «Завтра» или напишите дату внизу.`;
+    return '<strong>Когда подать машину?</strong> Нажмите «Завтра» или напишите дату внизу.';
   }
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Введите адрес внизу или выберите из недавних.';
   if(stepId==='unload') return '<strong>Куда везём?</strong> Введите адрес внизу или выберите из недавних.';
   if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — введите внизу или выберите из недавних.';
   if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> Грузоотправитель подписывает ЭТрН (T1) на погрузке. Заказчик перевозки может быть другим.';
   if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Введите внизу, выберите из недавних или «пропустить».';
-  if(stepId==='body') return '<strong>Какой кузов вам нужен?</strong> Начните писать — подскажу.';
+  if(stepId==='body') return '<strong>Какой кузов?</strong> Нажмите тип ниже или напишите внизу: тент, реф…';
   if(stepId==='loadMethod'){
     if(who) return `${who}<strong>как будем грузить?</strong> Выберите подходящие варианты.`;
     return '<strong>Как будем грузить?</strong> Выберите подходящие варианты.';
@@ -3043,28 +3045,14 @@ function customerChatRenderWidgets(){
     customerChatMigrateData(customerChat.data);
     const items=customerChat.data.cargoItems||[];
     if(items.length){
-      widget=`<div class="chat-cargo-tray">
-      <div id="cust-chat-cargo-list-wrap">${customerChatCargoListHtml(items)}</div>
-      <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-cargo-next">Далее → (${items.length})</button></div>
-    </div>`;
+      widget=`<div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-cargo-next">Далее → (${items.length})</button></div>`;
     }
   }else if(step.id==='when'){
-    const pendingWhen=customerChat.data.pendingWhen||'';
     widget=`<div class="chat-chips" id="cust-chat-chips">
-      <button type="button" class="chat-chip muted${pendingWhen==='1'?' is-selected':''}" data-chat-when="1">Завтра</button>
-      <button type="button" class="chat-chip muted${pendingWhen==='2'?' is-selected':''}" data-chat-when="2">Послезавтра</button>
-      <button type="button" class="chat-chip${pendingWhen==='pick'?' is-selected':''}" data-chat-when="pick">Выбрать дату…</button>
+      <button type="button" class="chat-chip muted" data-chat-when="1">Завтра</button>
+      <button type="button" class="chat-chip muted" data-chat-when="2">Послезавтра</button>
     </div>
-    <div class="chat-widget" id="cust-chat-when-pick" hidden>
-      <div class="chat-widget-row">
-        <input id="cust-chat-date" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" aria-label="Дата" />
-        <input id="cust-chat-time" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" aria-label="Время" value="09:00" style="max-width:5.5rem" />
-      </div>
-      <div class="chat-chips" style="padding-left:0;margin-top:8px">
-        <button type="button" class="chat-chip primary" id="cust-chat-when-ok">Готово</button>
-      </div>
-    </div>
-    <div class="chat-chips"><button type="button" class="chat-chip primary" id="cust-chat-when-next"${pendingWhen?'':' disabled'}>Далее →</button></div>`;
+    <p class="chat-tray-hint">Или дата внизу: 29.08.2026, 9:00</p>`;
   }else if(step.id==='load' || step.id==='unload'){
     const kind=step.id==='load'?'load':'unload';
     widget=customerChatHistoryAddrChipsHtml(kind);
@@ -3078,26 +3066,12 @@ function customerChatRenderWidgets(){
     </div>`:''
     }`;
   }else if(step.id==='shipper'){
-    const other=customerChat.data.shipperSameAsCustomer===false;
     widget=`<div class="chat-chips">
-      <button type="button" class="chat-chip primary${!other?' is-selected':''}" id="cust-chat-shipper-yes">Да, я грузоотправитель</button>
-      <button type="button" class="chat-chip muted${other?' is-selected':''}" id="cust-chat-shipper-no">Нет, другой</button>
-    </div>
-    <div class="chat-widget" id="cust-chat-shipper-other"${other?'':' hidden'}>
-      <div class="chat-widget-row">
-        <input id="cust-chat-shipper-name" placeholder="Организация или ФИО" value="${esc(customerChat.data.shipperName||'')}" aria-label="Грузоотправитель" />
-        <input id="cust-chat-shipper-phone" placeholder="+7…" value="${esc(customerChat.data.shipperPhone||'')}" inputmode="tel" aria-label="Телефон" style="max-width:9.5rem" />
-      </div>
-      <div class="chat-chips" style="padding-left:0;margin-top:8px">
-        <button type="button" class="chat-chip primary" id="cust-chat-shipper-ok">Далее →</button>
-      </div>
+      <button type="button" class="chat-chip primary${customerChat.data.shipperSameAsCustomer!==false?' is-selected':''}" id="cust-chat-shipper-yes">Да, я грузоотправитель</button>
+      <button type="button" class="chat-chip muted${customerChat.data.shipperAwaitingOther?' is-selected':''}" id="cust-chat-shipper-no">Нет, другой</button>
     </div>`;
   }else if(step.id==='body'){
-    widget=`<div class="chat-widget chat-vtype-widget">
-      <input type="search" id="cust-chat-vtype-search" placeholder="тент, фургон, реф, трал…" autocomplete="off" aria-label="Поиск типа кузова" enterkeyhint="search" />
-      <div id="cust-chat-vtype-suggest" class="addr-suggest-list chat-vtype-suggest" hidden role="listbox"></div>
-    </div>
-    <p class="chat-vtype-hint">Популярные типы — нажмите или уточните в поиске:</p>
+    widget=`<p class="chat-tray-hint">Популярные типы:</p>
     <div class="chat-chips chat-vtype-chips" id="cust-chat-body-chips">${
       CUST_CHAT_BODY_CHIPS.map(c=>{
         const on=customerChat.data.bodyVtype===c.vtype;
@@ -3106,7 +3080,6 @@ function customerChatRenderWidgets(){
     }</div>
     <div class="chat-chips">
       <button type="button" class="chat-chip muted" data-chat-body="${CUST_CHAT_BODY_FORM_FALLBACK.id}">${esc(CUST_CHAT_BODY_FORM_FALLBACK.label)}</button>
-      <button type="button" class="chat-chip primary" id="cust-chat-body-ok"${customerChat.data.bodyVtype?'':' disabled'}>Далее →</button>
     </div>`;
   }else if(step.id==='loadMethod' || step.id==='unloadMethod'){
     const vtype=customerChat.data.bodyVtype||'tent';
@@ -3142,65 +3115,15 @@ function customerChatRenderWidgets(){
 }
 function customerChatWireWidgets(stepId){
   if(stepId==='when'){
-    const tray=customerChatTrayRoot();
-    const syncWhenChips=mode=>{
-      customerChat.data.pendingWhen=mode;
-      saveCustomerChatState();
-      customerChatPaintSingleChip(tray, 'data-chat-when', mode);
-      const next=$('cust-chat-when-next');
-      if(next) next.disabled=!mode || mode==='pick';
-      const pick=$('cust-chat-when-pick');
-      if(pick) pick.hidden=mode!=='pick';
-    };
     document.querySelectorAll('[data-chat-when]').forEach(btn=>{
       btn.onclick=()=>{
-        const mode=btn.getAttribute('data-chat-when');
-        if(mode==='pick'){
-          syncWhenChips('pick');
-          const de=$('cust-chat-date');
-          if(de) customerChatFocus(de);
-          return;
-        }
-        syncWhenChips(mode);
+        const days=+(btn.getAttribute('data-chat-when')||1)||1;
+        customerChat.data.date=customerChatOffsetDate(days);
+        customerChat.data.time='09:00';
+        delete customerChat.data.pendingWhen;
+        customerChatAdvance(customerChatWhenLabel());
       };
     });
-    const next=$('cust-chat-when-next');
-    if(next) next.onclick=()=>{
-      const mode=customerChat.data.pendingWhen;
-      if(!mode || mode==='pick') return;
-      const days=+mode||1;
-      customerChat.data.date=customerChatOffsetDate(days);
-      customerChat.data.time='09:00';
-      delete customerChat.data.pendingWhen;
-      customerChatAdvance(customerChatWhenLabel());
-    };
-    const ok=$('cust-chat-when-ok');
-    if(ok) ok.onclick=()=>{
-      const de=$('cust-chat-date');
-      const te=$('cust-chat-time');
-      let date=(de&&de.value||'').trim();
-      let time=(te&&te.value||'').trim()||'09:00';
-      if(typeof formatRuDateInput==='function') date=formatRuDateInput(date);
-      if(typeof formatTimeHmInput==='function') time=formatTimeHmInput(time);
-      if(!date || typeof parseRuDate==='function' && !parseRuDate(date)){
-        const err=$('cust-chat-error'); if(err) err.textContent='Укажите дату в формате ДД.ММ.ГГГГ';
-        return;
-      }
-      customerChat.data.date=date;
-      customerChat.data.time=time;
-      delete customerChat.data.pendingWhen;
-      customerChatAdvance(customerChatWhenLabel());
-    };
-    const de=$('cust-chat-date');
-    if(de && typeof maskRuDateInput==='function'){
-      de.oninput=()=>{ de.value=maskRuDateInput(de.value); };
-      de.onblur=()=>{ const f=formatRuDateInput(de.value); if(f) de.value=f; };
-    }
-    const te=$('cust-chat-time');
-    if(te && typeof maskTimeHmInput==='function'){
-      te.oninput=()=>{ te.value=maskTimeHmInput(te.value); };
-      te.onblur=()=>{ const f=formatTimeHmInput(te.value); if(f) te.value=f; };
-    }
   }
   if(stepId==='cargo'){
     const next=$('cust-chat-cargo-next');
@@ -3217,16 +3140,6 @@ function customerChatWireWidgets(stepId){
       saveCustomerChatState();
       customerChatAdvance('');
     };
-    document.querySelectorAll('[data-cargo-remove]').forEach(btn=>{
-      btn.onclick=()=>{
-        const id=btn.getAttribute('data-cargo-remove');
-        customerChat.data.cargoItems=(customerChat.data.cargoItems||[]).filter(it=>it.id!==id);
-        customerChatApplyCargoItemsToForm(customerChat.data.cargoItems);
-        saveCustomerChatState();
-        scheduleCustomerOrderDraftSave();
-        customerChatRenderAll();
-      };
-    });
   }
   if(stepId==='load' || stepId==='unload'){
     const submitAddr=addr=>{
@@ -3289,46 +3202,21 @@ function customerChatWireWidgets(stepId){
   if(stepId==='shipper'){
     const yes=$('cust-chat-shipper-yes');
     const no=$('cust-chat-shipper-no');
-    const otherBox=$('cust-chat-shipper-other');
-    const ok=$('cust-chat-shipper-ok');
-    const nameInp=$('cust-chat-shipper-name');
-    const phoneInp=$('cust-chat-shipper-phone');
-    const submitOther=()=>{
-      const name=(nameInp&&nameInp.value||'').trim();
-      const phone=formatPhone((phoneInp&&phoneInp.value||'').trim());
-      const err=$('cust-chat-error');
-      if(!name){ if(err) err.textContent='Укажите грузоотправителя'; if(nameInp) customerChatFocus(nameInp); return; }
-      if(!phone){ if(err) err.textContent='Укажите телефон грузоотправителя'; if(phoneInp) customerChatFocus(phoneInp); return; }
-      if(err) err.textContent='';
-      customerChat.data.shipperSameAsCustomer=false;
-      customerChat.data.shipperName=name;
-      customerChat.data.shipperPhone=phone;
-      customerChatApplyToForm();
-      saveCustomerChatState();
-      customerChatAdvance(customerChatContactLine(name, phone));
-    };
     if(yes) yes.onclick=()=>{
       customerChat.data.shipperSameAsCustomer=true;
       customerChat.data.shipperName='';
       customerChat.data.shipperPhone='';
+      delete customerChat.data.shipperAwaitingOther;
       customerChatApplyToForm();
       saveCustomerChatState();
       customerChatAdvance('Я грузоотправитель');
     };
     if(no) no.onclick=()=>{
       customerChat.data.shipperSameAsCustomer=false;
-      if(otherBox) otherBox.hidden=false;
-      const n=customerChat.data.loadingContactName||'';
-      const p=customerChat.data.loadingContactPhone||'';
-      if(nameInp&&!nameInp.value&&n) nameInp.value=n;
-      if(phoneInp&&!phoneInp.value&&p) phoneInp.value=p;
-      setTimeout(()=>customerChatFocus(nameInp||phoneInp), 80);
+      customerChat.data.shipperAwaitingOther=true;
+      saveCustomerChatState();
+      customerChatRenderAll();
     };
-    if(ok) ok.onclick=submitOther;
-    [nameInp, phoneInp].forEach(el=>{
-      if(!el) return;
-      el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); submitOther(); } };
-    });
   }
   if(stepId==='body'){
     document.querySelectorAll('[data-chat-body]').forEach(btn=>{
@@ -3343,73 +3231,6 @@ function customerChatWireWidgets(stepId){
         customerChatSelectBody(chip.vtype, chip.label, true);
       };
     });
-    const bodyOk=$('cust-chat-body-ok');
-    if(bodyOk) bodyOk.onclick=()=>{
-      const vtype=customerChat.data.bodyVtype;
-      if(!vtype){
-        const err=$('cust-chat-error');
-        if(err) err.textContent='Выберите тип кузова';
-        return;
-      }
-      const err=$('cust-chat-error');
-      if(err) err.textContent='';
-      customerChatAdvance(customerChat.data.pendingBodyLabel||customerChatBodyLabel(vtype));
-    };
-    const search=$('cust-chat-vtype-search');
-    const suggest=$('cust-chat-vtype-suggest');
-    if(search){
-      let activeIdx=-1;
-      const pickActive=()=>{
-        if(!suggest||suggest.hidden) return;
-        const btn=suggest.querySelector(`.chat-vtype-suggest-item[data-idx="${activeIdx}"]`);
-        if(!btn) return;
-        customerChatSelectBody(btn.dataset.vtype, btn.textContent, true);
-      };
-      search.onfocus=()=>{ customerChatFilterVtypeSuggest(search.value); };
-      search.oninput=()=>{
-        activeIdx=-1;
-        customerChatFilterVtypeSuggest(search.value);
-      };
-      search.onkeydown=e=>{
-        const items=suggest?suggest.querySelectorAll('.chat-vtype-suggest-item'):[];
-        if(e.key==='ArrowDown'&&items.length){
-          e.preventDefault();
-          activeIdx=Math.min(activeIdx+1, items.length-1);
-          items.forEach((el,i)=>el.classList.toggle('is-active', i===activeIdx));
-          if(items[activeIdx]) items[activeIdx].scrollIntoView({block:'nearest'});
-          return;
-        }
-        if(e.key==='ArrowUp'&&items.length){
-          e.preventDefault();
-          activeIdx=Math.max(activeIdx-1, 0);
-          items.forEach((el,i)=>el.classList.toggle('is-active', i===activeIdx));
-          if(items[activeIdx]) items[activeIdx].scrollIntoView({block:'nearest'});
-          return;
-        }
-        if(e.key==='Enter'){
-          e.preventDefault();
-          if(activeIdx>=0){ pickActive(); return; }
-          const q=search.value.trim();
-          const matches=customerChatVtypeMatches(q);
-          if(matches.length===1) customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label, true);
-          else if(matches.length>1){
-            const err=$('cust-chat-error');
-            if(err) err.textContent='Выберите тип из списка';
-            customerChatFilterVtypeSuggest(q);
-          }else{
-            const err=$('cust-chat-error');
-            if(err) err.textContent='Тип не найден — попробуйте «тент», «реф» или «трал»';
-          }
-        }
-        if(e.key==='Escape'&&suggest){ suggest.hidden=true; activeIdx=-1; }
-      };
-      if(suggest){
-        suggest.onpointerdown=e=>{ e.preventDefault(); };
-      }
-      search.onblur=()=>{ setTimeout(()=>{ if(suggest) suggest.hidden=true; activeIdx=-1; }, 220); };
-      customerChatFilterVtypeSuggest(search.value||'');
-      setTimeout(()=>customerChatFocus(search), 80);
-    }
   }
   if(stepId==='loadMethod' || stepId==='unloadMethod'){
     const key=stepId==='loadMethod'?'loadMethods':'unloadMethods';
@@ -3485,6 +3306,78 @@ function customerChatRenderAll(){
   customerChatRenderWidgets();
   customerChatUpdateCompose();
 }
+function customerChatShowCompose(step){
+  if(!step||customerChat.summaryReady) return false;
+  if(customerChat.messages.some(m=>m.stepId==='submitted')) return false;
+  if(['cargo','load','unload','loadContact','unloadContact','when','body'].includes(step.id)) return true;
+  if(step.id==='shipper'&&customerChat.data.shipperAwaitingOther) return true;
+  return false;
+}
+function customerChatParseWhenInput(raw){
+  let s=String(raw||'').trim();
+  if(!s) return null;
+  let date='', time='09:00';
+  const tm=s.match(/(\d{1,2}:\d{2})/);
+  if(tm){
+    time=typeof formatTimeHmInput==='function'?formatTimeHmInput(tm[1]):tm[1];
+    s=s.replace(tm[0],' ').trim();
+  }
+  const dm=s.match(/(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4})/);
+  if(!dm) return null;
+  date=typeof formatRuDateInput==='function'?formatRuDateInput(dm[1]):dm[1];
+  if(!date||typeof parseRuDate==='function'&&!parseRuDate(date)) return null;
+  return {date, time};
+}
+function customerChatHandleWhenCompose(raw){
+  const err=$('cust-chat-error');
+  const inp=$('cust-chat-input');
+  if(!raw) return;
+  const parsed=customerChatParseWhenInput(raw);
+  if(!parsed){
+    if(err) err.textContent='Дата: ДД.ММ.ГГГГ, 9:00 — или кнопка «Завтра»';
+    return;
+  }
+  if(err) err.textContent='';
+  customerChat.data.date=parsed.date;
+  customerChat.data.time=parsed.time;
+  delete customerChat.data.pendingWhen;
+  if(inp) inp.value='';
+  customerChatAdvance(customerChatWhenLabel());
+}
+function customerChatHandleShipperCompose(raw){
+  const err=$('cust-chat-error');
+  const inp=$('cust-chat-input');
+  const parsed=customerChatParseContactInput(raw);
+  const name=(parsed.name||String(raw||'').replace(/\+?\d[\d\s\-()]{8,}/g,'').trim());
+  const phone=formatPhone(parsed.phone||'');
+  if(!name){ if(err) err.textContent='Укажите организацию или ФИО'; return; }
+  if(!phone){ if(err) err.textContent='Укажите телефон'; return; }
+  if(err) err.textContent='';
+  customerChat.data.shipperSameAsCustomer=false;
+  customerChat.data.shipperName=name;
+  customerChat.data.shipperPhone=phone;
+  delete customerChat.data.shipperAwaitingOther;
+  if(inp) inp.value='';
+  customerChatApplyToForm();
+  saveCustomerChatState();
+  customerChatAdvance(customerChatContactLine(name, phone));
+}
+function customerChatHandleBodyCompose(raw){
+  const err=$('cust-chat-error');
+  const inp=$('cust-chat-input');
+  if(!raw) return;
+  const matches=customerChatVtypeMatches(raw);
+  if(matches.length===1){
+    if(inp) inp.value='';
+    customerChatSelectBody(matches[0].id, matches[0].ati||matches[0].label, true);
+    return;
+  }
+  if(matches.length>1){
+    if(err) err.textContent='Уточните: '+matches.slice(0,3).map(m=>m.ati||m.label).join(', ');
+    return;
+  }
+  if(err) err.textContent='Тип не найден — нажмите чип или «тент», «реф»';
+}
 function customerChatWireComposeInput(step){
   const inp=$('cust-chat-input');
   if(!inp) return;
@@ -3497,16 +3390,15 @@ function customerChatWireComposeInput(step){
   if(step && step.id==='cargo' && !inp.dataset.cargoSyncWired){
     inp.dataset.cargoSyncWired='1';
   }
-  const textSteps=['cargo','load','unload','loadContact','unloadContact'];
-  if(step && textSteps.includes(step.id)){
+  const textSteps=['cargo','load','unload','loadContact','unloadContact','when','body'];
+  if(step && (textSteps.includes(step.id)||(step.id==='shipper'&&customerChat.data.shipperAwaitingOther))){
     setTimeout(()=>customerChatFocus(inp), 80);
   }
 }
 function customerChatUpdateCompose(){
   const compose=$('cust-chat-compose');
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
-  const textSteps=['cargo','load','unload','loadContact','unloadContact'];
-  const show=step && textSteps.includes(step.id) && !customerChat.summaryReady && !customerChat.messages.some(m=>m.stepId==='submitted');
+  const show=customerChatShowCompose(step);
   const inp=$('cust-chat-input');
   if(inp && step){
     if(step.id==='cargo'){
@@ -3515,6 +3407,9 @@ function customerChatUpdateCompose(){
       if(pending) inp.placeholder=`Вес для «${pending}»: 3 т`;
       else if(n) inp.placeholder='Ещё груз: паллеты, 3 т';
       else inp.placeholder='Паллеты, 3 т';
+    }else if(step.id==='when'){
+      inp.placeholder='29.08.2026, 9:00';
+      if(!inp.matches(':focus')) inp.value='';
     }else if(step.id==='load'){
       inp.placeholder='Город, улица, дом…';
       if(!inp.matches(':focus')) inp.value=customerChat.data.load||'';
@@ -3527,6 +3422,12 @@ function customerChatUpdateCompose(){
     }else if(step.id==='unloadContact'){
       inp.placeholder='Имя и телефон или «пропустить»';
       if(!inp.matches(':focus')) inp.value='';
+    }else if(step.id==='body'){
+      inp.placeholder='тент, реф, трал…';
+      if(!inp.matches(':focus')) inp.value='';
+    }else if(step.id==='shipper'&&customerChat.data.shipperAwaitingOther){
+      inp.placeholder='ООО Компания +79001234567';
+      if(!inp.matches(':focus')) inp.value='';
     }
   }
   if(compose) compose.classList.toggle('is-visible', !!show);
@@ -3536,6 +3437,7 @@ function customerChatAdvance(userText){
   const err=$('cust-chat-error'); if(err) err.textContent='';
   delete customerChat.data.cargoPendingName;
   if(userText) customerChatAddUser(userText);
+  customerChatApplyToForm();
   customerChat.stepIndex++;
   saveCustomerChatState();
   const step=CUST_CHAT_STEPS[customerChat.stepIndex];
@@ -3572,6 +3474,18 @@ function customerChatHandleTextInput(){
   if(!step) return;
   if(step.id==='cargo'){
     customerChatHandleCargoCompose(raw);
+    return;
+  }
+  if(step.id==='when'){
+    customerChatHandleWhenCompose(raw);
+    return;
+  }
+  if(step.id==='shipper'&&customerChat.data.shipperAwaitingOther){
+    customerChatHandleShipperCompose(raw);
+    return;
+  }
+  if(step.id==='body'){
+    customerChatHandleBodyCompose(raw);
     return;
   }
   if(!raw) return;

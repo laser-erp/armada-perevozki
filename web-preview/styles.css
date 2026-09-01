@@ -1144,6 +1144,9 @@
     .chat-action-tray .chat-history-chips,
     .chat-action-tray .chat-step-lead{padding-left:0}
     .chat-tray-actions{margin-top:6px}
+    .chat-tray-hint{margin:0 0 6px;font-size:.72rem;line-height:1.35;color:var(--muted,#64748b)}
+    #customer-portal.cust-order-chat-mode #cust-form-panel,
+    #customer-portal.cust-order-chat-mode #cust-form-checklist{display:none!important}
     .chat-step-panel{
       width:100%;max-width:100%;box-sizing:border-box;flex-shrink:0;
       padding:8px 0 2px;
@@ -1245,6 +1248,8 @@
     @media (max-width:640px){
       .cust-order-head{gap:6px 8px}
       .cust-chat-preview-link{width:100%;text-align:right}
+      #customer-portal.cust-order-chat-mode #cust-form-panel,
+      #customer-portal.cust-order-chat-mode #cust-form-checklist{display:none!important}
       #customer-portal.cust-order-chat-mode #cust-portal-sub,
       #customer-portal.cust-order-chat-mode #cust-armada-source-banner{display:none}
       #customer-portal.cust-order-chat-mode #cust-portal-scroll{
