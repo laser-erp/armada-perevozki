@@ -4541,6 +4541,13 @@ function openCatalogs(){
         signedAt:prevFc.signedAt||new Date().toISOString(),
         signedBy:prevFc.signedBy||name
       }:prevFc;
+      if(roles.includes('customer') && $('co-portal-enabled')&&$('co-portal-enabled').checked){
+        const pp=(($('co-portal-pin')||{}).value||'').trim();
+        if(pp.length<4){ alert('Для портала заказчика PIN от 4 цифр'); return; }
+        const ph=formatPhone((($('co-portal-phone')||{}).value||'').trim());
+        if(!ph){ alert('Укажите телефон для входа в портал'); return; }
+      }
+      const savedId=c.id;
       upsertCompany({
         id:c.id, name, roles, note:($('co-note').value||'').trim(),
         inn:innRaw, ogrn:(($('co-ogrn')||{}).value||'').trim(),
@@ -4565,16 +4572,13 @@ function openCatalogs(){
           bankCorrAccount:(($('co-bank-corr')||{}).value||'').trim()
         })
       });
-      if(roles.includes('customer') && $('co-portal-enabled')&&$('co-portal-enabled').checked){
-        const pp=(($('co-portal-pin')||{}).value||'').trim();
-        if(pp.length<4){ alert('Для портала заказчика PIN от 4 цифр'); return; }
-        const ph=formatPhone((($('co-portal-phone')||{}).value||'').trim());
-        if(!ph){ alert('Укажите телефон для входа в портал'); return; }
-      }
+      if(typeof migrateStripSpuriousOwnRoles==='function') migrateStripSpuriousOwnRoles();
       bumpDataEpoch('save-company');
       persist();
       openCatalogs();
-      $('cat-ok').style.display='block';
+      flashCatOk('Сохранено');
+      const saved=findCompanyById(savedId);
+      if(saved) openEditor(saved);
     };
   };
 

@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-profile4317";
+const APP_BUILD="2026-09-01-ownfix4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1802,7 +1802,12 @@ function ensureOwnCompanyForSpace(space){
   }
   let co=(state.companies||[]).find(c=>c.spaceId===space.id && companyHasRole(c,'own'));
   if(!co){
-    co=(state.companies||[]).find(c=>companyHasRole(c,'own') && (c.name||'').trim().toLowerCase()===(space.name||'').trim().toLowerCase());
+    co=(state.companies||[]).find(c=>c.spaceId===space.id && (c.name||'').trim().toLowerCase()===(space.name||'').trim().toLowerCase());
+    if(co){
+      const roles=(co.roles||[]).slice();
+      if(!roles.includes('own')) roles.push('own');
+      co=upsertCompany(Object.assign({}, co, {roles, spaceId:space.id}));
+    }
   }
   if(!co){
     co=upsertCompany({
@@ -1811,9 +1816,12 @@ function ensureOwnCompanyForSpace(space){
       spaceId:space.id, inn:space.inn, ogrn:space.ogrn, kpp:space.kpp, address:space.address
     });
   } else {
-    co.spaceId=space.id;
-    if(!companyHasRole(co,'own')) co.roles.push('own');
-    upsertCompany(co);
+    if(co.spaceId!==space.id) co.spaceId=space.id;
+    if(!companyHasRole(co,'own')){
+      const roles=(co.roles||[]).slice();
+      roles.push('own');
+      co=upsertCompany(Object.assign({}, co, {roles, spaceId:space.id}));
+    }
   }
   if(co) space.ownCompanyId=co.id;
   return co||null;
@@ -2209,6 +2217,30 @@ function migratePurgeCrossTenantGhostDrivers(){
   });
   return changed;
 }
+/** Снять «Наша фирма» у записей в чужом кабинете (legacy: МБН/Нечаев в справочнике Армады). */
+function migrateStripSpuriousOwnRoles(){
+  let changed=false;
+  (state.spaces||[]).forEach(sp=>{
+    if(!sp.ownCompanyId) return;
+    (state.companies||[]).forEach(c=>{
+      if(!companyHasRole(c,'own') || c.id===sp.ownCompanyId) return;
+      if(c.spaceId===sp.id){
+        c.roles=(c.roles||[]).filter(r=>r!=='own');
+        if(!c.roles.length) c.roles=['customer'];
+        changed=true;
+      }
+    });
+  });
+  (state.companies||[]).forEach(c=>{
+    if(!companyHasRole(c,'own')) return;
+    if((state.spaces||[]).some(sp=>sp.ownCompanyId===c.id)) return;
+    c.roles=(c.roles||[]).filter(r=>r!=='own');
+    if(!c.roles.length) c.roles=['customer'];
+    changed=true;
+  });
+  if(changed && typeof syncCustomersFromCompanies==='function') syncCustomersFromCompanies();
+  return changed;
+}
 function migrateSpaces(){
   state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
@@ -2280,6 +2312,7 @@ function migrateSpaces(){
   });
   if(ensureFleetPerSpaces()) changed=true;
   if(migratePurgeCrossTenantGhostDrivers()) changed=true;
+  if(migrateStripSpuriousOwnRoles()) changed=true;
   return changed;
 }
 function isValidInn(inn){
