@@ -1914,6 +1914,12 @@
     #admin-profile-screen .admin-form-shell{max-width:640px}
     .admin-profile-card{padding:4px 0 24px}
     .admin-profile-card h2{margin:0 0 8px;font-size:1.15rem}
+    .admin-profile-alert{margin:0 0 14px;padding:10px 12px;border-radius:10px;background:rgba(255,180,0,.12);border:1px solid rgba(255,180,0,.35);font-size:var(--fs-sm);line-height:1.4}
+    .admin-profile-fields{display:grid;gap:8px;margin:0 0 8px}
+    .admin-profile-fields label{font-size:var(--fs-sm);font-weight:600;color:var(--muted)}
+    .admin-profile-fields input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--field);font:inherit}
+    .admin-profile-fields .primary{margin-top:4px;width:100%}
+    .admin-profile-fields .err{color:var(--danger,#c0392b)}
     .admin-profile-grid{display:grid;gap:16px;margin:16px 0}
     .admin-profile-preview{margin-top:20px;padding:14px;border:1px dashed var(--border);border-radius:10px;background:var(--field)}
     .admin-profile-sample{position:relative;height:88px;margin-top:8px}

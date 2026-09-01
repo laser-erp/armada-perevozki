@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-tenant4317";
+const APP_BUILD="2026-09-01-profile4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2039,6 +2039,10 @@ function ownCompanyForAdminId(adminId){
 function currentOwnCompany(){
   if(!currentAdmin) return null;
   return ownCompanyForAdminId(currentAdmin.id) || ownCompanyForSpaceId(currentSpaceId());
+}
+function currentAdminOwnCompanyId(){
+  const co=currentOwnCompany();
+  return co?co.id:'';
 }
 function ownCompaniesList(){
   return (state.companies||[]).filter(c=>companyHasRole(c,'own'));

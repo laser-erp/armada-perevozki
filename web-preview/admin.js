@@ -497,6 +497,7 @@ async function loginAdmin(){
   seedAdminInboxNotifySnapshot();
   syncAdminNotifyToggle();
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+  if(typeof maybeOpenAdminProfileOnLogin==='function') maybeOpenAdminProfileOnLogin(adm);
   }finally{
     if(btn) btn.disabled=false;
   }
