@@ -99,6 +99,8 @@ function paintAdminOwnerFilters(){
 }
 function paintCatalogOwnerFilters(){
   paintOwnerFiltersBox($('cat-owner-filters'), ()=>{
+    catalogActiveCompanyId=null;
+    catalogDriverCompanyId=null;
     if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
   });
 }
@@ -4071,22 +4073,23 @@ function flashCatOk(msg){
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
   paintCatalogOwnerFilters();
+  if(catalogActiveCompanyId){
+    const hit=findCompanyById(catalogActiveCompanyId);
+    if(!hit || !companyInMySpace(hit)) catalogActiveCompanyId=null;
+  }
+  if(catalogDriverCompanyId){
+    const hit=findCompanyById(catalogDriverCompanyId);
+    if(!hit || !companyInMySpace(hit)) catalogDriverCompanyId=null;
+  }
   const companies=(state.companies||[]).filter(companyInMySpace);
-  const drvCo=typeof catalogDriverCompany==='function'?catalogDriverCompany():currentOwnCompany();
+  const fleetCo=typeof catalogFleetCompany==='function'?catalogFleetCompany():currentOwnCompany();
   const drivers=(state.drivers||[]).map((d,i)=>({d,i})).filter(({d})=>{
-    if(isSuperAdmin()){
-      if(drvCo) return d.companyId===drvCo.id;
-      return true;
-    }
-    if(!currentAdmin) return false;
-    if(drvCo) return d.companyId===drvCo.id;
-    return d.ownerAdminId===currentAdmin.id;
+    if(!fleetCo) return false;
+    return d.companyId===fleetCo.id;
   });
   const vehicles=(state.vehicles||[]).map((v,i)=>({v,i})).filter(({v})=>{
-    if(isSuperAdmin()) return true;
-    if(!currentAdmin) return false;
-    if(myCo && v.companyId===myCo.id) return true;
-    return !v.spaceId || v.spaceId===currentAdmin.spaceId;
+    if(!fleetCo) return false;
+    return v.companyId===fleetCo.id;
   });
   const catalogHint=(isSuperAdmin()&&(state.adminOwnerFilter||'all')==='all')
     ? '<p class="cat-panel-hint">Показаны компании <strong>всех кабинетов</strong>. Справочник Армады — выберите «ООО «Армада»» в фильтре «Все кабинеты» сверху. «Наша фирма» у МБН и Нечаева — их кабинеты, не контрагенты Армады.</p>'
@@ -4199,14 +4202,14 @@ function openCatalogs(){
 
     <div class="cat-panel ${tab==='drivers'?'on':''}" data-cat-panel="drivers">
       ${(()=>{
-        const owns=ownCompaniesList().filter(c=>companyInMySpace(c));
-        const active=drvCo;
-        const firmPick=owns.length>1
-          ? `<label class="svc-full">Фирма (парк)<select id="drv-company-pick">${owns.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
+        const fleetList=typeof catalogFleetCompanies==='function'?catalogFleetCompanies():ownCompaniesList().filter(c=>companyInMySpace(c));
+        const active=fleetCo;
+        const firmPick=fleetList.length>1
+          ? `<label class="svc-full">Компания<select id="drv-company-pick">${fleetList.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
           : '';
         const hint=active
           ? `Водители «${esc(active.name)}». Нажмите карточку — все документы в одном месте.`
-          : (isSuperAdmin()?'Выберите фирму или добавьте «нашу»':'Сначала нужна ваша фирма');
+          : (isSuperAdmin()?'Выберите компанию с парком':'Сначала нужна ваша фирма');
         return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
       })()}
       <div class="cat-quick drv-add">
@@ -4223,7 +4226,17 @@ function openCatalogs(){
     </div>
 
     <div class="cat-panel ${tab==='vehicles'?'on':''}" data-cat-panel="vehicles">
-      <p class="cat-panel-hint">${(()=>{ const co=currentOwnCompany(); return co?`Авто «${esc(co.name)}»: тоннаж, габариты, экипаж/водители — в карточке «Ремонт и ТО»`:(isSuperAdmin()?'Авто привязаны к фирме админа. Экипаж — в карточке авто':'Сначала нужна ваша фирма'); })()}</p>
+      ${(()=>{
+        const fleetList=typeof catalogFleetCompanies==='function'?catalogFleetCompanies():ownCompaniesList().filter(c=>companyInMySpace(c));
+        const active=fleetCo;
+        const firmPick=fleetList.length>1
+          ? `<label class="svc-full">Компания<select id="veh-company-pick">${fleetList.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
+          : '';
+        const hint=active
+          ? `Авто «${esc(active.name)}»: тоннаж, габариты, экипаж — в карточке «Ремонт и ТО».`
+          : (isSuperAdmin()?'Выберите компанию с парком':'Сначала нужна ваша фирма');
+        return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
+      })()}
       <div class="cat-quick">
         <div class="row">
           <input id="own-veh-plate" placeholder="Госномер" style="flex:1.5" />
@@ -4273,7 +4286,10 @@ function openCatalogs(){
   `;
   show('admin-catalogs-screen');
   showCatalogTab(tab);
-  document.querySelectorAll('#cat-tabs [data-cat-tab]').forEach(b=>b.onclick=()=>showCatalogTab(b.dataset.catTab));
+  document.querySelectorAll('#cat-tabs [data-cat-tab]').forEach(b=>b.onclick=()=>{
+    catalogTab=b.dataset.catTab;
+    openCatalogs();
+  });
   const search=$('co-search');
   if(search){
     search.oninput=()=>{
@@ -4289,6 +4305,15 @@ function openCatalogs(){
 
     const openEditor=(company)=>{
     showCatalogTab('companies');
+    if(company&&company.id){
+      catalogActiveCompanyId=company.id;
+      if(typeof catalogFleetCompany==='function'){
+        const co0=findCompanyById(company.id);
+        if(co0&&(companyHasRole(co0,'own')||companyHasRole(co0,'carrier'))) catalogDriverCompanyId=company.id;
+      }
+    } else {
+      catalogActiveCompanyId=null;
+    }
     const c=company?(()=>{
       const n=normalizeCompany(company);
       if(n) return n;
@@ -4360,6 +4385,9 @@ function openCatalogs(){
         <h4>Водители фирмы (телефоны)</h4>
         <div class="hint" style="margin:0 0 4px">Парк «нашей фирмы» — ФИО и телефон. Правки сохраняются в справочник водителей.</div>
         <div id="co-own-drivers"></div>
+        <h4 style="margin-top:12px">Авто парка</h4>
+        <div class="hint" style="margin:0 0 4px">Тоннаж и ТО — вкладка «Авто» или кнопка «Ремонт и ТО».</div>
+        <div id="co-own-vehicles"></div>
       </div>
       <div id="co-customer-fields" style="display:${isCust?'block':'none'}">
         <h4>Портал заказчика (самостоятельные заявки)</h4>
@@ -4415,6 +4443,21 @@ function openCatalogs(){
     }
     let vehicles=(c.vehicles||[]).map(x=>({...x}));
     let drivers=(c.drivers||[]).map(x=>({...x}));
+    if(isOwn&&c.id){
+      vehicles=fleetVehiclesForCompany(c.id).map(v=>({
+        id:v.id, plate:v.plate, makeModel:v.makeModel||'',
+        payloadTons:v.payloadTons, bodyLengthM:v.bodyLengthM, bodyWidthM:v.bodyWidthM, bodyHeightM:v.bodyHeightM
+      }));
+    }
+    if(isCarr&&c.id&&!isOwn){
+      const fleet=fleetVehiclesForCompany(c.id);
+      if(fleet.length) vehicles=fleet.map(v=>({
+        id:v.id, plate:v.plate, makeModel:v.makeModel||'',
+        payloadTons:v.payloadTons, bodyLengthM:v.bodyLengthM, bodyWidthM:v.bodyWidthM, bodyHeightM:v.bodyHeightM
+      }));
+      const fleetDrv=fleetDriversForCompany(c.id);
+      if(fleetDrv.length) drivers=fleetDrv.map(d=>({id:d.id, name:d.name, phone:d.phone||'', vehicleId:d.vehicleId||null}));
+    }
     const paintContacts=()=>{
       $('co-contacts').innerHTML=contacts.map((p,i)=>`
         <div class="card" style="margin:6px 0">
@@ -4441,6 +4484,22 @@ function openCatalogs(){
         </div>`;
       }).join(''):`<div class="hint">Нет водителей в парке — добавьте во вкладке «Водители»</div>`;
     };
+    const paintOwnVehicles=()=>{
+      const box=$('co-own-vehicles'); if(!box) return;
+      const list=c.id?fleetVehiclesForCompany(c.id):[];
+      box.innerHTML=list.length?list.map(v=>{
+        const spec=typeof vehicleSpecText==='function'?vehicleSpecText(v):'';
+        const vid=v.id||'';
+        return `<div class="card" style="margin:6px 0">
+          <div class="row" style="align-items:center;gap:8px">
+            <div style="flex:1;font-weight:700">${esc(v.plate)}</div>
+            ${spec?`<span class="meta">${esc(spec)}</span>`:''}
+            ${vid?`<button type="button" class="secondary" data-open-veh-co="${esc(vid)}" style="width:auto;padding:4px 8px">ТО</button>`:''}
+          </div>
+        </div>`;
+      }).join(''):`<div class="hint">Нет авто — добавьте во вкладке «Авто»</div>`;
+      box.querySelectorAll('[data-open-veh-co]').forEach(b=>b.onclick=()=>openVehicleCard(b.dataset.openVehCo));
+    };
     const paintVehicles=()=>{
       $('co-vehicles').innerHTML=vehicles.map((v,i)=>`
         <div class="card" style="margin:6px 0">
@@ -4465,7 +4524,7 @@ function openCatalogs(){
         </div>`).join('')||`<div class="hint">Нет водителей</div>`;
       document.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{ drivers.splice(+b.dataset.ddel,1); paintDrivers(); });
     };
-    paintContacts(); paintOwnDrivers(); paintVehicles(); paintDrivers();
+    paintContacts(); paintOwnDrivers(); paintOwnVehicles(); paintVehicles(); paintDrivers();
     const syncRoleVisibility=()=>{
       $('co-customer-fields').style.display=$('co-role-c').checked?'block':'none';
       $('co-carrier-fields').style.display=$('co-role-r').checked?'block':'none';
@@ -4673,8 +4732,11 @@ function openCatalogs(){
     if(!plate){ alert('Укажите госномер'); return; }
     if(!(cons>0)) cons=20;
     const owner=resolveAdminOwner(currentAdmin.id);
-    if(!owner.companyId){ alert('У админа нет «нашей фирмы»'); return; }
-    const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase() && v.companyId===owner.companyId);
+    if(!owner.companyId&&!fleetCo){ alert('Выберите компанию с парком'); return; }
+    const companyId=(fleetCo&&fleetCo.id)||owner.companyId;
+    const companyName=(fleetCo&&fleetCo.name)||owner.companyName;
+    const fleetSpace=(fleetCo&&fleetCo.spaceId)||owner.spaceId;
+    const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase() && v.companyId===companyId);
     if(exists){ alert('Такой госномер уже есть в этой фирме'); return; }
     const payloadTons=numOrNull(($('own-veh-pay')||{}).value);
     const bodyLengthM=numOrNull(($('own-veh-l')||{}).value);
@@ -4683,7 +4745,7 @@ function openCatalogs(){
     if(!(payloadTons>0)){ alert('Укажите грузоподъёмность (т) — нужна для биржи'); return; }
     state.vehicles.push(normalizeFleetVehicle({
       plate, consumptionPer100Km:cons, payloadTons, bodyLengthM, bodyWidthM, bodyHeightM, makeModel:'',
-      spaceId:owner.spaceId, companyId:owner.companyId, companyName:owner.companyName,
+      spaceId:fleetSpace, companyId, companyName,
       serviceIntervals:[], maintenanceLogs:[]
     }));
     bumpDataEpoch('add-vehicle');
@@ -4706,7 +4768,7 @@ function openCatalogs(){
     if(pin.length<4){ alert('PIN от 4 цифр'); return; }
     if(Number.isNaN(pct) || pct<0) pct=30;
     const owner=resolveAdminOwner(currentAdmin.id);
-    const drvCo=typeof catalogDriverCompany==='function'?catalogDriverCompany():null;
+    const drvCo=typeof catalogFleetCompany==='function'?catalogFleetCompany():null;
     const companyId=(drvCo&&drvCo.id)||owner.companyId;
     const companyName=(drvCo&&drvCo.name)||owner.companyName;
     if(!companyId){ alert('Выберите фирму (парк) для водителя'); return; }
@@ -4735,7 +4797,17 @@ function openCatalogs(){
   if(drvCoSel){
     drvCoSel.onchange=()=>{
       catalogDriverCompanyId=drvCoSel.value||null;
+      catalogActiveCompanyId=catalogDriverCompanyId;
       catalogTab='drivers';
+      openCatalogs();
+    };
+  }
+  const vehCoSel=$('veh-company-pick');
+  if(vehCoSel){
+    vehCoSel.onchange=()=>{
+      catalogDriverCompanyId=vehCoSel.value||null;
+      catalogActiveCompanyId=catalogDriverCompanyId;
+      catalogTab='vehicles';
       openCatalogs();
     };
   }

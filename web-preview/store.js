@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-catalog4317";
+const APP_BUILD="2026-09-01-fleet4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1043,7 +1043,29 @@ let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой
 let presenceTimer=null;
 let catalogTab='companies'; // companies | drivers | vehicles | finance
 let catalogFinanceCompanyId=null; // какая «наша фирма» правится во вкладке Тариф
-let catalogDriverCompanyId=null; // какая «наша фирма» во вкладке Водители
+let catalogDriverCompanyId=null; // какая фirmа во вкладке Водители / Авто
+let catalogActiveCompanyId=null; // компания, открытая в карточке «Компании»
+/** Компании с парком (наша / перевозчик) в текущем кабинете. */
+function catalogFleetCompanies(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  return (state.companies||[]).filter(c=>inSpace(c) && (companyHasRole(c,'own')||companyHasRole(c,'carrier')));
+}
+/** Чей парк показывать во вкладках и в карточке компании. */
+function catalogFleetCompany(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  if(catalogActiveCompanyId){
+    const active=findCompanyById(catalogActiveCompanyId);
+    if(active && inSpace(active) && (companyHasRole(active,'own')||companyHasRole(active,'carrier'))) return active;
+  }
+  if(catalogDriverCompanyId){
+    const hit=findCompanyById(catalogDriverCompanyId);
+    if(hit && inSpace(hit) && (companyHasRole(hit,'own')||companyHasRole(hit,'carrier'))) return hit;
+  }
+  const my=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(my && inSpace(my)) return my;
+  const list=catalogFleetCompanies();
+  return list[0]||null;
+}
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
   if(!id){ id=uuid(); localStorage.setItem(DEVICE_KEY, id); }
