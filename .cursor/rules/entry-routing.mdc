@@ -41,3 +41,9 @@ alwaysApply: true
 1. Открыть `/` в инкognito → три блока ролей, не форма заказчика.
 2. `/z/` → вход заказчика.
 3. После входа заказчиком, снова `/` → снова хаб (не автologin).
+
+## Boot / splash
+
+- Один переход splash → экран: `finishSplashOnce()` в `store.js`.
+- `boot-loader.js` не вызывает `bootFallbackAfterSplash` на корне — только `/a/` `/v/` `/z/`.
+- Service worker **не делает** `location.reload()` при обновлении (HTML/JS с `?v=APP_BUILD`).

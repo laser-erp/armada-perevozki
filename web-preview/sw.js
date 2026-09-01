@@ -1,5 +1,5 @@
 /* АРМАДА PWA — JS/CSS network-first (не держать сломанный кэш) */
-const CACHE = 'armada-shell-v57';
+const CACHE = 'armada-shell-v58';
 const SHELL = ['./manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {
@@ -10,11 +10,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim()).then(() =>
-      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-        clients.forEach((c) => c.postMessage({ type: 'ARMADA_SW_UPDATED', cache: CACHE }));
-      })
-    )
+    ).then(() => self.clients.claim())
   );
 });
 

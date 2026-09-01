@@ -4686,12 +4686,12 @@ try{
     }else openDedicatedEntryScreen();
   } else if(onRoleHub || !urlEntry){
     if(!document.querySelector('#roles.show') && !isArmadaEntryScreenVisible()){
-      if(document.querySelector('#splash.show')) showAfterSplash(showRoleHub);
+      if(typeof finishSplashOnce==='function') finishSplashOnce(showRoleHub);
       else showRoleHub();
     }
   } else if(!(await tryDriver())){
     if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show')){
-      if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
+      if(typeof finishSplashOnce==='function') finishSplashOnce(showDefaultAfterSplash);
       else showDefaultAfterSplash();
     }
   }
@@ -4708,7 +4708,7 @@ try{
   }catch(err){
     console.error('АРМАДА boot', err);
     if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show') && !document.querySelector('#customer-portal.show')){
-      if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
+      if(typeof finishSplashOnce==='function') finishSplashOnce(showDefaultAfterSplash);
       else if(typeof showDefaultAfterSplash==='function') showDefaultAfterSplash();
     }
   }finally{
@@ -4716,10 +4716,8 @@ try{
     if(typeof window.__armadaApplyEntryRoute==='function' && typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
       if(!isArmadaEntryScreenVisible()) window.__armadaApplyEntryRoute();
     }
-    if(document.querySelector('#splash.show') && !isArmadaEntryScreenVisible()){
-      if(typeof bootFallbackAfterSplash==='function') showAfterSplash(bootFallbackAfterSplash);
-      else if(typeof showAfterSplash==='function' && typeof showDefaultAfterSplash==='function') showAfterSplash(showDefaultAfterSplash);
-      else if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl() && typeof window.__armadaApplyEntryRoute==='function') window.__armadaApplyEntryRoute();
+    if(document.querySelector('#splash.show') && !isArmadaEntryScreenVisible() && !window.__armadaSplashDone){
+      if(typeof finishSplashOnce==='function') finishSplashOnce(typeof bootFallbackAfterSplash==='function'?bootFallbackAfterSplash:showRoleHub);
       else if(typeof show==='function' && !(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl())) show('roles');
     }
   }
@@ -4812,27 +4810,6 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 if('serviceWorker' in navigator){
-  let reloading=false;
-  function armadaSkipSwReload(){
-    try{
-      const p=(location.pathname||'').toLowerCase();
-      return /^\/(v|a|z)(?:\/|$)/.test(p);
-    }catch(_){ return false; }
-  }
-  navigator.serviceWorker.addEventListener('message',e=>{
-    if(e.data && e.data.type==='ARMADA_SW_UPDATED' && !reloading){
-      if(armadaSkipSwReload()) return;
-      reloading=true;
-      location.reload();
-    }
-  });
-  navigator.serviceWorker.addEventListener('controllerchange',()=>{
-    if(reloading) return;
-    if(armadaSkipSwReload()) return;
-    if(!navigator.serviceWorker.controller) return;
-    reloading=true;
-    location.reload();
-  });
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('./sw.js?v='+encodeURIComponent(APP_BUILD))
       .then(reg=>{ try{ reg.update(); }catch(_){} })

@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-01-no-autologin4317';
+  var APP_BUILD = '2026-09-01-single-boot4317';
 
   window.__armadaBootDone = false;
 
@@ -29,31 +29,6 @@
   }
 
   showScreenEarly(dedicatedScreenId());
-
-  setTimeout(function () {
-    var entry = dedicatedScreenId();
-    if (entry) {
-      showScreenEarly(entry);
-      return;
-    }
-    var sp = document.getElementById('splash');
-    if (!sp || !sp.classList.contains('show')) return;
-    if (typeof bootFallbackAfterSplash === 'function') {
-      bootFallbackAfterSplash();
-      return;
-    }
-    if (typeof showAfterSplash === 'function' && typeof showDefaultAfterSplash === 'function') {
-      showAfterSplash(showDefaultAfterSplash);
-      return;
-    }
-    if (typeof showAfterSplash === 'function') {
-      showAfterSplash('roles');
-      return;
-    }
-    if (typeof show === 'function') {
-      show('roles');
-    }
-  }, 5000);
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
@@ -116,20 +91,14 @@
   function finishBoot() {
     window.__armadaBootDone = true;
     var early = dedicatedScreenId();
-    if (early) {
-      showScreenEarly(early);
-      if (early === 'admin-pin' && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
-      if (early === 'admin-pin') {
-        var loginBtn = document.getElementById('pin-ok');
-        if (loginBtn) loginBtn.disabled = false;
-      }
+    if (!early) return;
+    showScreenEarly(early);
+    if (early === 'admin-pin' && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
+    if (early === 'admin-pin') {
+      var loginBtn = document.getElementById('pin-ok');
+      if (loginBtn) loginBtn.disabled = false;
     }
-    if (typeof openDedicatedEntryScreen === 'function' && openDedicatedEntryScreen()) return;
-    if (typeof bootFallbackAfterSplash === 'function') {
-      bootFallbackAfterSplash();
-      return;
-    }
-    if (early) showScreenEarly(early);
+    if (typeof openDedicatedEntryScreen === 'function') openDedicatedEntryScreen();
   }
 
   var chain = Promise.resolve();

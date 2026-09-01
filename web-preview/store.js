@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-no-autologin4317";
+const APP_BUILD="2026-09-01-single-boot4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -282,7 +282,8 @@ function isArmadaEntryScreenVisible(){
 function bootFallbackAfterSplash(){
   if(isArmadaEntryScreenVisible()) return;
   if(typeof isRoleHubUrl==='function' && isRoleHubUrl()){
-    showRoleHub();
+    if(typeof finishSplashOnce==='function') finishSplashOnce(showRoleHub);
+    else showRoleHub();
     return;
   }
   if(typeof dedicatedEntryMode==='function' && dedicatedEntryMode()){
@@ -292,7 +293,7 @@ function bootFallbackAfterSplash(){
   else if(typeof show==='function') show('roles');
 }
 function showHubAfterSplash(){
-  if(document.querySelector('#splash.show') && typeof showAfterSplash==='function') showAfterSplash(showRoleHub);
+  if(document.querySelector('#splash.show') && typeof finishSplashOnce==='function') finishSplashOnce(showRoleHub);
   else showRoleHub();
 }
 function entryPathWithSlash(path){
@@ -1126,6 +1127,21 @@ function showAfterSplash(idOrFn){
   };
   if(wait<=0){ run(); return; }
   setTimeout(run, wait);
+}
+/** Один переход splash → экран (boot-loader + app.js не дублируют). */
+function finishSplashOnce(idOrFn){
+  if(window.__armadaSplashDone){
+    if(typeof idOrFn==='function') idOrFn();
+    else if(idOrFn) show(idOrFn);
+    return;
+  }
+  window.__armadaSplashDone=true;
+  const run=()=>{
+    if(typeof idOrFn==='function') idOrFn();
+    else if(idOrFn) show(idOrFn);
+  };
+  if(document.querySelector('#splash.show')) showAfterSplash(run);
+  else run();
 }
 function isCancelledOrder(o){
   return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));
