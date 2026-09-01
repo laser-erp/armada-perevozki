@@ -4616,6 +4616,10 @@ function wireAdminLoginHandlers(){
   }
 }
 function showDefaultAfterSplash(){
+  if(typeof isRoleHubUrl==='function' && isRoleHubUrl()){
+    showRoleHub();
+    return;
+  }
   if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
     if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
     const sid=typeof entryLoginScreenId==='function'?entryLoginScreenId():null;
@@ -4626,17 +4630,11 @@ function showDefaultAfterSplash(){
   if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
   showRoleHub();
 }
-// Сразу после загрузки localStorage — без PIN, если сессия была (кроме /a без PIN в этой вкладке)
+// Сессию на /a/ /v/ /z/ восстанавливаем; на корне — только хаб ролей (без lastRole).
 try{
   const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
   if(urlEntry==='driver' && restoreDriverSession()) show('driver');
-  else if(!urlEntry){
-    const last=localStorage.getItem(LAST_ROLE_KEY)||'';
-    if(last==='driver' && restoreDriverSession()) show('driver');
-    else if(last==='customer'){ /* customer.js ниже */ }
-    else if(canAutoRestoreAdmin()) show('admin');
-    else if(restoreDriverSession()) show('driver');
-  }
+  else if(urlEntry==='admin' && canAutoRestoreAdmin()) show('admin');
 }catch(_){}
 (async function boot(){
   try{
@@ -4674,6 +4672,7 @@ try{
     return true;
   };
   const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
+  const onRoleHub=typeof isRoleHubUrl==='function' && isRoleHubUrl();
   if(urlEntry==='customer'){
     try{ await initCloudSync(); }catch(_){}
     initPortalScopeFromPage();
@@ -4689,6 +4688,11 @@ try{
       renderAdmin();
       if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     }else openDedicatedEntryScreen();
+  } else if(onRoleHub){
+    if(!document.querySelector('#roles.show') && !isArmadaEntryScreenVisible()){
+      if(document.querySelector('#splash.show')) showAfterSplash(showRoleHub);
+      else showRoleHub();
+    }
   } else if(lastRole==='driver'){
     if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
   } else if(lastRole==='customer'){

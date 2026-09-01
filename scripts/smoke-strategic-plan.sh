@@ -41,6 +41,7 @@ if grep -q 'armada_app_v5' "$STORE_TMP"; then pass "store.js KEY"; else fail "st
 if grep -q 'driverInvitePageUrl' "$STORE_TMP"; then pass "driverInvites in store.js"; else fail "driverInvites"; fi
 if grep -q 'ENTRY_SESSION_KEY' "$STORE_TMP"; then pass "separate entry modes in store.js"; else fail "entry modes"; fi
 
+echo "S3 ETRN MVP"
 if grep -q 'fetchArmadaApiHealth' "$STORE_TMP"; then pass "fetchArmadaApiHealth in store.js"; else fail "fetchArmadaApiHealth"; fi
 for f in etrn.js billing.js; do
   if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
@@ -70,6 +71,9 @@ else
   fail "entry paths /v /a /z"
 fi
 if curl -fsS -o /dev/null "$BASE/entry.css"; then pass "entry.css"; else fail "entry.css"; fi
+
+if grep -q 'isRoleHubUrl' "$STORE_TMP"; then pass "isRoleHubUrl in store.js"; else fail "isRoleHubUrl"; fi
+if curl -fsS "$BASE/index.html" | grep -q 'id="roles"'; then pass "index.html roles hub"; else fail "index.html roles hub"; fi
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then

@@ -179,7 +179,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-kontur-keys4317";
+const APP_BUILD="2026-09-01-root-hub4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -281,6 +281,10 @@ function isArmadaEntryScreenVisible(){
 }
 function bootFallbackAfterSplash(){
   if(isArmadaEntryScreenVisible()) return;
+  if(typeof isRoleHubUrl==='function' && isRoleHubUrl()){
+    showRoleHub();
+    return;
+  }
   if(typeof dedicatedEntryMode==='function' && dedicatedEntryMode()){
     if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
   }
@@ -391,6 +395,14 @@ function isDedicatedEntryUrl(){
     const path=(location.pathname||'').toLowerCase();
     return /^\/(v|a|z)(?:\/|$)/.test(path)
       || /(driver|admin|zakaz)\.html$/i.test(path);
+  }catch(_){ return false; }
+}
+/** Корень app (/ или /index.html) — хаб ролей, без автologin по lastRole. */
+function isRoleHubUrl(){
+  try{
+    if(isDedicatedEntryUrl()) return false;
+    const path=(location.pathname||'').toLowerCase();
+    return path==='/' || path==='/index.html';
   }catch(_){ return false; }
 }
 function dedicatedEntryMode(){

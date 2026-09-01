@@ -1,0 +1,43 @@
+---
+description: Маршрутизация входа app.armada.sx — корень vs /a/ /v/ /z/
+alwaysApply: true
+---
+
+# Entry routing (АРМАДА)
+
+## Корень `/` — хаб ролей
+
+На `https://app.armada.sx/` (и `/index.html`) **всегда** показывается экран `#roles` с тремя карточками и кнопками «Кабинет / Водитель / Заказчик`.
+
+**Запрещено на корне:**
+- автologin по `localStorage` (`LAST_ROLE_KEY` / lastRole)
+- автologin по сохранённой сессии admin/driver/customer
+- редирект на `/z/` или `customer-login`
+
+Используй `isRoleHubUrl()` из `store.js` перед любым auto-restore.
+
+## Dedicated URLs — только вход роли
+
+| URL | Экран |
+|-----|--------|
+| `/a/` | `#admin-pin` |
+| `/v/` | `#driver-login` |
+| `/z/`, `/z/{slug}/` | `#customer-login` или портал после сессии |
+
+Ранний роут: `entry-route.js` + `boot-loader.js` → `dedicatedScreenId()`.
+
+На dedicated URL можно восстанавливать сессию (admin с PIN, driver, customer portal).
+
+## «Назад» с экрана входа
+
+`backFromEntryLogin()` на dedicated URL → `location.assign('/')` (хаб), не customer-login.
+
+## Caddy
+
+`/v*`, `/a*`, `/z*` → rewrite `index.html`. Корень `/` → `try_files` → `index.html` без редиректа на `/z/`.
+
+## Проверка после правок
+
+1. Открыть `/` в инкognito → три блока ролей, не форма заказчика.
+2. `/z/` → вход заказчика.
+3. После входа заказчиком, снова `/` → снова хаб (не автologin).
