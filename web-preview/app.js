@@ -477,10 +477,19 @@ function companyHasOwnPark(co){
 }
 function carrierOwnCompanyForSpace(spaceId){
   if(spaceId){
+    const sp=typeof findSpaceById==='function'?findSpaceById(spaceId):null;
+    if(sp&&sp.ownCompanyId){
+      const canonical=findCompanyById(sp.ownCompanyId);
+      if(canonical&&companyHasRole(canonical,'own')) return canonical;
+    }
     const hit=(state.companies||[]).find(c=>c.spaceId===spaceId && companyHasRole(c,'own'));
     if(hit) return hit;
   }
   return ownCompaniesList()[0]||null;
+}
+function isCanonicalOwnCompany(co){
+  if(!co||!co.id) return false;
+  return (state.spaces||[]).some(sp=>sp.ownCompanyId===co.id);
 }
 /** Минимальная и рекомендуемая цена заявки заказчика (по тарифу перевозчика) */
 function quoteBodyCargoMultiplier(draft, fin){
@@ -844,9 +853,12 @@ function upsertCompany(raw){
     if(!c.phones.length && prev.phones) c.phones=prev.phones;
     if(!c.vehicles.length && prev.vehicles) c.vehicles=prev.vehicles;
     if(!c.drivers.length && prev.drivers) c.drivers=prev.drivers;
-    if(!c.roles.includes('customer') && companyHasRole(prev,'customer')) c.roles.push('customer');
-    if(!c.roles.includes('carrier') && companyHasRole(prev,'carrier')) c.roles.push('carrier');
-    if(!c.roles.includes('own') && companyHasRole(prev,'own')) c.roles.push('own');
+    const rolesExplicit=raw&&Array.isArray(raw.roles);
+    if(!rolesExplicit){
+      if(!c.roles.includes('customer') && companyHasRole(prev,'customer')) c.roles.push('customer');
+      if(!c.roles.includes('carrier') && companyHasRole(prev,'carrier')) c.roles.push('carrier');
+      if(!c.roles.includes('own') && companyHasRole(prev,'own')) c.roles.push('own');
+    }
     c.id=prev.id;
     c.spaceId=c.spaceId||prev.spaceId||null;
     c.inn=c.inn||prev.inn||'';

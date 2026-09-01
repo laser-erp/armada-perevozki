@@ -4258,6 +4258,7 @@ function openCatalogs(){
     const isOwn=companyHasRole(c,'own');
     const isCust=companyHasRole(c,'customer');
     const isCarr=companyHasRole(c,'carrier');
+    const canonicalOwn=typeof isCanonicalOwnCompany==='function'&&isCanonicalOwnCompany(c);
     box.innerHTML=`
       <div class="row" style="align-items:center;margin-bottom:4px">
         <h3 style="margin:0;flex:1;font-size:.95rem">${company?'Карточка':'Новая компания'}</h3>
@@ -4276,10 +4277,11 @@ function openCatalogs(){
       </div>
       <label>Юр. адрес</label><input id="co-address" value="${esc(c.address||'')}" />
       <div class="role-toggles">
-        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}/> Наша фирма</label>
+        <label class="role-tog"><input type="checkbox" id="co-role-o" ${isOwn?'checked':''}${canonicalOwn?' disabled':''}/> Наша фирма</label>
         <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
         <label class="role-tog"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
       </div>
+      ${canonicalOwn?`<p class="hint">Это основная «наша фирма» кабинета — роль нельзя снять. Для пилота партнёра создайте отдельного админа в «Активность».</p>`:''}
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>
       <div class="hint" style="margin:0 0 4px">Телефон контакта — в карточке компании; у водителя с тем же ФИО подтянется сам</div>
@@ -4457,6 +4459,10 @@ function openCatalogs(){
       if($('co-role-o')&&$('co-role-o').checked) roles.push('own');
       if($('co-role-c').checked) roles.push('customer');
       if($('co-role-r').checked) roles.push('carrier');
+      if(typeof isCanonicalOwnCompany==='function'&&isCanonicalOwnCompany(c)&&!roles.includes('own')){
+        alert('Нельзя снять «Наша фирма» у основной компании кабинета. Для партнёра — отдельный админ в «Активность».');
+        return;
+      }
       if(!roles.length){ alert('Выберите роль: наша фирма / заказчик / перевозчик'); return; }
       // read contacts from DOM
       contacts=contacts.map((p,i)=>{
