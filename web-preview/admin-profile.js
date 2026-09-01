@@ -125,9 +125,9 @@ function saveAdminSelfProfile(adminId, fields) {
   const phoneRaw = String(fields && fields.phone || '').trim();
   if (name.length < 2) return { ok: false, error: 'Укажите ФИО (минимум 2 символа)' };
   if (name.length > 120) return { ok: false, error: 'Слишком длинное имя' };
+  if (!phoneRaw) return { ok: false, error: 'Укажите номер телефона' };
   const phone = typeof formatPhone === 'function' ? formatPhone(phoneRaw) : phoneRaw;
-  if (!phone) return { ok: false, error: 'Укажите номер телефона' };
-  if (phoneRaw && !phone) return { ok: false, error: 'Некорректный номер телефона' };
+  if (!phone) return { ok: false, error: 'Некорректный номер телефона' };
   if (phone && (state.admins || []).some(a => {
     if (a.id === adminId || a.loginBy !== 'phone') return false;
     const other = typeof adminLoginPhone === 'function' ? adminLoginPhone(a) : formatPhone(a.phone || '');
@@ -161,6 +161,16 @@ function maybeOpenAdminProfileOnLogin(adm) {
   }, 450);
 }
 
+function adminPersonalProfileLabel(){
+  return (typeof isSuperAdmin==='function'&&isSuperAdmin())?'Профиль администратора':'Профиль логиста';
+}
+function syncAdminProfileNavLabels(){
+  const lbl=adminPersonalProfileLabel();
+  const nav=$('admin-profile');
+  const h1=$('admin-profile-title')||document.querySelector('#admin-profile-screen h1');
+  if(nav) nav.textContent=lbl;
+  if(h1) h1.textContent=lbl;
+}
 function renderAdminProfile() {
   const host = $('admin-profile-form');
   if (!host || !currentAdmin) return;
@@ -175,6 +185,7 @@ function renderAdminProfile() {
   host.innerHTML = `<section class="admin-profile-card">
     ${incomplete ? '<div class="admin-profile-alert" id="adm-profile-alert">Заполните ФИО и телефон — для связи, документов и входа по телефону (если включит администратор).</div>' : ''}
     <h2 class="form-section-title">Мои данные</h2>
+    <p class="cat-panel-hint">Личные данные ${typeof isSuperAdmin==='function'&&isSuperAdmin()?'администратора':'логиста'} — не путать с «Профилем компании» в Справочниках (ИНН, банк, парк).</p>
     <div class="admin-profile-fields">
       <label>ФИО</label>
       <input id="adm-profile-name" type="text" autocomplete="name" placeholder="Иванов Иван Иванович" value="${esc(adm.name || '')}" />
@@ -250,6 +261,7 @@ function openAdminProfile() {
     show('admin-pin');
     return;
   }
+  syncAdminProfileNavLabels();
   document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b => {
     b.classList.toggle('on', b.dataset.nav === 'profile');
   });

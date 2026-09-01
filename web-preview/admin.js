@@ -409,6 +409,7 @@ function updateAdminChrome(){
   }
   syncAdminNav();
   paintAdminOwnerFilters();
+  syncAdminProfileNavLabels();
 }
 function saveAdminSession(){
   if(!currentAdmin){ try{ localStorage.removeItem(ADMIN_SESSION_KEY); }catch(_){} return; }
@@ -904,6 +905,7 @@ function renderAdminActivity(){
       <input id="new-firm-director" placeholder="Руководитель" />
       <label class="check"><input type="checkbox" id="new-adm-super"/> Супер админ</label>
       <button type="button" class="primary cat-add-btn" id="new-adm-add">+ администратор и фирма</button>
+      <p class="hint">Создаётся кабинет, «наша фирма» и <strong>профиль водителя</strong> с тем же ФИО — для входа в приложение «Водитель» (телефон + PIN).</p>
     </div>
       <h2 class="form-section-title" style="margin-top:8px">Реквизиты по ИНН (ФНС)</h2>
       <p class="cat-panel-hint">По умолчанию — официальный ЕГРЮЛ (egrul.nalog.ru). Для полного адреса: ключ API-ФНС (api-fns.ru). DaData — резервный источник.</p>
@@ -4336,7 +4338,7 @@ function openCatalogs(){
     const catalogSid=typeof catalogViewSpaceId==='function'?catalogViewSpaceId():currentSpaceId();
     box.innerHTML=`
       <div class="row" style="align-items:center;margin-bottom:4px">
-        <h3 style="margin:0;flex:1;font-size:.95rem">${company?'Карточка':'Новая компания'}</h3>
+        <h3 style="margin:0;flex:1;font-size:.95rem">${company?'Профиль компании':'Новая компания'}</h3>
         <button type="button" class="icon-btn" id="co-cancel" title="Закрыть">×</button>
       </div>
       <label>ИНН</label>

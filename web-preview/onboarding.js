@@ -318,7 +318,7 @@
         placement:'top'
       },
       {
-        title:'Профиль',
+        title:'Профиль водителя',
         body:'<p>Начисления и ожидающие расчёта суммы, уведомления, выход.</p><p>Подсказки и полная инструкция — в профиле или на <a href="help.html?role=driver" target="_blank" rel="noopener">странице помощи водителя</a>.</p>',
         target:'btn-cabinet',
         placement:'top'

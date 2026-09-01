@@ -555,7 +555,7 @@
           <button type="button" class="admin-nav-item" data-nav="catalogs" id="admin-catalogs">Справочники</button>
           <button type="button" class="admin-nav-item" data-nav="links" id="admin-links">Ссылки</button>
           <button type="button" class="admin-nav-item" data-nav="documents" id="admin-documents">Документы</button>
-          <button type="button" class="admin-nav-item" data-nav="profile" id="admin-profile">Профиль</button>
+          <button type="button" class="admin-nav-item" data-nav="profile" id="admin-profile">Профиль логиста</button>
           <button type="button" class="admin-nav-item" data-nav="activity" id="admin-activity" style="display:none">Активность</button>
           <button type="button" class="admin-nav-item" data-nav="billing" id="admin-billing" style="display:none">Тарифы</button>
           <button type="button" class="admin-nav-item" data-nav="plans" id="admin-plans" style="display:none">Планы</button>
@@ -858,7 +858,7 @@
     <div class="admin-form-shell">
       <header class="form-topbar">
         <button type="button" class="form-back" id="profile-back">← Назад</button>
-        <h1>Профиль</h1>
+        <h1 id="admin-profile-title">Профиль логиста</h1>
       </header>
       <div class="admin-form-scroll" id="admin-profile-form"></div>
     </div>
@@ -948,10 +948,10 @@
       <button type="button" id="btn-home" class="on" aria-current="page"><span class="tab-ico" aria-hidden="true">●</span>Главная</button>
       <button type="button" id="btn-orders"><span class="tab-ico" aria-hidden="true">☰</span>Заявки</button>
       <button type="button" id="btn-shifts"><span class="tab-ico" aria-hidden="true">◷</span>История</button>
-      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль</button>
+      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль водителя</button>
     </nav>
     <div id="cabinet-panel" class="driver-panel">
-      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль</h1></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль водителя</h1></header>
       <div class="panel-body" id="cabinet-list"></div>
     </div>
     <div id="orders-panel" class="driver-panel">

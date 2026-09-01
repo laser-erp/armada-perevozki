@@ -441,6 +441,11 @@ async function enterAsDriver(rec){
     const bind=resolveDriverOrderBinding(DRIVER, '');
     DRIVER_COMPANY_ID=bind.ownCompanyId||null;
   }
+  if(DRIVER_COMPANY_ID){
+    if(!rec.companyId) rec.companyId=DRIVER_COMPANY_ID;
+    const lbl=typeof driverCompanyLabel==='function'?driverCompanyLabel(rec):'';
+    if(lbl && rec.companyName!==lbl){ rec.companyName=lbl; bumpDataEpoch('driver-company-label'); persist(); }
+  }
   // Админ-сессию в localStorage оставляем — из водителя можно вернуться.
   // В памяти currentAdmin сбрасываем, чтобы режим водителя не смешивался с правами админа.
   if(currentAdmin){
