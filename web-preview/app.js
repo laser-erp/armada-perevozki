@@ -984,6 +984,7 @@ function normalizeAdmin(a){
   if(stamp) out.stampDataUrl=stamp;
   const signature=adminDocImageOrNull(a.signatureDataUrl);
   if(signature) out.signatureDataUrl=signature;
+  if(a.skipDriverMirror) out.skipDriverMirror=true;
   return out;
 }
 function migrateAdmins(){

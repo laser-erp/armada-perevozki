@@ -904,8 +904,9 @@ function renderAdminActivity(){
       <input id="new-firm-address" placeholder="Адрес" />
       <input id="new-firm-director" placeholder="Руководитель" />
       <label class="check"><input type="checkbox" id="new-adm-super"/> Супер админ</label>
+      <label class="check"><input type="checkbox" id="new-adm-driver"/> Создать профиль водителя (если сам за рулём)</label>
       <button type="button" class="primary cat-add-btn" id="new-adm-add">+ администратор и фирма</button>
-      <p class="hint">Создаётся кабинет, «наша фирма» и <strong>профиль водителя</strong> с тем же ФИО — для входа в приложение «Водитель» (телефон + PIN).</p>
+      <p class="hint">Профиль водителя нужен только для входа в приложение «Водитель». Офисный логист — галочку не ставить.</p>
     </div>
       <h2 class="form-section-title" style="margin-top:8px">Реквизиты по ИНН (ФНС)</h2>
       <p class="cat-panel-hint">По умолчанию — официальный ЕГРЮЛ (egrul.nalog.ru). Для полного адреса: ключ API-ФНС (api-fns.ru). DaData — резервный источник.</p>
@@ -1046,6 +1047,7 @@ function renderAdminActivity(){
     }
     const adm={id:uuid(), name, pin, isSuper, spaceId:null, loginBy};
     if(phone) adm.phone=phone;
+    if(!($('new-adm-driver')||{}).checked) adm.skipDriverMirror=true;
     state.admins.push(adm);
     createSpaceForAdmin(adm, {
       name:firmName,
@@ -1055,7 +1057,10 @@ function renderAdminActivity(){
       address:(($('new-firm-address')||{}).value||'').trim(),
       director:(($('new-firm-director')||{}).value||'').trim()
     });
-    if(typeof syncAdminAuthToDrivers==='function') syncAdminAuthToDrivers(adm);
+    if(($('new-adm-driver')||{}).checked){
+      if(typeof ensureAdminDriverMirror==='function') ensureAdminDriverMirror(adm);
+      else if(typeof syncAdminAuthToDrivers==='function') syncAdminAuthToDrivers(adm);
+    }
     if(typeof bumpDataEpoch==='function') bumpDataEpoch('new-admin');
     const btn=$('new-adm-add');
     if(btn){ btn.disabled=true; btn.textContent='…'; }
@@ -1666,10 +1671,14 @@ function openDriverCard(driverKey){
     if(!isSuperAdmin() && (!currentAdmin || (d.ownerAdminId!==currentAdmin.id && d.companyId!==(currentOwnCompany()||{}).id))){ alert('Нет доступа'); return; }
     const name=d.name||'';
     const firmName=d.companyName||(findCompanyById(d.companyId)||{}).name||'фирмы';
-    if(!confirm(`Удалить водителя ${name} из «${firmName}»?`)) return;
-    const sameFirm=(state.drivers||[]).filter(x=>d.companyId?x.companyId===d.companyId:(d.spaceId?x.spaceId===d.spaceId:true));
-    if(sameFirm.length<=1){ alert('В этой фирме должен остаться хотя бы один водитель'); return; }
+    const adm=d.ownerAdminId?(state.admins||[]).find(a=>a.id===d.ownerAdminId):null;
+    const isAdminMirror=adm&&samePersonName(adm.name, name);
+    const warn=isAdminMirror
+      ? `\n\nЭто зеркало администратора «${adm.name}» — после удаления не будет входа в «Водитель» под этим ФИО.`
+      : '';
+    if(!confirm(`Удалить водителя ${name} из «${firmName}»?${warn}`)) return;
     if(typeof markDriverDeleted==='function') markDriverDeleted(d);
+    if(isAdminMirror) adm.skipDriverMirror=true;
     state.drivers.splice(i,1);
     bumpDataEpoch('del-driver');
     persist();

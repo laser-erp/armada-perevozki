@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-fleet4317c";
+const APP_BUILD="2026-09-01-alice-driver4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1767,6 +1767,11 @@ function samePersonName(a,b){
   if(!ia||!ib) return true;
   return ia.charAt(0)===ib.charAt(0);
 }
+function adminMirrorDriverBlocked(adm, co){
+  if(!adm||!co) return true;
+  if(adm.skipDriverMirror) return true;
+  return isDriverDeleted(adm.name, co.id);
+}
 /** PIN админа → водительские профили; при восстановлении доступа — сразу на сервер. */
 function syncAdminAuthToDrivers(adm){
   if(!adm||!adm.id) return false;
@@ -1777,7 +1782,7 @@ function syncAdminAuthToDrivers(adm){
   const sp=findSpaceById(adm.spaceId);
   const existing=(state.drivers||[]).find(d=>samePersonName(d.name, adm.name));
   const driverName=existing?existing.name:adm.name;
-  if(co && ensureDriverInCompany({
+  if(co && !adminMirrorDriverBlocked(adm, co) && ensureDriverInCompany({
     name:driverName, companyId:co.id, companyName:co.name,
     spaceId:adm.spaceId||co.spaceId||null,
     ownerAdminId:adm.id, ownerAdminName:adm.name,
@@ -2029,7 +2034,7 @@ function ensureFleetPerSpaces(){
     });
     const adm=(state.admins||[]).find(a=>a.id===sp.adminId)
       || (state.admins||[]).find(a=>a.spaceId===sp.id);
-    if(adm && ensureDriverInCompany({
+    if(adm && co && !adminMirrorDriverBlocked(adm, co) && ensureDriverInCompany({
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
     })) changed=true;
@@ -2213,14 +2218,20 @@ function createSpaceForAdmin(admin, firm){
   if(typeof bootstrapPilotSpace==='function') bootstrapPilotSpace(space.id);
   else if(typeof getBillingForSpace==='function') getBillingForSpace(space.id);
   admin.spaceId=space.id;
-  const co=ensureOwnCompanyForSpace(space);
-  if(co){
-    ensureDriverInCompany({
-      name:admin.name, companyId:co.id, companyName:co.name, spaceId:space.id,
-      ownerAdminId:admin.id, ownerAdminName:admin.name
-    });
-  }
+  ensureOwnCompanyForSpace(space);
   return space;
+}
+function ensureAdminDriverMirror(adm, opts){
+  if(!adm||!adm.spaceId) return false;
+  const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(adm.spaceId):null;
+  if(!co||adminMirrorDriverBlocked(adm, co)) return false;
+  if(typeof unmarkDriverDeleted==='function') unmarkDriverDeleted(adm.name, co.id);
+  adm.skipDriverMirror=false;
+  return ensureDriverInCompany(Object.assign({
+    name:adm.name, companyId:co.id, companyName:co.name, spaceId:adm.spaceId,
+    ownerAdminId:adm.id, ownerAdminName:adm.name,
+    phone:adm.phone||'', pin:String(adm.pin||'').trim()
+  }, opts||{}));
 }
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
 /** Автозаглушки парка (legacy seed) — не настоящие машины. */
@@ -2242,6 +2253,19 @@ function vehiclePlateInUse(plate){
     return v&&matchPl(v.plate);
   })) return true;
   return false;
+}
+/** Админ явно удалил зеркало водителя — не создавать снова. */
+function migrateAdminSkipDriverMirror(){
+  let changed=false;
+  (state.admins||[]).forEach(adm=>{
+    const co=typeof ownCompanyForAdminId==='function'?ownCompanyForAdminId(adm.id):null;
+    if(!co) return;
+    if(isDriverDeleted(adm.name, co.id) && !adm.skipDriverMirror){
+      adm.skipDriverMirror=true;
+      changed=true;
+    }
+  });
+  return changed;
 }
 /** Удалить автосозданные заглушки без заказов и смен. */
 function migrateRemoveAutoSeedVehicles(){
@@ -2378,6 +2402,7 @@ function migrateSpaces(){
   });
   if(ensureFleetPerSpaces()) changed=true;
   if(migrateRemoveAutoSeedVehicles()) changed=true;
+  if(migrateAdminSkipDriverMirror()) changed=true;
   if(migratePurgeCrossTenantGhostDrivers()) changed=true;
   if(migrateStripSpuriousOwnRoles()) changed=true;
   return changed;
