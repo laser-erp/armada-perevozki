@@ -4102,14 +4102,16 @@ function openCatalogs(){
     if(!fleetCo) return false;
     return v.companyId===fleetCo.id;
   });
-  const catalogHint=(isSuperAdmin()&&(state.adminOwnerFilter||'all')==='all')
-    ? '<p class="cat-panel-hint">Показаны компании <strong>всех кабинетов</strong>. Справочник Армады — выберите «ООО «Армада»» в фильтре «Все кабинеты» сверху. «Наша фирма» у МБН и Нечаева — их кабинеты, не контрагенты Армады.</p>'
+  const allCabinets=typeof catalogAllCabinetsOpen==='function'&&catalogAllCabinetsOpen();
+  const catalogHint=allCabinets
+    ? '<p class="cat-panel-hint">Показаны компании <strong>всех кабинетов</strong>. Чтобы видеть справочник как у логиста — выберите его кабинет в фильтре сверху.</p>'
     : '';
   const companyCards=companies.map(c=>{
     const roles=roleLabels(c);
     const spLbl=typeof companySpaceLabel==='function'?companySpaceLabel(c):'';
+    const showSpaceChip=allCabinets;
     const chips=[
-      spLbl&&(state.adminOwnerFilter||'all')==='all'?`<span class="chip">${esc(spLbl)}</span>`:'',
+      showSpaceChip&&spLbl?`<span class="chip">${esc(spLbl)}</span>`:'',
       companyHasRole(c,'own')?'<span class="chip hot">наша</span>':'',
       companyHasRole(c,'own')?(typeof isDispatcherCompany==='function' && isDispatcherCompany(c)?'<span class="chip">диспетчер</span>':''):'',
       companyHasRole(c,'customer')?'<span class="chip">заказчик</span>':'',
@@ -4128,7 +4130,7 @@ function openCatalogs(){
       nContacts?`${nContacts} конт.`:null,
       companyHasRole(c,'own')?`вод. ${fleetDriversForCompany(c.id).length}`:null,
       companyHasRole(c,'customer')&&nAddr?`${nAddr} адр.`:null,
-      companyHasRole(c,'carrier')?`ТС ${(c.vehicles||[]).length}`:null
+      companyHasRole(c,'carrier')?`ТС ${typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(c.id).length:(c.vehicles||[]).length}`:null
     ].filter(Boolean).join(' · ');
     return `<div class="dense-row" data-co-row="${esc(c.id)}">
       <button type="button" class="grow" data-edit-co="${esc(c.id)}">
@@ -4159,7 +4161,7 @@ function openCatalogs(){
   }).join('') || `<div class="hint">Нет водителей — добавьте ниже</div>`;
 
   const vehicleCards=vehicles.map(({v,i})=>{
-    const coName=v.companyName||(v.companyId&&(findCompanyById(v.companyId)||{}).name)||(isSuperAdmin()&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'');
+    const coName=v.companyName||(v.companyId&&(findCompanyById(v.companyId)||{}).name)||(allCabinets&&v.spaceId?((findSpaceById(v.spaceId)||{}).name||''):'');
     const spec=vehicleSpecText(v);
     const ivs=v.serviceIntervals||[];
     const overs=ivs.filter(iv=>serviceIntervalStatus(v,iv).level==='over').length;
@@ -4220,7 +4222,7 @@ function openCatalogs(){
           : '';
         const hint=active
           ? `Водители «${esc(active.name)}». Нажмите карточку — все документы в одном месте.`
-          : (isSuperAdmin()?'Выберите компанию с парком':'Сначала нужна ваша фирма');
+          : (allCabinets?'Выберите компанию с парком':'Сначала нужна ваша фирма');
         return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
       })()}
       <div class="cat-quick drv-add">
@@ -4245,7 +4247,7 @@ function openCatalogs(){
           : '';
         const hint=active
           ? `Авто «${esc(active.name)}»: тоннаж, габариты, экипаж — в карточке «Ремонт и ТО».`
-          : (isSuperAdmin()?'Выберите компанию с парком':'Сначала нужна ваша фирма');
+          : (allCabinets?'Выберите компанию с парком':'Сначала нужна ваша фирма');
         return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
       })()}
       <div class="cat-quick">
@@ -4268,8 +4270,8 @@ function openCatalogs(){
       ${(()=>{
         const finCo=catalogFinanceCompany();
         const fin=finCo?financeForCompanyId(finCo.id):normalizeFinance(state.finance);
-        const owns=ownCompaniesList();
-        const firmPick=isSuperAdmin() && owns.length
+        const owns=typeof catalogOwnCompaniesInView==='function'?catalogOwnCompaniesInView():ownCompaniesList().filter(c=>companyInMySpace(c));
+        const firmPick=owns.length>1
           ? `<label class="svc-full">Фирма<select id="fin-company">${owns.map(c=>`<option value="${esc(c.id)}" ${finCo&&c.id===finCo.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
           : `<p class="cat-panel-hint">Тариф фирмы: <b>${esc((finCo&&finCo.name)||'—')}</b></p>`;
         return `
@@ -4367,7 +4369,7 @@ function openCatalogs(){
         <label class="role-tog"><input type="checkbox" id="co-role-c" ${isCust?'checked':''}/> Заказчик</label>
         <label class="role-tog"><input type="checkbox" id="co-role-r" ${isCarr?'checked':''}/> Перевозчик</label>
       </div>
-      ${foreignOwn&&foreignSpace?`<p class="hint">Это «наша фирма» кабинета «${esc(foreignSpace.name)}», не контрагент текущего справочника. Чтобы добавить МБН/Нечаева как партнёра в Армаду — создайте <strong>новую</strong> карточку (+) в фильтре «ООО «Армада»».</p>`:''}
+      ${foreignOwn&&foreignSpace&&allCabinets?`<p class="hint">Это «наша фирма» кабинета «${esc(foreignSpace.name)}», не контрагент текущего справочника. Чтобы добавить её как партнёра — создайте <strong>новую</strong> карточку (+) в нужном кабинете.</p>`:''}
       ${canonicalOwn&&!foreignOwn?`<p class="hint">Это основная «наша фирма» кабинета — роль нельзя снять. Для пилота партнёра создайте отдельного админа в «Активность».</p>`:''}
       <label>Заметка</label><input id="co-note" value="${esc(c.note||'')}" />
       <h4>Контактные лица</h4>

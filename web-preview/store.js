@@ -178,7 +178,7 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-01-alice-driver4317";
+const APP_BUILD="2026-09-01-unified-company-card4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2181,14 +2181,20 @@ function catalogDriverCompany(){
   return owns[0]||null;
 }
 function catalogFinanceCompany(){
-  if(!isSuperAdmin()) return currentOwnCompany();
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
   if(catalogFinanceCompanyId){
     const hit=findCompanyById(catalogFinanceCompanyId);
-    if(hit && companyHasRole(hit,'own')) return hit;
+    if(hit && companyHasRole(hit,'own') && inSpace(hit)) return hit;
   }
-  const my=currentOwnCompany();
-  if(my) return my;
-  return ownCompaniesList()[0]||null;
+  if(catalogActiveCompanyId){
+    const active=findCompanyById(catalogActiveCompanyId);
+    if(active && companyHasRole(active,'own') && inSpace(active)) return active;
+  }
+  const my=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(my && inSpace(my)) return my;
+  const list=typeof catalogOwnCompaniesInView==='function'?catalogOwnCompaniesInView()
+    :ownCompaniesList().filter(inSpace);
+  return list[0]||null;
 }
 /** Раздать общий тариф по «нашим фирмам», если у фирмы ещё нет своего. */
 function migrateCompanyFinance(){

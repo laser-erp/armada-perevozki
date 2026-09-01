@@ -503,6 +503,15 @@ function catalogViewSpaceId(){
   }
   return typeof currentSpaceId==='function'?currentSpaceId():null;
 }
+/** Супер-админ смотрит справочник всех кабинетов сразу (не один кабинет). */
+function catalogAllCabinetsOpen(){
+  return typeof isSuperAdmin==='function'&&isSuperAdmin()&&(state.adminOwnerFilter||'all')==='all';
+}
+/** «Наши фирмы» в текущем фильтре справочника. */
+function catalogOwnCompaniesInView(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  return (state.companies||[]).filter(c=>companyHasRole(c,'own')&&inSpace(c));
+}
 /** «Наша фирма» другого кабинета — не контрагент текущего пространства. */
 function isForeignCanonicalOwnCompany(co){
   if(!isCanonicalOwnCompany(co)) return false;

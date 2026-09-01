@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-01-alice-driver4317';
+  var APP_BUILD = '2026-09-01-unified-company-card4317';
 
   window.__armadaBootDone = false;
 
