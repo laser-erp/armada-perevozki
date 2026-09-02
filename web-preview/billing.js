@@ -456,6 +456,12 @@ function billingBannerForAdmin(){
   if(b.balance<0) parts.push(`комиссия биржи: ${formatRub(-b.balance)}`);
   if(use.drivers>=lim.drivers || use.vehicles>=lim.vehicles) parts.push('лимит парка');
   if(st==='readonly' || st==='grace') parts.push('создание заказов ограничено');
+  const et=billingCanUseEtrn(sid);
+  if(et.ok && typeof epdSpaceForSpaceId==='function'){
+    const epd=epdSpaceForSpaceId(sid);
+    const epdLbl=typeof epdSpaceStatusLabel==='function'?epdSpaceStatusLabel(epd.status):'';
+    parts.push(`ЭТrН Контур: ${epdLbl||'ждём boxId'}`);
+  }
   return parts.join(' · ');
 }
 

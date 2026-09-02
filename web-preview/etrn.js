@@ -78,6 +78,22 @@ function orderEtrnBadgeHtml(o){
 function adminEtrnSignPendingCount(orders){
   return (orders||[]).filter(o=>orderEtrnNeedsMySignature(o)).length;
 }
+function orderEtrnWaitingCustomer(o){
+  if(!orderEtrnVisible(o) || !o.etrn) return false;
+  if(!orderEtrnTitulPending(o,'t1')) return false;
+  return typeof orderEtrnLoadingPhase==='function'?orderEtrnLoadingPhase(o):!!(o.startOdometer!=null||o.arrivedAt!=null);
+}
+function orderEtrnWaitingDriver(o){
+  if(!orderEtrnVisible(o) || !o.etrn) return false;
+  if(orderEtrnTitulPending(o,'t3')||orderEtrnTitulPending(o,'t4')) return true;
+  return false;
+}
+function adminEtrnWaitCustomerCount(orders){
+  return (orders||[]).filter(o=>orderEtrnWaitingCustomer(o)).length;
+}
+function adminEtrnWaitDriverCount(orders){
+  return (orders||[]).filter(o=>orderEtrnWaitingDriver(o)).length;
+}
 function orderEtrnSectionHtml(o){
   if(!orderEtrnVisible(o)) return '';
   const et=o.etrn;

@@ -255,21 +255,28 @@ function syncAdminNotifyToggle(){
   btn.title=on?'Уведомления о входящих: вкл':'Включить уведомления о входящих заявках';
 }
 function updateAdminEtrnSignBadge(){
-  const badge=$('admin-etrn-sign-badge');
-  const btn=document.querySelector('#admin-filters button[data-filter="etrn-sign"]');
   const pool=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.cancelledAt && !(o.closedAt && o.cancelReason));
-  const n=typeof adminEtrnSignPendingCount==='function'?adminEtrnSignPendingCount(pool):0;
-  if(badge){
+  const nSign=typeof adminEtrnSignPendingCount==='function'?adminEtrnSignPendingCount(pool):0;
+  const nT1=typeof adminEtrnWaitCustomerCount==='function'?adminEtrnWaitCustomerCount(pool):0;
+  const nDrv=typeof adminEtrnWaitDriverCount==='function'?adminEtrnWaitDriverCount(pool):0;
+  const setBadge=(id, n, aria)=>{
+    const badge=$(id);
+    if(!badge) return;
     if(n>0){
       badge.textContent=n>99?'99+':String(n);
       badge.hidden=false;
-      badge.setAttribute('aria-label', `${n} заказов ждут подпись T2`);
+      badge.setAttribute('aria-label', aria);
     }else{
       badge.hidden=true;
       badge.removeAttribute('aria-label');
     }
-  }
-  if(btn) btn.classList.toggle('has-unread', n>0);
+  };
+  setBadge('admin-etrn-sign-badge', nSign, `${nSign} заказов ждут подпись T2`);
+  setBadge('admin-etrn-t1-badge', nT1, `${nT1} заказов ждут подпись T1`);
+  setBadge('admin-etrn-driver-badge', nDrv, `${nDrv} заказов ждут подпись водителя`);
+  document.querySelector('#admin-filters button[data-filter="etrn-sign"]')?.classList.toggle('has-unread', nSign>0);
+  document.querySelector('#admin-filters button[data-filter="etrn-wait-customer"]')?.classList.toggle('has-unread', nT1>0);
+  document.querySelector('#admin-filters button[data-filter="etrn-wait-driver"]')?.classList.toggle('has-unread', nDrv>0);
 }
 function updateAdminInboxBadge(){
   const badge=$('admin-inbox-badge');
@@ -959,6 +966,29 @@ function renderAdminActivity(){
         <input id="epd-webhook-token" type="password" placeholder="Секрет webhook" value="${esc((state.settings&&state.settings.epdWebhookToken)||'')}" style="flex:1" />
         <button type="button" class="primary" id="epd-webhook-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
       </div>
+      <h2 class="form-section-title" style="margin-top:12px">boxId кабинетов (Контур.Логистика)</h2>
+      <p class="cat-panel-hint">Ящик организации в Контуре — вводит только супер-админ. Логист видит статус «подключено» / «ждём» в баннере тарифа.</p>
+      <div class="cat-list" id="epd-space-box-list">
+        ${(state.spaces||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ru')).map(sp=>{
+          const rec=typeof epdSpaceForSpaceId==='function'?epdSpaceForSpaceId(sp.id):{};
+          const stLbl=typeof epdSpaceStatusLabel==='function'?epdSpaceStatusLabel(rec.status):'';
+          const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(sp.id):null;
+          const inn=rec.orgInn||(co&&co.inn)||sp.inn||'';
+          return `<div class="item-card" data-epd-space="${esc(sp.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(sp.name||'—')}</div>
+              <span class="hint ${rec.status==='connected'?'ok':''}">${esc(stLbl)}</span>
+            </div>
+            <div class="hint">${inn?`ИНН ${esc(inn)}`:''}${rec.connectedAt?` · с ${esc(typeof dateTime==='function'?dateTime(rec.connectedAt):rec.connectedAt)}`:''}</div>
+            <label>boxId</label>
+            <div class="row" style="gap:8px">
+              <input class="epd-space-box-input" data-space-id="${esc(sp.id)}" value="${esc(rec.boxId||'')}" placeholder="UUID ящика Контура" style="flex:1" />
+              <button type="button" class="primary epd-space-box-save" data-space-id="${esc(sp.id)}" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
+            </div>
+            ${rec.lastError?`<p class="error">${esc(rec.lastError)}</p>`:''}
+          </div>`;
+        }).join('')||'<p class="hint">Нет кабинетов</p>'}
+      </div>
       <h2 class="form-section-title" style="margin-top:12px">Карта маршрута (Яндекс)</h2>
       <p class="cat-panel-hint">Ключ JavaScript API и Static API Яндекс.Карт — для схемы Яндекса на форме заказчика. Без ключа — OpenStreetMap.</p>
       <label>API-ключ Яндекс.Карт</label>
@@ -1027,6 +1057,18 @@ function renderAdminActivity(){
     state.settings.epdWebhookToken=(($('epd-webhook-token')||{}).value||'').trim();
     persist();
     alert(state.settings.epdWebhookToken?'Webhook token сохранён':'Webhook token очищен');
+  });
+  document.querySelectorAll('.epd-space-box-save').forEach(btn=>{
+    btn.onclick=()=>{
+      const sid=btn.dataset.spaceId;
+      if(!sid||typeof setEpdSpaceRecord!=='function') return;
+      const inp=document.querySelector(`.epd-space-box-input[data-space-id="${CSS.escape(sid)}"]`);
+      const boxId=((inp&&inp.value)||'').trim();
+      setEpdSpaceRecord(sid, { boxId, status:boxId?'connected':'pending' });
+      persist();
+      flashAdmPinOk(boxId?`boxId сохранён · ${findSpaceById(sid)?.name||sid}`:'boxId очищен');
+      renderAdminActivity();
+    };
   });
   paintEpdServerStatus();
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{
@@ -2338,6 +2380,8 @@ function filteredOrders(){
     if(state.adminFilter==='progress') return !looksClosedOrder(o) && o.startOdometer!=null;
     if(state.adminFilter==='closed') return looksClosedOrder(o);
     if(state.adminFilter==='etrn-sign') return typeof orderEtrnNeedsMySignature==='function' && orderEtrnNeedsMySignature(o);
+    if(state.adminFilter==='etrn-wait-customer') return typeof orderEtrnWaitingCustomer==='function' && orderEtrnWaitingCustomer(o);
+    if(state.adminFilter==='etrn-wait-driver') return typeof orderEtrnWaitingDriver==='function' && orderEtrnWaitingDriver(o);
     return true;
   });
 }
@@ -2902,6 +2946,10 @@ function renderAdmin(){
     const checklist='';
     let emptyHint=(state.adminFilter||'all')==='etrn-sign'
       ? 'Нет заказов, где нужна ваша подпись перевозчика (T2).'
+      : (state.adminFilter||'all')==='etrn-wait-customer'
+      ? 'Нет заказов, где ждём подпись заказчика (T1).'
+      : (state.adminFilter||'all')==='etrn-wait-driver'
+      ? 'Нет заказов, где ждём подпись водителя (T3/T4).'
       : isSuperAdmin()
       ? 'Пока нет заявок в выбранном кабинете. Переключите «Все кабинеты» или фирму с заказами (например «ИП Нечаев»).'
       : 'Пока нет заявок. Пройдите чеклист в «Настройки кабинета» и нажмите + Заказ';
