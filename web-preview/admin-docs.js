@@ -243,6 +243,37 @@ function adminDocsConstructorIsOpLetter(tplId) {
     || (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId));
 }
 
+function adminDocsTplVarGroupsForTemplate(tplId) {
+  const isOp = adminDocsConstructorIsOpLetter(tplId);
+  const isSignOp = typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId);
+  if (isOp) {
+    const vars = isSignOp && typeof SIGN_OPERATOR_LETTER_VARS !== 'undefined'
+      ? SIGN_OPERATOR_LETTER_VARS
+      : (typeof OPERATOR_LETTER_VARS !== 'undefined' ? OPERATOR_LETTER_VARS : [{ key: '{{today}}', label: 'Сегодня', hint: 'Текущая дата' }]);
+    return [{ title: isSignOp ? 'Данные компании' : 'Служебные поля', vars }];
+  }
+  return typeof DOC_TEMPLATE_VAR_GROUPS !== 'undefined' ? DOC_TEMPLATE_VAR_GROUPS : [];
+}
+
+function adminDocsTplVarsPanelHtml(groups) {
+  const intro = `<p class="adm-tpl-vars-intro">Подстановочные поля: нажмите строку — код вставится в текст. При печати подставятся данные из выбранной заявки и справочников.</p>`;
+  const body = (groups || []).map(g => `
+    <details class="adm-tpl-var-group" open>
+      <summary class="adm-tpl-var-group-title">${esc(g.title)}</summary>
+      <ul class="adm-tpl-var-list">
+        ${(g.vars || []).map(v => `
+          <li>
+            <button type="button" class="adm-tpl-var-row" data-adm-tpl-var="${esc(v.key)}" title="Вставить ${esc(v.key)}">
+              <span class="adm-tpl-var-label">${esc(v.label || v.key)}</span>
+              ${v.hint ? `<span class="adm-tpl-var-hint">${esc(v.hint)}</span>` : ''}
+              <code class="adm-tpl-var-key">${esc(v.key)}</code>
+            </button>
+          </li>`).join('')}
+      </ul>
+    </details>`).join('');
+  return intro + body;
+}
+
 function adminDocsConstructorPanelHtml() {
   const sid = adminDocsSpaceId();
   const tplId = adminDocsConstructorTpl || 'application';
@@ -273,16 +304,8 @@ function adminDocsConstructorPanelHtml() {
       <span class="adm-tpl-item-title">${esc(t.title)}</span>
       <span class="adm-tpl-item-hint">${esc(t.hint)}</span>
     </button>`).join('');
-  const vars = !isOp && (typeof DOC_TEMPLATE_VARS !== 'undefined' ? DOC_TEMPLATE_VARS : []).map(v =>
-    `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
-  ).join('');
-  const opVars = isOp
-    ? (isSignOp && typeof SIGN_OPERATOR_LETTER_VARS !== 'undefined'
-      ? SIGN_OPERATOR_LETTER_VARS
-      : (typeof OPERATOR_LETTER_VARS !== 'undefined' ? OPERATOR_LETTER_VARS : [{ key: '{{today}}', label: 'Сегодня' }]))
-      .map(v => `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`)
-      .join('')
-    : '';
+  const varGroups = adminDocsTplVarGroupsForTemplate(tplId);
+  const varsPanel = adminDocsTplVarsPanelHtml(varGroups);
   const readOnlyHint = canEdit
     ? isKonturOp
       ? '<p class="cat-panel-hint">Письмо платформы ООО «АРМАДА» оператору ЭТрН. Исходящий номер и дата присваиваются при первой печати. Сохранение синхронизируется на сервер.</p>'
@@ -299,11 +322,13 @@ function adminDocsConstructorPanelHtml() {
       <aside class="adm-tpl-side">
         <h3 class="adm-tpl-side-title">Шаблоны</h3>
         <div class="adm-tpl-list">${tplList}</div>
-        ${!isOp ? `<h3 class="adm-tpl-side-title">Поля</h3><div class="adm-tpl-vars">${vars}</div>` : `<h3 class="adm-tpl-side-title">Поля</h3><div class="adm-tpl-vars">${opVars}</div>`}
+        <h3 class="adm-tpl-side-title">Подстановочные поля</h3>
+        <div class="adm-tpl-vars">${varsPanel}</div>
       </aside>
       <div class="adm-tpl-main">
         <div class="adm-tpl-toolbar">
-          ${!isOp ? `<label class="adm-tpl-order-lbl">Пример заявки
+          ${!isOp ? `<label class="adm-tpl-order-lbl">Пример заявки для превью
+            <span class="adm-tpl-order-hint">От чьих данных заполнятся поля {{order…}} и {{customer…}}</span>
             <select id="adm-tpl-order"${canEdit ? '' : ' disabled'}>
               <option value="">— демо-данные —</option>
               ${orderOpts}

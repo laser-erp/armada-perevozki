@@ -2046,11 +2046,29 @@
     .adm-tpl-item.on{border-color:var(--accent);background:rgba(239,68,68,.08)}
     .adm-tpl-item-title{display:block;font-weight:700;font-size:.82rem}
     .adm-tpl-item-hint{display:block;font-size:.68rem;color:var(--muted);margin-top:2px}
-    .adm-tpl-vars{display:flex;flex-wrap:wrap;gap:6px}
+    .adm-tpl-vars{display:flex;flex-direction:column;gap:8px}
+    .adm-tpl-vars-intro{margin:0 0 4px;font-size:.72rem;line-height:1.4;color:var(--muted)}
+    .adm-tpl-var-group{border:1px solid var(--border);border-radius:10px;background:var(--field);overflow:hidden}
+    .adm-tpl-var-group-title{
+      padding:8px 10px;font-size:.72rem;font-weight:700;cursor:pointer;list-style:none;
+      color:var(--text);background:rgba(0,0,0,.02)
+    }
+    .adm-tpl-var-group-title::-webkit-details-marker{display:none}
+    .adm-tpl-var-list{list-style:none;margin:0;padding:0 6px 6px}
+    .adm-tpl-var-row{
+      display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;
+      border:1px solid transparent;border-radius:8px;padding:6px 8px;background:#fff;
+      cursor:pointer;text-align:left;font-family:inherit
+    }
+    .adm-tpl-var-row:hover{border-color:var(--accent);background:rgba(239,68,68,.04)}
+    .adm-tpl-var-label{font-size:.78rem;font-weight:600;color:var(--text)}
+    .adm-tpl-var-hint{font-size:.68rem;line-height:1.35;color:var(--muted)}
+    .adm-tpl-var-key{font-size:.62rem;font-family:ui-monospace,monospace;color:#64748b;background:#f1f5f9;padding:1px 5px;border-radius:4px}
     .adm-tpl-var{
       border:1px dashed var(--border);border-radius:999px;padding:4px 8px;background:#fff;
       font-size:.65rem;font-family:ui-monospace,monospace;cursor:pointer
     }
+    .adm-tpl-order-hint{display:block;font-size:.68rem;color:var(--muted);font-weight:400;line-height:1.35;margin-bottom:2px}
     .adm-tpl-main{padding:12px 14px 24px;display:flex;flex-direction:column;gap:10px;min-width:0}
     .adm-tpl-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;justify-content:space-between}
     .adm-tpl-order-lbl{font-size:.78rem;color:var(--muted);display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px}
@@ -2074,7 +2092,7 @@
     button.linkish{border:0;background:transparent;padding:0;color:var(--accent);font-weight:600;cursor:pointer;font:inherit;text-decoration:underline}
     @media (min-width:820px){
       .adm-tpl-layout{flex-direction:row;align-items:stretch}
-      .adm-tpl-side{flex:0 0 220px;border-bottom:0;border-right:1px solid var(--border);overflow:auto;max-height:none}
+      .adm-tpl-side{flex:0 0 300px;border-bottom:0;border-right:1px solid var(--border);overflow:auto;max-height:none}
       .adm-tpl-main{flex:1;min-width:0}
       .adm-tpl-preview-wrap{max-height:480px}
     }

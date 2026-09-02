@@ -8,29 +8,62 @@ const DOC_TEMPLATE_CATALOG = [
   { id: 'act', title: 'Акт выполненных работ', group: 'buh', hint: 'После закрытия заявки' }
 ];
 
-const DOC_TEMPLATE_VARS = [
-  { key: '{{carrier.name}}', label: 'Перевозчик' },
-  { key: '{{carrier.inn}}', label: 'ИНН перевозчика' },
-  { key: '{{carrier.address}}', label: 'Адрес перевозчика' },
-  { key: '{{customer.name}}', label: 'Заказчик' },
-  { key: '{{customer.inn}}', label: 'ИНН заказчика' },
-  { key: '{{order.number}}', label: '№ заявки' },
-  { key: '{{order.date}}', label: 'Дата заявки' },
-  { key: '{{order.route}}', label: 'Маршрут' },
-  { key: '{{order.amount}}', label: 'Сумма' },
-  { key: '{{order.driver}}', label: 'Водитель' },
-  { key: '{{order.plate}}', label: 'Госномер' },
-  { key: '{{order.driverPassport}}', label: 'Паспорт водителя' },
-  { key: '{{order.driverLicense}}', label: 'ВУ водителя' },
-  { key: '{{order.vehicleSts}}', label: 'СТС' },
-  { key: '{{order.vehicleAt}}', label: 'Подача ТС' },
-  { key: '{{order.shipper}}', label: 'Грузоотправитель' },
-  { key: '{{order.consignee}}', label: 'Грузополучатель' },
-  { key: '{{order.cargo}}', label: 'Сведения о грузе' },
-  { key: '{{order.vehicleReq}}', label: 'Требования к ТС' },
-  { key: '{{order.payment}}', label: 'Оплата и порядок расчётов' },
-  { key: '{{today}}', label: 'Сегодня' }
+const DOC_TEMPLATE_VAR_GROUPS = [
+  {
+    title: 'Наша фирма (перевозчик)',
+    vars: [
+      { key: '{{carrier.name}}', label: 'Название', hint: 'ООО/ИП из «Справочники → Наша фирма»' },
+      { key: '{{carrier.inn}}', label: 'ИНН', hint: 'ИНН вашей компании' },
+      { key: '{{carrier.address}}', label: 'Юр. адрес', hint: 'Адрес из карточки фирмы' }
+    ]
+  },
+  {
+    title: 'Заказчик',
+    vars: [
+      { key: '{{customer.name}}', label: 'Название', hint: 'Компания-заказчик из заявки' },
+      { key: '{{customer.inn}}', label: 'ИНН', hint: 'ИНН заказчика из справочника' }
+    ]
+  },
+  {
+    title: 'Заявка',
+    vars: [
+      { key: '{{order.number}}', label: 'Номер заявки', hint: 'Порядковый № за день (как в списке заказов)' },
+      { key: '{{order.date}}', label: 'Дата заявки', hint: 'Дата создания заявки' },
+      { key: '{{order.amount}}', label: 'Сумма', hint: 'Ставка для заказчика, ₽' },
+      { key: '{{order.payment}}', label: 'Оплата', hint: 'Текст про срок и способ оплаты' }
+    ]
+  },
+  {
+    title: 'Маршрут и груз',
+    vars: [
+      { key: '{{order.route}}', label: 'Маршрут', hint: 'Подача → выгрузка одной строкой' },
+      { key: '{{order.vehicleAt}}', label: 'Подача ТС', hint: 'Дата и время подачи машины' },
+      { key: '{{order.shipper}}', label: 'Грузоотправитель', hint: 'Кто отдаёт груз (если не заказчик)' },
+      { key: '{{order.consignee}}', label: 'Грузополучатель', hint: 'Кто принимает груз на выгрузке' },
+      { key: '{{order.cargo}}', label: 'Груз', hint: 'Описание, вес, объём, температура' },
+      { key: '{{order.vehicleReq}}', label: 'Требования к ТС', hint: 'Тоннаж, тип кузова, габариты' }
+    ]
+  },
+  {
+    title: 'Водитель и автомобиль',
+    vars: [
+      { key: '{{order.driver}}', label: 'Водитель', hint: 'ФИО из заявки' },
+      { key: '{{order.plate}}', label: 'Госномер', hint: 'Номер ТС на рейсе' },
+      { key: '{{order.driverPassport}}', label: 'Паспорт', hint: 'Из карточки водителя, если заполнен' },
+      { key: '{{order.driverLicense}}', label: 'Водительское удостоверение', hint: 'Серия и номер ВУ' },
+      { key: '{{order.vehicleSts}}', label: 'СТС', hint: 'Свидетельство о регистрации ТС' }
+    ]
+  },
+  {
+    title: 'Прочее',
+    vars: [
+      { key: '{{today}}', label: 'Сегодня', hint: 'Текущая дата в момент печати' }
+    ]
+  }
 ];
+
+/** Плоский список для совместимости. */
+const DOC_TEMPLATE_VARS = DOC_TEMPLATE_VAR_GROUPS.flatMap(g => g.vars);
 
 function docTemplatesRoot() {
   if (!state.docTemplates || typeof state.docTemplates !== 'object') state.docTemplates = { spaces: {} };

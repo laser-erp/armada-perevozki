@@ -24,9 +24,9 @@ const OPERATOR_LETTER_CATALOG = [
 ];
 
 const OPERATOR_LETTER_VARS = [
-  { key: '{{letter.outNo}}', label: 'Исходящий номер (авто при печати)' },
-  { key: '{{letter.outDate}}', label: 'Дата исходящего («31» августа 2026 г.)' },
-  { key: '{{today}}', label: 'Сегодня (как дата исходящего)' }
+  { key: '{{letter.outNo}}', label: 'Исходящий номер', hint: 'Присваивается автоматически при первой печати' },
+  { key: '{{letter.outDate}}', label: 'Дата исходящего', hint: 'Например: «31» августа 2026 г.' },
+  { key: '{{today}}', label: 'Сегодня', hint: 'Текущая дата (как дата исходящего)' }
 ];
 
 const ARMADA_PLATFORM_PARTY = {

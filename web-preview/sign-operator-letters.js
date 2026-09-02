@@ -21,10 +21,10 @@ const SIGN_OPERATOR_LETTER_CATALOG = [
 ];
 
 const SIGN_OPERATOR_LETTER_VARS = [
-  { key: '{{today}}', label: 'Сегодня' },
-  { key: '{{carrier.name}}', label: 'Название компании' },
-  { key: '{{carrier.inn}}', label: 'ИНН компании' },
-  { key: '{{carrier.address}}', label: 'Адрес компании' }
+  { key: '{{today}}', label: 'Сегодня', hint: 'Дата письма при печати' },
+  { key: '{{carrier.name}}', label: 'Название компании', hint: 'Ваша организация из «Наша фирма»' },
+  { key: '{{carrier.inn}}', label: 'ИНН компании', hint: 'ИНН организации-отправителя письма' },
+  { key: '{{carrier.address}}', label: 'Юр. адрес', hint: 'Адрес из карточки фирмы' }
 ];
 
 function isSignOperatorLetterId(templateId) {
