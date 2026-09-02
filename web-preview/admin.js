@@ -254,6 +254,23 @@ function syncAdminNotifyToggle(){
   btn.classList.toggle('on', on);
   btn.title=on?'Уведомления о входящих: вкл':'Включить уведомления о входящих заявках';
 }
+function updateAdminEtrnSignBadge(){
+  const badge=$('admin-etrn-sign-badge');
+  const btn=document.querySelector('#admin-filters button[data-filter="etrn-sign"]');
+  const pool=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.cancelledAt && !(o.closedAt && o.cancelReason));
+  const n=typeof adminEtrnSignPendingCount==='function'?adminEtrnSignPendingCount(pool):0;
+  if(badge){
+    if(n>0){
+      badge.textContent=n>99?'99+':String(n);
+      badge.hidden=false;
+      badge.setAttribute('aria-label', `${n} заказов ждут подпись T2`);
+    }else{
+      badge.hidden=true;
+      badge.removeAttribute('aria-label');
+    }
+  }
+  if(btn) btn.classList.toggle('has-unread', n>0);
+}
 function updateAdminInboxBadge(){
   const badge=$('admin-inbox-badge');
   const btn=document.querySelector('#admin-filters button[data-filter="inbox"]');
@@ -2063,10 +2080,12 @@ function adminOrderCardHtml(o){
     !looksClosedOrder(o)&&!o.cancelledAt
       ?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''
   ].filter(Boolean).join('');
+  const etrnBadge=typeof orderEtrnBadgeHtml==='function'?orderEtrnBadgeHtml(o):'';
   return `<div class="order-card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
     <div class="order-card-head">
       ${adminOrderPickHtml(o)}
       <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+      ${etrnBadge}
     </div>
     <div class="order-status ${stCls}">${esc(st)}</div>
     <p>${esc(dateTime(o.createdAt))}</p>
@@ -2302,6 +2321,7 @@ function filteredOrders(){
     if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && !waitingLogistDriver(o.driverName);
     if(state.adminFilter==='progress') return !looksClosedOrder(o) && o.startOdometer!=null;
     if(state.adminFilter==='closed') return looksClosedOrder(o);
+    if(state.adminFilter==='etrn-sign') return typeof orderEtrnNeedsMySignature==='function' && orderEtrnNeedsMySignature(o);
     return true;
   });
 }
@@ -2816,6 +2836,7 @@ function renderAdminDebounced(){
 }
 function renderAdmin(){
   updateAdminInboxBadge();
+  updateAdminEtrnSignBadge();
   updateAdminInboxBanner();
   maybeNotifyAdminInboxUpdates();
   const billBanner=$('admin-billing-banner');
@@ -2863,7 +2884,9 @@ function renderAdmin(){
   }
   if(!orders.length){
     const checklist='';
-    let emptyHint=isSuperAdmin()
+    let emptyHint=(state.adminFilter||'all')==='etrn-sign'
+      ? 'Нет заказов, где нужна ваша подпись перевозчика (T2).'
+      : isSuperAdmin()
       ? 'Пока нет заявок в выбранном кабинете. Переключите «Все кабинеты» или фирму с заказами (например «ИП Нечаев»).'
       : 'Пока нет заявок. Пройдите чеклист в «Настройки кабинета» и нажмите + Заказ';
     if(isSuperAdmin() && (state.adminOwnerFilter||'all')!=='all'){
@@ -2879,6 +2902,9 @@ function renderAdmin(){
     return;
   }
   const exCount=allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.closedAt && o.onExchange && o.startOdometer==null).length;
+  const etrnSignCount=typeof adminEtrnSignPendingCount==='function'
+    ? adminEtrnSignPendingCount(allOrders().filter(o=>canAdminSeeOrder(o) && matchesOwnerFilter(o) && !o.cancelledAt && !(o.closedAt && o.cancelReason)))
+    : 0;
   if(!state.adminExpandedGroups || typeof state.adminExpandedGroups!=='object') state.adminExpandedGroups={};
   const {groups:allGroups}=buildAdminShiftDayGroups(orders);
   const cal=ensureAdminOrdersCal();
@@ -2944,12 +2970,13 @@ function renderAdmin(){
   const calHtml=adminOrdersCalHtml(allGroups);
   const filtersHtml=adminOrdersFiltersHtml(allGroups);
   const statsHtml=`<div class="orders-board-head">
-    <p class="cat-panel-hint">${headHint}${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</p>
+    <p class="cat-panel-hint">${headHint}${exCount?` На бирже: <strong>${exCount}</strong>.`:''}${etrnSignCount?` ЭТrН · ваша подпись: <strong>${etrnSignCount}</strong>.`:''}</p>
     ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
       <div class="m"><span>Заказы</span><b>${periodTot.count}</b></div>
       <div class="m"><span>Выручка</span><b>${fmt(periodTot.revenue)} ₽</b></div>
       <div class="m"><span>ЗП</span><b>${fmt(periodTot.pay)} ₽</b></div>
+      ${etrnSignCount?`<div class="m"><span>ЭТrН T2</span><b class="warn">${etrnSignCount}</b></div>`:''}
     </div>
   </div>`;
   const emptyMsg=(cal.driver||cal.plate)?'Нет заявок по фильтру водителя/ТС'
@@ -3618,7 +3645,8 @@ function openDetail(id){
   if(detailTitle) detailTitle.textContent=`Заявка №${o.sequentialNumber}`;
   const detailMeta=$('detail-meta');
   if(detailMeta){
-    detailMeta.textContent=`${statusText(o)} · ${orderDayLabel(o.dayNumber)} · ${o.driverName||'—'}${m.percent!=null?` (${m.percent}%)`:''}`;
+    const etrnSum=typeof orderEtrnSummary==='function'?orderEtrnSummary(o):null;
+    detailMeta.textContent=`${statusText(o)} · ${orderDayLabel(o.dayNumber)} · ${o.driverName||'—'}${m.percent!=null?` (${m.percent}%)`:''}${etrnSum?` · ${etrnSum.label}`:''}`;
   }
   $('detail-form').innerHTML=`
     <div class="cust-form-blocks admin-order-blocks">

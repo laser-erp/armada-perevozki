@@ -28,13 +28,71 @@ function orderEtrnTransportActive(o){
   if(!o || looksClosedOrder(o) || o.cancelledAt) return false;
   return o.departOdometer!=null || o.startOdometer!=null;
 }
+function orderEtrnVisible(o){
+  if(!o || o.cancelledAt) return false;
+  const sid=typeof orderSpaceId==='function'?orderSpaceId(o):(o.spaceId||null);
+  if(sid && typeof billingCanUseEtrn==='function'){
+    const g=billingCanUseEtrn(sid);
+    if(!g.ok) return false;
+  }
+  if(o.etrn) return true;
+  return orderEtrnEligible(o) && !looksClosedOrder(o);
+}
+function orderEtrnWeAreCarrier(o){
+  if(!o || !currentAdmin) return false;
+  const myCo=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(!myCo) return false;
+  if(o.carrierCompanyId && o.carrierCompanyId===myCo.id) return true;
+  if(typeof isMyFirmOrder==='function' && isMyFirmOrder(o) && (!o.carrierCompanyId || o.carrierCompanyId===myCo.id)) return true;
+  return false;
+}
+function orderEtrnTitulPending(o, key){
+  const t=o&&o.etrn&&o.etrn.tituls;
+  return !!(t && t[key]==='pending');
+}
+function orderEtrnNeedsMySignature(o){
+  if(!orderEtrnVisible(o) || !o.etrn) return false;
+  if(!orderEtrnWeAreCarrier(o)) return false;
+  if(!orderEtrnTitulPending(o,'t2')) return false;
+  return typeof orderEtrnLoadingPhase==='function'?orderEtrnLoadingPhase(o):!!(o.startOdometer!=null||o.arrivedAt!=null);
+}
+function orderEtrnSummary(o){
+  if(!orderEtrnVisible(o)){
+    if(orderEtrnEligible(o) && !looksClosedOrder(o)) return { label:'ЭТрН: после выезда', cls:'muted', urgent:false };
+    return null;
+  }
+  if(!o.etrn) return { label:'ЭТрН: не создан', cls:'muted', urgent:false };
+  const t=o.etrn.tituls||{};
+  if(['t1','t2','t3','t4'].every(k=>t[k]==='signed')) return { label:'ЭТрН: закрыт ✓', cls:'ok', urgent:false };
+  if(orderEtrnNeedsMySignature(o)) return { label:'T2 — ваша подпись', cls:'warn urgent', urgent:true };
+  if(t.t1==='pending') return { label:'T1 · ждёт заказчика', cls:'pending', urgent:false };
+  if(t.t3==='pending'||t.t4==='pending') return { label:'T3/T4 · водитель', cls:'pending', urgent:false };
+  if(t.t2==='pending') return { label:'T2 · перевозчик', cls:'pending', urgent:false };
+  return { label:'ЭТрН · в работе', cls:'pending', urgent:false };
+}
+function orderEtrnBadgeHtml(o){
+  const s=orderEtrnSummary(o);
+  if(!s) return '';
+  return `<span class="order-etrn-badge ${esc(s.cls)}${s.urgent?' order-etrn-badge--urgent':''}">${esc(s.label)}</span>`;
+}
+function adminEtrnSignPendingCount(orders){
+  return (orders||[]).filter(o=>orderEtrnNeedsMySignature(o)).length;
+}
 function orderEtrnSectionHtml(o){
-  if(!o || !orderEtrnEligible(o)) return '';
+  if(!orderEtrnVisible(o)) return '';
   const et=o.etrn;
+  const needsMine=orderEtrnNeedsMySignature(o);
+  const banner=needsMine
+    ? `<div class="etrn-sign-banner" role="status"><strong>Нужна ваша подпись перевозчика (T2)</strong><span class="hint">Подпишите на погрузке — иначе ЭТrН не закроется.</span></div>`
+    : '';
   const tituls=et&&et.tituls?Object.entries(et.tituls).map(([k,v])=>{
-    const canSign=et.sandbox&&v!=='signed';
-    const btn=canSign?`<button type="button" class="secondary etrn-titul-sign" data-order-id="${esc(o.id)}" data-titul="${esc(k)}" style="margin-left:6px;font-size:.72rem;padding:2px 6px">Подписать</button>`:'';
-    return `<div class="calc-row etrn-titul-row"><span>${esc(etrnTitulLabel(k))}<br><span class="hint">${esc(etrnTitulWhenHint(k))}</span></span><span>${esc(etrnTitulStatusLabel(v))}${btn}</span></div>`;
+    const isMine=k==='t2'&&orderEtrnWeAreCarrier(o);
+    const rowCls=isMine&&v==='pending'?' etrn-titul-row--mine':'';
+    const canSign=et.sandbox&&v!=='signed'&&(isMine||typeof isSuperAdmin==='function'&&isSuperAdmin());
+    const btn=canSign?`<button type="button" class="primary etrn-titul-sign" data-order-id="${esc(o.id)}" data-titul="${esc(k)}">Подписать</button>`:'';
+    const stLbl=etrnTitulStatusLabel(v);
+    const stSpan=`<span class="etrn-titul-st ${v==='signed'?'ok':(isMine&&v==='pending'?'warn':'')}">${esc(stLbl)}</span>`;
+    return `<div class="calc-row etrn-titul-row${rowCls}"><span>${esc(etrnTitulLabel(k))}<br><span class="hint">${esc(etrnTitulWhenHint(k))}</span></span><span class="etrn-titul-actions">${stSpan}${btn}</span></div>`;
   }).join(''):'';
   const epd=state.settings&&state.settings.epdOperator?String(state.settings.epdOperator):'';
   const head=et
@@ -47,6 +105,7 @@ function orderEtrnSectionHtml(o){
   return `
     <section class="form-section" id="etrn-section">
       <h2 class="form-section-title">ЭТрН</h2>
+      ${banner}
       ${head}
       <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
         <button type="button" class="secondary" id="etrn-create" ${et?'disabled':''}>${et?'ЭТрН создан':'Создать ЭТрН'}</button>

@@ -129,6 +129,11 @@ function getDocTemplateRecord(spaceId, templateId) {
 }
 
 function getDocTemplateBody(spaceId, templateId) {
+  if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(templateId)) {
+    return typeof getSignOperatorLetterBody === 'function'
+      ? getSignOperatorLetterBody(spaceId, templateId)
+      : (typeof defaultSignOperatorLetterBody === 'function' ? defaultSignOperatorLetterBody(templateId) : '');
+  }
   if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
     return typeof getOperatorLetterBody === 'function'
       ? getOperatorLetterBody(templateId)
@@ -140,6 +145,11 @@ function getDocTemplateBody(spaceId, templateId) {
 }
 
 function setDocTemplateBody(spaceId, templateId, body) {
+  if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(templateId)) {
+    return typeof setSignOperatorLetterBody === 'function'
+      ? setSignOperatorLetterBody(spaceId, templateId, body)
+      : false;
+  }
   if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
     return typeof setOperatorLetterBody === 'function'
       ? setOperatorLetterBody(templateId, body)
@@ -232,6 +242,36 @@ function substituteDocTemplate(body, ctx) {
   return out;
 }
 
+/** Фирменный бланк кабинета (логотип space + реквизиты «нашей фирмы»). */
+function clientLetterheadHtml(co, sp) {
+  const p = typeof resolveParty === 'function'
+    ? resolveParty(co && co.id, co && co.name, sp && sp.id || (co && co.spaceId))
+    : { name: (co && co.name) || (sp && sp.name) || '—', inn: '', kpp: '', ogrn: '', address: '', phone: '', email: '' };
+  const req = [
+    p.address ? esc(p.address) : '',
+    p.inn ? `ИНН ${esc(p.inn)}` : '',
+    p.kpp ? `КПП ${esc(p.kpp)}` : '',
+    p.ogrn ? `ОГРН ${esc(p.ogrn)}` : ''
+  ].filter(Boolean).join(' · ');
+  const logo = (sp && sp.portalLogo) ? esc(sp.portalLogo) : '';
+  const contacts = [
+    p.phone ? esc(typeof formatPhone === 'function' ? formatPhone(p.phone) : p.phone) : '',
+    p.email ? esc(p.email) : ''
+  ].filter(Boolean).join(' · ');
+  return `<header class="adm-letterhead">
+    ${logo ? `<img class="adm-letterhead__logo" src="${logo}" alt="" width="68" height="68" />` : '<div class="adm-letterhead__logo adm-letterhead__logo--ph" aria-hidden="true"></div>'}
+    <div class="adm-letterhead__brand">
+      <p class="adm-letterhead__name">${esc(p.name)}</p>
+      ${req ? `<p class="adm-letterhead__req">${req}</p>` : ''}
+      ${contacts ? `<p class="adm-letterhead__contacts">${contacts}</p>` : ''}
+    </div>
+  </header>`;
+}
+
+function armadaServiceFooterHtml() {
+  return '<footer class="adm-tpl-foot adm-tpl-foot--service">Сформировано в сервисе Армада</footer>';
+}
+
 function renderDocTemplateTextToHtml(text) {
   const paras = String(text || '').split(/\n\n+/).map(p => p.trim()).filter(Boolean);
   if (!paras.length) return '<p class="no-indent">—</p>';
@@ -244,13 +284,13 @@ function renderDocTemplateTextToHtml(text) {
 }
 
 function docTemplateLetterheadHtml(spaceId) {
-  const co = typeof ownCompanyForAdminId === 'function' && currentAdmin
-    ? ownCompanyForAdminId(currentAdmin.id)
-    : (typeof currentOwnCompany === 'function' ? currentOwnCompany() : null);
+  const co = typeof ownCompanyForSpaceId === 'function' && spaceId
+    ? ownCompanyForSpaceId(spaceId)
+    : (typeof ownCompanyForAdminId === 'function' && currentAdmin
+      ? ownCompanyForAdminId(currentAdmin.id)
+      : (typeof currentOwnCompany === 'function' ? currentOwnCompany() : null));
   const sp = spaceId ? findSpaceById(spaceId) : null;
-  if (typeof adminDocsLetterheadHtml === 'function') return adminDocsLetterheadHtml(co, sp);
-  const name = (co && co.name) || (sp && sp.name) || 'АРМАДА';
-  return `<header class="adm-letterhead"><p class="adm-letterhead__name">${esc(name)}</p></header>`;
+  return clientLetterheadHtml(co, sp);
 }
 
 function renderDocTemplatePreviewHtml(templateId, body, order, spaceId) {
@@ -259,19 +299,28 @@ function renderDocTemplatePreviewHtml(templateId, body, order, spaceId) {
       ? renderOperatorLetterPreviewHtml(templateId, body)
       : '';
   }
+  if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(templateId)) {
+    return typeof renderSignOperatorLetterPreviewHtml === 'function'
+      ? renderSignOperatorLetterPreviewHtml(spaceId, templateId, body)
+      : '';
+  }
   const ctx = buildDocTemplateContext(order, spaceId);
   const filled = substituteDocTemplate(body, ctx);
   const inner = renderDocTemplateTextToHtml(filled);
-  const meta = DOC_TEMPLATE_CATALOG.find(t => t.id === templateId);
+  const meta = DOC_TEMPLATE_CATALOG.find(t => t.id === templateId)
+    || (typeof signOperatorLetterMeta === 'function' ? signOperatorLetterMeta(templateId) : null);
   return `<article class="adm-letter-page adm-tpl-preview">
     ${docTemplateLetterheadHtml(spaceId)}
     ${meta ? `<p class="adm-tpl-cat">${esc(meta.title)} · пример подстановки</p>` : ''}
     <div class="adm-tpl-body">${inner}</div>
-    <footer class="adm-tpl-foot">${esc((findSpaceById(spaceId) || {}).name || '')} · app.armada.sx</footer>
+    ${typeof armadaServiceFooterHtml === 'function' ? armadaServiceFooterHtml() : ''}
   </article>`;
 }
 
 function hasCustomDocTemplate(spaceId, templateId) {
+  if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(templateId)) {
+    return typeof hasCustomSignOperatorLetter === 'function' && hasCustomSignOperatorLetter(spaceId, templateId);
+  }
   if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(templateId)) {
     return typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(templateId);
   }

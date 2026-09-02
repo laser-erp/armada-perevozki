@@ -23,23 +23,17 @@ function adminDocsSpaceId() {
 }
 
 function adminDocsLetterheadHtml(co, sp) {
+  if (typeof clientLetterheadHtml === 'function') return clientLetterheadHtml(co, sp);
   const p = typeof resolveParty === 'function'
     ? resolveParty(co && co.id, co && co.name, sp && sp.id || (co && co.spaceId))
-    : { name: (co && co.name) || (sp && sp.name) || 'АРМАДА', inn: '', kpp: '', ogrn: '', address: '' };
+    : { name: (co && co.name) || (sp && sp.name) || '—', inn: '', kpp: '', ogrn: '', address: '' };
   const req = [
     p.address ? esc(p.address) : '',
     p.inn ? `ИНН ${esc(p.inn)}` : '',
     p.kpp ? `КПП ${esc(p.kpp)}` : '',
     p.ogrn ? `ОГРН ${esc(p.ogrn)}` : ''
   ].filter(Boolean).join(' · ');
-  return `<header class="adm-letterhead">
-    <img class="adm-letterhead__logo" src="/icons/icon-192.png" alt="" width="68" height="68" />
-    <div class="adm-letterhead__brand">
-      <p class="adm-letterhead__name">${esc(p.name)}</p>
-      ${req ? `<p class="adm-letterhead__req">${req}</p>` : ''}
-      <p class="adm-letterhead__contacts">${esc(typeof armadaMail==='function'?armadaMail('hello'):'hello@armada.sx')} · app.armada.sx · документы АРМАДА</p>
-    </div>
-  </header>`;
+  return `<header class="adm-letterhead"><p class="adm-letterhead__name">${esc(p.name)}</p>${req ? `<p class="adm-letterhead__req">${req}</p>` : ''}</header>`;
 }
 
 function openAdminLetterBlank() {
@@ -164,63 +158,97 @@ function adminDocsBuhPanelHtml() {
 
 function adminDocsConstructorCatalog() {
   const buh = (typeof DOC_TEMPLATE_CATALOG !== 'undefined' ? DOC_TEMPLATE_CATALOG : []);
-  const ops = (typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
+  const signOps = (typeof SIGN_OPERATOR_LETTER_CATALOG !== 'undefined')
+    ? SIGN_OPERATOR_LETTER_CATALOG.map(t => ({
+      id: t.id,
+      title: t.title,
+      hint: t.hint,
+      group: 'sign'
+    }))
+    : [];
+  const ops = (typeof canShowKonturIntegrationLetters === 'function' && canShowKonturIntegrationLetters()
     && typeof OPERATOR_LETTER_CATALOG !== 'undefined')
     ? OPERATOR_LETTER_CATALOG.map(t => ({
       id: t.id,
-      title: 'Оператор: ' + t.title,
-      hint: t.hint,
+      title: 'Платформа → ' + t.title,
+      hint: t.hint + ' · только супер-админ',
       group: 'operators'
     }))
-    : (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG.map(t => ({
-      id: t.id,
-      title: 'Оператор: ' + t.title,
-      hint: t.hint + ' · только просмотр',
-      group: 'operators'
-    })) : []);
-  return buh.concat(ops);
+    : [];
+  return buh.concat(signOps).concat(ops);
 }
 
 function adminDocsConstructorCanEdit(tplId) {
   if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
     return typeof canEditOperatorLetters === 'function' && canEditOperatorLetters();
   }
+  if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId)) {
+    const sid = adminDocsSpaceId();
+    return sid && typeof canEditDocTemplatesForSpace === 'function' && canEditDocTemplatesForSpace(sid);
+  }
   const sid = adminDocsSpaceId();
   return sid && typeof canEditDocTemplatesForSpace === 'function' && canEditDocTemplatesForSpace(sid);
 }
 
 function adminDocsLettersPanelHtml() {
-  const ops = (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG : []).map(t => {
-    const custom = typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(t.id);
-    const outMeta = typeof operatorLetterOutMetaLine === 'function' ? operatorLetterOutMetaLine(t.id) : '';
+  const sid = adminDocsSpaceId();
+  const signOps = (typeof SIGN_OPERATOR_LETTER_CATALOG !== 'undefined' ? SIGN_OPERATOR_LETTER_CATALOG : []).map(t => {
+    const custom = sid && typeof hasCustomSignOperatorLetter === 'function' && hasCustomSignOperatorLetter(sid, t.id);
     return `<div class="adm-doc-card">
       <div>
         <h3>${esc(t.title)}</h3>
-        <p class="meta">${esc(t.hint)}${custom ? ' · изменено' : ''}${outMeta ? `<br>${esc(outMeta)}` : ''}</p>
+        <p class="meta">${esc(t.hint)}${custom ? ' · изменено' : ''}</p>
       </div>
       <div class="adm-doc-actions adm-doc-actions--stack">
-        <button type="button" class="secondary adm-op-letter-edit" data-op-letter="${esc(t.id)}">Редактировать</button>
-        <button type="button" class="primary adm-op-letter-print" data-op-letter="${esc(t.id)}">Печать</button>
-        <button type="button" class="secondary adm-op-letter-pdf" data-op-letter="${esc(t.id)}">PDF</button>
+        <button type="button" class="secondary adm-sign-letter-edit" data-sign-letter="${esc(t.id)}">Редактировать</button>
+        <button type="button" class="primary adm-sign-letter-print" data-sign-letter="${esc(t.id)}">Печать</button>
       </div>
     </div>`;
   }).join('');
-  const editHint = typeof canEditOperatorLetters === 'function' && canEditOperatorLetters()
-    ? 'Текст писем операторам редактирует супер-админ. Исходящий № и дата проставляются автоматически при печати.'
-    : 'Просмотр и печать. Редактирование — только супер-админ.';
-  return `<p class="cat-panel-hint">${editHint} <strong>Печать</strong> — бланк для подписи от руки. <strong>PDF</strong> — с печатью и подписью для отправки. Исходящие номера сквозные по порядку шаблонов (заявка → ключи → Калуга). Общие исходящие на бланке фирмы — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
+  const konturBlock = (typeof canShowKonturIntegrationLetters === 'function' && canShowKonturIntegrationLetters())
+    ? (() => {
+      const ops = (typeof OPERATOR_LETTER_CATALOG !== 'undefined' ? OPERATOR_LETTER_CATALOG : []).map(t => {
+        const custom = typeof hasCustomOperatorLetter === 'function' && hasCustomOperatorLetter(t.id);
+        const outMeta = typeof operatorLetterOutMetaLine === 'function' ? operatorLetterOutMetaLine(t.id) : '';
+        return `<div class="adm-doc-card">
+          <div>
+            <h3>${esc(t.title)}</h3>
+            <p class="meta">${esc(t.hint)}${custom ? ' · изменено' : ''}${outMeta ? `<br>${esc(outMeta)}` : ''}</p>
+          </div>
+          <div class="adm-doc-actions adm-doc-actions--stack">
+            <button type="button" class="secondary adm-op-letter-edit" data-op-letter="${esc(t.id)}">Редактировать</button>
+            <button type="button" class="primary adm-op-letter-print" data-op-letter="${esc(t.id)}">Печать</button>
+            <button type="button" class="secondary adm-op-letter-pdf" data-op-letter="${esc(t.id)}">PDF</button>
+          </div>
+        </div>`;
+      }).join('');
+      return `<h3 class="adm-docs-subtitle">Письма оператору Контура (платформа)</h3>
+        <p class="cat-panel-hint">Только для супер-админа: заявка на API и ключи.</p>
+        ${ops || '<div class="empty">Нет шаблонов</div>'}`;
+    })()
+    : '';
+  return `<p class="cat-panel-hint"><strong>Печать</strong> — на бланке вашей компании. Логотип — «Тарифы» → портал заказчика. Произвольное письмо — <button type="button" class="linkish" data-adm-goto-constructor="letter">конструктор «Письмо»</button>.</p>
     <div class="adm-doc-card">
       <div><h3>Пустой фирменный бланк</h3><p class="meta">Новое письмо · реквизиты из «Наша фирма»</p></div>
       <div class="adm-doc-actions"><button type="button" class="primary" id="adm-letter-blank">Открыть</button></div>
     </div>
-    <h3 class="adm-docs-subtitle">Письма операторам ЭТрН</h3>
-    ${ops || '<div class="empty">Нет шаблонов операторов</div>'}`;
+    <h3 class="adm-docs-subtitle">Письма оператору подписи (КЭП / ПЭП)</h3>
+    <p class="cat-panel-hint">Подключение подписи для ЭТrН — заказчик (T1), перевозчик (T2), водитель (T3/T4).</p>
+    ${signOps || '<div class="empty">Нет шаблонов</div>'}
+    ${konturBlock}`;
+}
+
+function adminDocsConstructorIsOpLetter(tplId) {
+  return (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId))
+    || (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId));
 }
 
 function adminDocsConstructorPanelHtml() {
   const sid = adminDocsSpaceId();
   const tplId = adminDocsConstructorTpl || 'application';
-  const isOp = typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId);
+  const isOp = adminDocsConstructorIsOpLetter(tplId);
+  const isSignOp = typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId);
+  const isKonturOp = typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId);
   if (!sid && !isOp) {
     return '<div class="empty">Нет space у администратора — шаблоны привязаны к фирме.</div>';
   }
@@ -248,18 +276,24 @@ function adminDocsConstructorPanelHtml() {
   const vars = !isOp && (typeof DOC_TEMPLATE_VARS !== 'undefined' ? DOC_TEMPLATE_VARS : []).map(v =>
     `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
   ).join('');
-  const opVars = isOp && typeof OPERATOR_LETTER_VARS !== 'undefined'
-    ? OPERATOR_LETTER_VARS.map(v =>
-      `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`
-    ).join('')
-    : (isOp ? `<button type="button" class="adm-tpl-var" data-adm-tpl-var="{{today}}" title="Сегодня">{{today}}</button>` : '');
+  const opVars = isOp
+    ? (isSignOp && typeof SIGN_OPERATOR_LETTER_VARS !== 'undefined'
+      ? SIGN_OPERATOR_LETTER_VARS
+      : (typeof OPERATOR_LETTER_VARS !== 'undefined' ? OPERATOR_LETTER_VARS : [{ key: '{{today}}', label: 'Сегодня' }]))
+      .map(v => `<button type="button" class="adm-tpl-var" data-adm-tpl-var="${esc(v.key)}" title="${esc(v.label)}">${esc(v.key)}</button>`)
+      .join('')
+    : '';
   const readOnlyHint = canEdit
-    ? isOp
+    ? isKonturOp
       ? '<p class="cat-panel-hint">Письмо платформы ООО «АРМАДА» оператору ЭТрН. Исходящий номер и дата присваиваются при первой печати. Сохранение синхронизируется на сервер.</p>'
-      : `<p class="cat-panel-hint">Шаблоны фирмы «${esc(sp && sp.name || sid)}». После сохранения подстановка полей используется при печати документов.</p>`
-    : isOp
+      : isSignOp
+        ? '<p class="cat-panel-hint">Письмо на бланке вашей компании для подключения подписи ЭТrН (T1/T2/T3/T4). Печать — с фирменным логотипом из «Тарифы» → портал заказчика.</p>'
+        : `<p class="cat-panel-hint">Шаблоны фирмы «${esc(sp && sp.name || sid)}». После сохранения подстановка полей используется при печати документов.</p>`
+    : isKonturOp
       ? '<p class="hint">Просмотр письма оператору. Редактировать может только супер-админ.</p>'
-      : `<p class="hint">Просмотр шаблонов другой фирмы. Редактировать можно только шаблоны своего space${typeof isSuperAdmin === 'function' && isSuperAdmin() ? ' (ваш space как супер-админа)' : ''}.</p>`;
+      : isSignOp
+        ? '<p class="hint">Просмотр шаблона письма оператору подписи.</p>'
+        : `<p class="hint">Просмотр шаблонов другой фирмы. Редактировать можно только шаблоны своего space${typeof isSuperAdmin === 'function' && isSuperAdmin() ? ' (ваш space как супер-админа)' : ''}.</p>`;
   return `${readOnlyHint}
     <div class="adm-tpl-layout">
       <aside class="adm-tpl-side">
@@ -274,7 +308,7 @@ function adminDocsConstructorPanelHtml() {
               <option value="">— демо-данные —</option>
               ${orderOpts}
             </select>
-          </label>` : '<span class="hint">Письмо оператору · без привязки к заявке</span>'}
+          </label>` : `<span class="hint">${isSignOp ? 'Письмо оператору подписи · бланк компании' : 'Письмо оператору · без привязки к заявке'}</span>`}
           <div class="adm-tpl-actions">
             ${canEdit ? `<button type="button" class="secondary" id="adm-tpl-reset">Сброс</button>
               <button type="button" class="primary" id="adm-tpl-save">Сохранить</button>` : ''}
@@ -294,7 +328,7 @@ function refreshAdminDocsConstructorPreview() {
   const box = $('adm-tpl-preview');
   if (!editor || !box) return;
   const tplId = adminDocsConstructorTpl || 'application';
-  const isOp = typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId);
+  const isOp = adminDocsConstructorIsOpLetter(tplId);
   if (!sid && !isOp) return;
   let order = null;
   if (!isOp) {
@@ -372,6 +406,10 @@ function wireAdminDocsConstructor() {
       const sid = adminDocsSpaceId();
       if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
         if (state.docTemplates && state.docTemplates.platform) delete state.docTemplates.platform[tplId];
+      } else if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId)) {
+        if (state.docTemplates && state.docTemplates.spaces && state.docTemplates.spaces[sid]) {
+          delete state.docTemplates.spaces[sid][tplId];
+        }
       } else if (state.docTemplates && state.docTemplates.spaces && state.docTemplates.spaces[sid]) {
         delete state.docTemplates.spaces[sid][tplId];
       }
@@ -384,6 +422,15 @@ function wireAdminDocsConstructor() {
   if (printBtn) {
     printBtn.onclick = () => {
       const tplId = adminDocsConstructorTpl || 'application';
+      if (typeof isSignOperatorLetterId === 'function' && isSignOperatorLetterId(tplId)) {
+        const sid = adminDocsSpaceId();
+        const ta = $('adm-tpl-editor');
+        const body = ta ? ta.value : '';
+        if (sid && typeof openSignOperatorLetterPrint === 'function') {
+          openSignOperatorLetterPrint(sid, tplId, body);
+        }
+        return;
+      }
       if (typeof isOperatorLetterId === 'function' && isOperatorLetterId(tplId)) {
         if (typeof ensureOperatorLetterOutNo === 'function') ensureOperatorLetterOutNo(tplId);
         const ta = $('adm-tpl-editor');
@@ -459,6 +506,23 @@ function wireAdminDocsPanel() {
       if (id && typeof openOperatorLetterPrint === 'function') {
         openOperatorLetterPrint(id);
         renderAdminDocsBody();
+      }
+    };
+  });
+  document.querySelectorAll('.adm-sign-letter-edit').forEach(btn => {
+    btn.onclick = () => {
+      adminDocsTab = 'constructor';
+      adminDocsConstructorTpl = btn.dataset.signLetter || 'signCarrier';
+      paintAdminDocsTabs();
+      renderAdminDocsBody();
+    };
+  });
+  document.querySelectorAll('.adm-sign-letter-print').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.signLetter;
+      const sid = adminDocsSpaceId();
+      if (id && sid && typeof openSignOperatorLetterPrint === 'function') {
+        openSignOperatorLetterPrint(sid, id);
       }
     };
   });

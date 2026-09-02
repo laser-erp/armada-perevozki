@@ -320,8 +320,23 @@
     .chip.ok{background:rgba(34,197,94,.15);color:#15803d;font-size:.65rem;padding:2px 6px;border-radius:4px}
     .framework-contract-actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
     .bulk-pick-all{display:flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;cursor:pointer}
-    .order-card-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:2px}
-    .order-card-head h3,.ex-card .order-card-head h3{margin:0;flex:1}
+    .order-card-head{display:flex;align-items:flex-start;gap:8px;margin-bottom:2px;flex-wrap:wrap}
+    .order-card-head h3,.ex-card .order-card-head h3{margin:0;flex:1;min-width:140px}
+    .order-etrn-badge{
+      display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;
+      font-size:.68rem;font-weight:700;line-height:1.2;border:1px solid var(--border);background:var(--field);color:var(--muted)
+    }
+    .order-etrn-badge.pending{border-color:rgba(100,116,139,.35);color:#475569}
+    .order-etrn-badge.ok{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.1);color:#15803d}
+    .order-etrn-badge.warn,.order-etrn-badge.urgent{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12);color:#b45309}
+    .order-etrn-badge--urgent{animation:etrn-badge-pulse 1.6s ease-in-out infinite}
+    @keyframes etrn-badge-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.35)}50%{box-shadow:0 0 0 4px rgba(245,158,11,0)}}
+    .etrn-sign-banner{
+      margin:0 0 10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.45);
+      background:rgba(245,158,11,.1);display:flex;flex-direction:column;gap:4px
+    }
+    .etrn-sign-banner strong{font-size:.88rem;color:#b45309}
+    .etrn-titul-row--mine{background:rgba(245,158,11,.08);border-radius:8px;padding:4px 6px;margin:-4px -6px}
     .order-pick{display:flex;align-items:center;padding:2px 0;cursor:pointer}
     .order-pick input{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--accent)}
     .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:640px;margin:0 auto;padding:12px 12px 28px;text-align:left;direction:ltr}
@@ -1489,6 +1504,8 @@
     .filters button.on{background:var(--accent);border-color:var(--accent);color:#fff}
     .admin-filter-inbox{position:relative;padding-right:10px}
     .admin-filter-inbox.has-unread{padding-right:22px}
+    .admin-filter-etrn{position:relative;padding-right:10px}
+    .admin-filter-etrn.has-unread{padding-right:22px}
     .admin-filter-badge{
       position:absolute;top:2px;right:4px;min-width:18px;height:18px;padding:0 5px;
       border-radius:999px;background:#dc2626;color:#fff;font-size:.62rem;font-weight:800;line-height:18px;text-align:center;
@@ -2006,6 +2023,7 @@
       border-bottom:2.5px solid #1e5aa8;margin-bottom:18px;font-family:Inter,Arial,sans-serif
     }
     .adm-letterhead__logo{width:68px;height:auto;border-radius:8px}
+    .adm-letterhead__logo--ph{width:68px;height:68px;border-radius:8px;background:#e2e8f0;border:1px dashed #94a3b8}
     .adm-letterhead__name{font-size:15pt;font-weight:700;color:#1e5aa8;margin:0 0 4px}
     .adm-letterhead__req,.adm-letterhead__contacts{font-size:8.5pt;color:#475569;margin:0;line-height:1.35}
 
@@ -2046,6 +2064,7 @@
     .adm-tpl-preview .adm-tpl-body p.doc-subject{text-indent:0}
     .adm-tpl-cat{font-family:Inter,sans-serif;font-size:9pt;color:#64748b;margin:0 0 10px}
     .adm-tpl-foot{margin-top:16px;padding-top:6px;border-top:1px solid #cbd5e1;font-size:8pt;color:#64748b;text-align:center;font-family:Inter,sans-serif}
+    .adm-tpl-foot--service{margin-top:24px;color:#94a3b8}
     button.linkish{border:0;background:transparent;padding:0;color:var(--accent);font-weight:600;cursor:pointer;font:inherit;text-decoration:underline}
     @media (min-width:820px){
       .adm-tpl-layout{flex-direction:row;align-items:stretch}

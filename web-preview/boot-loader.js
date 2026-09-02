@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-02-restore-catalogs-f40c';
+  var APP_BUILD = '2026-09-02-epd-stage1-4317';
 
   window.__armadaBootDone = false;
 
@@ -51,7 +51,7 @@
     var isZ = /\/(z)(\/|$)/.test(p);
     var files = ['store.js', 'billing.js'];
     if (isV) files.push('qrcode.min.js', 'entry-share.js', 'epd-sign.js', 'etrn.js', 'driver.js');
-    else if (isA) files.push('qrcode.min.js', 'entry-share.js', 'print-window.js', 'order-documents.js', 'doc-templates.js', 'operator-letters.js', 'admin-profile.js', 'admin-cabinet-settings.js', 'epd-sign.js', 'etrn.js', 'admin.js', 'admin-docs.js', 'admin-plans.js', 'onboarding.js');
+    else if (isA) files.push('qrcode.min.js', 'entry-share.js', 'print-window.js', 'order-documents.js', 'doc-templates.js', 'sign-operator-letters.js', 'operator-letters.js', 'admin-profile.js', 'admin-cabinet-settings.js', 'epd-sign.js', 'etrn.js', 'admin.js', 'admin-docs.js', 'admin-plans.js', 'onboarding.js');
     else if (isZ) files.push('qrcode.min.js', 'customer-invoice.js', 'order-documents.js', 'doc-templates.js', 'epd-sign.js', 'etrn.js', 'customer.js', 'onboarding.js');
     else {
       files.push(
@@ -61,6 +61,7 @@
         'print-window.js',
         'order-documents.js',
         'doc-templates.js',
+        'sign-operator-letters.js',
         'operator-letters.js',
         'admin-profile.js',
         'admin-cabinet-settings.js',
