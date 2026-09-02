@@ -363,7 +363,8 @@ function syncAdminNav(){
 function setAdminNav(nav){
   if(!currentAdmin && !canAutoRestoreAdmin()){ show('admin-pin'); return; }
   closeAdminSidebar();
-  if(nav==='settings'||nav==='catalogs'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
+  if(nav==='catalogs'){ openCatalogs(); return; }
+  if(nav==='settings'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
   if(nav==='plans'){ openAdminPlans(); return; }
@@ -4128,7 +4129,9 @@ function flashCatOk(msg){
 }
 function openCatalogs(){
   if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-  if(typeof markCabinetSettingsNavOn==='function') markCabinetSettingsNavOn();
+  document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.nav==='catalogs');
+  });
   const catTitle=$('cat-title');
   if(catTitle) catTitle.textContent=cabinetSettingsFromHub?'Свой автопарк':'Справочники';
   paintCatalogOwnerFilters();

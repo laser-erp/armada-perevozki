@@ -4855,7 +4855,7 @@ function wireShellHandlers(){
   $('admin-help')&&($('admin-help').onclick=()=>{
     window.open('help.html?role=admin','_blank','noopener');
   });
-  $('admin-settings')&&typeof setAdminNav==='function'&&($('admin-settings').onclick=()=>setAdminNav('settings'));
+  $('admin-catalogs')&&typeof setAdminNav==='function'&&($('admin-catalogs').onclick=()=>setAdminNav('catalogs'));
   $('admin-activity')&&typeof setAdminNav==='function'&&($('admin-activity').onclick=()=>setAdminNav('activity'));
   $('admin-billing')&&typeof setAdminNav==='function'&&($('admin-billing').onclick=()=>setAdminNav('billing'));
   $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
