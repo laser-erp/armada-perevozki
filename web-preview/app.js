@@ -1364,9 +1364,13 @@ function numOrNull(raw){
 function vehicleSpecText(v){
   if(!v) return '';
   const bits=[];
+  if(v.bodyTypeId && typeof bodyTypeInputLabel==='function') bits.push(bodyTypeInputLabel(v.bodyTypeId));
   if(v.payloadTons>0) bits.push(v.payloadTons+'т');
   if([v.bodyLengthM,v.bodyWidthM,v.bodyHeightM].every(x=>x>0))
     bits.push(`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`);
+  if(v.hasTrailer){
+    bits.push(v.trailerPlate?`прицеп ${v.trailerPlate}`:'+ прицеп');
+  }
   return bits.join(' · ');
 }
 function orderTempRangeText(o){
@@ -2316,6 +2320,9 @@ function normalizeFleetVehicle(v){
     bodyLengthM:numOrNull(v.bodyLengthM),
     bodyWidthM:numOrNull(v.bodyWidthM),
     bodyHeightM:numOrNull(v.bodyHeightM),
+    bodyTypeId:v.bodyTypeId?String(v.bodyTypeId).trim():null,
+    hasTrailer:!!v.hasTrailer,
+    trailerPlate:v.hasTrailer?String(v.trailerPlate||'').trim():'',
     spaceId:v.spaceId||null,
     companyId:v.companyId||null,
     companyName:v.companyName||null,

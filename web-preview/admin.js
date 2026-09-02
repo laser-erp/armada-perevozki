@@ -1299,6 +1299,10 @@ function openVehicleCard(vehicleId){
       <h2 class="form-section-title">Основные</h2>
       <div class="fin-grid">
         <label>Модель<input id="vc-model" value="${esc(v.makeModel||'')}" placeholder="ГАЗ Валдай" /></label>
+        <label>Тип кузова<select id="vc-body-type">${fleetBodyTypeOptionsHtml(v.bodyTypeId)}</select></label>
+        <label>Грузоподъёмность, т<input id="vc-payload" inputmode="decimal" value="${v.payloadTons??''}" placeholder="5" /></label>
+        <label class="check vc-trailer-check"><input type="checkbox" id="vc-trailer" ${v.hasTrailer?'checked':''}/> С прицепом</label>
+        <label id="vc-trailer-plate-wrap" class="svc-full"${v.hasTrailer?'':' hidden'}>Госномер прицепа<input id="vc-trailer-plate" value="${esc(v.trailerPlate||'')}" placeholder="А123BC77" /></label>
         <label>Одометр сейчас<input id="vc-odo" inputmode="numeric" value="${v.currentOdometer??''}" placeholder="км" /></label>
         <button type="button" class="primary cat-add-btn fin-full" id="vc-save-head">Сохранить</button>
       </div>
@@ -1337,6 +1341,11 @@ function openVehicleCard(vehicleId){
   `;
   show('admin-vehicle-card');
   state._vehicleCardId=v.id;
+  wireFleetTrailerToggles(box);
+  $('vc-trailer')&&($('vc-trailer').onchange=()=>{
+    const wrap=$('vc-trailer-plate-wrap');
+    if(wrap) wrap.hidden=!$('vc-trailer').checked;
+  });
   const refreshLogCheckPreview=()=>{
     const boxPrev=$('log-check-preview'); if(!boxPrev) return;
     const intervalId=(($('log-iv')||{}).value||'')||null;
@@ -1376,7 +1385,14 @@ function openVehicleCard(vehicleId){
   });
   $('vc-save-head').onclick=()=>{
     v.makeModel=(($('vc-model')||{}).value||'').trim();
+    v.bodyTypeId=(($('vc-body-type')||{}).value||'').trim()||null;
+    v.payloadTons=numOrNull(($('vc-payload')||{}).value);
+    const trailer=readFleetTrailerFromDom($('vc-trailer'), $('vc-trailer-plate'));
+    if(!validateFleetTrailer(trailer)) return;
+    v.hasTrailer=trailer.hasTrailer;
+    v.trailerPlate=trailer.trailerPlate;
     v.currentOdometer=numOrNull(($('vc-odo')||{}).value);
+    state.vehicles[vi]=normalizeFleetVehicle(Object.assign({}, v));
     bumpDataEpoch('veh-card-head');
     persist();
     openVehicleCard(v.id);
@@ -4142,6 +4158,36 @@ function openDetail(id){
   };
 }
 
+function fleetBodyTypeOptionsHtml(selectedId){
+  const sel=selectedId?String(selectedId):'';
+  const list=(typeof ATI_BODY_TYPES!=='undefined'&&ATI_BODY_TYPES.length)?ATI_BODY_TYPES
+    :((typeof BODY_TYPES!=='undefined')?BODY_TYPES:[]);
+  return ['<option value="">— тип кузова —</option>']
+    .concat(list.map(t=>`<option value="${esc(t.id)}"${t.id===sel?' selected':''}>${esc(t.label||t.id)}</option>`))
+    .join('');
+}
+function readFleetTrailerFromDom(checkboxEl, plateEl){
+  const has=!!(checkboxEl&&checkboxEl.checked);
+  const plate=has&&plateEl?String(plateEl.value||'').trim():'';
+  return { hasTrailer:has, trailerPlate:has?plate:'' };
+}
+function validateFleetTrailer(trailer){
+  if(trailer&&trailer.hasTrailer&&!trailer.trailerPlate){
+    alert('Укажите госномер прицепа');
+    return false;
+  }
+  return true;
+}
+function wireFleetTrailerToggles(root){
+  (root||document).querySelectorAll('[data-veh-trailer-toggle]').forEach(cb=>{
+    const key=cb.dataset.vehTrailerToggle;
+    const wrap=(root||document).querySelector(`[data-veh-trailer-plate-wrap="${key}"]`);
+    if(!wrap) return;
+    const sync=()=>{ wrap.hidden=!cb.checked; };
+    cb.onchange=sync;
+    sync();
+  });
+}
 function showCatalogTab(tab){
   catalogTab=tab||'companies';
   document.querySelectorAll('[data-cat-tab]').forEach(b=>b.classList.toggle('on', b.dataset.catTab===catalogTab));
@@ -4258,9 +4304,14 @@ function openCatalogs(){
           <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
         </div>
       </div>
-      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec,vehicleCrewSummary(v)].filter(Boolean).join(' · ')||'укажите т и габариты')}${v.stsPhoto?' · СТС 📄':''}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
-      <div class="veh-specs">
+      <div class="meta" style="font-size:.65rem;color:var(--muted)">${esc([coName,spec,vehicleCrewSummary(v)].filter(Boolean).join(' · ')||'укажите тип, т и габариты')}${v.stsPhoto?' · СТС 📄':''}${svcHint?' · ':''}${svcHint}${logsN?` · записей ${logsN}`:''}</div>
+      <div class="veh-specs veh-specs--wide">
+        <select id="veh-body-${i}" title="Тип кузова" class="veh-body-select">${fleetBodyTypeOptionsHtml(v.bodyTypeId)}</select>
         <input id="veh-pay-${i}" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" value="${v.payloadTons??''}" />
+        <label class="check veh-trailer-check" title="С прицепом"><input type="checkbox" data-veh-trailer-toggle="${i}" id="veh-trailer-${i}" ${v.hasTrailer?'checked':''}/> Прицеп</label>
+        <span data-veh-trailer-plate-wrap="${i}" class="veh-trailer-plate-wrap"${v.hasTrailer?'':' hidden'}>
+          <input id="veh-trailer-plate-${i}" placeholder="№ прицепа" title="Госномер прицепа" value="${esc(v.trailerPlate||'')}" />
+        </span>
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
         <input id="veh-w-${i}" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
         <input id="veh-h-${i}" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
@@ -4325,7 +4376,7 @@ function openCatalogs(){
           ? `<label class="svc-full">Компания<select id="veh-company-pick">${fleetList.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
           : '';
         const hint=active
-          ? `Авто «${esc(active.name)}»: тоннаж, габариты, экипаж — в карточке «Ремонт и ТО».`
+          ? `Авто «${esc(active.name)}»: тип кузова, тоннаж, прицеп — в карточке или ниже. «Ремонт и ТО» — сервис.`
           : (allCabinets?'Выберите компанию с парком':'Сначала нужна ваша фирма');
         return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
       })()}
@@ -4336,7 +4387,14 @@ function openCatalogs(){
           <button type="button" class="icon-btn ok" id="own-veh-add" title="Добавить">+</button>
         </div>
         <div class="row" style="margin-top:4px">
+          <select id="own-veh-body" style="flex:1.2" title="Тип кузова">${fleetBodyTypeOptionsHtml('')}</select>
           <input id="own-veh-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность" style="flex:0 0 56px;text-align:center" />
+          <label class="check" title="С прицепом"><input type="checkbox" id="own-veh-trailer" data-veh-trailer-toggle="own-add"/> Прицеп</label>
+        </div>
+        <div class="row" style="margin-top:4px" data-veh-trailer-plate-wrap="own-add" hidden>
+          <input id="own-veh-trailer-plate" placeholder="Госномер прицепа" style="flex:1" />
+        </div>
+        <div class="row" style="margin-top:4px">
           <input id="own-veh-l" inputmode="decimal" placeholder="Д, м" style="flex:1;text-align:center" />
           <input id="own-veh-w" inputmode="decimal" placeholder="Ш, м" style="flex:1;text-align:center" />
           <input id="own-veh-h" inputmode="decimal" placeholder="В, м" style="flex:1;text-align:center" />
@@ -4593,7 +4651,12 @@ function openCatalogs(){
         <div class="card" style="margin:6px 0">
           <input data-vp="${i}" placeholder="Госномер" value="${esc(v.plate)}" />
           <input data-vm="${i}" placeholder="Марка/модель" value="${esc(v.makeModel||'')}" />
+          <select data-vbody="${i}" title="Тип кузова">${fleetBodyTypeOptionsHtml(v.bodyTypeId)}</select>
           <input data-vpay="${i}" inputmode="decimal" placeholder="Грузоподъёмность, т" value="${v.payloadTons??''}" />
+          <label class="check"><input type="checkbox" data-vtrailer="${i}" ${v.hasTrailer?'checked':''}/> Прицеп</label>
+          <div data-vtrailer-wrap="${i}"${v.hasTrailer?'':' hidden'}>
+            <input data-vtrailer-plate="${i}" placeholder="Госномер прицепа" value="${esc(v.trailerPlate||'')}" />
+          </div>
           <div class="row">
             <input data-vl="${i}" inputmode="decimal" placeholder="Длина, м" value="${v.bodyLengthM??''}" />
             <input data-vw="${i}" inputmode="decimal" placeholder="Ширина, м" value="${v.bodyWidthM??''}" />
@@ -4602,6 +4665,13 @@ function openCatalogs(){
           <button type="button" class="secondary" data-vdel="${i}">Удалить ТС</button>
         </div>`).join('')||`<div class="hint">Нет ТС</div>`;
       document.querySelectorAll('[data-vdel]').forEach(b=>b.onclick=()=>{ vehicles.splice(+b.dataset.vdel,1); paintVehicles(); });
+      document.querySelectorAll('[data-vtrailer]').forEach(cb=>{
+        const i=cb.dataset.vtrailer;
+        const wrap=document.querySelector(`[data-vtrailer-wrap="${i}"]`);
+        const sync=()=>{ if(wrap) wrap.hidden=!cb.checked; };
+        cb.onchange=sync;
+        sync();
+      });
     };
     const paintDrivers=()=>{
       $('co-drivers').innerHTML=drivers.map((d,i)=>`
@@ -4627,7 +4697,7 @@ function openCatalogs(){
     $('co-role-r').onchange=syncRoleVisibility;
     $('co-role-o')&&($('co-role-o').onchange=syncRoleVisibility);
     $('co-add-contact').onclick=()=>{ contacts.push({id:uuid(),name:'',title:'',phones:[],isPrimary:!contacts.length}); paintContacts(); };
-    $('co-add-veh').onclick=()=>{ vehicles.push({id:uuid(),plate:'',makeModel:'',payloadTons:null,bodyLengthM:null,bodyWidthM:null,bodyHeightM:null}); paintVehicles(); };
+    $('co-add-veh').onclick=()=>{ vehicles.push({id:uuid(),plate:'',makeModel:'',bodyTypeId:null,payloadTons:null,hasTrailer:false,trailerPlate:'',bodyLengthM:null,bodyWidthM:null,bodyHeightM:null}); paintVehicles(); };
     $('co-add-drv').onclick=()=>{ drivers.push({id:uuid(),name:'',phone:'',vehicleId:null}); paintDrivers(); };
     $('co-cancel').onclick=()=>{ box.classList.remove('show'); box.innerHTML=''; };
     $('co-inn-lookup')&&($('co-inn-lookup').onclick=async()=>{
@@ -4678,11 +4748,21 @@ function openCatalogs(){
         const ph=formatPhone((phoneEl&&phoneEl.value||'').trim());
         return {id:p.id||uuid(), name:nm, title:(titleEl&&titleEl.value||'').trim(), phones:ph?[{id:uuid(),number:ph,label:''}]:[], isPrimary:!!(primEl&&primEl.checked)};
       }).filter(p=>p.name);
+      for(let vi=0;vi<vehicles.length;vi++){
+        const hasTr=!!document.querySelector(`[data-vtrailer="${vi}"]`)?.checked;
+        if(hasTr){
+          const tpl=String(document.querySelector(`[data-vtrailer-plate="${vi}"]`)?.value||'').trim();
+          if(!tpl){ alert('Укажите госномер прицепа'); return; }
+        }
+      }
       vehicles=vehicles.map((v,i)=>{
         const plate=(document.querySelector(`[data-vp="${i}"]`)?.value||'').trim();
         const makeModel=(document.querySelector(`[data-vm="${i}"]`)?.value||'').trim();
+        const bodyTypeId=(document.querySelector(`[data-vbody="${i}"]`)?.value||'').trim()||null;
+        const hasTrailer=!!document.querySelector(`[data-vtrailer="${i}"]`)?.checked;
+        const trailerPlate=hasTrailer?String(document.querySelector(`[data-vtrailer-plate="${i}"]`)?.value||'').trim():'';
         const num=id=>{ const raw=document.querySelector(`[data-${id}="${i}"]`)?.value||''; const n=+String(raw).replace(',','.'); return n>0?n:null; };
-        return {id:v.id||uuid(), plate, makeModel, payloadTons:num('vpay'), bodyLengthM:num('vl'), bodyWidthM:num('vw'), bodyHeightM:num('vh')};
+        return {id:v.id||uuid(), plate, makeModel, bodyTypeId, hasTrailer, trailerPlate, payloadTons:num('vpay'), bodyLengthM:num('vl'), bodyWidthM:num('vw'), bodyHeightM:num('vh')};
       }).filter(v=>v.plate);
       drivers=drivers.map((d,i)=>{
         const name=(document.querySelector(`[data-dn="${i}"]`)?.value||'').trim();
@@ -4795,11 +4875,20 @@ function openCatalogs(){
     const v=state.vehicles[i]; if(!v) return;
     const cons=+(($('veh-'+i).value||'').replace(',','.'));
     if(!(cons>0)){ alert('Укажите расход л/100'); return; }
+    const trailer=readFleetTrailerFromDom(
+      document.getElementById('veh-trailer-'+i),
+      document.getElementById('veh-trailer-plate-'+i)
+    );
+    if(!validateFleetTrailer(trailer)) return;
     v.consumptionPer100Km=cons;
+    v.bodyTypeId=(($('veh-body-'+i)||{}).value||'').trim()||null;
     v.payloadTons=numOrNull(($('veh-pay-'+i)||{}).value);
+    v.hasTrailer=trailer.hasTrailer;
+    v.trailerPlate=trailer.trailerPlate;
     v.bodyLengthM=numOrNull(($('veh-l-'+i)||{}).value);
     v.bodyWidthM=numOrNull(($('veh-w-'+i)||{}).value);
     v.bodyHeightM=numOrNull(($('veh-h-'+i)||{}).value);
+    state.vehicles[i]=normalizeFleetVehicle(Object.assign({}, v));
     bumpDataEpoch('save-vehicle');
     persist(); flashCatOk(); openCatalogs();
   });
@@ -4832,12 +4921,18 @@ function openCatalogs(){
     const exists=state.vehicles.some(v=>(v.plate||'').toLowerCase()===plate.toLowerCase() && v.companyId===companyId);
     if(exists){ alert('Такой госномер уже есть в этой фирме'); return; }
     const payloadTons=numOrNull(($('own-veh-pay')||{}).value);
+    const bodyTypeId=(($('own-veh-body')||{}).value||'').trim()||null;
+    const trailer=readFleetTrailerFromDom($('own-veh-trailer'), $('own-veh-trailer-plate'));
     const bodyLengthM=numOrNull(($('own-veh-l')||{}).value);
     const bodyWidthM=numOrNull(($('own-veh-w')||{}).value);
     const bodyHeightM=numOrNull(($('own-veh-h')||{}).value);
     if(!(payloadTons>0)){ alert('Укажите грузоподъёмность (т) — нужна для биржи'); return; }
+    if(!bodyTypeId){ alert('Выберите тип кузова'); return; }
+    if(!validateFleetTrailer(trailer)) return;
     state.vehicles.push(normalizeFleetVehicle({
-      plate, consumptionPer100Km:cons, payloadTons, bodyLengthM, bodyWidthM, bodyHeightM, makeModel:'',
+      plate, consumptionPer100Km:cons, payloadTons, bodyTypeId,
+      hasTrailer:trailer.hasTrailer, trailerPlate:trailer.trailerPlate,
+      bodyLengthM, bodyWidthM, bodyHeightM, makeModel:'',
       spaceId:fleetSpace, companyId, companyName,
       serviceIntervals:[], maintenanceLogs:[]
     }));
@@ -4939,5 +5034,6 @@ function openCatalogs(){
     }catch(_){}
     flashCatOk();
   });
+  wireFleetTrailerToggles($('catalogs-form'));
 }
 
