@@ -79,9 +79,9 @@ deploy_tar
 BUILD="$(grep -m1 'APP_BUILD=' "$SRC/store.js" | sed 's/.*"\(.*\)".*/\1/')"
 echo "Готово. Проверка APP_BUILD на сервере:"
 run_ssh "grep -m1 APP_BUILD $DEST/store.js || true"
-echo "Live: https://aptown1.fvds.ru/ (ожидаемая сборка: $BUILD)"
+echo "Live: https://app.armada.sx/ (ожидаемая сборка: $BUILD)"
 SMOKE="$ROOT/scripts/smoke-strategic-plan.sh"
 if [ -x "$SMOKE" ]; then
   echo "Smoke S0–S3…"
-  BASE_URL="https://aptown1.fvds.ru" "$SMOKE" || echo "Smoke: есть ошибки (см. выше)"
+  BASE_URL="https://app.armada.sx" "$SMOKE" || echo "Smoke: есть ошибки (см. выше)"
 fi

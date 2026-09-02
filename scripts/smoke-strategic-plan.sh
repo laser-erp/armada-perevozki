@@ -1,27 +1,34 @@
 #!/usr/bin/env bash
 # Smoke S0 (HTTPS + armada-api), S1 (driverInvites), S3 (ETRN MVP UI/API).
-# Usage: BASE_URL=https://aptown1.fvds.ru ./scripts/smoke-strategic-plan.sh
+# Usage: BASE_URL=https://app.armada.sx ./scripts/smoke-strategic-plan.sh
 set -euo pipefail
 
-BASE="${BASE_URL:-https://aptown1.fvds.ru}"
+BASE="${BASE_URL:-https://app.armada.sx}"
 API="${BASE}/armada-api"
 FAIL=0
 STORE_TMP="$(mktemp)"
-trap 'rm -f "$STORE_TMP"' EXIT
+HTML_TMP="$(mktemp)"
+BOOT_TMP="$(mktemp)"
+trap 'rm -f "$STORE_TMP" "$HTML_TMP" "$BOOT_TMP"' EXIT
 
 pass() { echo "  OK  $1"; }
 fail() { echo "  FAIL $1"; FAIL=1; }
 
-fetch_store() {
+fetch_url() {
+  local url="$1" dest="$2"
   local i=0
   while [ "$i" -lt 3 ]; do
-    if curl -fsS "$BASE/store.js" >"$STORE_TMP" && [ -s "$STORE_TMP" ]; then
+    if curl -fsS "$url" >"$dest" && [ -s "$dest" ]; then
       return 0
     fi
     i=$((i + 1))
     sleep 1
   done
   return 1
+}
+
+fetch_store() {
+  fetch_url "$BASE/store.js" "$STORE_TMP"
 }
 
 echo "ARMADA strategic plan smoke — $BASE"
@@ -59,10 +66,11 @@ BUILD="$(grep -m1 'APP_BUILD=' "$STORE_TMP" | sed 's/.*"\(.*\)".*/\1/')"
 if [ -n "$BUILD" ]; then pass "APP_BUILD=$BUILD"; else fail "APP_BUILD"; fi
 
 echo "Onboarding"
+if fetch_url "$BASE/boot-loader.js" "$BOOT_TMP"; then pass "boot-loader.js"; else fail "boot-loader.js"; fi
+if grep -q 'onboarding.js' "$BOOT_TMP"; then pass "onboarding.js in boot-loader"; else fail "onboarding.js in boot-loader"; fi
 for f in onboarding.js help.html; do
   if curl -fsS -o /dev/null "$BASE/$f"; then pass "$f"; else fail "$f"; fi
 done
-if curl -fsS "$BASE/index.html" | grep -q 'onboarding.js'; then pass "index.html loads onboarding.js"; else fail "index.html onboarding"; fi
 
 echo "Entry paths"
 if curl -fsS -o /dev/null "$BASE/v" && curl -fsS -o /dev/null "$BASE/a" && curl -fsS -o /dev/null "$BASE/z"; then
@@ -73,7 +81,18 @@ fi
 if curl -fsS -o /dev/null "$BASE/entry.css"; then pass "entry.css"; else fail "entry.css"; fi
 
 if grep -q 'isRoleHubUrl' "$STORE_TMP"; then pass "isRoleHubUrl in store.js"; else fail "isRoleHubUrl"; fi
-if curl -fsS "$BASE/index.html" | grep -q 'id="roles"'; then pass "index.html roles hub"; else fail "index.html roles hub"; fi
+if fetch_url "$BASE/index.html" "$HTML_TMP" && grep -q 'id="roles"' "$HTML_TMP"; then pass "index.html roles hub"; else fail "index.html roles hub"; fi
+
+if fetch_url "$BASE/legal.html" "$HTML_TMP" && grep -q 'Публичная оферта на оказание услуг' "$HTML_TMP"; then pass "legal.html offer text"; else fail "legal.html offer text"; fi
+
+LEGACY="${LEGACY_BASE_URL:-https://aptown1.fvds.ru}"
+echo "Legacy redirect ($LEGACY → $BASE)"
+LEGACY_CODE="$(curl -sS -o /dev/null -w "%{http_code}" "$LEGACY/armada-api/health")"
+if [ "$LEGACY_CODE" = "301" ] || [ "$LEGACY_CODE" = "308" ]; then
+  pass "legacy host redirects (HTTP $LEGACY_CODE)"
+else
+  fail "legacy host redirects (HTTP $LEGACY_CODE)"
+fi
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
