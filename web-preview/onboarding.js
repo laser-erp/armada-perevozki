@@ -280,6 +280,12 @@
         placement:'bottom'
       },
       {
+        title:'ЭТrН в заказах',
+        body:'<p>Если подключён модуль ЭТrН — смотрите бейджи на строках и фильтры <strong>«моя подпись»</strong>, <strong>T1</strong>, <strong>водитель</strong>.</p><p>Подробнее — <a href="help.html?role=admin#etrn" target="_blank" rel="noopener">раздел помощи про ЭТrН</a>.</p>',
+        target:()=>document.querySelector('#admin-filters button[data-filter="etrn-sign"]')||document.getElementById('admin-filters'),
+        placement:'bottom'
+      },
+      {
         title:'Справочники',
         body:'<p>Здесь настраивается всё для работы: водители и PIN, автомобили, компании, тариф ₽/км и ₽/ч, портал заказчика.</p><p>Тур можно перезапустить: «Помощь» в меню.</p>',
         target:'admin-catalogs',
@@ -307,7 +313,7 @@
       },
       {
         title:'Заявки',
-        body:'<p>Все ваши заказы: выехал, прибыл, одометры, маршрут. Карточка заказа — действия по шагам.</p>',
+        body:'<p>Все ваши заказы: выехал, прибыл, одометры, маршрут. Карточка заказа — действия по шагам.</p><p>После выезда — QR ЭТrН для инспектора и подписи T3/T4 (если модуль включён).</p>',
         target:'btn-orders',
         placement:'top'
       },

@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-02-epd-stage1-filters-4317";
+const APP_BUILD="2026-09-02-bodytype-epd-sync-4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -756,6 +756,31 @@ const CARGO_KINDS=[
 ];
 function bodyTypeLabel(id){
   return (BODY_TYPES.find(x=>x.id===id)||{}).label||'';
+}
+/** Группа (tent/board/reefer/dump) и точный id типа кузова для матчинга. */
+function bodyTypeMatchMeta(id){
+  const x=String(id||'').trim();
+  if(!x) return null;
+  const ati=ATI_BODY_TYPES.find(t=>t.id===x);
+  if(ati) return { id:ati.id, group:ati.mapTo||'board' };
+  const coarse=BODY_TYPES.find(t=>t.id===x);
+  if(coarse) return { id:coarse.id, group:coarse.id };
+  return { id:x, group:mapVtypeToBodyType(x) };
+}
+/** ТС подходит по типу кузова: vehicleTypeIds (точно) или reqBodyType (группа/точный ATI). */
+function vehicleBodyTypeMatchesOrder(v, o){
+  if(!v||!o) return true;
+  const vtypes=Array.isArray(o.vehicleTypeIds)?o.vehicleTypeIds.filter(Boolean):[];
+  const req=String(o.reqBodyType||'').trim();
+  if(!vtypes.length && !req) return true;
+  const vid=String(v.bodyTypeId||'').trim();
+  if(!vid) return false;
+  if(vtypes.length) return vtypes.includes(vid);
+  const reqMeta=bodyTypeMatchMeta(req);
+  const vehMeta=bodyTypeMatchMeta(vid);
+  if(!reqMeta||!vehMeta) return false;
+  if(BODY_TYPES.some(t=>t.id===req)) return vehMeta.group===reqMeta.group;
+  return vehMeta.id===reqMeta.id;
 }
 function cargoKindLabel(id){
   return (CARGO_KINDS.find(x=>x.id===id)||{}).label||'';
@@ -1596,7 +1621,17 @@ async function syncEpdSpaceFromServer(spaceId){
   const remote=await fetchEpdSpaceFromApi(spaceId);
   if(!remote) return false;
   setEpdSpaceRecord(spaceId, remote);
+  if(typeof persist==='function') persist();
   return true;
+}
+async function syncAllEpdSpacesFromServer(){
+  if(!API_BASE) return 0;
+  const ids=(state.spaces||[]).map(s=>s&&s.id).filter(Boolean);
+  let n=0;
+  for(const sid of ids){
+    if(await syncEpdSpaceFromServer(sid)) n++;
+  }
+  return n;
 }
 function snapshot(){
   // Отменённые никогда не уезжают на сервер — иначе старая вкладка воскрешает их.

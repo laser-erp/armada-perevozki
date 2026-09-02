@@ -1428,6 +1428,7 @@ function orderReqText(o){
 /** ТС подходит, если каждое указанное требование закрыто его характеристикой. */
 function vehicleFitsOrder(v, o){
   if(!v || !o) return false;
+  if(typeof vehicleBodyTypeMatchesOrder==='function' && !vehicleBodyTypeMatchesOrder(v, o)) return false;
   const pairs=[['reqPayloadTons','payloadTons'],['reqLengthM','bodyLengthM'],['reqWidthM','bodyWidthM'],['reqHeightM','bodyHeightM']];
   let anyReq=false;
   for(const [req,field] of pairs){
