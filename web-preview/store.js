@@ -178,7 +178,16 @@ function generateAdminPin(){
   for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
   return s;
 }
-const APP_BUILD="2026-09-02-vehicle-trailer-4317";
+function normalizeLoginInn(raw){
+  return String(raw||'').replace(/\D/g,'');
+}
+function dayKeyFromIso(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+const APP_BUILD="2026-09-02-epd-driver-fixes-4317";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1026,6 +1035,7 @@ const state={
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
   adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{},
   billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}},
+  epdBySpace:(saved.epdBySpace && typeof saved.epdBySpace==='object')?saved.epdBySpace:{},
   invoices:Array.isArray(saved.invoices)?saved.invoices:[],
   docTemplates:(saved.docTemplates && typeof saved.docTemplates==='object')?saved.docTemplates:{spaces:{}},
   customerPortalLeads:Array.isArray(saved.customerPortalLeads)?saved.customerPortalLeads:[]
@@ -1511,6 +1521,56 @@ function logOpsEvent(kind, detail, meta){
   });
   if(state.opsLog.length>60) state.opsLog.length=60;
 }
+function normalizeEpdSpaceRecord(rec, spaceId){
+  const sp=spaceId?findSpaceById(spaceId):null;
+  const co=spaceId&&typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(spaceId):null;
+  const boxId=String(rec&&rec.boxId||'').trim();
+  let status=rec&&rec.status;
+  if(!['pending','connected','error'].includes(status)) status=boxId?'connected':'pending';
+  return {
+    operator:String(rec&&rec.operator||'kontur').trim()||'kontur',
+    sandbox:rec&&rec.sandbox!=null?!!rec.sandbox:true,
+    orgInn:normalizeLoginInn(rec&&rec.orgInn||(co&&co.inn)||(sp&&sp.inn)||''),
+    boxId,
+    status,
+    connectedAt:rec&&rec.connectedAt||null,
+    lastError:rec&&rec.lastError?String(rec.lastError):''
+  };
+}
+function epdSpaceForSpaceId(spaceId){
+  if(!spaceId) return normalizeEpdSpaceRecord(null, null);
+  if(!state.epdBySpace||typeof state.epdBySpace!=='object') state.epdBySpace={};
+  return normalizeEpdSpaceRecord(state.epdBySpace[spaceId], spaceId);
+}
+function setEpdSpaceRecord(spaceId, patch){
+  if(!spaceId) return null;
+  if(!state.epdBySpace||typeof state.epdBySpace!=='object') state.epdBySpace={};
+  const prev=state.epdBySpace[spaceId]||{};
+  const next=normalizeEpdSpaceRecord(Object.assign({}, prev, patch||{}), spaceId);
+  if(patch&&patch.boxId!==undefined && next.boxId && !next.connectedAt) next.connectedAt=new Date().toISOString();
+  state.epdBySpace[spaceId]=next;
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('epd-space');
+  return next;
+}
+function epdBySpaceSnapshotSlice(){
+  const out={};
+  Object.keys(state.epdBySpace||{}).forEach(sid=>{
+    out[sid]=normalizeEpdSpaceRecord(state.epdBySpace[sid], sid);
+  });
+  return out;
+}
+function applyEpdBySpacePayload(raw){
+  if(!raw||typeof raw!=='object') return;
+  if(!state.epdBySpace||typeof state.epdBySpace!=='object') state.epdBySpace={};
+  Object.keys(raw).forEach(sid=>{
+    state.epdBySpace[sid]=normalizeEpdSpaceRecord(raw[sid], sid);
+  });
+}
+function epdSpaceStatusLabel(st){
+  if(st==='connected') return 'подключено';
+  if(st==='error') return 'ошибка';
+  return 'ждём boxId';
+}
 function snapshot(){
   // Отменённые никогда не уезжают на сервер — иначе старая вкладка воскрешает их.
   const orders=stripCancelledFromOrders(state.orders);
@@ -1538,6 +1598,7 @@ function snapshot(){
     driverInvites:Array.isArray(state.driverInvites)?state.driverInvites:[],
     dataEpoch:Number(state.dataEpoch)||0,
     billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
+    epdBySpace:typeof epdBySpaceSnapshotSlice==='function'?epdBySpaceSnapshotSlice():(state.epdBySpace||{}),
     invoices:Array.isArray(state.invoices)?state.invoices:[],
     docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
     customerPortalLeads:Array.isArray(state.customerPortalLeads)?state.customerPortalLeads:[],
@@ -1574,6 +1635,8 @@ function applyPayload(p, opts){
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
   if(typeof applyBillingPayload==='function') applyBillingPayload(p.billing);
   else if(p.billing&&typeof p.billing==='object') state.billing=p.billing;
+  if(typeof applyEpdBySpacePayload==='function') applyEpdBySpacePayload(p.epdBySpace);
+  else if(p.epdBySpace&&typeof p.epdBySpace==='object') state.epdBySpace=p.epdBySpace;
   state.invoices=Array.isArray(p.invoices)?p.invoices:[];
   if(typeof applyDocTemplatesPayload==='function') applyDocTemplatesPayload(p.docTemplates);
   else if(p.docTemplates&&typeof p.docTemplates==='object') state.docTemplates=p.docTemplates;

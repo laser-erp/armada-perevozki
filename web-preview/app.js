@@ -4712,6 +4712,7 @@ async function openAdminLoginAsync(){
   }
 }
 function wireAdminLoginHandlers(){
+  if(typeof loginAdmin!=='function') return;
   const ok=$('pin-ok');
   if(ok){
     ok.type='button';
@@ -4733,6 +4734,31 @@ function wireAdminLoginHandlers(){
   if(back && typeof backFromEntryLogin==='function'){
     back.type='button';
     back.onclick=()=>backFromEntryLogin();
+  }
+}
+function wireDriverLoginHandlers(){
+  if(typeof loginDriver!=='function') return;
+  const phoneOk=$('drv-login-phone-ok');
+  if(phoneOk){
+    phoneOk.type='button';
+    phoneOk.onclick=()=>continueDriverPhone();
+  }
+  const loginOk=$('drv-login-ok');
+  if(loginOk){
+    loginOk.type='button';
+    loginOk.onclick=()=>loginDriver();
+  }
+  const phone=$('drv-login-phone');
+  if(phone && typeof continueDriverPhone==='function'){
+    phone.onkeydown=e=>{
+      if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); }
+    };
+  }
+  const pin=$('drv-login-pin');
+  if(pin && typeof loginDriver==='function'){
+    pin.onkeydown=e=>{
+      if(e.key==='Enter'){ e.preventDefault(); loginDriver(); }
+    };
   }
 }
 function showDefaultAfterSplash(){
@@ -4801,7 +4827,7 @@ try{
   } else if(urlEntry==='admin'){
     if(canAutoRestoreAdmin()){
       show('admin');
-      renderAdmin();
+      if(typeof renderAdmin==='function') renderAdmin();
       if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     }else openDedicatedEntryScreen();
   } else if(onRoleHub || !urlEntry){
@@ -4847,11 +4873,7 @@ function wireShellHandlers(){
     if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
     if(typeof openDriverLogin==='function') openDriverLogin(true);
   });
-  if(typeof loginDriver==='function'){
-    $('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
-    $('drv-login-phone-ok')&&($('drv-login-phone-ok').onclick=continueDriverPhone);
-    $('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); } });
-  }
+  if(typeof loginDriver==='function') wireDriverLoginHandlers();
   $('btn-home')&&typeof showDriverHome==='function'&&($('btn-home').onclick=showDriverHome);
   $('pin-back')&&typeof backFromEntryLogin==='function'&&($('pin-back').onclick=()=>backFromEntryLogin());
   if(typeof loginAdmin==='function'){
@@ -4865,12 +4887,14 @@ function wireShellHandlers(){
   $('admin-catalogs')&&typeof setAdminNav==='function'&&($('admin-catalogs').onclick=()=>setAdminNav('catalogs'));
   $('admin-activity')&&typeof setAdminNav==='function'&&($('admin-activity').onclick=()=>setAdminNav('activity'));
   $('admin-billing')&&typeof setAdminNav==='function'&&($('admin-billing').onclick=()=>setAdminNav('billing'));
-  $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
-    const sb=$('admin-sidebar');
-    if(sb && sb.classList.contains('open')) closeAdminSidebar();
-    else openAdminSidebar();
-  });
-  $('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
+  if(typeof closeAdminSidebar==='function' && typeof openAdminSidebar==='function'){
+    $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
+      const sb=$('admin-sidebar');
+      if(sb && sb.classList.contains('open')) closeAdminSidebar();
+      else openAdminSidebar();
+    });
+    $('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
+  }
   $('admin-notify-toggle')&&($('admin-notify-toggle').onclick=async()=>{
     if(typeof adminNotifyActive==='function' && adminNotifyActive()){
       if(typeof setAdminNotifyWanted==='function') setAdminNotifyWanted(false);
@@ -4879,12 +4903,14 @@ function wireShellHandlers(){
     }
     if(typeof enableAdminNotifications==='function') await enableAdminNotifications();
   });
-  document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
-    b.onclick=()=>setAdminNav(b.dataset.nav);
-  });
-  document.querySelectorAll('#admin-park-ex [data-park-ex]').forEach(b=>{
-    b.onclick=()=>setAdminNav(b.dataset.parkEx==='exchange'?'exchange':'orders');
-  });
+  if(typeof setAdminNav==='function'){
+    document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
+      b.onclick=()=>setAdminNav(b.dataset.nav);
+    });
+    document.querySelectorAll('#admin-park-ex [data-park-ex]').forEach(b=>{
+      b.onclick=()=>setAdminNav(b.dataset.parkEx==='exchange'?'exchange':'orders');
+    });
+  }
   if(typeof updateAdminChrome==='function') updateAdminChrome();
   if(typeof showCabinet==='function') $('btn-cabinet')&&($('btn-cabinet').onclick=showCabinet);
   if(typeof showOrders==='function') $('btn-orders')&&($('btn-orders').onclick=showOrders);
@@ -4894,12 +4920,14 @@ function wireShellHandlers(){
       b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
     });
   }
-  document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
-    state.adminFilter=b.dataset.filter;
-    document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
-    if(b.dataset.filter==='inbox' && typeof markAllAdminInboxSeen==='function') markAllAdminInboxSeen();
-    renderAdmin();
-  });
+  if(typeof renderAdmin==='function'){
+    document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
+      state.adminFilter=b.dataset.filter;
+      document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
+      if(b.dataset.filter==='inbox' && typeof markAllAdminInboxSeen==='function') markAllAdminInboxSeen();
+      renderAdmin();
+    });
+  }
   if(typeof bindAdminCreate==='function') bindAdminCreate();
 }
 wireShellHandlers();

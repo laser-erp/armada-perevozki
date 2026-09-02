@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-02-vehicle-trailer-4317';
+  var APP_BUILD = '2026-09-02-epd-driver-fixes-4317';
 
   window.__armadaBootDone = false;
 
@@ -96,6 +96,7 @@
     if (early) {
       showScreenEarly(early);
       if (early === 'admin-pin' && typeof wireAdminLoginHandlers === 'function') wireAdminLoginHandlers();
+      if (early === 'driver-login' && typeof wireDriverLoginHandlers === 'function') wireDriverLoginHandlers();
       if (early === 'admin-pin') {
         var loginBtn = document.getElementById('pin-ok');
         if (loginBtn) loginBtn.disabled = false;

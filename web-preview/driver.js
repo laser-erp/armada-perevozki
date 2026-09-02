@@ -381,6 +381,7 @@ function openDriverLogin(fromAdmin){
   }
   show('driver-login');
   applyEntrySkin('driver-login');
+  if(typeof wireDriverLoginHandlers==='function') wireDriverLoginHandlers();
   setTimeout(()=>{
     const focusEl=(phoneEl && phoneEl.value)?($('drv-login-pin')||phoneEl):($('drv-login-phone')||phoneEl);
     if(focusEl && focusEl.focus) focusEl.focus();
@@ -1527,7 +1528,7 @@ function showCabinet(){
     html+=epdSignCardHtml('driver');
   }
   html+=`<div class="drv-earn">
-    <span class="lbl">Профиль</span>
+    <span class="lbl">Профиль водителя</span>
     <span class="val" style="font-size:1.25rem">${esc(DRIVER||'—')}</span>
     <span class="sub">${esc(firm||'Водитель')}</span>
   </div>`;
