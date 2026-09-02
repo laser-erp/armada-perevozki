@@ -1322,6 +1322,23 @@ function migrateDriverOrderOwners(){
   });
   return changed;
 }
+/** Заказы с битым ownerAdminId — привязать к админу space. */
+function migrateRepairOrderOwnersBySpace(){
+  let changed=false;
+  (state.orders||[]).forEach(o=>{
+    if(!o||!o.spaceId) return;
+    const sp=(state.spaces||[]).find(s=>s.id===o.spaceId);
+    const admForSpace=(state.admins||[]).find(a=>a.spaceId===o.spaceId&&!a.isSuper)
+      || (sp&&sp.adminId?(state.admins||[]).find(a=>a.id===sp.adminId):null);
+    if(!admForSpace) return;
+    const ownerOk=o.ownerAdminId&&(state.admins||[]).some(a=>a.id===o.ownerAdminId);
+    if(ownerOk) return;
+    o.ownerAdminId=admForSpace.id;
+    o.ownerAdminName=admForSpace.name;
+    changed=true;
+  });
+  return changed;
+}
 function isPartnerOnOrder(o){
   if(!o || !currentAdmin) return false;
   const myCo=currentOwnCompany();

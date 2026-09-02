@@ -2129,7 +2129,7 @@ function ensureAdminOrdersCal(){
       month:now.getMonth(),
       from:null,
       to:null,
-      showAll:false,
+      showAll:true,
       driver:'',
       plate:''
     };
@@ -2137,6 +2137,35 @@ function ensureAdminOrdersCal(){
   const cal=state.adminOrdersCal;
   if(cal.driver==null) cal.driver='';
   if(cal.plate==null) cal.plate='';
+  if(cal.showAll==null) cal.showAll=true;
+  return cal;
+}
+/** Если в текущем месяце нет заказов — показать «все дни» или месяц последнего заказа. */
+function alignAdminOrdersCalToData(orders){
+  const cal=ensureAdminOrdersCal();
+  if(cal.from || cal.showAll) return cal;
+  const list=orders||[];
+  if(!list.length) return cal;
+  const prefix=`${cal.year}-${String(cal.month+1).padStart(2,'0')}`;
+  const inMonth=list.some(o=>{
+    const k=dayKeyFromIso(o.closedAt||o.createdAt);
+    return k && String(k).startsWith(prefix);
+  });
+  if(inMonth) return cal;
+  let latest=null;
+  list.forEach(o=>{
+    const k=dayKeyFromIso(o.closedAt||o.createdAt);
+    if(k && (!latest || k>latest)) latest=k;
+  });
+  if(latest){
+    const p=String(latest).split('-');
+    if(p.length===3){
+      cal.year=+p[0];
+      cal.month=+p[1]-1;
+      return cal;
+    }
+  }
+  cal.showAll=true;
   return cal;
 }
 function adminOrdersPeriodLabel(cal){
@@ -2801,6 +2830,7 @@ function renderAdmin(){
   }
   const orders=filteredOrders();
   pruneAdminOrderSelection(orders.map(o=>o.id).filter(Boolean));
+  alignAdminOrdersCalToData(orders);
   if(state.adminFilter==='exchange'){
     $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
@@ -2832,9 +2862,18 @@ function renderAdmin(){
   }
   if(!orders.length){
     const checklist='';
-    const emptyHint=isSuperAdmin()
-      ? 'Пока нет заявок. Нажмите + Заказ'
-      : 'Пока нет заявок. Пройдите чеклист ниже и нажмите + Заказ';
+    let emptyHint=isSuperAdmin()
+      ? 'Пока нет заявок в выбранном кабинете. Переключите «Все кабинеты» или фирму с заказами (например «ИП Нечаев»).'
+      : 'Пока нет заявок. Пройдите чеклист в «Настройки кабинета» и нажмите + Заказ';
+    if(isSuperAdmin() && (state.adminOwnerFilter||'all')!=='all'){
+      const sid=state.adminOwnerFilter;
+      const sp=typeof findSpaceById==='function'?findSpaceById(sid):null;
+      const totalAll=(state.orders||[]).length;
+      const inCab=(state.orders||[]).filter(o=>typeof orderSpaceId==='function'&&orderSpaceId(o)===sid).length;
+      if(totalAll>0 && inCab===0){
+        emptyHint=`В кабинете «${sp&&sp.name||'выбранный'}» заказов нет (в системе ${totalAll} за другие фирмы). Выберите нужный кабинет в фильтре сверху.`;
+      }
+    }
     $('admin-list').innerHTML=`${checklist}<div class="empty">${emptyHint}</div>`;
     return;
   }
@@ -2912,7 +2951,10 @@ function renderAdmin(){
       <div class="m"><span>ЗП</span><b>${fmt(periodTot.pay)} ₽</b></div>
     </div>
   </div>`;
-  const emptyMsg=(cal.driver||cal.plate)?'Нет заявок по фильтру':'Нет заявок за выбранные дни';
+  const emptyMsg=(cal.driver||cal.plate)?'Нет заявок по фильтру водителя/ТС'
+    :(allGroups.length && !groups.length)
+      ? `Нет заявок за ${esc(adminOrdersPeriodLabel(cal))}. Заказы есть за другие даты — нажмите «Сбросить» или выберите август в календаре.`
+      : 'Нет заявок за выбранные дни';
   const listBody=groups.length
     ? `<div class="admin-cards">${groupCards}</div>
     <div class="hint admin-desktop-only" style="padding:0 16px">Таблица — те же группы.</div>
