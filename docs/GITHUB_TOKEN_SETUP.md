@@ -22,14 +22,34 @@
    - Scope: только **`repo`**
    - Generate → скопируйте `ghp_…`
 
-## Шаг 2. Добавить в Cursor Environment
+## Шаг 2. Добавить в Cursor (Secrets — не на странице Environment)
 
-1. Cursor → **Dashboard** → **Cloud Agents** → **Environments**
-2. Откройте environment для репозитория `armada-perevozki`
-3. **Secrets** → Add secret:
+**Важно:** вкладки «Secrets» на странице environment часто **нет**. Секреты — на главном дашборде Cloud Agents.
+
+### Вариант A (рекомендуется)
+
+1. Откройте: https://cursor.com/dashboard/cloud-agents
+2. Вверху найдите вкладку **Secrets** (рядом с Agents / Environments / Builds)
+3. **Add secret**:
    - Name: **`GITHUB_TOKEN`**
-   - Value: вставьте скопированный токен
-4. Save. **Новый** Cloud Agent подхватит секрет автоматически.
+   - Type: **Runtime Secret** (токен не попадёт в чат агента)
+   - Apply to / Repository: **`laser-erp/armada-perevozki`** (если есть выбор)
+   - Value: вставьте `ghp_…` или `github_pat_…`
+4. Save
+5. **Запустите новый Cloud Agent** (текущий уже запущенный секрет не подхватит)
+
+### Вариант B (через environment)
+
+1. https://cursor.com/dashboard/cloud-agents → **Environments**
+2. Откройте environment → блок **Runtime secrets** (не «Build secrets»)
+3. Add → Name **`GITHUB_TOKEN`**, Value — токен → Save
+4. Новый агент после сохранения
+
+### Если вкладки Secrets нет
+
+- Откройте тот же URL в **десктопном Cursor**: Settings → **Cloud Agents** → **Secrets**
+- Убедитесь, что вы в **том же аккаунте**, под которым запущен агент
+- Для team workspace иногда нужны права admin — тогда попросите админа добавить секрет
 
 ## Шаг 3. Проверка (в агенте)
 
