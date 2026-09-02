@@ -1059,13 +1059,19 @@ function renderAdminActivity(){
     alert(state.settings.epdWebhookToken?'Webhook token сохранён':'Webhook token очищен');
   });
   document.querySelectorAll('.epd-space-box-save').forEach(btn=>{
-    btn.onclick=()=>{
+    btn.onclick=async()=>{
       const sid=btn.dataset.spaceId;
       if(!sid||typeof setEpdSpaceRecord!=='function') return;
-      const inp=document.querySelector(`.epd-space-box-input[data-space-id="${CSS.escape(sid)}"]`);
+      const card=btn.closest('[data-epd-space]');
+      const inp=card&&card.querySelector('.epd-space-box-input');
       const boxId=((inp&&inp.value)||'').trim();
       setEpdSpaceRecord(sid, { boxId, status:boxId?'connected':'pending' });
       persist();
+      if(typeof saveEpdSpaceToApi==='function'){
+        const api=await saveEpdSpaceToApi(sid, { boxId, status:boxId?'connected':'pending' });
+        if(api&&api.epd) setEpdSpaceRecord(sid, api.epd);
+        persist();
+      }
       flashAdmPinOk(boxId?`boxId сохранён · ${findSpaceById(sid)?.name||sid}`:'boxId очищен');
       renderAdminActivity();
     };

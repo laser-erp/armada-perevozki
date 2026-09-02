@@ -1571,6 +1571,33 @@ function epdSpaceStatusLabel(st){
   if(st==='error') return 'ошибка';
   return 'ждём boxId';
 }
+async function fetchEpdSpaceFromApi(spaceId){
+  if(!API_BASE||!spaceId) return null;
+  try{
+    const headers=typeof armadaApiJsonHeaders==='function'?armadaApiJsonHeaders():{Accept:'application/json'};
+    const res=await fetch(`${API_BASE}/epd/space/${encodeURIComponent(spaceId)}`, { headers });
+    if(!res.ok) return null;
+    const data=await res.json().catch(()=>({}));
+    return data&&data.epd?normalizeEpdSpaceRecord(data.epd, spaceId):null;
+  }catch(_){ return null; }
+}
+async function saveEpdSpaceToApi(spaceId, patch){
+  if(!API_BASE||!spaceId) return null;
+  try{
+    const headers=typeof armadaApiJsonHeaders==='function'?armadaApiJsonHeaders():{Accept:'application/json','Content-Type':'application/json'};
+    const res=await fetch(`${API_BASE}/epd/space/${encodeURIComponent(spaceId)}`, {
+      method:'PUT', headers, body:JSON.stringify(patch||{})
+    });
+    if(!res.ok) return null;
+    return await res.json().catch(()=>null);
+  }catch(_){ return null; }
+}
+async function syncEpdSpaceFromServer(spaceId){
+  const remote=await fetchEpdSpaceFromApi(spaceId);
+  if(!remote) return false;
+  setEpdSpaceRecord(spaceId, remote);
+  return true;
+}
 function snapshot(){
   // Отменённые никогда не уезжают на сервер — иначе старая вкладка воскрешает их.
   const orders=stripCancelledFromOrders(state.orders);
