@@ -1,0 +1,124 @@
+{
+	email aptown1@gmail.com
+}
+
+# IP → канонический домен
+http://176.12.67.35 {
+	redir https://app.armada.sx{uri} permanent
+}
+
+# Старый хост → новый (закладки aptown1 продолжат работать)
+aptown1.fvds.ru {
+	tls /etc/caddy/ssl/aptown1.crt /etc/caddy/ssl/aptown1.key
+	redir https://app.armada.sx{uri} permanent
+}
+
+(armada) {
+	encode gzip
+
+	@entry_driver path /v /v/
+	@entry_admin path /a /a/
+	@entry_customer_root path /z /z/
+	@entry_portal_slug path_regexp ^/z/[a-z0-9][a-z0-9_-]{2,31}/?$
+	handle @entry_driver {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	handle @entry_admin {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	handle @entry_customer_root {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	handle @entry_portal_slug {
+		root * /var/www/armada
+		rewrite * /index.html
+		header Content-Type "text/html; charset=utf-8"
+		file_server
+	}
+	redir /driver.html /v/ permanent
+	redir /admin.html /a/ permanent
+	redir /zakaz.html /z/ permanent
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' https://suggestions.dadata.ru https://api-fns.ru; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	}
+
+	handle /armada-api/* {
+		uri strip_prefix /armada-api
+		reverse_proxy 127.0.0.1:8091
+	}
+
+	handle /api/* {
+		respond "Forbidden" 403
+	}
+	handle /_/* {
+		respond "Forbidden" 403
+	}
+
+	handle /cbr-api/* {
+		uri strip_prefix /cbr-api
+		reverse_proxy https://www.cbr.ru {
+			header_up Host www.cbr.ru
+		}
+	}
+
+	handle /egrul-api/* {
+		uri strip_prefix /egrul-api
+		reverse_proxy https://egrul.nalog.ru {
+			header_up Host egrul.nalog.ru
+		}
+	}
+
+	handle /geo-nominatim/* {
+		uri strip_prefix /geo-nominatim
+		reverse_proxy https://nominatim.openstreetmap.org {
+			header_up Host nominatim.openstreetmap.org
+			header_up User-Agent "ARMADA/1.0 (aptown1@gmail.com)"
+			header_up Accept-Language "ru"
+		}
+	}
+	handle /osrm-route/* {
+		uri strip_prefix /osrm-route
+		reverse_proxy https://router.project-osrm.org {
+			header_up Host router.project-osrm.org
+		}
+	}
+
+	handle /map-osm/* {
+		uri strip_prefix /map-osm
+		reverse_proxy https://tile.openstreetmap.org {
+			header_up Host tile.openstreetmap.org
+			header_up User-Agent "ARMADA/1.0 (aptown1@gmail.com)"
+		}
+	}
+
+	handle /map-yandex-static/* {
+		uri strip_prefix /map-yandex-static
+		reverse_proxy https://static-maps.yandex.ru {
+			header_up Host static-maps.yandex.ru
+		}
+	}
+
+	handle {
+		root * /var/www/armada
+		header Cache-Control "no-store, no-cache, must-revalidate"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+app.armada.sx {
+	import armada
+}

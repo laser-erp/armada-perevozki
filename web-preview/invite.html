@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>АРМАДА — вход водителя</title>
+  <meta name="theme-color" content="#EF4444" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body{background:#f0f4f8;padding:16px;font-family:Inter,system-ui,sans-serif}
+    .invite-wrap{max-width:400px;margin:40px auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    .invite-wrap h1{font-size:1.15rem;margin:0 0 8px}
+    .invite-wrap label{display:block;margin:12px 0 4px;font-size:.85rem;font-weight:600}
+    .invite-wrap input{width:100%;padding:10px 12px;border:1px solid #d8dee8;border-radius:8px;font-size:1rem}
+    .invite-wrap button.primary{width:100%;margin-top:16px;padding:12px;border:0;border-radius:8px;background:var(--accent,#1e5aa8);color:#fff;font-weight:700;cursor:pointer}
+    .invite-wrap .err{color:#dc2626;font-size:.85rem;margin-top:8px}
+    .invite-wrap .ok{color:#059669;font-size:.9rem;margin-top:12px}
+    .invite-wrap .muted{font-size:.8rem;color:#666;margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="invite-wrap">
+    <p><a href="/a/">Админ</a> · <a href="/v/">Водитель</a> · <a href="/z/">Заказчик</a></p>
+    <h1>Вход водителя</h1>
+    <p id="invite-status" class="muted">Загрузка…</p>
+    <div id="invite-form" style="display:none">
+      <p id="invite-driver" style="font-weight:600"></p>
+      <p id="invite-firm" class="muted"></p>
+      <label for="invite-pin">Задайте PIN (4–8 цифр)</label>
+      <input id="invite-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password" />
+      <button type="button" class="primary" id="invite-submit">Сохранить PIN и войти</button>
+      <p id="invite-error" class="err" style="display:none"></p>
+    </div>
+    <p id="invite-done" class="ok" style="display:none"></p>
+  </div>
+  <script src="/boot-loader.js?v=2026-08-28-entrybc34" data-mode="invite"></script>
+</body>
+</html>

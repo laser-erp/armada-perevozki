@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>АРМАДА — помощь и инструкции</title>
+  <meta name="theme-color" content="#EF4444" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2026-08-27-entries1" />
+  <style>
+    body{background:var(--bg0);padding:16px;max-width:720px;margin:0 auto}
+    .help-wrap{padding-bottom:32px}
+    .help-top{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+    .help-top img{width:48px;border-radius:10px}
+    .help-top h1{margin:0;font-size:1.25rem}
+    .help-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .help-nav a{
+      padding:8px 12px;border-radius:var(--radius);background:var(--surface);
+      border:1px solid var(--border);text-decoration:none;color:var(--text);font-size:.85rem;font-weight:600
+    }
+    .help-section{margin-bottom:24px}
+    .help-section h2{font-size:1.05rem;margin:0 0 10px;color:var(--text)}
+    .help-section h3{font-size:.92rem;margin:16px 0 6px}
+    .help-section p,.help-section li{font-size:.9rem;line-height:1.5;color:var(--text)}
+    .help-section ol,.help-section ul{padding-left:1.2rem;margin:8px 0}
+    .help-section li{margin-bottom:6px}
+    .help-back{display:inline-block;margin-bottom:16px;color:var(--accent);font-weight:600;text-decoration:none;font-size:.9rem}
+    .help-note{
+      padding:10px 12px;border-radius:var(--radius);background:rgba(239,68,68,.08);
+      border:1px solid rgba(239,68,68,.25);font-size:.85rem;margin:12px 0
+    }
+  </style>
+</head>
+<body>
+  <a class="help-back" href="admin.html">← В приложение</a>
+  <div class="help-wrap">
+    <div class="help-top">
+      <img src="logo.png" alt="" />
+      <div>
+        <h1>Помощь и инструкции</h1>
+        <p class="hint" style="margin:0">АРМАДА — учёт перевозок</p>
+      </div>
+    </div>
+    <nav class="help-nav" aria-label="Разделы">
+      <a href="#start">С чего начать</a>
+      <a href="#admin">Администратор</a>
+      <a href="#driver">Водитель</a>
+      <a href="#customer">Заказчик</a>
+      <a href="#sync">Синхронизация</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+
+    <section class="help-section" id="start">
+      <h2>С чего начать</h2>
+      <ol>
+        <li>Откройте страницу входа для вашей роли:
+          <a href="admin.html">администратор</a>,
+          <a href="driver.html">водитель</a> или
+          <a href="zakaz.html">заказчик</a>.
+        </li>
+        <li>На первом входе появится короткое приветствие — пролистайте или пропустите.</li>
+        <li>Введите телефон и PIN (их выдаёт администратор перевозчика).</li>
+        <li>После входа запустится тур по экрану. Его можно перезапустить из меню «Помощь».</li>
+      </ol>
+      <div class="help-note">PIN водителя задаётся в админке: Справочники → Водители. PIN заказчика — в карточке компании заказчика (портал).</div>
+    </section>
+
+    <section class="help-section" id="admin">
+      <h2>Администратор</h2>
+      <h3>Парк и биржа</h3>
+      <ul>
+        <li>Сверху <strong>Парк</strong>. Если в справочнике нашей фирмы включён <strong>Диспетчер</strong> — появляется кнопка <strong>Биржа</strong>.</li>
+        <li>Логист и диспетчер — одна должность. Парк как обычно; биржа — чтобы отдать остаток партнёрам. Биржа уже в тарифе «Бизнес».</li>
+        <li><strong>+ Заказ</strong> — новая заявка. Кто везёт: Парк (наш водитель) и, если диспетчер включён, Биржа.</li>
+        <li>Фильтры парка: все / входящие / назначен / в работе / закрыт. «Входящие» — заявки заказчика.</li>
+        <li>Карточка заявки — маршрут, одометры, расчёт ЗП, ЭТрН (если подключён оператор).</li>
+      </ul>
+      <h3>ЕТО</h3>
+      <p>Таблица техосмотров по автомобилям: что водитель прошёл в смене, просрочки ТО-1 / ТО-2.</p>
+      <h3>Диспетчер</h3>
+      <p>Та же должность, что логист. Галочка в справочнике нашей фирмы включает кнопку «Биржа». Свой парк не отключается. Биржа входит в тариф «Бизнес».</p>
+      <h3>Справочники</h3>
+      <ul>
+        <li><strong>Водители</strong> — ФИО, телефон, PIN, фирма.</li>
+        <li><strong>Авто</strong> — госномер, парк, расход, ТО, чек-листы.</li>
+        <li><strong>Компании</strong> — заказчики, перевозчики, портал заказчика.</li>
+        <li><strong>Тариф</strong> — ₽/км и ₽/ч для расчёта минимальной цены.</li>
+      </ul>
+      <h3>Тарифы (супер-админ)</h3>
+      <p>Оплата подписки сервиса АРМАДА для вашей организации.</p>
+    </section>
+
+    <section class="help-section" id="driver">
+      <h2>Водитель</h2>
+      <h3>Типичный день</h3>
+      <ol>
+        <li>Откройте <a href="driver.html">страницу входа водителя</a> (или ссылку из SMS).</li>
+        <li>Войти по телефону и PIN.</li>
+        <li>На главной нажать <strong>«Открыть смену»</strong>.</li>
+        <li>Выбрать автомобиль, ввести одометр на стоянке.</li>
+        <li>Пройти ЕТО: ГУР, ОЖ, свет, масло — ответы кнопками.</li>
+        <li>В разделе <strong>Заявки</strong> или на главной — взять заказ: выехал → прибыл → одометры.</li>
+        <li>После последнего заказа — закрыть смену (одометр на стоянке).</li>
+      </ol>
+      <h3>Разделы нижнего меню</h3>
+      <ul>
+        <li><strong>Главная</strong> — сводка и активные заказы.</li>
+        <li><strong>Заявки</strong> — все ваши заказы и действия.</li>
+        <li><strong>История</strong> — закрытые смены.</li>
+        <li><strong>Профиль</strong> — начисления, уведомления, выход, «Показать подсказки».</li>
+      </ul>
+      <div class="help-note">Без сети черновик смены сохраняется на телефоне. При появлении связи данные отправятся на сервер.</div>
+    </section>
+
+    <section class="help-section" id="customer">
+      <h2>Заказчик</h2>
+      <p>Портал включается перевозчиком в карточке вашей компании.</p>
+      <ol>
+        <li>Откройте <a href="zakaz.html">портал заказчика</a> (ссылку даёт перевозчик).</li>
+        <li>Войти по телефону и PIN из письма/звонка диспетчера.</li>
+        <li>Заполнить адреса, дату подачи, тоннаж, тип кузова и что везёте.</li>
+        <li>Километраж считается по адресам. Для рефрижератора, самосвала, продуктов и 20 т в ориентир входит надбавка.</li>
+        <li>Если цена не посчиталась — заявку всё равно можно отправить: цену уточнит диспетчер.</li>
+        <li>Режим «логисту» — закрыть как можно скорее, ставка логиста уже в ориентире цены. Свободную машину можно запросить: перевозчик подтвердит бронь, и дата подачи появится в календаре у вас и у него.</li>
+        <li>Режим «свой парк» — заранее, без срочной ставки. Тоже запрос брони, пока перевозчик не подтвердит.</li>
+      </ol>
+    </section>
+
+    <section class="help-section" id="sync">
+      <h2>Синхронизация</h2>
+      <p>Данные хранятся в браузере (localStorage) и на сервере перевозчика. Несколько диспетчеров видят одни заявки.</p>
+      <p>Если на экране входа текст <strong>«Нет связи с сервером»</strong> — проверьте интернет или обратитесь к администратору сервера.</p>
+    </section>
+
+    <section class="help-section" id="faq">
+      <h2>Частые вопросы</h2>
+      <h3>Забыл PIN</h3>
+      <p>Обратитесь к администратору — PIN сбросят в справочнике водителей или в карточке заказчика.</p>
+      <h3>Не вижу заказы</h3>
+      <p>Водитель: заказ должен быть назначен на вас. Админ: проверьте фильтр фирмы и статус заявки.</p>
+      <h3>Как снова показать подсказки на экране?</h3>
+      <p>Админ: кнопка «Помощь» в левом меню. Водитель: Профиль → «Показать подсказки». Ссылки входа: <a href="admin.html">админ</a>, <a href="driver.html">водитель</a>, <a href="zakaz.html">заказчик</a>.</p>
+      <h3>Юридические документы</h3>
+      <p><a href="legal.html">Оферта</a>, <a href="legal.html#privacy">политика ПДн</a>, <a href="kp.html">коммерческое предложение</a>.</p>
+    </section>
+  </div>
+</body>
+</html>

@@ -1,4 +1,5 @@
 /* АРМАДА admin UI: login/chrome, vehicle card, boards/catalogs (phase2 chunk D) */
+const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 function paintAdminOwnerFilters(){
   const box=$('admin-owner-filters');
   if(!box) return;
@@ -29,6 +30,17 @@ function fillAdminLoginSelect(){
   const sel=$('admin-name-select'); if(!sel) return;
   const list=state.admins.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
   sel.innerHTML=list.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join('');
+  const hint=$('pin-recovery-hint');
+  if(hint){
+    const msg=state.settings&&state.settings.superPinRecoveryNotice;
+    if(msg){
+      hint.textContent=msg;
+      hint.style.display='block';
+    }else{
+      hint.textContent='';
+      hint.style.display='none';
+    }
+  }
 }
 function pushAdminLogin(action){
   if(!currentAdmin) return;
@@ -58,7 +70,7 @@ function startPresenceHeartbeat(){
   presenceTimer=setInterval(()=>{
     if(!currentAdmin) return;
     touchAdminPresence('admin');
-    persist();
+    persistLocalOnly();
   }, PRESENCE_TICK_MS);
 }
 function stopPresenceHeartbeat(){
@@ -88,6 +100,7 @@ function openAdminSidebar(){
 }
 function syncAdminNav(){
   const f=state.adminFilter||'all';
+  const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(typeof currentOwnCompany==='function'?currentOwnCompany():null);
   const nav=(f==='eto'||f==='exchange')?f:'orders';
   document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
     b.classList.toggle('on', b.dataset.nav===nav);
@@ -95,13 +108,29 @@ function syncAdminNav(){
   const filters=$('admin-filters');
   if(filters) filters.style.display=(nav==='orders')?'flex':'none';
   const cta=$('admin-new');
-  if(cta) cta.style.display=(nav==='orders')?'':'none';
+  if(cta) cta.style.display=(nav==='orders'||nav==='exchange')?'':'none';
+  const exNav=document.querySelector('.admin-nav-item[data-nav="exchange"]');
+  if(exNav) exNav.style.display=dispatcher?'':'none';
+  const sw=$('admin-park-ex');
+  const title=$('admin-title');
+  const showSwitch=(nav==='orders'||nav==='exchange') && dispatcher;
+  if(sw){
+    sw.hidden=!showSwitch;
+    sw.querySelectorAll('[data-park-ex]').forEach(b=>{
+      const on=(b.dataset.parkEx==='exchange' && nav==='exchange') || (b.dataset.parkEx==='park' && nav==='orders');
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', on?'true':'false');
+    });
+  }
+  if(title) title.classList.toggle('with-park-ex', showSwitch);
 }
 function setAdminNav(nav){
   if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
   closeAdminSidebar();
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
+  if(nav==='billing'){ openAdminBilling(); return; }
+  if(nav==='links'){ openAdminLinks(); return; }
   if(nav==='eto') state.adminFilter='eto';
   else if(nav==='exchange') state.adminFilter='exchange';
   else {
@@ -115,20 +144,27 @@ function setAdminNav(nav){
 }
 function updateAdminChrome(){
   const act=$('admin-activity');
+  const bill=$('admin-billing');
   if(act) act.style.display=isSuperAdmin()?'':'none';
+  if(bill) bill.style.display=isSuperAdmin()?'':'none';
   const title=$('admin-title');
   const userEl=$('admin-sidebar-user');
   if(!currentAdmin){
-    if(title) title.textContent='Заявки';
+    if(title) title.textContent='Парк';
     if(userEl) userEl.textContent='';
   } else {
     const sp=findSpaceById(currentAdmin.spaceId);
     const firm=sp?sp.name:currentAdmin.name;
     const section=state.adminFilter==='eto'?'ЕТО'
       : state.adminFilter==='exchange'?'Биржа'
-      : 'Заявки';
+      : 'Парк';
     if(title) title.textContent=section;
-    if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}`;
+    const kind=typeof currentLogistKind==='function'?currentLogistKind():'';
+    const kindLabel=kind==='broker'?'диспетчер':'';
+    if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}${kindLabel?' · '+kindLabel:''}`;
+    const etoNav=document.querySelector('.admin-nav-item[data-nav="eto"]');
+    const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(typeof currentOwnCompany==='function'?currentOwnCompany():null);
+    if(etoNav) etoNav.style.display=hasPark?'':'none';
   }
   syncAdminNav();
   paintAdminOwnerFilters();
@@ -160,22 +196,43 @@ function restoreAdminSession(){
   updateAdminChrome();
   return true;
 }
-function loginAdmin(){
+async function loginAdmin(){
   migrateAdmins();
+  const pinErr=$('pin-error');
+  if(pinErr) pinErr.textContent='';
+  const btn=$('pin-ok');
+  if(btn) btn.disabled=true;
+  try{
+    if(navigator.onLine!==false && typeof fetchServerState==='function'){
+      const rec=await fetchServerState(3500);
+      if(rec&&rec.payload){
+        pbRecordId=rec.id;
+        mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
+        migrateAdmins();
+        persistLocalOnly();
+        fillAdminLoginSelect();
+      }
+    }
+  }catch(_){}
+  finally{ if(btn) btn.disabled=false; }
   const id=(($('admin-name-select')||{}).value||'').trim();
   const pin=(($('pin-input')||{}).value||'').trim();
   const adm=state.admins.find(a=>a.id===id);
-  if(!adm){ $('pin-error').textContent='Выберите администратора'; return; }
-  if(pin!==String(adm.pin)){ $('pin-error').textContent='Неверный PIN'; return; }
+  if(!adm){ if(pinErr) pinErr.textContent='Выберите администратора'; return; }
+  if(pin!==String(adm.pin)){ if(pinErr) pinErr.textContent='Неверный PIN'; return; }
+  if(adm.mustChangePin){
+    alert('Смените PIN: «Активность» → блок администраторов. Слабый или устаревший PIN из истории проекта.');
+  }
   currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
   saveAdminSession();
   pushAdminLogin('login');
   touchAdminPresence('admin');
   startPresenceHeartbeat();
-  persist();
+  armadaApiLogin(pin, currentAdmin).finally(()=>persist());
   updateAdminChrome();
   show('admin');
   renderAdmin();
+  if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
 }
 function logoutAdmin(){
   if(currentAdmin){
@@ -186,8 +243,10 @@ function logoutAdmin(){
   stopPresenceHeartbeat();
   currentAdmin=null;
   clearAdminSession();
+  setArmadaApiToken('');
   updateAdminChrome();
-  show('roles');
+  if(getEntryMode()==='admin') goEntryLanding('admin');
+  else show('roles');
 }
 function openAdminActivity(){
   if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
@@ -195,13 +254,217 @@ function openAdminActivity(){
   renderAdminActivity();
   show('admin-activity-screen');
 }
+function openAdminBilling(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  renderAdminBilling();
+  show('admin-billing-screen');
+}
+function openAdminLinks(){
+  renderAdminLinks();
+  show('admin-links-screen');
+}
+function adminLinkCard(title, desc, url, share){
+  const s=share&&typeof share==='object'?share:{};
+  return `<section class="admin-link-card">
+    <h3>${esc(title)}</h3>
+    <p class="meta">${esc(desc)}</p>
+    <p class="admin-link-url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>
+    <div class="share-row">
+      <a class="secondary" href="${esc(url)}" target="_blank" rel="noopener">Открыть</a>
+      ${entryShareBlockHtml({kind:s.kind||'customerPortal',url,title:'QR + SMS',carrier:s.carrier||'',phone:s.phone||'',expires:s.expires||''})}
+    </div>
+  </section>`;
+}
+function renderAdminLinks(){
+  const form=$('links-form');
+  if(!form) return;
+  const sid=currentSpaceId();
+  const sp=sid?findSpaceById(sid):null;
+  const co=currentOwnCompany();
+  const carrier=(co&&co.name)||(sp&&sp.name)||'АРМАДА';
+  const portalUrl=sid?customerPortalPageUrl({spaceId:sid}):`${location.origin}/z`;
+  const drvUrl=driverEntryPageUrl();
+  const admUrl=adminEntryPageUrl();
+  form.innerHTML=`<p class="cat-panel-hint">У каждой роли — своя страница входа. Сохраните в закладки или отправьте водителю/заказчику через QR и SMS.</p>
+    ${adminLinkCard('Водитель', 'Смена, ЕТО и заказы в дороге — отдельный вход /v', drvUrl, {kind:'driverEntry',carrier})}
+    ${adminLinkCard('Заказчик', 'Портал вашей фирмы — заявки и статус', portalUrl, {kind:'customerPortal',carrier})}
+    ${adminLinkCard('Администратор', 'Кабинет диспетчера — заявки и справочники', admUrl, {kind:'adminEntry'})}
+    <p class="meta" style="margin-top:12px">Короткий адрес заказчика (/z/…) настраивается в «Тарифы» (супер-админ) или у супер-админа в биллинге space.</p>`;
+  $('links-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireEntryShareButtons(form);
+}
+function renderAdminBilling(){
+  migrateBilling();
+  const spaces=(state.spaces||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const rows=spaces.map(sp=>{
+    const b=getBillingForSpace(sp.id);
+    const st=resolveBillingStatus(sp.id);
+    const lim=billingLimitsForSpace(sp.id);
+    const use=billingUsageForSpace(sp.id);
+    const ledger=(b.ledger||[]).slice(-5).reverse().map(e=>{
+      const sign=e.amount>=0?'+':'';
+      return `<div class="meta">${formatBillingDate(e.at)} · ${esc(e.type)} · ${sign}${formatRub(e.amount)} ${esc(e.note||'')}</div>`;
+    }).join('') || '<div class="meta">Нет записей</div>';
+    return `<section class="card" style="margin-bottom:10px">
+      <h3>${esc(sp.name)}</h3>
+      <p class="meta">Space ${esc(sp.id)} · ${billingStatusLabel(st)} · баланс ${formatRub(b.balance)}</p>
+      <div class="eto-grid">
+        <div><span class="lbl">Пилот до</span><b>${formatBillingDate(b.trialEndsAt)}</b></div>
+        <div><span class="lbl">Оплачено до</span><b>${b.subscriptionEndsAt?formatBillingDate(b.subscriptionEndsAt):'—'}</b></div>
+        <div><span class="lbl">Водители</span><b>${use.drivers}/${lim.drivers}</b></div>
+        <div><span class="lbl">ТС</span><b>${use.vehicles}/${lim.vehicles}</b></div>
+        <div><span class="lbl">Админы</span><b>${use.admins}/${lim.admins}</b></div>
+        <div><span class="lbl">Комиссия</span><b>${Math.round((b.commissionRate||0)*100)}%</b></div>
+        <div><span class="lbl">ЭТрН</span><b>${b.etrnEnabled?'в тарифе':'нет'}</b></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center">
+        <select id="bill-plan-${esc(sp.id)}" style="flex:1;min-width:140px">${Object.values(BILLING_PLANS).map(p=>{
+          const sel=b.planId===p.id?' selected':'';
+          return `<option value="${esc(p.id)}"${sel}>${esc(p.name)} — ${formatRub(p.priceMonthly)}/мес</option>`;
+        }).join('')}</select>
+        <button type="button" class="secondary" data-bill-save="${esc(sp.id)}">Тариф</button>
+        <button type="button" class="secondary" data-bill-trial="${esc(sp.id)}">+30 дн. пилот</button>
+        <input id="bill-pay-amt-${esc(sp.id)}" inputmode="numeric" placeholder="₽ оплата" style="width:100px" />
+        <input id="bill-pay-note-${esc(sp.id)}" placeholder="счёт/акт" style="flex:1;min-width:100px" />
+        <button type="button" class="primary" data-bill-pay="${esc(sp.id)}">Записать оплату</button>
+      </div>
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.8rem">Журнал (последние)</summary>${ledger}</details>
+      <p class="meta" style="margin-top:10px">Портал заказчиков:
+        <a href="${esc(customerPortalPageUrl({spaceId:sp.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({spaceId:sp.id}))}</a>
+      </p>
+      <div class="share-row" style="margin-top:8px">
+        ${entryShareBlockHtml({kind:'customerPortal',url:customerPortalPageUrl({spaceId:sp.id}),title:'QR + SMS заказчику',carrier:sp.name})}
+        ${entryShareBlockHtml({kind:'driverEntry',url:driverEntryPageUrl(),title:'QR + SMS водителям',carrier:sp.name})}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center">
+        <label class="meta" for="bill-slug-${esc(sp.id)}">Короткий адрес /z/</label>
+        <input id="bill-slug-${esc(sp.id)}" placeholder="severlog" value="${esc(sp.portalSlug||'')}" style="width:120px" />
+        <button type="button" class="secondary" data-bill-slug="${esc(sp.id)}">Сохранить slug</button>
+      </div>
+      <div style="margin-top:10px">
+        <label class="meta">Логотип на входе заказчика (PNG/JPG, до 80 КБ)</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px">
+          ${sp.portalLogo?`<img src="${esc(sp.portalLogo)}" alt="" style="height:40px;border-radius:8px;border:1px solid #e2e8f0" />`:''}
+          <input type="file" accept="image/png,image/jpeg,image/webp" data-bill-logo="${esc(sp.id)}" />
+          ${sp.portalLogo?`<button type="button" class="secondary" data-bill-logo-clear="${esc(sp.id)}">Убрать</button>`:''}
+        </div>
+      </div>
+    </section>`;
+  }).join('');
+  const form=$('billing-form');
+  if(!form) return;
+  form.innerHTML=`<p class="cat-panel-hint">M0: ручные счета и оплата. M3: webhook ЮKassa/Тинькофф — см. docs/PAYMENT_INTEGRATION.md. Публичный HTTPS — до активных B2B вне пилота (docs/HTTPS_PREREQUISITE.md).</p>
+    ${rows || '<p class="empty">Нет space — создайте админа с фирмой</p>'}`;
+  $('billing-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  form.querySelectorAll('[data-bill-save]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sid=btn.dataset.billSave;
+      const sel=$('bill-plan-'+sid);
+      if(!sid||!sel) return;
+      setSpaceBillingPlan(sid, sel.value);
+      persist();
+      renderAdminBilling();
+    };
+  });
+  form.querySelectorAll('[data-bill-trial]').forEach(btn=>{
+    btn.onclick=()=>{
+      extendSpaceTrial(btn.dataset.billTrial, 30);
+      persist();
+      renderAdminBilling();
+    };
+  });
+  form.querySelectorAll('[data-bill-pay]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sid=btn.dataset.billPay;
+      const amt=+(($('bill-pay-amt-'+sid)||{}).value||'').replace(/\s/g,'');
+      const note=(($('bill-pay-note-'+sid)||{}).value||'').trim();
+      if(!(amt>0)){ alert('Укажите сумму оплаты'); return; }
+      recordManualPayment(sid, amt, note, currentAdmin&&currentAdmin.name);
+      persist();
+      renderAdminBilling();
+    };
+  });
+  form.querySelectorAll('[data-bill-slug]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sid=btn.dataset.billSlug;
+      const sp=findSpaceById(sid);
+      if(!sp) return;
+      let slug=String((($('bill-slug-'+sid)||{}).value||'')).trim().toLowerCase()
+        .replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'').slice(0,32);
+      if(slug.length<3){ alert('Slug от 3 символов: латиница, цифры, дефис'); return; }
+      const clash=(state.spaces||[]).find(s=>s.id!==sid && String(s.portalSlug||'').toLowerCase()===slug);
+      if(clash){ alert('Этот адрес уже у space «'+clash.name+'»'); return; }
+      sp.portalSlug=slug;
+      bumpDataEpoch('portal-slug');
+      persist();
+      renderAdminBilling();
+    };
+  });
+  form.querySelectorAll('[data-bill-logo]').forEach(inp=>{
+    inp.onchange=()=>{
+      const sid=inp.dataset.billLogo;
+      const sp=findSpaceById(sid);
+      const file=inp.files&&inp.files[0];
+      if(!sp||!file) return;
+      if(file.size>80*1024){ alert('Логотип до 80 КБ'); inp.value=''; return; }
+      const reader=new FileReader();
+      reader.onload=()=>{
+        sp.portalLogo=String(reader.result||'');
+        bumpDataEpoch('portal-logo');
+        persist();
+        renderAdminBilling();
+      };
+      reader.readAsDataURL(file);
+    };
+  });
+  form.querySelectorAll('[data-bill-logo-clear]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sp=findSpaceById(btn.dataset.billLogoClear);
+      if(!sp) return;
+      sp.portalLogo='';
+      bumpDataEpoch('portal-logo');
+      persist();
+      renderAdminBilling();
+    };
+  });
+  wireEntryShareButtons(form);
+}
+function activityLogWhen(at){
+  try{
+    return new Date(at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }catch(_){ return '—'; }
+}
+function flashAdmPinOk(msg, isWarn){
+  const el=$('adm-pin-ok'); if(!el) return;
+  el.textContent=msg||'Пин-код записан';
+  el.classList.toggle('toast-warn', !!isWarn);
+  el.classList.toggle('toast-ok', !isWarn);
+  el.style.display='block';
+  clearTimeout(flashAdmPinOk._t);
+  const ms=(msg&&msg.length>28)?4200:2200;
+  flashAdmPinOk._t=setTimeout(()=>{ if(el) el.style.display='none'; }, ms);
+}
 function renderAdminActivity(){
   migrateAdmins();
   const online=onlineAdmins();
   const log=(state.adminLogins||[]).slice(0,40);
+  const ops=(state.opsLog||[]).slice(0,25);
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
     <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
+    ${ops.length?`<section class="form-section">
+      <h2 class="form-section-title">Журнал ЭТрН / API (S3)</h2>
+      <div class="cat-list">
+        ${ops.map(e=>`
+          <div class="item-card">
+            <div class="item-top">
+              <div class="item-name">${esc(e.kind||'info')}</div>
+              <span class="hint">${esc(dateTime(e.at))}</span>
+            </div>
+            <div class="hint">${esc(e.detail||'')}</div>
+          </div>`).join('')}
+      </div>
+    </section>`:''}
     <section class="form-section">
       <h2 class="form-section-title">Сейчас в приложении</h2>
       <div class="cat-list">
@@ -216,20 +479,19 @@ function renderAdminActivity(){
         :`<div class="empty">Никого нет онлайн</div>`}
       </div>
     </section>
-    <section class="form-section">
-      <h2 class="form-section-title">Журнал входов</h2>
-      <div class="cat-list">
-        ${log.length?log.map(e=>`
-          <div class="item-card">
-            <div class="item-top">
-              <div class="item-name">${esc(e.adminName)}</div>
-              <span class="hint">${e.action==='login'?'вход':'выход'}</span>
-            </div>
-            <div class="hint">${esc(dateTime(e.at))}</div>
+    <details class="activity-log-fold">
+      <summary class="activity-log-summary">Журнал входов${log.length?` · ${log.length}`:''}</summary>
+      <div class="activity-log-compact">
+        ${log.length?log.slice(0,12).map(e=>`
+          <div class="activity-log-line">
+            <span class="activity-log-when">${esc(activityLogWhen(e.at))}</span>
+            <span class="activity-log-who">${esc(e.adminName)}</span>
+            <span class="activity-log-act ${e.action==='login'?'is-in':'is-out'}">${e.action==='login'?'вход':'выход'}</span>
           </div>`).join('')
         :`<div class="empty">Пока пусто</div>`}
+        ${log.length>12?`<p class="hint activity-log-more">Показаны последние 12 из ${log.length}</p>`:''}
       </div>
-    </section>
+    </details>
     <section class="form-section">
       <h2 class="form-section-title">Пространства / администраторы</h2>
       <p class="cat-panel-hint">Каждый админ — своё пространство фирмы. ИНН → «Загрузить» подтянет реквизиты из ЕГРЮЛ (ФНС).</p>
@@ -265,6 +527,14 @@ function renderAdminActivity(){
         <input id="dadata-token" type="password" placeholder="Token DaData" value="${esc((state.settings&&state.settings.dadataToken)||'')}" style="flex:1" />
         <button type="button" class="primary" id="dadata-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
       </div>
+      <h2 class="form-section-title" style="margin-top:12px">Карта маршрута (Яндекс)</h2>
+      <p class="cat-panel-hint">Ключ JavaScript API и Static API Яндекс.Карт — для схемы Яндекса на форме заказчика. Без ключа — OpenStreetMap.</p>
+      <label>API-ключ Яндекс.Карт</label>
+      <div class="row">
+        <input id="yandex-maps-key" type="password" placeholder="Ключ developer.tech.yandex.ru" value="${esc((state.settings&&state.settings.yandexMapsApiKey)||'')}" style="flex:1" />
+        <button type="button" class="primary" id="yandex-maps-save" style="width:auto;flex:0 0 auto;padding:8px 12px">OK</button>
+      </div>
+      <div class="toast-ok" id="adm-pin-ok" style="display:none"></div>
       <div class="cat-list" style="margin-top:8px">
         ${admins.map((a,i)=>{
           const sp=findSpaceById(a.spaceId);
@@ -281,7 +551,7 @@ function renderAdminActivity(){
             </div>
             <div class="item-actions">
               <button type="button" class="primary" data-save-adm="${i}">Сохранить</button>
-              <button type="button" class="secondary" data-del-adm="${a.id}">Удал.</button>
+              ${a.isSuper?'<span class="hint">Супер админа нельзя удалить</span>':`<button type="button" class="secondary" data-del-adm="${a.id}">Удал.</button>`}
             </div>
           </div>`;
         }).join('')}
@@ -290,16 +560,22 @@ function renderAdminActivity(){
   `;
   $('act-back').onclick=()=>{ show('admin'); renderAdmin(); };
   $('fns-api-save')&&($('fns-api-save').onclick=()=>{
-    state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
     state.settings.fnsApiKey=(($('fns-api-key')||{}).value||'').trim();
     persist();
     alert(state.settings.fnsApiKey?'Ключ API-ФНС сохранён':'Ключ API-ФНС очищен');
   });
   $('dadata-save')&&($('dadata-save').onclick=()=>{
-    state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
     state.settings.dadataToken=(($('dadata-token')||{}).value||'').trim();
     persist();
     alert(state.settings.dadataToken?'Токен DaData сохранён':'Токен очищен');
+  });
+  $('yandex-maps-save')&&($('yandex-maps-save').onclick=()=>{
+    state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
+    state.settings.yandexMapsApiKey=(($('yandex-maps-key')||{}).value||'').trim();
+    persist();
+    alert(state.settings.yandexMapsApiKey?'Ключ Яндекс.Карт сохранён':'Ключ Яндекс.Карт очищен — карта OSM');
   });
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{
     const st=$('new-firm-inn-status');
@@ -343,13 +619,24 @@ function renderAdminActivity(){
     });
     persist(); renderAdminActivity();
   };
-  document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-save-adm]').forEach(b=>b.onclick=async()=>{
     if(!isSuperAdmin()) return;
     const i=+b.dataset.saveAdm;
     const pin=(($('adm-pin-'+i)||{}).value||'').trim();
     const isSuper=!!(($('adm-super-'+i)||{}).checked);
     if(!pin||pin.length<4){ alert('PIN от 4 цифр'); return; }
     state.admins[i].pin=pin;
+    const isSuperRow=!!state.admins[i].isSuper || state.admins[i].id==='admin-super';
+    const weak=typeof isRecoveryOrWeakAdminPin==='function'?isRecoveryOrWeakAdminPin(pin)
+      :(typeof WEAK_ADMIN_PINS!=='undefined' && WEAK_ADMIN_PINS.has(pin));
+    if(!weak) delete state.admins[i].mustChangePin;
+    if(isSuperRow){
+      if(!state.settings) state.settings={};
+      if(!weak){
+        if(typeof markSuperPinChangedByUser==='function') markSuperPinChangedByUser();
+        else { state.settings.superPinChangedByUser=true; delete state.settings.superPinRecoveryNotice; }
+      }
+    }
     state.admins[i].isSuper=isSuper;
     if(!state.admins.some(a=>a.isSuper)){ alert('Должен остаться хотя бы один супер админ'); state.admins[i].isSuper=true; }
     // обновить текущую сессию если это я
@@ -360,7 +647,25 @@ function renderAdminActivity(){
       saveAdminSession();
       updateAdminChrome();
     }
-    persist(); renderAdminActivity();
+    if(typeof bumpDataEpoch==='function') bumpDataEpoch('admin-pin');
+    const btn=b;
+    const prevText=btn.textContent;
+    btn.disabled=true;
+    btn.textContent='…';
+    let saveResult={ ok:navigator.onLine!==false, offline:navigator.onLine===false };
+    if(typeof persistAdminPinImmediate==='function'){
+      saveResult=await persistAdminPinImmediate();
+    } else {
+      persist();
+    }
+    btn.disabled=false;
+    btn.textContent=prevText;
+    renderAdminActivity();
+    if(saveResult.ok){
+      flashAdmPinOk('Пин-код записан');
+    } else {
+      flashAdmPinOk('Пин-код записан на этом устройстве, но не на сервере — проверьте интернет', true);
+    }
   });
   document.querySelectorAll('[data-del-adm]').forEach(b=>b.onclick=()=>{
     if(!isSuperAdmin()) return;
@@ -368,7 +673,7 @@ function renderAdminActivity(){
     const adm=state.admins.find(a=>a.id===id);
     if(!adm) return;
     if(adm.id===currentAdmin?.id){ alert('Нельзя удалить себя, пока вы в системе'); return; }
-    if(adm.isSuper && state.admins.filter(a=>a.isSuper).length<=1){ alert('Нельзя удалить последнего супер админа'); return; }
+    if(adm.isSuper){ alert('Супер админа нельзя удалить'); return; }
     if(!confirm(`Удалить администратора ${adm.name}?`)) return;
     state.admins=state.admins.filter(a=>a.id!==id);
     persist(); renderAdminActivity();
@@ -650,10 +955,7 @@ function dayKeyFromIso(iso){
 }
 function canAdminSeeShift(s){
   if(!s) return false;
-  if(isSuperAdmin()){
-    if(state.adminOwnerFilter==='all') return true;
-    return s.ownerAdminId===state.adminOwnerFilter || samePersonName(s.ownerAdminName||'', ((state.admins||[]).find(a=>a.id===state.adminOwnerFilter)||{}).name||'');
-  }
+  if(isSuperAdmin()) return true;
   const my=currentOwnCompany();
   if(my && s.ownCompanyId && s.ownCompanyId===my.id) return true;
   if(currentAdmin && s.ownerAdminId && s.ownerAdminId===currentAdmin.id) return true;
@@ -785,8 +1087,101 @@ function buildAdminShiftDayGroups(orders){
   });
   return {groups, ungrouped:[]};
 }
+function ensureAdminOrderSelection(){
+  if(!state.adminSelectedOrderIds || typeof state.adminSelectedOrderIds!=='object'){
+    state.adminSelectedOrderIds={};
+  }
+  return state.adminSelectedOrderIds;
+}
+function currentFilteredOrderIds(){
+  return filteredOrders().map(o=>o.id).filter(Boolean);
+}
+function pruneAdminOrderSelection(visibleIds){
+  const sel=ensureAdminOrderSelection();
+  const vis=new Set(visibleIds||[]);
+  Object.keys(sel).forEach(id=>{
+    if(!vis.has(id)) delete sel[id];
+  });
+}
+function adminOrderPickCount(){
+  const sel=ensureAdminOrderSelection();
+  const visible=new Set(currentFilteredOrderIds());
+  return Object.keys(sel).filter(id=>sel[id] && visible.has(id)).length;
+}
+function adminOrderPickHtml(o){
+  const sel=ensureAdminOrderSelection();
+  const on=!!sel[o.id];
+  return `<label class="order-pick" title="Выбрать для удаления" onclick="event.stopPropagation()">
+    <input type="checkbox" class="admin-order-pick" data-id="${esc(o.id)}"${on?' checked':''} />
+  </label>`;
+}
+function adminOrdersBulkBarHtml(){
+  const n=adminOrderPickCount();
+  return `<div class="admin-bulk-bar" id="admin-orders-bulk">
+    <label class="bulk-pick-all"><input type="checkbox" id="admin-orders-select-page" /> На экране</label>
+    <button type="button" class="secondary" id="admin-orders-delete-selected"${n?'':' disabled'}>Удалить выбранные (${n})</button>
+    <span class="hint">Удаляются заказ, смена, биржа, документы, комиссия</span>
+  </div>`;
+}
+function updateAdminOrderPickUi(){
+  const n=adminOrderPickCount();
+  const btn=$('admin-orders-delete-selected');
+  if(btn){
+    btn.disabled=!n;
+    btn.textContent=`Удалить выбранные (${n})`;
+  }
+}
+function wireAdminOrderDeleteUi(visibleOrders){
+  const sel=ensureAdminOrderSelection();
+  const ids=(visibleOrders||[]).map(o=>o.id).filter(Boolean);
+  document.querySelectorAll('#admin-list .admin-order-pick').forEach(inp=>{
+    inp.onchange=()=>{
+      if(inp.checked) sel[inp.dataset.id]=true;
+      else delete sel[inp.dataset.id];
+      updateAdminOrderPickUi();
+      const allPage=$('admin-orders-select-page');
+      if(allPage) allPage.checked=ids.length>0 && ids.every(id=>sel[id]);
+    };
+  });
+  const allPage=$('admin-orders-select-page');
+  if(allPage){
+    allPage.checked=ids.length>0 && ids.every(id=>sel[id]);
+    allPage.onchange=()=>{
+      ids.forEach(id=>{
+        if(allPage.checked) sel[id]=true;
+        else delete sel[id];
+      });
+      document.querySelectorAll('#admin-list .admin-order-pick').forEach(inp=>{
+        inp.checked=!!sel[inp.dataset.id];
+      });
+      updateAdminOrderPickUi();
+    };
+  }
+  const delBtn=$('admin-orders-delete-selected');
+  if(delBtn) delBtn.onclick=()=>adminDeleteSelectedOrders();
+}
+function adminDeleteSelectedOrders(){
+  const sel=ensureAdminOrderSelection();
+  const visible=new Set(currentFilteredOrderIds());
+  const ids=Object.keys(sel).filter(id=>sel[id] && visible.has(id));
+  if(!ids.length){ alert('Отметьте заказы галочкой'); return; }
+  const orders=ids.map(id=>(state.orders||[]).find(o=>o.id===id)).filter(Boolean);
+  const nums=orders.map(o=>o.sequentialNumber).sort((a,b)=>a-b);
+  const inProg=orders.filter(o=>o.startOdometer!=null && !looksClosedOrder(o) && !o.cancelledAt);
+  let msg=`Удалить ${orders.length} заказ(ов)? № ${nums.join(', ')}`;
+  if(inProg.length) msg+=`\n\n${inProg.length} в работе — у водителя может сбиться шаг в чате.`;
+  msg+='\n\nУдалятся все связи (смена, биржа, документы, комиссия). Номера снова доступны для новых заказов.';
+  if(!confirm(msg)) return;
+  if(inProg.length && !confirm('Заказы в работе — точно удалить?')) return;
+  const res=deleteOrders(ids);
+  if(!res.ok){ alert(res.message||'Не удалось удалить'); return; }
+  Object.keys(sel).forEach(id=>delete sel[id]);
+  alert(`Удалено: ${res.deleted}. Следующий новый заказ — № ${res.nextNumber}.`);
+  renderAdmin();
+}
 function orderStatusClass(o){
   if(looksClosedOrder(o)) return 'closed';
+  if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) return 'inbox';
   if(o.onExchange && o.startOdometer==null) return 'exchange';
   if(o.startOdometer!=null || o.departOdometer!=null) return 'progress';
   return '';
@@ -798,31 +1193,45 @@ function adminOrderCardHtml(o){
   const onEx=!!o.onExchange && !looksClosedOrder(o) && o.startOdometer==null;
   const st=statusText(o);
   const stCls=orderStatusClass(o);
-  const sp=findSpaceById(o.spaceId);
+  const sp=findSpaceById(orderSpaceId(o));
   const ownerLine=isSuperAdmin()
     ? `<p>Фирма: ${esc(sp?sp.name:'—')}${o.ownerAdminName?` · ${esc(o.ownerAdminName)}`:''}</p>`
     : '';
   const phone=(()=>{ const dp=orderDriverPhone(o); return dp?` · <a href="tel:${esc(dp)}" style="color:var(--accent)" onclick="event.stopPropagation()">☎ ${esc(dp)}</a>`:''; })();
   const sideBtns=[
     onEx?`<button type="button" class="secondary go-exchange">Биржа</button>`:'',
+    typeof isBookingRequested==='function' && isBookingRequested(o) && isMyFirmOrder(o)
+      ?`<button type="button" class="primary in-book-ok" data-id="${o.id}">Подтвердить бронь</button>`:'',
+    typeof isBookingRequested==='function' && isBookingRequested(o) && isMyFirmOrder(o)
+      ?`<button type="button" class="secondary in-book-no" data-id="${o.id}">Отклонить бронь</button>`:'',
     !onEx && !looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && isMyFirmOrder(o)
-      ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">На биржу</button>`:'',
+      && (typeof isDispatcherCompany==='function' && isDispatcherCompany(findCompanyById(o.ownCompanyId)||currentOwnCompany()))
+      ?`<button type="button" class="secondary pub-exchange" data-id="${o.id}">Биржа</button>`:'',
+    canReturnOrderToExchange(o)
+      && (typeof isDispatcherCompany==='function' && isDispatcherCompany(findCompanyById(o.ownCompanyId)||currentOwnCompany()))
+      ?`<button type="button" class="secondary ret-exchange" data-id="${o.id}">На биржу снова</button>`:'',
     !looksClosedOrder(o)&&!o.cancelledAt
       ?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''
   ].filter(Boolean).join('');
   return `<div class="order-card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
-    <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+    <div class="order-card-head">
+      ${adminOrderPickHtml(o)}
+      <h3>Заказ №${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+    </div>
     <div class="order-status ${stCls}">${esc(st)}</div>
     <p>${esc(dateTime(o.createdAt))}</p>
     ${ownerLine}
     ${o.ownCompanyName?`<p style="color:var(--text);font-weight:600">От: ${esc(o.ownCompanyName)}</p>`:''}
     <p>Заказчик: ${esc(o.customer||'—')}${o.carrierCompanyName?` · Перевозчик: ${esc(o.carrierCompanyName)}`:''}</p>
     ${o.transportApp?`<p style="color:var(--accent)">Договор‑заявка: ${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>`:''}
-    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${phone}</p>
+    <p>${esc(o.driverName)} · ${esc(o.vehiclePlate)}${o.bookedPlate&&o.bookedPlate!==o.vehiclePlate?` · бронь ${esc(o.bookedPlate)}`:''}${phone}</p>
+    ${o.fulfillment==='logist'?'<p>Срочно: заказчик просит закрыть как можно скорее</p>':o.fulfillment==='direct'?'<p>Прямой парк, без срочной ставки логиста</p>':''}
+    ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="order-money">${esc(logistMarginLine(o))}</p>`:''}
     <p>${esc(orderContactLine(o))}</p>
     <p class="order-route">${esc(routeText(o))}</p>
     ${orderTimesLines(ensureOrderTimeStamps(o))}
     ${orderReqText(o)?`<p>ТС: ${esc(orderReqText(o))}</p>`:''}
+    ${o.pricePending?`<p class="rate-missing">Цену уточнит перевозчик</p>`:''}
     ${orderScheduleLines(o, false)}
     <p class="order-km">Нулевой: ${fmt(o.emptyKmBefore)} · с грузом: ${fmt(o.loadedKm)} · до стоянки: ${fmt(o.emptyKmAfter)}</p>
     ${hasRate
@@ -960,6 +1369,11 @@ function adminOrdersSelectDay(dayKey){
 function adminOrdersCalHtml(groups){
   const cal=ensureAdminOrdersCal();
   const marked=new Set((groups||[]).map(g=>g.dayKey).filter(k=>k && k!=='без-даты'));
+  allOrders().forEach(o=>{
+    if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return;
+    const k=typeof confirmedBookingDayKey==='function'?confirmedBookingDayKey(o):'';
+    if(k) marked.add(k);
+  });
   const y=cal.year, m=cal.month;
   const title=new Date(y,m,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
   const first=new Date(y,m,1);
@@ -1004,7 +1418,8 @@ function filteredOrders(){
     // обычный админ — только свои; супер — все, плюс фильтр по админу
     if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return false;
     if(state.adminFilter==='exchange') return !looksClosedOrder(o) && !!o.onExchange && o.startOdometer==null;
-    if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && o.driverName && o.driverName!=='—' && o.driverName!=='-' && o.driverName!=='Биржа';
+    if(state.adminFilter==='inbox') return typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o);
+    if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && !waitingLogistDriver(o.driverName);
     if(state.adminFilter==='progress') return !looksClosedOrder(o) && o.startOdometer!=null;
     if(state.adminFilter==='closed') return looksClosedOrder(o);
     return true;
@@ -1059,32 +1474,124 @@ function unpublishFromExchange(id){
   if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Снять с биржи может только фирма‑заказчик'); return; }
   if(!confirm('Снять заказ с биржи?')) return;
   o.onExchange=false;
-  o.executorType='own';
-  o.driverName=o.driverName==='Биржа'?'—':(o.driverName||'—');
+  const keep=typeof orderKeepsLogist==='function' && orderKeepsLogist(o);
+  o.executorType=keep?'logist':'own';
+  if(typeof waitingLogistDriver==='function' ? waitingLogistDriver(o.driverName) : (o.driverName==='Биржа'||!o.driverName)){
+    o.driverName=keep?'Диспетчер':'—';
+  }
   bumpDataEpoch('unpublish-exchange');
   upsertOrder(o);
   renderAdmin();
+}
+function confirmOrderBooking(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !String(o.bookedPlate||'').trim()){ alert('Нет запроса брони'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  if(typeof vehicleBusyAt==='function' && vehicleBusyAt(o.bookedPlate, o.vehicleAt, o.id)){
+    alert('Эта машина уже занята на это время. Выберите другое авто или отклоните запрос.');
+    return;
+  }
+  if(!confirm(`Подтвердить бронь ${o.bookedPlate} на ${o.vehicleAt?formatRuDateTimeAt(o.vehicleAt):'указанную подачу'}? Дата появится в календаре у вас и у заказчика.`)) return;
+  stampConfirmedBooking(o, o.bookedPlate);
+  bumpDataEpoch('book-confirm');
+  upsertOrder(o);
+  persist();
+  renderAdmin();
+}
+function rejectOrderBooking(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o || !String(o.bookedPlate||'').trim()){ alert('Нет запроса брони'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  if(!confirm(`Отклонить бронь ${o.bookedPlate}? Заказчик увидит отказ, точка в календаре не появится.`)) return;
+  o.bookStatus='rejected';
+  o.bookRejectedAt=new Date().toISOString();
+  bumpDataEpoch('book-reject');
+  upsertOrder(o);
+  persist();
+  renderAdmin();
+}
+function canReturnOrderToExchange(o){
+  if(!o || looksClosedOrder(o) || o.cancelledAt || o.startOdometer!=null || o.onExchange) return false;
+  if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) return false;
+  if(typeof waitingLogistDriver==='function' && waitingLogistDriver(o.driverName)) return false;
+  const assigned=o.driverName && o.driverName!=='Биржа' && o.driverName!=='—';
+  if(!assigned) return false;
+  if(isMyFirmOrder(o) || isSuperAdmin()) return true;
+  return false;
+}
+function returnOrderToExchange(id){
+  const o=state.orders.find(x=>x.id===id);
+  if(!o){ alert('Заказ не найден'); return; }
+  if(!canReturnOrderToExchange(o)){ alert('Вернуть на биржу можно только до выезда, если заказ уже назначен'); return; }
+  if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
+  billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
+    if(!g.ok){ alert(g.message); return; }
+    if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа'); openDetail(id); return; }
+    if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
+      ? 'Вернуть на биржу? Там вы снова заказчик перевозки. Назначение водителя и договор‑заявка будут сброшены.'
+      : 'Вернуть заказ на биржу? Назначение водителя и договор‑заявка будут сброшены.')) return;
+    o.onExchange=true;
+    o.exchangeListedAt=new Date().toISOString();
+    o.wasOnExchange=true;
+    const keep=typeof orderKeepsLogist==='function' && (o.customerSubmitted || o.fulfillment==='logist' || o.fulfillment==='direct');
+    o.executorType=keep?'logist':'exchange';
+    o.driverName=keep?'Диспетчер':'Биржа';
+    o.vehiclePlate='—';
+    o.transportApp=null;
+    o.partnerSpaceId=null;
+    o.carrierCompanyId=null;
+    o.carrierCompanyName=null;
+    o.carrierDriverId=null;
+    o.carrierVehicleId=null;
+    o.executorAdminId=null;
+    o.driverPhone='';
+    if(typeof clearOrderBooking==='function') clearOrderBooking(o);
+    bumpDataEpoch('return-exchange');
+    upsertOrder(o);
+    if(state.detailId===id && typeof openDetail==='function') openDetail(id);
+    else renderAdmin();
+  });
 }
 function publishToExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || o.closedAt || o.startOdometer!=null){ alert('Нельзя выставить на биржу'); return; }
   if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Чужой заказ'); return; }
-  if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
-  if(!confirm('Выставить заказ на биржу для других фирм?')) return;
-  o.onExchange=true;
-  o.executorType='exchange';
-  o.driverName='Биржа';
-  o.vehiclePlate='—';
-  o.transportApp=null;
-  o.partnerSpaceId=null;
-  o.executorAdminId=null;
-  bumpDataEpoch('publish-exchange');
-  upsertOrder(o);
-  setAdminNav('exchange');
+  const firm=findCompanyById(o.ownCompanyId)||currentOwnCompany();
+  if(typeof isDispatcherCompany==='function' && !isDispatcherCompany(firm)){
+    alert('Включите «Диспетчер» в справочнике нашей фирмы — тогда появится Биржа. Биржа входит в тариф «Бизнес».');
+    return;
+  }
+  billingGuardWithServer(o.spaceId||currentSpaceId(), 'publish_exchange').then(g=>{
+    if(!g.ok){ alert(g.message); return; }
+    if(!(o.reqPayloadTons>0)){ alert('Укажите грузоподъёмность в карточке заказа (требования к ТС), затем выставьте на биржу'); openDetail(id); return; }
+    const free=(typeof companyHasOwnPark==='function' && !companyHasOwnPark(findCompanyById(o.ownCompanyId)||currentOwnCompany()))
+      ? []
+      : (typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):[]);
+    if(free.length){
+      const plates=free.slice(0,6).map(v=>v.plate).join(', ')+(free.length>6?'…':'');
+      if(!confirm(`Свободных своих машин под заявку: ${free.length} (${plates}).\n\nСначала свой парк. Остаток можно отдать на биржу — там вы заказчик перевозки.\n\nВсё равно выставить на биржу?`)) return;
+    } else if(!confirm(typeof orderKeepsLogist==='function' && orderKeepsLogist(o)
+      ? 'Выставить на биржу? Там вы заказчик перевозки, партнёр везёт, для грузоотправителя исполнителем остаётесь вы. Биржа — в тарифе «Бизнес».'
+      : 'Выставить заказ на биржу для других фирм? Там вы заказчик этой перевозки.')) return;
+    o.onExchange=true;
+    o.exchangeListedAt=new Date().toISOString();
+    o.wasOnExchange=true;
+    const keep=typeof orderKeepsLogist==='function' && orderKeepsLogist(o);
+    o.executorType=keep?'logist':'exchange';
+    o.driverName=keep?'Диспетчер':'Биржа';
+    o.vehiclePlate='—';
+    o.transportApp=null;
+    o.partnerSpaceId=null;
+    o.executorAdminId=null;
+    if(typeof clearOrderBooking==='function') clearOrderBooking(o);
+    bumpDataEpoch('publish-exchange');
+    upsertOrder(o);
+    setAdminNav('exchange');
+  });
 }
 function assignExchangeToOwn(id){
   const o=state.orders.find(x=>x.id===id);
-  if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
+  if(!o || looksClosedOrder(o) || o.cancelledAt || o.startOdometer!=null){ alert('Нельзя назначить'); renderAdmin(); return; }
   if(!isMyFirmOrder(o) && !isSuperAdmin()){ alert('Свой парк — только для заказов вашей фирмы. Чужой забирайте кнопкой «Забрать»'); return; }
   const driver=(($('ex-drv-'+id)||{}).value||'').trim();
   const plate=(($('ex-plate-'+id)||{}).value||'').trim();
@@ -1104,12 +1611,22 @@ function assignExchangeToOwn(id){
   o.driverPercent=driverPercent(driver, firmId);
   o.driverPhone=driverPhone(driver, firmId);
   o.carrierCompanyId=null; o.carrierDriverId=null; o.carrierVehicleId=null;
+  if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
   stampOrderDriverPhone(o);
+  if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
   bumpDataEpoch('assign-exchange-own');
   upsertOrder(o);
   renderAdmin();
 }
 let claimOrderId=null;
+function clearAdminUiForDeletedOrders(ids){
+  const delSet=new Set((ids||[]).filter(Boolean));
+  if(claimOrderId && delSet.has(claimOrderId)) claimOrderId=null;
+  if(state.detailId && delSet.has(state.detailId)){
+    state.detailId=null;
+    if($('admin-detail')&&$('admin-detail').classList.contains('show')) show('admin');
+  }
+}
 function openClaimExchange(id){
   const o=state.orders.find(x=>x.id===id);
   if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); renderAdmin(); return; }
@@ -1128,14 +1645,14 @@ function openClaimExchange(id){
   $('claim-form').innerHTML=`
     <section class="form-section">
       <h2 class="form-section-title">Договор‑заявка</h2>
-      <p class="form-section-hint">Электронная заявка на перевозку между фирмами</p>
+      <p class="form-section-hint">Логист отдаёт вам заказ. Если вы владелец и сами за рулём — не нужно искать заявки: забрали, назначили своё авто и поехали.</p>
       <div class="claim-box">
         <p><strong>Заказчик перевозки:</strong> ${esc(o.ownCompanyName||'—')}</p>
         <p><strong>Перевозчик:</strong> ${esc(myCo.name)}</p>
         <p><strong>Маршрут:</strong> ${esc(routeText(o))}</p>
         <p><strong>Подача:</strong> ${o.vehicleAt?esc(formatRuDateTimeAt(o.vehicleAt)):'—'}</p>
         <p><strong>Требования к ТС:</strong> ${esc(req)}</p>
-        <p class="hint" style="margin-top:6px">После подписи — водитель и авто из вашего парка войдут в заявку.</p>
+        <p class="hint" style="margin-top:6px">После подписи — ваш водитель (часто вы сами) и авто войдут в заявку. Для грузоотправителя исполнителем остаётся логист.</p>
       </div>
     </section>
     <section class="form-section">
@@ -1163,6 +1680,12 @@ function openClaimExchange(id){
 function confirmClaimExchange(){
   const o=state.orders.find(x=>x.id===claimOrderId);
   if(!o || !o.onExchange){ alert('Заказ уже не на бирже'); claimOrderId=null; show('admin'); renderAdmin(); return; }
+  billingGuardWithServer(currentSpaceId(), 'claim_exchange').then(g=>{
+    if(!g.ok){ $('claim-error').textContent=g.message; return; }
+    confirmClaimExchangeAfterGuard(o);
+  });
+}
+function confirmClaimExchangeAfterGuard(o){
   const myCo=currentOwnCompany();
   if(!myCo || !currentAdmin){ $('claim-error').textContent='Нужна ваша фирма'; return; }
   const driver=(($('claim-driver')||{}).value||'').trim();
@@ -1207,9 +1730,19 @@ function confirmClaimExchange(){
   o.driverPercent=driverPercent(driver, myCo.id);
   o.driverPhone=driverPhone(driver, myCo.id);
   o.partnerSpaceId=currentAdmin.spaceId||null;
+  o.wasOnExchange=true;
   o.executorAdminId=currentAdmin.id;
   if(o.transportApp) o.transportApp.driverPhone=o.driverPhone||'';
   stampOrderDriverPhone(o);
+  if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
+  if(typeof syncOrderDocsOnAssign==='function'){
+    syncOrderDocsOnAssign(o);
+    ensureOrderDocs(o);
+    if(o.transportApp&&o.transportApp.signedAt){
+      o.docs.transportApp.status='signed';
+      o.docs.transportApp.updatedAt=o.transportApp.signedAt;
+    }
+  }
   bumpDataEpoch('claim-exchange');
   upsertOrder(o);
   claimOrderId=null;
@@ -1222,11 +1755,12 @@ function confirmClaimExchange(){
 function renderAdminExchangeBoard(orders){
   const mineCount=orders.filter(o=>isMyFirmOrder(o)).length;
   const head=`<div class="board-head">
-    <p class="cat-panel-hint">Чужой заказ — «Забрать» (договор‑заявка + ваш парк). Свой — назначить или снять.</p>
+    <p class="cat-panel-hint">Свои заявки на бирже: вы заказчик перевозки (свой парк уже занят или не подходит). Чужие — «Забрать» как перевозчик.</p>
+    ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
       <div class="m"><span>На бирже</span><b>${orders.length}</b></div>
-      <div class="m"><span>Ваши</span><b>${mineCount}</b></div>
-      <div class="m"><span>Чужие</span><b>${Math.max(0, orders.length-mineCount)}</b></div>
+      <div class="m"><span>Вы заказчик</span><b>${mineCount}</b></div>
+      <div class="m"><span>Забрать</span><b>${Math.max(0, orders.length-mineCount)}</b></div>
     </div>
   </div>`;
   if(!orders.length){
@@ -1242,10 +1776,13 @@ function renderAdminExchangeBoard(orders){
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
     const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join('');
     return `<div class="ex-card">
-      <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+      <div class="order-card-head">
+        ${adminOrderPickHtml(o)}
+        <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+      </div>
       <p>${esc(dateTime(o.createdAt))}</p>
-      <p>Заказчик: <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong></p>
-      <span class="ex-badge ${mine?'':'other'}">${mine?'ваш заказ':'чужой заказ'}</span>
+      <p>Заказчик: <strong style="color:var(--text)">${esc(o.ownCompanyName||'—')}</strong>${mine?' (вы)':''}</p>
+      <span class="ex-badge ${mine?'':'other'}">${mine?'вы заказчик':'чужой · забрать как перевозчик'}</span>
       <p class="ex-route">${esc(routeText(o))}</p>
       ${orderScheduleLines(o, false)}
       <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(req||'не указано')}</strong></p>
@@ -1256,7 +1793,7 @@ function renderAdminExchangeBoard(orders){
           <label for="ex-plate-${o.id}">Авто под требования</label>
           <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
           <div class="ex-actions">
-            <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
+            <button type="button" class="primary ex-assign" data-id="${o.id}">Парк</button>
             <div class="row">
               <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
               <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
@@ -1265,7 +1802,7 @@ function renderAdminExchangeBoard(orders){
         </div>
       `:`
         <div class="ex-actions">
-          <button type="button" class="primary ex-claim" data-id="${o.id}">Забрать</button>
+          <button type="button" class="primary ex-claim" data-id="${o.id}">Забрать как перевозчик</button>
           <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
         </div>
       `}
@@ -1273,19 +1810,148 @@ function renderAdminExchangeBoard(orders){
   }).join('');
   return `${head}<div class="admin-cards">${cards}</div>`;
 }
+function renderAdminInboxBoard(orders){
+  const rush=orders.filter(o=>o.fulfillment!=='direct').length;
+  const waitBook=orders.filter(o=>typeof isBookingRequested==='function' && isBookingRequested(o)).length;
+  const okBook=orders.filter(o=>typeof isBookingConfirmed==='function' && isBookingConfirmed(o)).length;
+  const calMarks=[];
+  (orders||[]).forEach(o=>{
+    const k=dayKeyFromIso(o.vehicleAt||o.createdAt);
+    if(k) calMarks.push({dayKey:k});
+  });
+  allOrders().forEach(o=>{
+    if(!canAdminSeeOrder(o)||!matchesOwnerFilter(o)) return;
+    const k=typeof confirmedBookingDayKey==='function'?confirmedBookingDayKey(o):'';
+    if(k) calMarks.push({dayKey:k});
+  });
+  const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(currentOwnCompany());
+  const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(currentOwnCompany());
+  const head=`<div class="board-head">
+    <p class="cat-panel-hint">${dispatcher
+      ?(hasPark
+        ? 'Логист и диспетчер — одна должность. Сначала свой парк, остаток — Биржа (тариф «Бизнес»): там вы заказчик перевозки.'
+        : 'Диспетчер без своего парка: заявки на биржу (тариф «Бизнес») — вы заказчик перевозки, партнёр везёт.')
+      :(hasPark
+        ? 'Свой парк. Чтобы появилась кнопка «Биржа», включите «Диспетчер» в справочнике нашей фирмы. Биржа — в тарифе «Бизнес».'
+        : 'Своего парка нет. Включите «Диспетчер» в справочнике — появится Биржа (тариф «Бизнес»).')}</p>
+    ${adminOrdersCalHtml(calMarks)}
+    ${adminOrdersBulkBarHtml()}
+    <div class="board-metrics">
+      <div class="m"><span>Входящие</span><b>${orders.length}</b></div>
+      <div class="m"><span>Ждут бронь</span><b class="${waitBook?'warn':''}">${waitBook}</b></div>
+      <div class="m"><span>Бронь ок</span><b class="ok">${okBook}</b></div>
+      <div class="m"><span>Срочно</span><b class="${rush?'warn':''}">${rush}</b></div>
+    </div>
+  </div>`;
+  if(!orders.length){
+    return `${head}<div class="admin-cards"><div class="empty">Входящих нет. Заявки с портала заказчика появляются здесь.</div></div>`;
+  }
+  const myCo=currentOwnCompany();
+  const cards=orders.map(o=>{
+    const firmId=o.ownCompanyId||(myCo&&myCo.id);
+    const drvList=firmId?fleetDriversForCompany(firmId):[];
+    const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
+    const freeList=typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):vehList;
+    const bookedPlate=String(o.bookedPlate||'').trim();
+    const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}${bookedPlate&&v.plate===bookedPlate?' · бронь':''}</option>`).join('');
+    const margin=typeof logistMarginLine==='function'?logistMarginLine(o):'';
+    const reqBook=typeof isBookingRequested==='function' && isBookingRequested(o);
+    const okB=typeof isBookingConfirmed==='function' && isBookingConfirmed(o);
+    const bookLine=reqBook
+      ? `<p class="rate-missing">Запрос брони ${esc(bookedPlate)} — подтвердите, тогда дата подачи попадёт в календарь.</p>`
+      : okB
+        ? `<p class="order-money">Бронь ${esc(bookedPlate)} подтверждена · в календаре ${esc(o.vehicleAt?dayOnly(o.vehicleAt):'')}</p>`
+        : o.bookStatus==='rejected'
+          ? `<p class="hint">Бронь ${esc(bookedPlate)} отклонена</p>`
+          : '';
+    return `<div class="ex-card">
+      <div class="order-card-head">
+        ${adminOrderPickHtml(o)}
+        <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
+      </div>
+      <p>${esc(dateTime(o.createdAt))}</p>
+      <p>Заказчик: <strong style="color:var(--text)">${esc(o.customer||'—')}</strong></p>
+      <span class="ex-badge">${o.fulfillment==='direct'?'свой парк':'срочно · ставка логиста'}</span>
+      <p class="ex-route">${esc(routeText(o))}</p>
+      ${orderScheduleLines(o, false)}
+      <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · ${esc(bookedPlate)}`:''}</p>
+      ${bookLine}
+      ${margin?`<p class="order-money">${esc(margin)}</p>`:''}
+      ${!hasPark?`
+      <p class="hint">${dispatcher?'Своего парка нет. На бирже вы заказчик перевозки.':'Своего парка нет. Включите «Диспетчер» в справочнике — появится Биржа.'}</p>
+      <div class="ex-actions">
+        ${dispatcher?`<button type="button" class="primary pub-exchange" data-id="${o.id}">Биржа</button>`:''}
+        <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+      </div>
+      `:`
+      <p class="hint">${freeList.length
+        ?`Свободно своих под заявку: ${freeList.length}. Сначала Парк${dispatcher?' — остаток на Биржу':''}.`
+        :(dispatcher?'Свободных своих нет. Остаток — Биржа.':'Свободных своих нет.')}</p>
+      <div class="ex-assign-box">
+        ${reqBook?`<div class="ex-actions" style="margin-bottom:8px">
+          <button type="button" class="primary in-book-ok" data-id="${o.id}">Подтвердить бронь</button>
+          <button type="button" class="secondary in-book-no" data-id="${o.id}">Отклонить бронь</button>
+        </div>`:''}
+        <label for="ex-drv-${o.id}">Водитель своего парка</label>
+        <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
+        <label for="ex-plate-${o.id}">Авто</label>
+        <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
+        <div class="park-ex-cta">
+          <button type="button" class="${freeList.length||!dispatcher?'primary':'secondary'} ex-assign" data-id="${o.id}">Парк</button>
+          ${dispatcher?`<button type="button" class="${freeList.length?'secondary':'primary'} pub-exchange" data-id="${o.id}">Биржа</button>`:''}
+        </div>
+        <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
+      </div>`}
+    </div>`;
+  }).join('');
+  return `${head}<div class="admin-cards">${cards}</div>`;
+}
+let renderAdminDebounceTimer=null;
+function renderAdminDebounced(){
+  clearTimeout(renderAdminDebounceTimer);
+  renderAdminDebounceTimer=setTimeout(()=>renderAdmin(), 100);
+}
 function renderAdmin(){
+  const billBanner=$('admin-billing-banner');
+  if(billBanner){
+    const txt=billingBannerForAdmin();
+    billBanner.textContent=txt||'';
+    billBanner.style.display=txt?'block':'none';
+  }
   updateAdminChrome();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();
     return;
   }
   const orders=filteredOrders();
+  pruneAdminOrderSelection(orders.map(o=>o.id).filter(Boolean));
   if(state.adminFilter==='exchange'){
     $('admin-list').innerHTML=renderAdminExchangeBoard(orders);
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
     document.querySelectorAll('#admin-list .ex-unpub').forEach(b=>b.onclick=()=>unpublishFromExchange(b.dataset.id));
     document.querySelectorAll('#admin-list .ex-claim').forEach(b=>b.onclick=()=>openClaimExchange(b.dataset.id));
     document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+    wireAdminOrderDeleteUi(orders);
+    return;
+  }
+  if(state.adminFilter==='inbox'){
+    $('admin-list').innerHTML=renderAdminInboxBoard(orders);
+    document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=()=>assignExchangeToOwn(b.dataset.id));
+    document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=()=>publishToExchange(b.dataset.id));
+    document.querySelectorAll('#admin-list .in-book-ok').forEach(b=>b.onclick=()=>confirmOrderBooking(b.dataset.id));
+    document.querySelectorAll('#admin-list .in-book-no').forEach(b=>b.onclick=()=>rejectOrderBooking(b.dataset.id));
+    document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+    const prev=$('admin-cal-prev');
+    const next=$('admin-cal-next');
+    const reset=$('admin-cal-reset');
+    if(prev) prev.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month--; if(c.month<0){ c.month=11; c.year--; } if(!c.from) c.showAll=false; renderAdmin(); };
+    if(next) next.onclick=()=>{ const c=ensureAdminOrdersCal(); c.month++; if(c.month>11){ c.month=0; c.year++; } if(!c.from) c.showAll=false; renderAdmin(); };
+    if(reset) reset.onclick=()=>{ const c=ensureAdminOrdersCal(); c.from=null; c.to=null; c.showAll=true; renderAdmin(); };
+    document.querySelectorAll('#admin-list [data-admin-cal-day]').forEach(btn=>{
+      btn.onclick=e=>{ e.stopPropagation(); adminOrdersSelectDay(btn.dataset.adminCalDay); };
+    });
+    wireAdminOrderDeleteUi(orders);
     return;
   }
   if(!orders.length){
@@ -1314,7 +1980,7 @@ function renderAdmin(){
   const orderRowHtml=o=>{
     const m=metrics(o);
     const cells=[dateTime(o.createdAt), o.vehiclePlate, o.driverName, o.customer||'—', routeText(o), o.dayNumber, fmt(o.emptyKmBefore), fmt(o.loadedKm), fmt(o.emptyKmAfter), fmt(dayTotal(o)), fmt(o.fuelPricePerLiter), fmt(o.ratePerKmCash), fmt(o.rateWithVat), fmt(o.rateWithoutVat), fmt(o.rateCash), fmt(o.salaryBonus), fmt(m.fuelLitersCalc), fmt(m.costPerKmNoVat), fmt(m.fuelCostCalc), fmt(o.vehicleRent), fmt(m.cushion), fmt(m.netProfit), o.sequentialNumber];
-    return `<tr class="group-detail" data-id="${o.id}"><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
+    return `<tr class="group-detail" data-id="${o.id}"><td>${adminOrderPickHtml(o)}</td><td><button type="button" class="open-rates" data-id="${o.id}" style="background:var(--accent);color:#fff;border:0;border-radius:8px;padding:6px 8px;font-weight:700;cursor:pointer">Ставки</button></td>${cells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}</tr>`;
   };
   const head=COLS.map(c=>`<th>${c}</th>`).join('');
   let tableRows='';
@@ -1347,6 +2013,7 @@ function renderAdmin(){
       t.count
     ];
     tableRows+=`<tr class="group-total" data-group="${esc(g.id)}" title="Нажмите, чтобы ${open?'свернуть':'развернуть'} заказы">
+      <td></td>
       <td><span class="tog">${open?'▼':'▶'}</span> ${g.openShift?'Смена':'Итог'}</td>
       ${sumCells.map(v=>`<td title="${esc(v)}">${esc(v)}</td>`).join('')}
     </tr>`;
@@ -1361,6 +2028,7 @@ function renderAdmin(){
   const filtersHtml=adminOrdersFiltersHtml(allGroups);
   const statsHtml=`<div class="orders-board-head">
     <p class="cat-panel-hint">${headHint}${exCount?` На бирже: <strong>${exCount}</strong>.`:''}</p>
+    ${adminOrdersBulkBarHtml()}
     <div class="board-metrics">
       <div class="m"><span>Заказы</span><b>${periodTot.count}</b></div>
       <div class="m"><span>Выручка</span><b>${fmt(periodTot.revenue)} ₽</b></div>
@@ -1371,7 +2039,7 @@ function renderAdmin(){
   const listBody=groups.length
     ? `<div class="admin-cards">${groupCards}</div>
     <div class="hint admin-desktop-only" style="padding:0 16px">Таблица — те же группы.</div>
-    <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="24">Нет строк</td></tr>'}</tbody></table></div>`
+    <div class="table-wrap admin-desktop-only" style="padding:8px 0 24px"><table class="admin"><thead><tr><th></th><th></th>${head}</tr></thead><tbody>${tableRows||'<tr><td colspan="25">Нет строк</td></tr>'}</tbody></table></div>`
     : `<div class="empty">${emptyMsg}</div>`;
   $('admin-list').innerHTML=`
     ${calHtml}
@@ -1407,7 +2075,10 @@ function renderAdmin(){
     };
   });
   document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
-  document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=()=>openDetail(tr.dataset.id));
+  document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=e=>{
+    if(e.target.closest('.order-pick,input')) return;
+    openDetail(tr.dataset.id);
+  });
   document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
     setAdminNav('exchange');
@@ -1416,11 +2087,24 @@ function renderAdmin(){
     e.stopPropagation();
     publishToExchange(b.dataset.id);
   });
+  document.querySelectorAll('#admin-list .in-book-ok').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    confirmOrderBooking(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .in-book-no').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    rejectOrderBooking(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .ret-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    returnOrderToExchange(b.dataset.id);
+  });
   document.querySelectorAll('#admin-list .cancel-order').forEach(b=>b.onclick=(e)=>{
     e.stopPropagation();
     if(!confirm('Отменить этот заказ? Он пропадёт из «Назначен» / «В работе».')) return;
     if(cancelOrder(b.dataset.id, 'Отменён из списка')) renderAdmin();
   });
+  wireAdminOrderDeleteUi(filtOrders);
 }
 function fillCreateFleetSelects(){
   const coId=(($('create-own-company')||{}).value)||'';
@@ -1451,9 +2135,8 @@ function fillCreateSelects(){
   const preferred=(currentOwnCompany()||{}).id;
   fillOwnCompanySelect('create-own-company', preferred);
   const ownEl=$('create-own-company');
-  if(ownEl && !ownEl._fleetBound){
-    ownEl._fleetBound=true;
-    ownEl.onchange=()=>fillCreateFleetSelects();
+  if(ownEl){
+    ownEl.onchange=()=>{ fillCreateFleetSelects(); if(typeof fillExecutorUI==='function') fillExecutorUI(); };
   }
   fillCreateFleetSelects();
 }
@@ -1477,12 +2160,19 @@ function roleLabels(c){
 }
 let createDay=1;
 function bindAdminCreate(){
-  $('admin-new').onclick=()=>{
+  $('admin-new').onclick=async ()=>{
     if(!currentAdmin){ fillAdminLoginSelect(); show('admin-pin'); return; }
-    createDay=1; $('create-error').textContent=''; $('create-customer').value=''; $('create-load').value=''; $('create-unload').value=''; if($('create-contact-name')) $('create-contact-name').value=''; if($('create-contact-phone')) $('create-contact-phone').value=''; if($('create-vehicle-date')) $('create-vehicle-date').value=''; if($('create-vehicle-time')) $('create-vehicle-time').value=''; ['create-loading-contact-name','create-loading-contact-phone','create-unloading-contact-name','create-unloading-contact-phone'].forEach(id=>{ if($(id)) $(id).value=''; }); if($('create-exec-mode')) $('create-exec-mode').value='own';
+    const g=await billingGuardCurrentAdminWithServer('create_order');
+    if(!g.ok){ alert(g.message); return; }
+    if($('create-exec-mode')){
+      const co=currentOwnCompany();
+      const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(co);
+      const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(co);
+      $('create-exec-mode').value=hasPark?'own':(dispatcher?'exchange':'carrier');
+    }
     ['create-req-pay','create-req-l','create-req-w','create-req-h','create-customer-inn','create-price-client','create-price-carrier'].forEach(id=>{ if($(id)) $(id).value=''; });
     if($('create-customer-inn-status')) $('create-customer-inn-status').textContent='';
-    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay(); $('create-exec-mode').onchange=fillExecutorUI;
+    fillCreateSelects(); fillCustomerPickers(); fillAddressPickers(''); fillContactPickers(''); fillExecutorUI(); updateCreateFreeHint(); wireVehicleAtHint('create'); wireCreateCustomerInn(); show('admin-create'); highlightDay();
     const createScroll=document.querySelector('#admin-create .admin-form-scroll'); if(createScroll) createScroll.scrollTop=0;
   };
   $('create-back').onclick=()=>{ show('admin'); renderAdmin(); };
@@ -1572,6 +2262,13 @@ function saveDispatcherOrder(){
   const seqNo=nextSequentialNumber();
   if(!currentAdmin){ $('create-error').textContent='Войдите как администратор'; return; }
   const orderSpaceId=ownCo.spaceId || currentAdmin.spaceId || null;
+  const createAction=mode==='exchange'?'publish_exchange':'create_order';
+  billingGuardWithServer(orderSpaceId, createAction).then(g=>{
+    if(!g.ok){ $('create-error').textContent=g.message; return; }
+    saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, load, unload, customer, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, plate, driver, driverPhoneVal, driverPercentVal, carrierCompanyId, carrierDriverId, carrierVehicleId, carrierCompanyName, vehicleAt, reqs, onExchange);
+  });
+}
+function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, load, unload, customer, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, plate, driver, driverPhoneVal, driverPercentVal, carrierCompanyId, carrierDriverId, carrierVehicleId, carrierCompanyName, vehicleAt, reqs, onExchange){
   const spaceAdm=(state.admins||[]).find(a=>a.spaceId && a.spaceId===orderSpaceId) || currentAdmin;
   const customerInn=String((($('create-customer-inn')||{}).value||'')).replace(/\D/g,'');
   const priceForClient=numOrNull(($('create-price-client')||{}).value);
@@ -1599,6 +2296,8 @@ function saveDispatcherOrder(){
     routePoints:defaultRoutePoints(load,unload), startOdometer:null,
     driverPercent:driverPercentVal,
     executorType:mode, onExchange,
+    exchangeListedAt:onExchange?new Date().toISOString():null,
+    wasOnExchange:onExchange||false,
     carrierCompanyId, carrierDriverId, carrierVehicleId, carrierCompanyName,
     reqPayloadTons:reqs.reqPayloadTons,
     reqLengthM:reqs.reqLengthM,
@@ -1615,278 +2314,7 @@ function saveDispatcherOrder(){
   show('admin'); renderAdmin();
 }
 
-/** Документооборот v1: статусы + печатные формы по заявке */
-const DOC_STATUSES=[
-  {id:'draft', label:'Черновик'},
-  {id:'ready', label:'Готов'},
-  {id:'sent', label:'Отправлен'},
-  {id:'signed', label:'Подписан'}
-];
-const DOC_KINDS=[
-  {id:'application', title:'Заявка на перевозку', hint:'Основные данные заявки для заказчика'},
-  {id:'transportApp', title:'Договор‑заявка', hint:'Между заказчиком и перевозчиком'},
-  {id:'act', title:'Акт выполненных работ', hint:'После выполнения / закрытия заказа'}
-];
-function docStatusLabel(st){
-  return (DOC_STATUSES.find(x=>x.id===st)||{}).label||'Черновик';
-}
-function ensureOrderDocs(o){
-  if(!o) return {};
-  if(!o.docs || typeof o.docs!=='object') o.docs={};
-  DOC_KINDS.forEach(k=>{
-    const cur=o.docs[k.id];
-    if(!cur || typeof cur!=='object'){
-      o.docs[k.id]={status:'draft', updatedAt:null};
-    } else {
-      if(!DOC_STATUSES.some(s=>s.id===cur.status)) cur.status='draft';
-      if(cur.updatedAt==null) cur.updatedAt=null;
-    }
-  });
-  return o.docs;
-}
-function paymentFormLabel(o){
-  if(!o) return 'наличные';
-  if(o.paymentForm==='withVat') return 'с НДС';
-  if(o.paymentForm==='withoutVat') return 'без НДС';
-  return 'наличные';
-}
-function resolveParty(companyId, companyName, spaceId){
-  let co=findCompanyById(companyId)||findCompanyByName(companyName)||null;
-  let sp=spaceId?findSpaceById(spaceId):null;
-  if(!sp && co && co.spaceId) sp=findSpaceById(co.spaceId);
-  const name=(co&&co.name)||(sp&&sp.name)||companyName||'—';
-  return {
-    name,
-    inn:(co&&co.inn)||(sp&&sp.inn)||'',
-    kpp:(co&&co.kpp)||(sp&&sp.kpp)||'',
-    ogrn:(co&&co.ogrn)||(sp&&sp.ogrn)||'',
-    address:(co&&co.address)||(sp&&sp.address)||''
-  };
-}
-function partyLinesHtml(p){
-  const bits=[];
-  if(p.inn) bits.push(`ИНН ${esc(p.inn)}`);
-  if(p.kpp) bits.push(`КПП ${esc(p.kpp)}`);
-  if(p.ogrn) bits.push(`ОГРН ${esc(p.ogrn)}`);
-  const req=bits.length?`<div class="muted">${bits.join(' · ')}</div>`:'';
-  const addr=p.address?`<div class="muted">${esc(p.address)}</div>`:'';
-  return `<div class="party"><strong>${esc(p.name||'—')}</strong>${req}${addr}</div>`;
-}
-function orderDocMoneyLine(o){
-  const rate=clientRate(o);
-  const form=paymentFormLabel(o);
-  if(rate==null) return `Форма оплаты: ${form}. Сумма не заполнена.`;
-  return `Форма оплаты: ${form}. Сумма к оплате: ${fmt(rate)} ₽`;
-}
-function orderDocRouteRows(o){
-  const pts=ensureRoutePoints(o)||[];
-  if(!pts.length) return `<tr><td colspan="2">${esc(routeText(o)||'—')}</td></tr>`;
-  return pts.map((p,i)=>`<tr><td>${i+1}. ${esc(kindTitle(p.kind))}</td><td>${esc(p.address||'—')}</td></tr>`).join('');
-}
-function buildOrderDocBody(kind, o){
-  const own=resolveParty(o.ownCompanyId, o.ownCompanyName, o.spaceId);
-  const customer=resolveParty(null, o.customer, null);
-  const carrierName=o.carrierCompanyName||(o.executorType==='partner'?'':own.name);
-  const carrier=resolveParty(o.carrierCompanyId, carrierName||own.name, o.executorType==='partner'?o.partnerSpaceId:o.spaceId);
-  const app=o.transportApp||null;
-  const title=(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ';
-  const num=o.sequentialNumber!=null?o.sequentialNumber:'—';
-  const when=dayOnly(o.vehicleAt||o.createdAt)||dayOnly(o.createdAt)||'—';
-  const driver=app&&app.driverName?app.driverName:(o.driverName||'—');
-  const plate=app&&app.vehiclePlate?app.vehiclePlate:(o.vehiclePlate||'—');
-  const phone=orderDriverPhone(o)||(app&&app.driverPhone)||'';
-  const contact=[o.contactName, formatPhone(o.contactPhone||'')].filter(Boolean).join(', ')||'—';
-  const kmBits=[
-    o.emptyKmBefore!=null?`нулевой ${fmt(o.emptyKmBefore)} км`:'',
-    o.loadedKm!=null?`с грузом ${fmt(o.loadedKm)} км`:'',
-    o.emptyKmAfter!=null?`до стоянки ${fmt(o.emptyKmAfter)} км`:''
-  ].filter(Boolean).join(' · ')||'—';
-  const commonHead=`
-    <div class="doc-head">
-      <div class="brand">АРМАДА</div>
-      <h1>${esc(title)}</h1>
-      <div class="muted">к заявке № ${esc(num)} · ${esc(when)}</div>
-    </div>`;
-  if(kind==='application'){
-    return `${commonHead}
-      <h2>1. Заказчик</h2>
-      ${partyLinesHtml(customer)}
-      <p>Контакт: ${esc(contact)}</p>
-      <h2>2. Исполнитель (наша фирма)</h2>
-      ${partyLinesHtml(own)}
-      <h2>3. Подача и маршрут</h2>
-      <p>Подача ТС: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
-      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <h2>4. Транспорт и водитель</h2>
-      <p>Водитель: <strong>${esc(driver)}</strong>${phone?` · ☎ ${esc(phone)}`:''}<br>
-      Авто: <strong>${esc(plate)}</strong>
-      ${orderReqText(o)?`<br>Требования к ТС: ${esc(orderReqText(o))}`:''}</p>
-      <h2>5. Стоимость</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
-      <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
-        <div>Исполнитель _______________ / _______________</div>
-      </div>`;
-  }
-  if(kind==='transportApp'){
-    const left=app?resolveParty(app.customerCompanyId, app.customerCompanyName, null):own;
-    const right=app?resolveParty(app.carrierCompanyId, app.carrierCompanyName, null):carrier;
-    return `${commonHead}
-      <p class="muted">${app&&app.signedAt?`Подписан в системе: ${esc(dateTime(app.signedAt))}`:'Черновик договора‑заявки по данным заказа'}</p>
-      <h2>1. Заказчик перевозки</h2>
-      ${partyLinesHtml(left)}
-      <h2>2. Перевозчик</h2>
-      ${partyLinesHtml(right)}
-      <h2>3. Условия перевозки</h2>
-      <p>Маршрут: <strong>${esc((app&&app.route)||routeText(o)||'—')}</strong></p>
-      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRows(o)}</tbody></table>
-      <p>Подача: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong><br>
-      Водитель: <strong>${esc(driver)}</strong>${phone?` · ☎ ${esc(phone)}`:''}<br>
-      ТС: <strong>${esc(plate)}</strong>
-      ${orderReqText(o)?`<br>Требования: ${esc(orderReqText(o))}`:''}</p>
-      <h2>4. Оплата</h2>
-      <p>${esc(orderDocMoneyLine(o))}</p>
-      <div class="sign">
-        <div>Заказчик _______________ / _______________</div>
-        <div>Перевозчик _______________ / _______________</div>
-      </div>`;
-  }
-  // act
-  return `${commonHead}
-    <p class="muted">${looksClosedOrder(o)?`Заказ закрыт ${esc(dateTime(o.closedAt))}`:'Заказ ещё не закрыт — акт по текущим данным'}</p>
-    <h2>1. Заказчик</h2>
-    ${partyLinesHtml(customer)}
-    <h2>2. Исполнитель</h2>
-    ${partyLinesHtml(o.executorType==='partner'?carrier:own)}
-    <h2>3. Выполненные работы</h2>
-    <p>Перевозка груза по заявке № <strong>${esc(num)}</strong>.<br>
-    Маршрут: <strong>${esc(routeText(o)||'—')}</strong><br>
-    Водитель / ТС: <strong>${esc(driver)}</strong> · <strong>${esc(plate)}</strong><br>
-    Пробег: ${esc(kmBits)}</p>
-    <h2>4. Стоимость</h2>
-    <p>${esc(orderDocMoneyLine(o))}</p>
-    <p>Работы выполнены полностью, стороны претензий не имеют.</p>
-    <div class="sign">
-      <div>Заказчик _______________ / _______________</div>
-      <div>Исполнитель _______________ / _______________</div>
-    </div>`;
-}
-function openPrintHtml(title, bodyHtml){
-  const w=window.open('', '_blank');
-  if(!w){ alert('Разрешите всплывающие окна, чтобы печатать документ'); return; }
-  const html=`<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8" />
-<title>${esc(title)}</title>
-<style>
-  @page{size:A4;margin:16mm}
-  body{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;font-size:12.5px;line-height:1.45;margin:0;padding:0}
-  .sheet{max-width:180mm;margin:0 auto;padding:8mm 4mm}
-  .doc-head{margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #EF4444}
-  .brand{font-weight:700;letter-spacing:.14em;font-size:13px;color:#EF4444;margin-bottom:4px}
-  h1{margin:0 0 4px;font-size:18px;line-height:1.2}
-  h2{margin:16px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#444}
-  p{margin:0 0 8px}
-  .muted{color:#666;font-size:11.5px}
-  .party{margin:0 0 8px;padding:8px 10px;border:1px solid #e5e7eb;border-radius:6px}
-  table{width:100%;border-collapse:collapse;margin:6px 0 10px}
-  th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top}
-  th{background:#f3f4f6;font-size:11px}
-  .sign{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:28px}
-  .sign div{padding-top:18px;border-top:1px solid #111}
-  .toolbar{display:flex;gap:8px;margin:0 0 12px;position:sticky;top:0;background:#fff;padding:8px 0}
-  .toolbar button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;background:#EF4444;color:#fff}
-  .toolbar button.secondary{background:#f3f4f6;color:#111}
-  @media print{.toolbar{display:none!important}.sheet{padding:0}}
-</style></head><body>
-<div class="sheet">
-  <div class="toolbar">
-    <button type="button" onclick="window.print()">Печать / PDF</button>
-    <button type="button" class="secondary" onclick="window.close()">Закрыть</button>
-  </div>
-  ${bodyHtml}
-</div>
-</body></html>`;
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-}
-function refreshOrderDocRow(orderId, kind){
-  const o=state.orders.find(x=>x.id===orderId); if(!o) return;
-  ensureOrderDocs(o);
-  const st=o.docs[kind].status||'draft';
-  const row=document.querySelector(`#detail-form .doc-row[data-doc-kind="${kind}"]`);
-  if(!row) return;
-  const chip=row.querySelector('.doc-status');
-  if(chip){ chip.className=`doc-status ${st}`; chip.textContent=docStatusLabel(st); }
-  const sel=row.querySelector('[data-doc-status]');
-  if(sel && sel.value!==st) sel.value=st;
-  const kindMeta=DOC_KINDS.find(k=>k.id===kind);
-  const meta=row.querySelector('.doc-meta');
-  if(meta && kindMeta){
-    const updated=o.docs[kind].updatedAt?` · ${dateTime(o.docs[kind].updatedAt)}`:'';
-    meta.textContent=`${kindMeta.hint}${updated}`;
-  }
-}
-function printOrderDoc(orderId, kind){
-  const o=state.orders.find(x=>x.id===orderId); if(!o) return;
-  ensureOrderDocs(o);
-  if(!o.docs[kind]) return;
-  if(o.docs[kind].status==='draft'){
-    o.docs[kind].status='ready';
-    o.docs[kind].updatedAt=new Date().toISOString();
-    bumpDataEpoch('doc-ready');
-    upsertOrder(o);
-    refreshOrderDocRow(orderId, kind);
-  }
-  const title=`${(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ'} · заявка №${o.sequentialNumber}`;
-  openPrintHtml(title, buildOrderDocBody(kind, o));
-}
-function setOrderDocStatus(orderId, kind, status){
-  const o=state.orders.find(x=>x.id===orderId); if(!o) return;
-  ensureOrderDocs(o);
-  if(!DOC_STATUSES.some(s=>s.id===status)) return;
-  o.docs[kind].status=status;
-  o.docs[kind].updatedAt=new Date().toISOString();
-  bumpDataEpoch('doc-status');
-  upsertOrder(o);
-  refreshOrderDocRow(orderId, kind);
-}
-function orderDocsSectionHtml(o){
-  ensureOrderDocs(o);
-  const rows=DOC_KINDS.map(k=>{
-    const st=o.docs[k.id].status||'draft';
-    const updated=o.docs[k.id].updatedAt?` · ${dateTime(o.docs[k.id].updatedAt)}`:'';
-    const opts=DOC_STATUSES.map(s=>`<option value="${s.id}" ${s.id===st?'selected':''}>${esc(s.label)}</option>`).join('');
-    return `<div class="doc-row" data-doc-kind="${esc(k.id)}">
-      <div>
-        <div class="doc-name">${esc(k.title)}</div>
-        <div class="doc-meta">${esc(k.hint)}${esc(updated)}</div>
-        <div class="doc-status ${esc(st)}">${esc(docStatusLabel(st))}</div>
-      </div>
-      <div class="doc-actions">
-        <select data-doc-status="${esc(k.id)}" aria-label="Статус: ${esc(k.title)}">${opts}</select>
-        <button type="button" class="secondary" data-doc-print="${esc(k.id)}">Печать</button>
-      </div>
-    </div>`;
-  }).join('');
-  return `<section class="form-section" id="order-docs-section">
-    <h2 class="form-section-title">Документы</h2>
-    <p class="form-section-hint">Печать или PDF через диалог браузера. Статус сохраняется в заявке.</p>
-    <div class="docs-list">${rows}</div>
-  </section>`;
-}
-function wireOrderDocs(orderId){
-  document.querySelectorAll('#detail-form [data-doc-print]').forEach(btn=>{
-    btn.onclick=e=>{
-      e.preventDefault();
-      printOrderDoc(orderId, btn.getAttribute('data-doc-print'));
-    };
-  });
-  document.querySelectorAll('#detail-form [data-doc-status]').forEach(sel=>{
-    sel.onchange=()=>{
-      setOrderDocStatus(orderId, sel.getAttribute('data-doc-status'), sel.value);
-    };
-  });
-}
+/* Документооборот — order-documents.js */
 
 function openDetail(id){
   state.detailId=id;
@@ -2007,6 +2435,7 @@ function openDetail(id){
       </div>`:''}
     </section>
     ${orderDocsSectionHtml(o)}
+    ${orderEtrnSectionHtml(o)}
     <section class="form-section">
       <h2 class="form-section-title">Участники</h2>
       <div class="form-fields">
@@ -2029,6 +2458,35 @@ function openDetail(id){
           <input id="d-req-l" inputmode="decimal" placeholder="Д, м" value="${o.reqLengthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
+        </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-body-type">Кузов</label>
+            <select id="d-body-type">
+              <option value="">— не указан —</option>
+              ${(BODY_TYPES||[]).map(t=>`<option value="${esc(t.id)}" ${o.reqBodyType===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label for="d-cargo-kind">Груз</label>
+            <select id="d-cargo-kind">
+              <option value="">— не указан —</option>
+              ${(CARGO_KINDS||[]).map(t=>`<option value="${esc(t.id)}" ${o.cargoKind===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-trip-mode">Рейс</label>
+            <select id="d-trip-mode">
+              <option value="city" ${o.tripMode!=='intercity'?'selected':''}>Город</option>
+              <option value="intercity" ${o.tripMode==='intercity'?'selected':''}>Межгород</option>
+            </select>
+          </div>
+          <div>
+            <label for="d-route-km">Км по дороге</label>
+            <input id="d-route-km" inputmode="numeric" value="${o.routeKm??''}" placeholder="авто" />
+          </div>
         </div>
         <label for="d-customer-inn">ИНН заказчика</label>
         <div class="row" style="gap:8px;align-items:center">
@@ -2066,6 +2524,9 @@ function openDetail(id){
             <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
           </div>
         </div>
+        ${o.bookedPlate?`<p class="hint">${o.bookStatus==='confirmed'?'Бронь подтверждена':'Запрос брони'}: ${esc(o.bookedPlate)}${o.bookStatus==='confirmed'?' · в календаре на дату подачи':o.bookStatus==='requested'?' · ждут вашего подтверждения':o.bookStatus==='rejected'?' · отклонена':''}</p>`:''}
+        ${o.fulfillment==='logist'?'<p class="hint">Срочно: заказчик просит закрыть как можно скорее, ставка логиста в цене.</p>':o.fulfillment==='direct'?'<p class="hint">Прямой парк, без срочной ставки логиста.</p>':''}
+        ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="hint">${esc(logistMarginLine(o))}</p>`:''}
       </div>
     </section>
     <section class="form-section">
@@ -2200,6 +2661,12 @@ function openDetail(id){
   const detailActions=$('detail-actions'); if(detailActions) detailActions.style.display='flex';
   const detailOk=$('detail-ok'); if(detailOk) detailOk.style.display='none';
   const detailCancel=$('detail-cancel-order');
+  const detailReturn=$('detail-return-exchange');
+  if(detailReturn){
+    const showRet=canReturnOrderToExchange(o);
+    detailReturn.style.display=showRet?'':'none';
+    detailReturn.onclick=()=>returnOrderToExchange(id);
+  }
   if(detailCancel){
     detailCancel.style.display=(!o.closedAt && !o.cancelledAt)?'':'none';
     detailCancel.onclick=()=>{
@@ -2214,6 +2681,7 @@ function openDetail(id){
   wirePerKmInputs(o);
   wireRateAutoFill(o);
   wireOrderDocs(id);
+  wireOrderEtrn(id);
   $('d-customer-inn-lookup')&&($('d-customer-inn-lookup').onclick=()=>{
     applyCustomerFromInn((($('d-customer-inn')||{}).value||'').trim(), $('d-customer-inn-status'), 'd');
   });
@@ -2273,6 +2741,11 @@ function openDetail(id){
     order.reqLengthM=numOrNull(($('d-req-l')||{}).value);
     order.reqWidthM=numOrNull(($('d-req-w')||{}).value);
     order.reqHeightM=numOrNull(($('d-req-h')||{}).value);
+    order.reqBodyType=(($('d-body-type')||{}).value||'').trim()||null;
+    order.cargoKind=(($('d-cargo-kind')||{}).value||'').trim()||null;
+    order.tripMode=(($('d-trip-mode')||{}).value||'')==='intercity'?'intercity':'city';
+    order.routeKm=numOrNull(($('d-route-km')||{}).value);
+    if(order.priceForClient!=null) order.pricePending=false;
     const carrSel=findCompanyById((($('d-carrier-company')||{}).value)||'');
     if(carrSel){ order.carrierCompanyId=carrSel.id; order.carrierCompanyName=carrSel.name; }
     else if(order.executorType!=='partner'){ order.carrierCompanyId=null; order.carrierCompanyName=''; }
@@ -2317,6 +2790,7 @@ function openDetail(id){
     order.salaryBonus=num('d-bonus'); order.vehicleRent=num('d-rent');
     order.freight=selectedRate(order);
     const pay=metrics(order).driverPay; order.earnings=pay!=null?pay:null;
+    if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
     upsertOrder(order);
     openDetail(id);
     $('detail-ok').style.display='block';
@@ -2356,6 +2830,7 @@ function openCatalogs(){
     const roles=roleLabels(c);
     const chips=[
       companyHasRole(c,'own')?'<span class="chip hot">наша</span>':'',
+      companyHasRole(c,'own')?(typeof isDispatcherCompany==='function' && isDispatcherCompany(c)?'<span class="chip">диспетчер</span>':''):'',
       companyHasRole(c,'customer')?'<span class="chip">заказчик</span>':'',
       companyHasRole(c,'carrier')?'<span class="chip">перевозчик</span>':''
     ].join('');
@@ -2392,6 +2867,7 @@ function openCatalogs(){
       <input class="drv-phone" id="drv-phone-${i}" type="tel" inputmode="tel" value="${esc(formatPhone(d.phone||''))}" placeholder="+79650730002" />
       <input class="drv-pin" id="drv-pin-${i}" inputmode="numeric" maxlength="8" value="${esc(d.pin||resolveDriverPin(d)||'')}" placeholder="PIN" title="PIN водителя" />
       <label class="check" title="Биржа"><input type="checkbox" id="drv-ex-${i}" ${d.exchangeEnabled?'checked':''}/> Б</label>
+      <button type="button" class="icon-btn secondary" data-drv-invite="${i}" title="Ссылка 7 дн.">🔗</button>
       <button type="button" class="icon-btn ok" data-save-drv-meta="${i}" title="Сохранить">✓</button>
       <button type="button" class="icon-btn danger" data-del-drv="${i}" title="Удалить">×</button>
     </div>`;
@@ -2501,6 +2977,11 @@ function openCatalogs(){
         <label>Нулевой до, км<input id="fin-podacha-km" inputmode="numeric" value="${fin.podachaEmptyKmLimit??20}" title="Свыше — +1 ч подачи" /></label>
         <label>₽/час<input id="fin-perhour" inputmode="decimal" value="${fin.defaultRatePerHourWork||''}" /></label>
         <label>₽/км сверх<input id="fin-perkm" inputmode="decimal" value="${fin.defaultRatePerKmCash||80}" /></label>
+        <label>Реф ×<input id="fin-reefer" inputmode="decimal" value="${fin.bodyMultReefer??1.25}" title="Надбавка рефрижератор / продукты" /></label>
+        <label>Самосвал ×<input id="fin-dump" inputmode="decimal" value="${fin.bodyMultDump??1.15}" /></label>
+        <label>От т<input id="fin-heavy-t" inputmode="decimal" value="${fin.heavyTonsFrom??20}" /></label>
+        <label>Тяжёлые ×<input id="fin-heavy" inputmode="decimal" value="${fin.heavyMult??1.15}" /></label>
+        <label title="Наценка заказчику за срочный подбор логистом">Ставка логиста, %<input id="fin-logist-fee" inputmode="decimal" value="${fin.logistFeePercent??10}" /></label>
         <button class="primary cat-add-btn fin-full" id="fin-save">Сохранить тариф фирмы</button>
       </div>`;
       })()}
@@ -2568,12 +3049,47 @@ function openCatalogs(){
       <div class="hint" style="margin:0 0 4px">Телефон контакта — в карточке компании; у водителя с тем же ФИО подтянется сам</div>
       <div id="co-contacts"></div>
       <button type="button" class="secondary" id="co-add-contact">+ Контакт</button>
+      <div id="co-own-kind" style="display:${isOwn?'block':'none'}">
+        <label class="role-tog"><input type="checkbox" id="co-dispatcher" ${(typeof isDispatcherCompany==='function'?isDispatcherCompany(c):c.logistKind==='broker')?'checked':''}/> Диспетчер — кнопка «Биржа»</label>
+        <p class="hint">Логист и диспетчер — одна должность. Парк как обычно. Если включить диспетчера, появится Биржа (остаток партнёрам). Биржа уже в тарифе «Бизнес».</p>
+        <label for="co-vat-payer">НДС перевозчика (для портала заказчика)</label>
+        <select id="co-vat-payer">
+          <option value="none" ${(typeof companyVatPayer==='function'?companyVatPayer(c):'none')==='none'?'selected':''}>Без НДС — заказчик платит перевозчику без НДС</option>
+          <option value="vat" ${(typeof companyVatPayer==='function'?companyVatPayer(c):'none')==='vat'?'selected':''}>С НДС — счёт перевозчика с НДС</option>
+        </select>
+        <p class="hint">Если перевозчик на УСН, заказчик с НДС не передаёт НДС перевозчику — в портале одна сумма без НДС.</p>
+        <h4>Банковские реквизиты (для счетов заказчику и QR СБП)</h4>
+        <label>Банк</label><input id="co-bank-name" placeholder="Сбербанк" value="${esc((c.bank&&c.bank.bankName)||c.bankName||'')}" />
+        <div class="form-pair">
+          <div><label>БИК</label><input id="co-bank-bik" inputmode="numeric" maxlength="9" placeholder="044525225" value="${esc((c.bank&&c.bank.bankBik)||c.bankBik||'')}" /></div>
+          <div><label>Р/с</label><input id="co-bank-account" inputmode="numeric" maxlength="20" placeholder="40802810…" value="${esc((c.bank&&c.bank.bankAccount)||c.bankAccount||'')}" /></div>
+        </div>
+        <label>К/с</label><input id="co-bank-corr" inputmode="numeric" maxlength="20" placeholder="30101810…" value="${esc((c.bank&&c.bank.bankCorrAccount)||c.bankCorrAccount||'')}" />
+        <p class="hint">Заполните для QR по стандарту СБП в счёте заказчика после отправки заявки.</p>
+      </div>
       <div id="co-own-fleet" style="display:${isOwn?'block':'none'}">
         <h4>Водители фирмы (телефоны)</h4>
         <div class="hint" style="margin:0 0 4px">Парк «нашей фирмы» — ФИО и телефон. Правки сохраняются в справочник водителей.</div>
         <div id="co-own-drivers"></div>
       </div>
       <div id="co-customer-fields" style="display:${isCust?'block':'none'}">
+        <h4>Портал заказчика (самостоятельные заявки)</h4>
+        <label class="check"><input type="checkbox" id="co-portal-enabled" ${c.portalEnabled?'checked':''}/> Разрешить вход в портал</label>
+        <label>Телефон для входа</label>
+        <input id="co-portal-phone" inputmode="tel" placeholder="+7…" value="${esc(c.portalPhone||contactPhone(c.contacts&&c.contacts[0])||'')}" />
+        <label>PIN (от 4 цифр)</label>
+        <input id="co-portal-pin" inputmode="numeric" maxlength="8" placeholder="PIN" value="${esc(c.portalPin||'')}" />
+        <p class="hint">Ссылка для этого заказчика: <a href="${esc(customerPortalPageUrl({companyId:c.id}))}" target="_blank" rel="noopener">${esc(customerPortalPageUrl({companyId:c.id}))}</a></p>
+        <p class="hint">Заявки идут на биржу с проверкой минимальной цены.</p>
+        <h4>Рамочный договор</h4>
+        ${(()=>{
+          const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(c):'none';
+          const fcLbl=typeof customerFrameworkContractLabel==='function'?customerFrameworkContractLabel(fcSt):'—';
+          const fc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(c.frameworkContract):{};
+          const signedAt=fc.signedAt?` · ${dateTime(fc.signedAt)}`:'' ;
+          return `<p class="hint">Статус: <strong>${esc(fcLbl)}</strong>${signedAt}${fc.signedBy?` · ${esc(fc.signedBy)}`:''}</p>
+        <label class="check"><input type="checkbox" id="co-contract-signed" ${fcSt==='signed'?'checked':''}/> Договор подписан (вручную / через портал)</label>`;
+        })()}
         <h4>Адреса заказчика</h4>
         <label>Загрузки (каждый с новой строки)</label>
         <textarea id="co-loads" rows="3">${esc((c.loadingAddresses||[]).join('\n'))}</textarea>
@@ -2665,7 +3181,10 @@ function openCatalogs(){
       $('co-customer-fields').style.display=$('co-role-c').checked?'block':'none';
       $('co-carrier-fields').style.display=$('co-role-r').checked?'block':'none';
       const ownBox=$('co-own-fleet');
-      if(ownBox) ownBox.style.display=$('co-role-o')&&$('co-role-o').checked?'block':'none';
+      const ownKind=$('co-own-kind');
+      const on=!!($('co-role-o')&&$('co-role-o').checked);
+      if(ownBox) ownBox.style.display=on?'block':'none';
+      if(ownKind) ownKind.style.display=on?'block':'none';
     };
     $('co-role-c').onchange=syncRoleVisibility;
     $('co-role-r').onchange=syncRoleVisibility;
@@ -2742,6 +3261,14 @@ function openCatalogs(){
       const loads=uniqAddrs((($('co-loads')||{}).value||'').split(/\n/));
       const unloads=uniqAddrs((($('co-unloads')||{}).value||'').split(/\n/));
       const innRaw=String((($('co-inn')||{}).value||'')).replace(/\D/g,'');
+      const contractSigned=roles.includes('customer')&&!!($('co-contract-signed')&&$('co-contract-signed').checked);
+      const prevFc=typeof normalizeFrameworkContract==='function'?normalizeFrameworkContract(c.frameworkContract):{status:'none'};
+      const frameworkContract=contractSigned?{
+        ...prevFc,
+        status:'signed',
+        signedAt:prevFc.signedAt||new Date().toISOString(),
+        signedBy:prevFc.signedBy||name
+      }:prevFc;
       upsertCompany({
         id:c.id, name, roles, note:($('co-note').value||'').trim(),
         inn:innRaw, ogrn:(($('co-ogrn')||{}).value||'').trim(),
@@ -2751,8 +3278,27 @@ function openCatalogs(){
         loadingAddresses:roles.includes('customer')?loads:[],
         unloadingAddresses:roles.includes('customer')?unloads:[],
         phones:c.phones||[],
-        spaceId:c.spaceId||currentSpaceId()
+        spaceId:c.spaceId||currentSpaceId(),
+        logistKind:roles.includes('own')?(($('co-dispatcher')||{}).checked?'broker':'staff'):null,
+        vatPayer:roles.includes('own')?(($('co-vat-payer')||{}).value==='vat'?'vat':'none'):null,
+        portalEnabled:roles.includes('customer')&&!!($('co-portal-enabled')&&$('co-portal-enabled').checked),
+        portalPhone:formatPhone((($('co-portal-phone')||{}).value||'').trim()),
+        portalPin:(($('co-portal-pin')||{}).value||'').trim(),
+        contractSigned,
+        frameworkContract:roles.includes('customer')?frameworkContract:undefined,
+        bank:normalizeCompanyBank({
+          bankName:(($('co-bank-name')||{}).value||'').trim(),
+          bankBik:(($('co-bank-bik')||{}).value||'').trim(),
+          bankAccount:(($('co-bank-account')||{}).value||'').trim(),
+          bankCorrAccount:(($('co-bank-corr')||{}).value||'').trim()
+        })
       });
+      if(roles.includes('customer') && $('co-portal-enabled')&&$('co-portal-enabled').checked){
+        const pp=(($('co-portal-pin')||{}).value||'').trim();
+        if(pp.length<4){ alert('Для портала заказчика PIN от 4 цифр'); return; }
+        const ph=formatPhone((($('co-portal-phone')||{}).value||'').trim());
+        if(!ph){ alert('Укажите телефон для входа в портал'); return; }
+      }
       bumpDataEpoch('save-company');
       persist();
       openCatalogs();
@@ -2803,8 +3349,10 @@ function openCatalogs(){
     bumpDataEpoch('del-vehicle');
     persist(); openCatalogs();
   });
-  $('own-veh-add')&&($('own-veh-add').onclick=()=>{
+  $('own-veh-add')&&($('own-veh-add').onclick=async ()=>{
     if(!currentAdmin){ alert('Войдите как администратор'); return; }
+    const g=await billingGuardCurrentAdminWithServer('add_vehicle');
+    if(!g.ok){ alert(g.message); return; }
     const plate=(($('own-veh-plate')||{}).value||'').trim();
     let cons=+((($('own-veh-cons')||{}).value||'').replace(',','.'));
     if(!plate){ alert('Укажите госномер'); return; }
@@ -2828,6 +3376,24 @@ function openCatalogs(){
     flashCatOk();
   });
   document.querySelectorAll('[data-save-drv]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.saveDrv; const v=+(($('drv-'+i).value||'').replace(',','.')); if(!(v>=0)) return; state.drivers[i].salaryPercent=v; state.orders.filter(o=>o.driverName===state.drivers[i].name).forEach(o=>{ o.driverPercent=v; }); persist(); flashCatOk(); });
+  document.querySelectorAll('[data-drv-invite]').forEach(b=>b.onclick=async ()=>{
+    const i=+b.dataset.drvInvite;
+    const phone=formatPhone((($('drv-phone-'+i)||{}).value||'').trim());
+    if(phone) state.drivers[i].phone=phone;
+    const res=await createDriverInvite(i);
+    if(!res.ok){ alert(res.message||'Не удалось создать ссылку'); return; }
+    const exp=res.invite&&res.invite.expiresAt?new Date(res.invite.expiresAt).toLocaleDateString('ru-RU'):'7 дней';
+    const co=findCompanyById(state.drivers[i].companyId)||currentOwnCompany();
+    const carrier=(co&&co.name)||'АРМАДА';
+    openShareSheet({
+      kind:'driverInvite',
+      url:res.url,
+      title:'Приглашение водителя',
+      carrier,
+      phone:state.drivers[i].phone,
+      expires:exp
+    });
+  });
   document.querySelectorAll('[data-save-drv-meta]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.saveDrvMeta;
     const d=state.drivers[i];
@@ -2860,8 +3426,10 @@ function openCatalogs(){
     bumpDataEpoch('del-driver');
     persist(); openCatalogs();
   });
-  $('own-drv-add')&&($('own-drv-add').onclick=()=>{
+  $('own-drv-add')&&($('own-drv-add').onclick=async ()=>{
     if(!currentAdmin){ alert('Войдите как администратор'); return; }
+    const g=await billingGuardCurrentAdminWithServer('add_driver');
+    if(!g.ok){ alert(g.message); return; }
     const name=(($('own-drv-name')||{}).value||'').trim();
     let pct=+((($('own-drv-pct')||{}).value||'').replace(',','.'));
     const phone=formatPhone((($('own-drv-phone')||{}).value||'').trim());
@@ -2903,7 +3471,12 @@ function openCatalogs(){
       podachaHours:+(($('fin-podacha').value||'').replace(',','.')),
       podachaEmptyKmLimit:+(($('fin-podacha-km').value||'').replace(/\D/g,'')),
       defaultRatePerHourWork:+(($('fin-perhour').value||'').replace(',','.')),
-      defaultRatePerKmCash:+(($('fin-perkm').value||'').replace(',','.'))
+      defaultRatePerKmCash:+(($('fin-perkm').value||'').replace(',','.')),
+      bodyMultReefer:+(($('fin-reefer')||{}).value||'').replace(',','.')||1.25,
+      bodyMultDump:+(($('fin-dump')||{}).value||'').replace(',','.')||1.15,
+      heavyTonsFrom:+(($('fin-heavy-t')||{}).value||'').replace(',','.')||20,
+      heavyMult:+(($('fin-heavy')||{}).value||'').replace(',','.')||1.15,
+      logistFeePercent:+(($('fin-logist-fee')||{}).value||'').replace(',','.')
     });
     co.finance=next;
     // глобальный state.finance — запасной для старых заказов без ownCompanyId

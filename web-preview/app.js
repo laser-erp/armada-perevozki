@@ -65,7 +65,7 @@ function normalizeCarrierVehicle(v){
 function normalizeCarrierDriver(d){
   if(!d||typeof d!=='object') return null;
   const name=String(d.name||'').trim(); if(!name) return null;
-  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), vehicleId:d.vehicleId||null};
+  return {id:d.id||uuid(), name, phone:formatPhone(d.phone||''), licenseNo:String(d.licenseNo||'').trim(), vehicleId:d.vehicleId||null};
 }
 /** Привести все телефоны в базе к +7XXXXXXXXXX. */
 function normalizeAllPhones(){
@@ -130,7 +130,152 @@ function normalizeCompany(c){
     address:String(c.address||'').trim()
   };
   if(c.finance) out.finance=normalizeFinance(c.finance);
+  out.logistKind=(c.logistKind==='staff'||c.logistKind==='broker')?c.logistKind:null;
+  out.portalEnabled=!!c.portalEnabled;
+  out.portalPhone=formatPhone(String(c.portalPhone||'').trim());
+  out.portalPin=String(c.portalPin||'').trim();
+  out.contractSigned=!!c.contractSigned;
+  if(c.frameworkContract && typeof normalizeFrameworkContract==='function'){
+    out.frameworkContract=normalizeFrameworkContract(c.frameworkContract);
+  } else if(out.contractSigned){
+    out.frameworkContract={status:'signed', signedAt:null, signedBy:''};
+  }
+  out.vatPayer=(c.vatPayer==='vat')?'vat':'none';
+  const bank=normalizeCompanyBank(c);
+  if(bank.bankName||bank.bankBik||bank.bankAccount||bank.bankCorrAccount) out.bank=bank;
   return out;
+}
+/** Перевозчик на ОСН с НДС или без (УСН и т.п.) */
+function companyVatPayer(co){
+  return co&&co.vatPayer==='vat'?'vat':'none';
+}
+function companyVatPayerLabel(co){
+  return companyVatPayer(co)==='vat'?'с НДС':'без НДС';
+}
+/** Форма оплаты перевозчику для заявки заказчика */
+function customerCarrierPaymentForm(carrier){
+  return companyVatPayer(carrier)==='vat'?'withVat':'withoutVat';
+}
+/** База перевозчика без ставки логиста (из расчёта заказчика). */
+function customerCarrierBaseCash(quote){
+  if(!quote||!(quote.minimumCash>0)) return null;
+  const feePct=+(quote.logistFeePercent||0);
+  if(feePct>0) return round2(quote.minimumCash/(1+feePct/100));
+  return quote.minimumCash;
+}
+/** Ориентир / минимум для заказчика (со ставкой логиста, если «логисту»). */
+function customerOrderClientPriceAmount(quote){
+  if(!quote) return null;
+  return quote.minimumCash;
+}
+function customerCarrierPriceAmount(quote, carrier){
+  const base=customerCarrierBaseCash(quote);
+  if(base==null) return null;
+  const form=customerCarrierPaymentForm(carrier);
+  const t=fillRatesFrom('cash', base);
+  if(form==='withVat') return t.withVat;
+  if(form==='withoutVat') return t.withoutVat;
+  return t.cash;
+}
+function customerCarrierPriceLabel(carrier){
+  return companyVatPayer(carrier)==='vat'?'с НДС':'без НДС';
+}
+function customerCarrierPriceHint(carrier){
+  return companyVatPayer(carrier)==='vat'
+    ?'Перевозчик работает с НДС — сумма по счёту перевозчика с НДС.'
+    :'Перевозчик работает без НДС — НДС перевозчику не передаётся.';
+}
+/** «Наша фирма» кабинета перевозчика для тарифа заказчика */
+function companyLogistKind(co){
+  if(!co) return 'broker';
+  if(co.logistKind==='staff'||co.logistKind==='broker') return co.logistKind;
+  const n=typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(co.id).length:0;
+  return n>0?'staff':'broker';
+}
+/** Диспетчер = тот же логист; включает кнопку «Биржа» (тариф Бизнес). */
+function isDispatcherCompany(co){ return companyLogistKind(co)==='broker'; }
+function isStaffLogistCompany(co){ return !isDispatcherCompany(co); }
+function isBrokerDispatcherCompany(co){ return isDispatcherCompany(co); }
+function currentLogistKind(){ return companyLogistKind(typeof currentOwnCompany==='function'?currentOwnCompany():null); }
+function companyHasOwnPark(co){
+  const firm=co || (typeof currentOwnCompany==='function'?currentOwnCompany():null);
+  if(!firm||!firm.id) return false;
+  const n=typeof fleetVehiclesForCompany==='function'?fleetVehiclesForCompany(firm.id).length:((firm.vehicles||[]).length||0);
+  return n>0;
+}
+function carrierOwnCompanyForSpace(spaceId){
+  if(spaceId){
+    const hit=(state.companies||[]).find(c=>c.spaceId===spaceId && companyHasRole(c,'own'));
+    if(hit) return hit;
+  }
+  return ownCompaniesList()[0]||null;
+}
+/** Минимальная и рекомендуемая цена заявки заказчика (по тарифу перевозчика) */
+function quoteBodyCargoMultiplier(draft, fin){
+  const s=normalizeFinance(fin||{});
+  let m=1;
+  const body=String(draft&&draft.reqBodyType||'');
+  const cargo=String(draft&&draft.cargoKind||'');
+  if(body==='reefer' || cargo==='food') m*=s.bodyMultReefer||1.25;
+  else if(body==='dump' || cargo==='bulk') m*=s.bodyMultDump||1.15;
+  if((+draft.reqPayloadTons||0) >= (s.heavyTonsFrom||20)) m*=s.heavyMult||1.15;
+  return Math.round(m*1000)/1000;
+}
+function inferTripMode(km, fin){
+  const s=normalizeFinance(fin||{});
+  if(!(km>0)) return 'city';
+  const suburb=+(s.suburbKmThreshold||30);
+  const city=+(s.cityKmThreshold||100);
+  if(km>city) return 'intercity';
+  if(km>suburb) return 'suburb';
+  return 'city';
+}
+function suggestCustomerOrderPrice(draft){
+  if(!draft||!draft.ownCompanyId) return null;
+  const fin=financeForCompanyId(draft.ownCompanyId);
+  const km=+(draft.routeKm||draft.estimateKm||0);
+  const trip=draft.tripMode||inferTripMode(km, fin);
+  const mult=quoteBodyCargoMultiplier(draft, fin);
+  const perKm=(+fin.defaultRatePerKmCash)||80;
+  const perHour=(+fin.defaultRatePerHourWork)||0;
+  let base=null;
+  let summary='';
+  if(trip==='intercity'){
+    if(!(km>0) || !(perKm>0)) return null;
+    const kmCash=round2(km*perKm);
+    const hourFloor=perHour>0?round2(((+fin.minWorkHours||0)+(+fin.podachaHours||0))*perHour):0;
+    const raw=Math.max(kmCash, hourFloor);
+    base={totalCash:raw, summary:`межгород ${km} км × ${fmt(perKm)} ₽/км`+(hourFloor>kmCash?` (не ниже пакета часов)`:``)};
+  } else {
+    const cityDraft=Object.assign({}, draft, {
+      estimateKm:km>0?km:null,
+      emptyKmBefore:0,
+      estimateWorkHours:draft.estimateWorkHours||fin.minWorkHours||4
+    });
+    base=calculateClientTariff(cityDraft, fin);
+  }
+  if(!base||!(base.totalCash>0)) return null;
+  let total=round2(base.totalCash*mult);
+  const extras=[];
+  if(mult>1.001) extras.push(`надбавка кузов/груз/тоннаж ×${mult}`);
+  const feePct=draft.fulfillment==='direct'?0:(+fin.logistFeePercent||0);
+  if(feePct>0){
+    total=round2(total*(1+feePct/100));
+    extras.push(`ставка логиста ${feePct}%`);
+  }
+  const t=fillRatesFrom('cash', total);
+  return {
+    minimumCash:total,
+    cash:t.cash,
+    withoutVat:t.withoutVat,
+    withVat:t.withVat,
+    summary:[base.summary, extras.join(', ')].filter(Boolean).join(' · '),
+    recommendedCash:total,
+    tripMode:trip,
+    routeKm:km||null,
+    multiplier:mult,
+    logistFeePercent:feePct
+  };
 }
 function companyHasRole(c, role){ return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role)); }
 function companyInMySpace(c){
@@ -185,6 +330,15 @@ function upsertCompany(raw){
     c.kpp=c.kpp||prev.kpp||'';
     c.address=c.address||prev.address||'';
     if(!c.finance && prev.finance) c.finance=normalizeFinance(prev.finance);
+    if(!c.bank && prev.bank) c.bank=normalizeCompanyBank(prev.bank);
+    if(!('logistKind' in (raw||{})) && prev.logistKind) c.logistKind=prev.logistKind;
+    if(!('portalEnabled' in raw)){
+      c.portalEnabled=!!prev.portalEnabled;
+      c.portalPhone=prev.portalPhone||'';
+      c.portalPin=prev.portalPin||'';
+    }
+    if(!('contractSigned' in (raw||{})) && prev.contractSigned) c.contractSigned=!!prev.contractSigned;
+    if(!('frameworkContract' in (raw||{})) && prev.frameworkContract) c.frameworkContract=prev.frameworkContract;
     state.companies[i]=c;
   } else {
     if(companyHasRole(c,'own') && !c.finance) c.finance=normalizeFinance(state.finance);
@@ -245,8 +399,11 @@ function rememberCustomer(order){
 function normalizeAdmin(a){
   if(!a||typeof a!=='object') return null;
   const name=String(a.name||'').trim(); if(!name) return null;
-  const pin=String(a.pin||ADMIN_PIN).trim()||ADMIN_PIN;
-  return {id:a.id||uuid(), name, pin, isSuper:!!a.isSuper, spaceId:a.spaceId||null};
+  const pin=String(a.pin||'').trim();
+  if(!pin) return null;
+  const out={id:a.id||uuid(), name, pin, isSuper:!!a.isSuper, spaceId:a.spaceId||null};
+  if(a.mustChangePin) out.mustChangePin=true;
+  return out;
 }
 function migrateAdmins(){
   state.admins=(state.admins||[]).map(normalizeAdmin).filter(Boolean);
@@ -255,31 +412,158 @@ function migrateAdmins(){
     const nm=(a.name||'').trim().toLowerCase();
     return !RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has(nm);
   });
-  // Сид только если админов ещё нет.
-  if(!state.admins.length) state.admins=DEFAULT_ADMINS.map(a=>({...a}));
-  // Переименование старого «Супер админ» → Наволоцкий Е.Н. + актуальный PIN
+  // Сид только если админов ещё нет — фиксированный recovery PIN (не случайный: иначе пользователь не узнает код).
+  if(!state.admins.length){
+    if(!state.settings||typeof state.settings!=='object') state.settings={};
+    delete state.settings.superPinChangedByUser;
+    state.admins=[{
+      id:'admin-super', name:'Наволоцкий Е.Н.', pin:SUPER_ADMIN_RECOVERY_PIN, isSuper:true, mustChangePin:true
+    }];
+    state.settings.superPinRecoveryNotice=superPinRecoveryNoticeText();
+  }
   state.admins.forEach(a=>{
     if(a.id==='admin-super' || (a.isSuper && (a.name||'').toLowerCase()==='супер админ')){
       a.name='Наволоцкий Е.Н.';
       if(a.id==='admin-super' || !a.id) a.id='admin-super';
       a.isSuper=true;
     }
-    if(a.id==='admin-super' || ((a.name||'')==='Наволоцкий Е.Н.' && a.isSuper)){
-      if(a.pin==='2580' || !a.pin) a.pin=ADMIN_PIN;
-    }
+    const pin=String(a.pin||'').trim();
+    if(WEAK_ADMIN_PINS.has(pin)) a.mustChangePin=true;
   });
   if(!state.admins.some(a=>a.isSuper)){
     const first=state.admins[0];
     if(first) first.isSuper=true;
-    else state.admins.push({...DEFAULT_ADMINS[0]});
+    else state.admins.push({id:'admin-super', name:'Наволоцкий Е.Н.', pin:SUPER_ADMIN_RECOVERY_PIN, isSuper:true, mustChangePin:true});
   }
   state.adminLogins=Array.isArray(state.adminLogins)?state.adminLogins:[];
   state.adminPresence=Array.isArray(state.adminPresence)?state.adminPresence:[];
+  if(typeof consumeRecoverSuperFromUrl==='function' && consumeRecoverSuperFromUrl()){
+    forceSuperAdminPinRecovery('recover-url');
+    if(typeof markRecoverSuperConsumed==='function') markRecoverSuperConsumed();
+  } else {
+    if(typeof stripRecoverParamFromUrl==='function') stripRecoverParamFromUrl();
+    ensureSuperAdminPinRecovery();
+  }
 }
-function mergeAdminAuthFromRemote(p){
+const RECOVER_SUPER_SESSION_KEY='armada_recover_super_v1';
+function readRecoverSuperFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    const v=String(q.get('recover')||q.get('reset')||'').trim().toLowerCase();
+    return v==='super' || v==='admin';
+  }catch(_){ return false; }
+}
+function stripRecoverParamFromUrl(){
+  try{
+    const u=new URL(location.href);
+    if(!u.searchParams.has('recover') && !u.searchParams.has('reset')) return;
+    u.searchParams.delete('recover');
+    u.searchParams.delete('reset');
+    const next=u.pathname+(u.search||'')+u.hash;
+    history.replaceState(history.state,'',next);
+  }catch(_){}
+}
+function consumeRecoverSuperFromUrl(){
+  if(!readRecoverSuperFromUrl()) return false;
+  try{
+    if(sessionStorage.getItem(RECOVER_SUPER_SESSION_KEY)==='1') return false;
+  }catch(_){}
+  return true;
+}
+function markRecoverSuperConsumed(){
+  try{ sessionStorage.setItem(RECOVER_SUPER_SESSION_KEY,'1'); }catch(_){}
+  stripRecoverParamFromUrl();
+}
+function superPinRecoveryNoticeText(){
+  return 'Временный PIN супер-админа: '+SUPER_ADMIN_RECOVERY_PIN+' — смените в «Активность» после входа.';
+}
+function forceSuperAdminPinRecovery(reason){
+  if(!state.settings||typeof state.settings!=='object') state.settings={};
+  delete state.settings.superPinChangedByUser;
+  let superA=(state.admins||[]).find(a=>a.id==='admin-super'||(a.isSuper&&(a.name||'').includes('Наволоцкий')));
+  if(!superA){
+    superA={id:'admin-super', name:'Наволоцкий Е.Н.', pin:SUPER_ADMIN_RECOVERY_PIN, isSuper:true, mustChangePin:true};
+    state.admins=(state.admins||[]).concat([superA]);
+  }else{
+    superA.id='admin-super';
+    superA.name='Наволоцкий Е.Н.';
+    superA.isSuper=true;
+    superA.pin=SUPER_ADMIN_RECOVERY_PIN;
+    superA.mustChangePin=true;
+  }
+  state.settings.superPinRecoveryNotice=superPinRecoveryNoticeText();
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch(reason||'super-recover');
+  if(typeof persistLocalOnly==='function') persistLocalOnly();
+}
+function isRecoveryOrWeakAdminPin(pin){
+  const p=String(pin||'').trim();
+  if(!p) return true;
+  if(typeof SUPER_ADMIN_RECOVERY_PIN!=='undefined' && p===SUPER_ADMIN_RECOVERY_PIN) return true;
+  if(typeof WEAK_ADMIN_PINS!=='undefined' && WEAK_ADMIN_PINS.has(p)) return true;
+  return false;
+}
+function markSuperPinChangedByUser(){
+  if(!state.settings||typeof state.settings!=='object') state.settings={};
+  state.settings.superPinChangedByUser=true;
+  delete state.settings.superPinRecoveryNotice;
+}
+/** Восстановление PIN супер-админа до явной смены в Активность (после compliance-миграции). */
+function ensureSuperAdminPinRecovery(){
+  if(!state.settings||typeof state.settings!=='object') state.settings={};
+  let superA=(state.admins||[]).find(a=>a.id==='admin-super'||(a.isSuper&&(a.name||'').includes('Наволоцкий')));
+  if(!superA){
+    if(state.settings.superPinChangedByUser) return;
+    superA={id:'admin-super', name:'Наволоцкий Е.Н.', pin:SUPER_ADMIN_RECOVERY_PIN, isSuper:true, mustChangePin:true};
+    state.admins=(state.admins||[]).concat([superA]);
+    state.settings.superPinRecoveryNotice=superPinRecoveryNoticeText();
+    return;
+  }
+  superA.id='admin-super';
+  superA.name='Наволоцкий Е.Н.';
+  superA.isSuper=true;
+  const pin=String(superA.pin||'').trim();
+  if(pin && !isRecoveryOrWeakAdminPin(pin)){
+    markSuperPinChangedByUser();
+    delete superA.mustChangePin;
+    return;
+  }
+  if(state.settings.superPinChangedByUser) return;
+  if(!pin){
+    superA.pin=SUPER_ADMIN_RECOVERY_PIN;
+    superA.mustChangePin=true;
+    state.settings.superPinRecoveryNotice=superPinRecoveryNoticeText();
+    return;
+  }
+  if(isRecoveryOrWeakAdminPin(pin)){
+    superA.mustChangePin=true;
+    state.settings.superPinRecoveryNotice=superPinRecoveryNoticeText();
+  }
+}
+function mergeAdminAuthFromRemote(p, opts){
+  const remoteWinsAuth=!!(opts&&opts.remoteWinsAuth);
   const remoteAdmins=(Array.isArray(p.admins)?p.admins:[]).map(normalizeAdmin).filter(Boolean)
     .filter(a=>!RETIRED_ADMIN_IDS.has(a.id) && !RETIRED_ADMIN_NAMES.has((a.name||'').trim().toLowerCase()));
-  if(remoteAdmins.length) state.admins=remoteAdmins;
+  if(remoteAdmins.length){
+    const localById=new Map((state.admins||[]).filter(a=>a&&a.id).map(a=>[a.id,a]));
+    const merged=remoteAdmins.map(r=>{
+      const loc=localById.get(r.id);
+      if(!loc) return r;
+      const locPin=String(loc.pin||'').trim();
+      const remPin=String(r.pin||'').trim();
+      // На другом устройстве в localStorage мог остаться старый PIN — при загрузке с сервера берём серверный.
+      if(!remoteWinsAuth && locPin && locPin!==remPin && !isRecoveryOrWeakAdminPin(locPin)){
+        const out={...r, pin:locPin};
+        if(loc.mustChangePin) out.mustChangePin=true;
+        else delete out.mustChangePin;
+        return out;
+      }
+      return r;
+    });
+    localById.forEach((loc,id)=>{
+      if(!merged.some(a=>a.id===id)) merged.push(loc);
+    });
+    state.admins=merged;
+  }
   const byId=new Map();
   (state.adminLogins||[]).forEach(e=>{ if(e&&e.id) byId.set(e.id,e); });
   (Array.isArray(p.adminLogins)?p.adminLogins:[]).forEach(e=>{
@@ -304,6 +588,7 @@ function mergeAdminAuthFromRemote(p){
     });
   }
   state.adminPresence=[...byDev.values()];
+  ensureSuperAdminPinRecovery();
 }
 function isSuperAdmin(){ return !!(currentAdmin&&currentAdmin.isSuper); }
 function driversOwnedByAdminId(adminId){
@@ -467,10 +752,49 @@ function vehicleSpecText(v){
     bits.push(`${v.bodyLengthM}×${v.bodyWidthM}×${v.bodyHeightM}м`);
   return bits.join(' · ');
 }
+function orderTempRangeText(o){
+  if(!o) return null;
+  const fmt=v=>{
+    const n=+v;
+    if(!Number.isFinite(n)) return '';
+    return (n>0?'+':'')+n;
+  };
+  const from=o.cargoTempFromC;
+  const to=o.cargoTempToC;
+  if(from!=null || to!=null){
+    const f=from!=null?fmt(from):'';
+    const t=to!=null?fmt(to):'';
+    if(f&&t) return f+'…'+t+'°C';
+    if(f) return f+'°C';
+    if(t) return 'до '+t+'°C';
+  }
+  if(o.cargoTempC!=null && o.cargoTempC!=='') return o.cargoTempC+'°C';
+  return null;
+}
 function orderReqText(o){
   if(!o) return '';
   const bits=[];
+  if(o.tripMode) bits.push(tripModeLabel(o.tripMode));
+  if(o.reqBodyType) bits.push(bodyTypeLabel(o.reqBodyType)||o.reqBodyType);
+  if(Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds.length){
+    bits.push(o.vehicleTypeIds.map(id=>typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(id):id).join(', '));
+  }
+  if(Array.isArray(o.loadingMethods)&&o.loadingMethods.length){
+    bits.push('загр.: '+o.loadingMethods.map(id=>typeof custLoadMethodLabel==='function'?custLoadMethodLabel(id):id).join(', '));
+  }
+  if(Array.isArray(o.unloadingMethods)&&o.unloadingMethods.length){
+    bits.push('выгр.: '+o.unloadingMethods.map(id=>typeof custUnloadMethodLabel==='function'?custUnloadMethodLabel(id):id).join(', '));
+  }
+  if(o.cargoKind) bits.push(cargoKindLabel(o.cargoKind)||o.cargoKind);
+  if(o.cargoDescription) bits.push(o.cargoDescription);
+  if(o.cargoPlaces>0) bits.push(o.cargoPlaces+' мест');
+  if(o.cargoVolumeM3>0) bits.push(o.cargoVolumeM3+' м³');
+  if(o.cargoPackaging && typeof custPackagingLabel==='function') bits.push(custPackagingLabel(o.cargoPackaging));
+  if(o.cargoFragile) bits.push('хрупкий');
+  const tempBit=orderTempRangeText(o);
+  if(tempBit) bits.push(tempBit);
   if(o.reqPayloadTons>0) bits.push('от '+o.reqPayloadTons+'т');
+  if(o.routeKm>0) bits.push('~'+o.routeKm+' км');
   if([o.reqLengthM,o.reqWidthM,o.reqHeightM].every(x=>x>0))
     bits.push(`кузов ≥ ${o.reqLengthM}×${o.reqWidthM}×${o.reqHeightM}м`);
   else {
@@ -503,13 +827,28 @@ function readOrderRequirementsFromCreate(){
     reqHeightM:numOrNull(($('create-req-h')||{}).value)
   };
 }
+/** Пространство фирмы заказа: spaceId, иначе через компанию или админа. */
+function orderSpaceId(o){
+  if(!o) return null;
+  if(o.spaceId) return o.spaceId;
+  if(o.ownCompanyId){
+    const co=findCompanyById(o.ownCompanyId);
+    if(co && co.spaceId) return co.spaceId;
+  }
+  if(o.ownerAdminId){
+    const adm=(state.admins||[]).find(a=>a.id===o.ownerAdminId);
+    if(adm && adm.spaceId) return adm.spaceId;
+  }
+  return null;
+}
 /** Фильтр супер-админа по пространству фирмы. */
 function matchesOwnerFilter(o){
   if(!isSuperAdmin()) return true;
   const f=state.adminOwnerFilter||'all';
   if(f==='all') return true;
-  if(f==='_none') return !o.spaceId;
-  return o.spaceId===f;
+  const sid=orderSpaceId(o);
+  if(f==='_none') return !sid;
+  return sid===f;
 }
 /** Парк конкретной «нашей фирмы» — то, что уходит в заявку. */
 function fleetDriversForCompany(companyId){
@@ -519,6 +858,42 @@ function fleetDriversForCompany(companyId){
 function fleetVehiclesForCompany(companyId){
   if(!companyId) return [];
   return (state.vehicles||[]).filter(v=>v.companyId===companyId);
+}
+function vehicleBusyAt(plate, atIso, exceptOrderId){
+  const want=String(plate||'').trim();
+  if(!want) return false;
+  const at=atIso?Date.parse(atIso):Date.now();
+  const placeholder=n=>!n || n==='—' || n==='-' || n==='Биржа' || n==='Диспетчер';
+  return (state.orders||[]).some(o=>{
+    if(!o || o.cancelledAt || looksClosedOrder(o)) return false;
+    if(exceptOrderId && o.id===exceptOrderId) return false;
+    const used=String(o.vehiclePlate||'').trim();
+    const booked=String(o.bookedPlate||'').trim();
+    const usedHit=!placeholder(used) && used===want;
+    const bookedHit=booked===want && o.bookStatus!=='rejected';
+    if(!usedHit && !bookedHit) return false;
+    if(o.startOdometer!=null) return true;
+    const start=Date.parse(o.vehicleAt||o.createdAt||0);
+    const free=Date.parse(o.freeAt||0);
+    if(Number.isFinite(free) && Number.isFinite(at) && at<free) return true;
+    if(Number.isFinite(start) && Number.isFinite(at) && Math.abs(at-start)<3*3600*1000) return true;
+    return false;
+  });
+}
+function availableFleetForCustomer(companyId, reqs, atIso){
+  return fleetVehiclesForCompany(companyId).filter(v=>{
+    if(reqs && (reqs.reqPayloadTons>0 || reqs.reqLengthM>0) && !vehicleFitsOrder(v, reqs)) return false;
+    return !vehicleBusyAt(v.plate, atIso);
+  });
+}
+function freeOwnFleetForOrder(o, exceptOrderId){
+  if(!o) return [];
+  const firmId=o.ownCompanyId || ((typeof currentOwnCompany==='function' && currentOwnCompany())||{}).id;
+  if(!firmId) return [];
+  return fleetVehiclesForCompany(firmId).filter(v=>{
+    if(!vehicleFitsOrder(v, o)) return false;
+    return !vehicleBusyAt(v.plate, o.vehicleAt, exceptOrderId||o.id);
+  });
 }
 function myCatalogDrivers(){
   if(isSuperAdmin()) return state.drivers||[];
@@ -578,6 +953,7 @@ function migrateCompanies(){
     salaryPercent:d.salaryPercent??30,
     exchangeEnabled:!!d.exchangeEnabled,
     phone:String(d.phone||'').trim(),
+    licenseNo:String(d.licenseNo||'').trim(),
     ownerAdminId:d.ownerAdminId||null,
     ownerAdminName:d.ownerAdminName||null,
     spaceId:d.spaceId||null,
@@ -888,13 +1264,67 @@ function fillAddressPickers(name){
   if(unloadEl && !unloadEl.value.trim() && (c.unloadingAddresses||[])[0]) unloadEl.value=c.unloadingAddresses[0];
 }
 function fillExecutorUI(){
-  const mode=(($('create-exec-mode')||{}).value)||'own';
+  const co=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  const dispatcher=typeof isDispatcherCompany==='function' && isDispatcherCompany(co);
+  const hasPark=typeof companyHasOwnPark==='function' && companyHasOwnPark(co);
+  const sel=$('create-exec-mode');
+  if(sel){
+    const ownOpt=sel.querySelector('option[value="own"]');
+    if(ownOpt) ownOpt.disabled=!hasPark;
+    if(!hasPark && (sel.value==='own'||!sel.value)) sel.value=dispatcher?'exchange':'carrier';
+    if(!dispatcher && sel.value==='exchange') sel.value=hasPark?'own':'carrier';
+  }
+  const mode=(($('create-exec-mode')||{}).value)|| (hasPark?'own':(dispatcher?'exchange':'carrier'));
   const ownBox=$('create-own-box');
   const carrierPeople=$('create-carrier-people');
   const exchangeHint=$('create-exchange-hint');
-  if(ownBox) ownBox.style.display=mode==='own'?'block':'none';
+  const execHint=$('create-exec-hint');
+  const sw=$('create-exec-switch');
+  if(sw){
+    sw.querySelectorAll('[data-exec]').forEach(b=>{
+      const hide=(b.dataset.exec==='own' && !hasPark) || (b.dataset.exec==='exchange' && !dispatcher);
+      b.hidden=hide;
+      b.disabled=hide;
+      b.classList.toggle('on', !hide && b.dataset.exec===mode);
+      if(!b._wired){
+        b._wired=true;
+        b.onclick=()=>{
+          const s=$('create-exec-mode');
+          if(s) s.value=b.dataset.exec;
+          fillExecutorUI();
+        };
+      }
+    });
+    const visible=sw.querySelectorAll('[data-exec]:not([hidden])').length;
+    sw.style.display=visible>1?'flex':'none';
+  }
+  const carBtn=$('create-exec-carrier');
+  const carWrap=$('create-exec-carrier-wrap');
+  if(carBtn && !carBtn._wired){
+    carBtn._wired=true;
+    carBtn.onclick=()=>{
+      const s=$('create-exec-mode');
+      if(s) s.value='carrier';
+      fillExecutorUI();
+    };
+  }
+  if(carBtn) carBtn.classList.toggle('on-link', mode==='carrier');
+  if(carWrap) carWrap.style.display='block';
+  if(ownBox) ownBox.style.display=(hasPark && mode==='own')?'block':'none';
   if(carrierPeople) carrierPeople.style.display=(mode==='carrier' || !!(($('create-carrier-company')||{}).value))?'block':'none';
-  if(exchangeHint) exchangeHint.style.display=mode==='exchange'?'block':'none';
+  if(exchangeHint){
+    exchangeHint.style.display=mode==='exchange'?'block':'none';
+    if(mode==='exchange'){
+      exchangeHint.textContent=hasPark
+        ?'Сначала свой парк. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику. Биржа — в тарифе «Бизнес».'
+        :'Своего парка нет — заявка на биржу. Вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Биржа — в тарифе «Бизнес».';
+    }
+  }
+  if(execHint){
+    execHint.textContent=dispatcher
+      ?(hasPark?'Парк или биржа: сначала свои машины, остаток партнёрам':'Биржа: партнёр везёт, вы заказчик перевозки')
+      :(hasPark?'Свой водитель из парка':'Нет своего парка — включите диспетчера, появится Биржа');
+  }
   const saveBtn=$('create-save');
   if(saveBtn){
     saveBtn.textContent=mode==='exchange'?'Выставить на биржу':(mode==='carrier'?'Назначить перевозчику':'Назначить водителю');
@@ -936,6 +1366,10 @@ function fillCarrierDriverVehicle(){
 
 function timeNow(){ return new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
 function dateTime(d){ return new Date(d).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function dayOnly(d){
+  if(!d) return '';
+  return new Date(d).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
 /** Подпись номера за смену: «за день-3», не «день 3». */
 function orderDayLabel(n){ return `за день-${n}`; }
 function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
@@ -1411,33 +1845,257 @@ function orderBeingClosed(){
 /** Текущий заказ на закрытии (не путать с «зомби» незакрытым №1). */
 function openOrder(){ return orderBeingClosed(); }
 function allOrders(){ return (state.orders||[]).slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); }
+function isBookingRequested(o){
+  return !!(o && String(o.bookedPlate||'').trim() && o.bookStatus==='requested');
+}
+function isBookingConfirmed(o){
+  return !!(o && String(o.bookedPlate||'').trim() && o.bookStatus==='confirmed');
+}
+function confirmedBookingDayKey(o){
+  if(!isBookingConfirmed(o) || o.cancelledAt) return '';
+  return typeof dayKeyFromIso==='function'?dayKeyFromIso(o.vehicleAt):'';
+}
+function monthCalHtml(cal, marked, opt){
+  opt=opt||{};
+  const dayAttr=opt.dayAttr||'data-cal-day';
+  const wrapId=opt.id||'';
+  const y=cal.year, m=cal.month;
+  const title=new Date(y,m,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  const first=new Date(y,m,1);
+  const startPad=(first.getDay()+6)%7;
+  const dim=new Date(y,m+1,0).getDate();
+  const todayKey=typeof dayKeyFromIso==='function'?dayKeyFromIso(new Date().toISOString()):'';
+  const a=cal.from?(cal.to && cal.to<cal.from?cal.to:cal.from):null;
+  const b=cal.from?(cal.to && cal.to>cal.from?cal.to:(cal.to||cal.from)):null;
+  let cells='';
+  for(let i=0;i<startPad;i++) cells+=`<button type="button" class="mute" disabled>·</button>`;
+  for(let day=1;day<=dim;day++){
+    const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cls=[
+      marked.has(key)?'has':'',
+      key===todayKey?'today':'',
+      a && key===a?'edge':'',
+      b && key===b?'edge':'',
+      a && b && key>a && key<b?'in':''
+    ].filter(Boolean).join(' ');
+    cells+=`<button type="button" class="${cls}" ${dayAttr}="${esc(key)}">${day}</button>`;
+  }
+  const showReset=!!(cal.from || opt.showReset);
+  return `<div class="drv-cal"${wrapId?` id="${esc(wrapId)}"`:''}>
+    <div class="drv-cal-head">
+      <button type="button" data-cal-prev aria-label="Предыдущий месяц">‹</button>
+      <h3>${esc(title.charAt(0).toUpperCase()+title.slice(1))}</h3>
+      <button type="button" data-cal-next aria-label="Следующий месяц">›</button>
+    </div>
+    <div class="drv-cal-week">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(w=>`<span>${w}</span>`).join('')}</div>
+    <div class="drv-cal-grid">${cells}</div>
+    <div class="drv-cal-meta">
+      <span class="period">${esc(opt.period||'Точка — подтверждённая бронь на дату подачи')}</span>
+      <button type="button" data-cal-reset${showReset?'':' hidden'}>Сбросить</button>
+    </div>
+  </div>`;
+}
+function stampConfirmedBooking(o, plate){
+  if(!o) return;
+  const p=String(plate||o.bookedPlate||'').trim();
+  if(!p) return;
+  o.bookedPlate=p;
+  o.bookStatus='confirmed';
+  o.bookConfirmedAt=new Date().toISOString();
+  o.bookRejectedAt=null;
+}
+function clearOrderBooking(o){
+  if(!o) return;
+  o.bookedPlate=null;
+  o.bookStatus=null;
+  o.bookConfirmedAt=null;
+  o.bookRejectedAt=null;
+}
+function waitingLogistDriver(name){
+  const n=String(name||'').trim();
+  return !n || n==='—' || n==='-' || n==='Биржа' || n==='Диспетчер';
+}
+function orderKeepsLogist(o){
+  if(!o) return false;
+  return o.executorType==='logist' || o.customerSubmitted || o.fulfillment==='logist' || o.fulfillment==='direct';
+}
+function isLogistInboxOrder(o){
+  if(!o || looksClosedOrder(o) || o.cancelledAt || o.onExchange || o.startOdometer!=null) return false;
+  if(!waitingLogistDriver(o.driverName)) return false;
+  return orderKeepsLogist(o);
+}
+function logistMargin(o){
+  const client=+o.priceForClient||0;
+  const carr=+o.priceForCarrier||0;
+  if(!(client>0) && !(carr>0)) return null;
+  return {
+    client:client||null,
+    carrier:carr||null,
+    margin:(client>0 && carr>0)?Math.round((client-carr)*100)/100:null
+  };
+}
+function logistMarginLine(o){
+  const m=logistMargin(o);
+  if(!m) return '';
+  if(m.margin!=null) return `Заказчику ${fmt(m.client)} ₽ · перевозчику ${fmt(m.carrier)} ₽ · вам ${fmt(m.margin)} ₽`;
+  if(m.client) return `Заказчику ${fmt(m.client)} ₽ · ставку перевозчику ещё не задали`;
+  return `Перевозчику ${fmt(m.carrier)} ₽`;
+}
 function statusText(o){
   if(o.cancelledAt || (o.closedAt && o.cancelReason)) return 'Отменён';
   if(looksClosedOrder(o)) return 'Закрыт';
-  if(o.onExchange && o.startOdometer==null) return 'На бирже';
+  if(isLogistInboxOrder(o)){
+    if(typeof isBookingRequested==='function' && isBookingRequested(o)) return 'Бронь · жду подтверждения';
+    if(typeof isBookingConfirmed==='function' && isBookingConfirmed(o)) return o.fulfillment==='direct'?'Прямой · бронь в календаре':'Входящая · бронь в календаре';
+    return o.fulfillment==='direct'?'Прямой · жду парк':'Входящая';
+  }
+  if(o.onExchange && o.startOdometer==null) return 'На бирже (ищем партнёра)';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(o.startOdometer!=null) return 'В работе';
   if(o.departOdometer!=null) return 'В пути';
-  if(o.executorType==='partner' && o.transportApp) return 'Партнёр';
-  // снят с биржи / без водителя — не считаем «назначен»
-  if(!o.onExchange && o.startOdometer==null && o.departOdometer==null &&
-     (!o.driverName || o.driverName==='—' || o.driverName==='-' || o.driverName==='Биржа')){
+  if(o.executorType==='partner' && o.transportApp) return 'Партнёр везёт';
+  if(!o.onExchange && o.startOdometer==null && o.departOdometer==null && waitingLogistDriver(o.driverName)){
     return 'Черновик';
   }
   return 'Назначен';
 }
+/** Снять все связи заказа перед удалением из state.orders. */
+function detachOrderReferences(deletedOrders){
+  const list=(deletedOrders||[]).filter(o=>o&&o.id);
+  if(!list.length) return false;
+  const delSet=new Set(list.map(o=>o.id));
+  let changed=false;
+
+  if(typeof removeBillingEntriesForOrders==='function'){
+    if(removeBillingEntriesForOrders(Array.from(delSet))) changed=true;
+  }
+
+  const nums=new Set(list.map(o=>o.sequentialNumber).filter(n=>n!=null));
+  const msgRefsDeleted=text=>{
+    const t=String(text||'');
+    for(const n of nums){
+      if(t.includes(`Заказ №${n}`) || t.includes(`№${n} ·`) || t.includes(`№${n}\n`)
+        || t.includes(`порядковый номер - ${n}`) || t.includes(`заказ №${n}`)) return true;
+    }
+    return false;
+  };
+  const scrubMessages=msgs=>{
+    if(!Array.isArray(msgs)) return msgs;
+    const next=msgs.filter(m=>!msgRefsDeleted(m.text));
+    return next.length===msgs.length?msgs:next;
+  };
+
+  list.forEach(d=>{
+    const prevWaiting=findOrderAwaitingEmptyAfterLink(d);
+    if(prevWaiting && !delSet.has(prevWaiting.id)){
+      prevWaiting.linkEmptyAfterToNext=false;
+      changed=true;
+    }
+    (state.orders||[]).forEach(o=>{
+      if(!o||delSet.has(o.id)) return;
+      if(o.emptyAfterLinkedFromNext && d.emptyKmBefore!=null && o.emptyKmAfter!=null
+        && +o.emptyKmAfter===+d.emptyKmBefore
+        && (!d.vehiclePlate || o.vehiclePlate===d.vehiclePlate)
+        && (!d.driverName || samePersonName(o.driverName||'', d.driverName||''))){
+        o.emptyKmAfter=null;
+        o.emptyAfterLinkedFromNext=false;
+        o.linkEmptyAfterToNext=false;
+        changed=true;
+      }
+    });
+  });
+
+  const cleanShift=s=>{
+    if(!s) return;
+    if(s.pendingEmptyAfterOrderId && delSet.has(s.pendingEmptyAfterOrderId)){
+      s.pendingEmptyAfterOrderId=null;
+      changed=true;
+    }
+    if(Array.isArray(s.orders) && s.orders.some(o=>o&&delSet.has(o.id))){
+      s.orders=s.orders.filter(o=>!o||!delSet.has(o.id));
+      changed=true;
+    }
+    if(Array.isArray(s.messages)){
+      const next=scrubMessages(s.messages);
+      if(next!==s.messages){ s.messages=next; changed=true; }
+    }
+  };
+  (state.shifts||[]).forEach(cleanShift);
+  if(state.shift) cleanShift(state.shift);
+
+  if(state.messages){
+    const next=scrubMessages(state.messages);
+    if(next!==state.messages){ state.messages=next; changed=true; }
+  }
+
+  if(state.draft && state.draft.closingOrderId && delSet.has(state.draft.closingOrderId)){
+    delete state.draft.closingOrderId;
+    changed=true;
+  }
+  if(state.orderStep && state.orderStep!=='idle'){
+    const pinned=state.draft&&state.draft.closingOrderId;
+    const live=inProgressOrder();
+    const stepOrder=pinned?orderById(pinned):live;
+    if(!stepOrder || delSet.has(stepOrder.id)){
+      if(['closingOdometer','fuelPrice','fuelAmount','askRefuel','closeShiftStaysLoaded','closeShiftParking'].includes(state.orderStep)){
+        state.orderStep='idle';
+        changed=true;
+      }
+    }
+  }
+
+  if(typeof clearAdminUiForDeletedOrders==='function'){
+    clearAdminUiForDeletedOrders(Array.from(delSet));
+  }
+
+  return changed;
+}
+function removeOrdersByIds(ids){
+  const delSet=new Set((ids||[]).filter(Boolean));
+  if(!delSet.size) return 0;
+  const deletedOrders=(state.orders||[]).filter(o=>o&&delSet.has(o.id));
+  detachOrderReferences(deletedOrders);
+  delSet.forEach(id=>rememberDeletedOrderId(id));
+  state.orders=(state.orders||[]).filter(x=>!delSet.has(x.id));
+  (state.shifts||[]).forEach(s=>{
+    if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>!delSet.has(x.id));
+  });
+  if(state.shift && Array.isArray(state.shift.orders)){
+    state.shift.orders=state.shift.orders.filter(x=>!delSet.has(x.id));
+  }
+  compactSequentialNumbers();
+  return deletedOrders.length;
+}
+/** Удалить заказы (включая закрытые). Номера после compactSequentialNumbers снова 1…N — следующий новый = seq+1. */
+function deleteOrders(ids){
+  const list=Array.isArray(ids)?ids.filter(Boolean):[];
+  if(!list.length) return {ok:false, deleted:0, message:'Ничего не выбрано'};
+  const toDelete=[];
+  const denied=[];
+  list.forEach(id=>{
+    const o=(state.orders||[]).find(x=>x.id===id);
+    if(!o) return;
+    if(currentAdmin && !canAdminSeeOrder(o)){
+      denied.push(o.sequentialNumber);
+      return;
+    }
+    toDelete.push(o);
+  });
+  if(denied.length) alert('Нет доступа к заказам № '+denied.join(', №'));
+  if(!toDelete.length) return {ok:false, deleted:0, message:'Нет заказов для удаления'};
+  const deleted=removeOrdersByIds(toDelete.map(o=>o.id));
+  bumpDataEpoch('deleteOrders');
+  persist();
+  return {ok:true, deleted, nextNumber:(Number(state.seq)||0)+1};
+}
 function cancelOrder(id, reason){
   const o=state.orders.find(x=>x.id===id); if(!o) return false;
   if(currentAdmin && !canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); return false; }
-  if(o.closedAt && !o.cancelledAt){ alert('Заказ уже закрыт'); return false; }
+  if(o.closedAt && !o.cancelledAt){ alert('Заказ уже закрыт — используйте «Удалить выбранные»'); return false; }
   if(o.startOdometer!=null && !o.cancelledAt){
     if(!confirm('Заказ уже в работе. Точно отменить?')) return false;
   }
-  // Полностью убираем из списка — иначе «Отменён» висит в «Все»
-  rememberDeletedOrderId(id);
-  state.orders=(state.orders||[]).filter(x=>x.id!==id);
-  state.shifts.forEach(s=>{ if(Array.isArray(s.orders)) s.orders=s.orders.filter(x=>x.id!==id); });
-  compactSequentialNumbers();
+  removeOrdersByIds([id]);
   bumpDataEpoch('cancelOrder');
   persist();
   return true;
@@ -1490,7 +2148,56 @@ function canArriveMessage(orderId){
   return null;
 }
 const DRIVER_NOTIFY_KEY='armada_driver_notify_v1';
+const CUSTOMER_NOTIFY_KEY_SHARED='armada_customer_notify_v1';
 const driverNotifyLastAt={};
+const armadaNotifyLastAt={};
+function notifyRoleWanted(role){
+  if(role==='customer'){
+    try{ return localStorage.getItem(CUSTOMER_NOTIFY_KEY_SHARED)==='1'; }catch(_){ return false; }
+  }
+  return driverNotifyWanted();
+}
+function setNotifyRoleWanted(role, on){
+  if(role==='customer') setCustomerNotifyWanted(on);
+  else setDriverNotifyWanted(on);
+}
+function armadaNotifySupported(){
+  return typeof Notification!=='undefined' && !!window.isSecureContext;
+}
+function armadaNotifyActive(role){
+  if(!armadaNotifySupported()) return false;
+  if(Notification.permission!=='granted') return false;
+  return notifyRoleWanted(role||'driver');
+}
+async function armadaRequestNotifyPermission(role){
+  if(!armadaNotifySupported()) return false;
+  let perm=Notification.permission;
+  if(perm!=='granted'){
+    try{ perm=await Notification.requestPermission(); }catch(_){ perm='denied'; }
+  }
+  const ok=perm==='granted';
+  setNotifyRoleWanted(role||'driver', ok);
+  return ok;
+}
+function armadaShowNotification(title, body, tag, role){
+  const r=role||'driver';
+  if(r==='driver' && !DRIVER) return;
+  if(r==='customer' && typeof currentCustomer!=='undefined' && !currentCustomer) return;
+  if(!armadaNotifyActive(r)) return;
+  const now=Date.now();
+  const key=tag||'armada';
+  const prev=armadaNotifyLastAt[key]||0;
+  if(now-prev<12*60*1000) return;
+  armadaNotifyLastAt[key]=now;
+  const opts={body:body||'', tag:key, renotify:true, icon:'./icons/icon-192.png', badge:'./icons/icon-192.png'};
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title, opts)).catch(()=>{
+      try{ new Notification(title, opts); }catch(_){}
+    });
+  } else {
+    try{ new Notification(title, opts); }catch(_){}
+  }
+}
 function driverNotifyWanted(){
   try{ return localStorage.getItem(DRIVER_NOTIFY_KEY)==='1'; }catch(_){ return false; }
 }
@@ -1516,19 +2223,7 @@ async function enableDriverNotifications(){
   return ok;
 }
 function driverNotify(title, body, tag){
-  if(!DRIVER || !driverNotifyActive()) return;
-  const now=Date.now();
-  const prev=driverNotifyLastAt[tag]||0;
-  if(now-prev<12*60*1000) return;
-  driverNotifyLastAt[tag]=now;
-  const opts={body:body||'', tag:tag||'armada', renotify:true, icon:'./icons/icon-192.png', badge:'./icons/icon-192.png'};
-  if(navigator.serviceWorker){
-    navigator.serviceWorker.ready.then(reg=>reg.showNotification(title, opts)).catch(()=>{
-      try{ new Notification(title, opts); }catch(_){}
-    });
-  } else {
-    try{ new Notification(title, opts); }catch(_){}
-  }
+  armadaShowNotification(title, body, tag, 'driver');
 }
 /** Системные напоминания, когда экран свёрнут / вкладка в фоне. */
 function maybeDriverActionNotify(force){
@@ -1574,7 +2269,7 @@ function flushDriverSyncWhenOnline(){
   updateDriverNetHint();
   syncStatus='syncing';
   updateDriverNetHint();
-  pushServerState()
+  pushServerStateQueued()
     .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
     .catch(err=>{ syncStatus='error'; console.warn('PB online flush', err); updateDriverNetHint(); });
   try{ pullRemoteUpdates('online'); }catch(_){}
@@ -1620,7 +2315,8 @@ function renderDriverBanner(){
   const enRoute=awaitingArrive();
   const pending=assignedPending();
   const needClose=shiftAwaitingClose();
-  if(!enRoute.length && !pending.length && !needClose){
+  const etrnHtml=typeof driverEtrnBannerHtml==='function'?driverEtrnBannerHtml():'';
+  if(!enRoute.length && !pending.length && !needClose && !etrnHtml){
     box.classList.remove('show','remind-close'); box.innerHTML='';
     updateDriverNetHint();
     return;
@@ -1647,11 +2343,18 @@ function renderDriverBanner(){
   } else {
     box.classList.remove('remind-close');
   }
+  if(etrnHtml) html+=etrnHtml;
   box.innerHTML=html;
   box.classList.add('show');
   document.querySelectorAll('.banner-depart').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.banner-arrive').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
   document.querySelectorAll('.banner-close-shift').forEach(b=>b.onclick=()=>startCloseShift());
+  document.querySelectorAll('.banner-etrn-sign').forEach(b=>b.onclick=()=>{
+    if(typeof openDriverEtrnSign==='function') openDriverEtrnSign(b.dataset.etrnSign);
+  });
+  if(typeof refreshDriverEtrnFromApi==='function') refreshDriverEtrnFromApi().then(changed=>{
+    if(changed && typeof renderDriverBanner==='function') renderDriverBanner();
+  });
   maybeDriverActionNotify(false);
   updateDriverNetHint();
 }
@@ -1756,12 +2459,27 @@ function migrateShiftOwners(){
   });
   return changed;
 }
+/** Пространство фирмы смены: spaceId, иначе через компанию или админа. */
+function shiftSpaceId(s){
+  if(!s) return null;
+  if(s.spaceId) return s.spaceId;
+  if(s.ownCompanyId){
+    const co=findCompanyById(s.ownCompanyId);
+    if(co && co.spaceId) return co.spaceId;
+  }
+  if(s.ownerAdminId){
+    const adm=(state.admins||[]).find(a=>a.id===s.ownerAdminId);
+    if(adm && adm.spaceId) return adm.spaceId;
+  }
+  return null;
+}
 function matchesShiftOwnerFilter(s){
   if(!isSuperAdmin()) return true;
   const f=state.adminOwnerFilter||'all';
   if(f==='all') return true;
-  if(f==='_none') return !s.spaceId;
-  return s.spaceId===f;
+  const sid=shiftSpaceId(s);
+  if(f==='_none') return !sid;
+  return sid===f;
 }
 /** Открытые смены водителей фирмы админа (для вкладки ЕТО). */
 function adminOpenShifts(){
@@ -1978,7 +2696,7 @@ function acceptClosePrevThenOpen(value){
   bumpDataEpoch('close-prev-open-new');
   upsertShift(); persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close-prev', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close-prev', err); });
   renderChat(); renderInput();
 }
 function healDuplicateOpenShifts(keep){
@@ -2687,6 +3405,7 @@ function healStuckClosing(){
     }
     ensureOrderTimeStamps(o);
     applyClientTariff(o);
+    if(typeof onOrderClosedBilling==='function') onOrderClosedBilling(o);
     s.orderStep='idle';
     s.draft={};
     s.lastOdometerPoint=end;
@@ -3105,15 +3824,138 @@ function updateSyncHint(){
   }
   updateDriverNetHint();
 }
+function openAdminLogin(){
+  migrateAdmins();
+  if(restoreAdminSession()){
+    clearEntrySkin();
+    show('admin');
+    renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+    return;
+  }
+  fillAdminLoginSelect();
+  const pinIn=$('pin-input');
+  if(pinIn) pinIn.value='';
+  const pinErr=$('pin-error');
+  if(pinErr) pinErr.textContent='';
+  show('admin-pin');
+  applyEntrySkin('admin-pin');
+  wireAdminLoginHandlers();
+}
+function wireAdminLoginHandlers(){
+  const ok=$('pin-ok');
+  if(ok){
+    ok.type='button';
+    ok.onclick=()=>loginAdmin();
+  }
+  const pin=$('pin-input');
+  if(pin){
+    pin.onkeydown=e=>{
+      if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); }
+    };
+  }
+  const back=$('pin-back');
+  if(back && typeof backFromEntryLogin==='function'){
+    back.type='button';
+    back.onclick=()=>backFromEntryLogin();
+  }
+}
+const ENTRY_ASIDE={
+  driver:{
+    badge:'Водитель',
+    title:'В дороге — всё в одном месте',
+    lead:'Смена, ЕТО и заказы на телефоне. Не нужно устанавливать приложение — откройте ссылку и добавьте на экран.',
+    items:['Открыть и закрыть смену','Пройти ЕТО перед выездом','Заявки, одометры, статусы'],
+    foot:'<a href="help.html#driver">Инструкция для водителя</a> · <a href="kp.html">О сервисе</a>'
+  },
+  admin:{
+    badge:'Администратор',
+    title:'Кабинет диспетчера',
+    lead:'Заявки, внутренняя биржа между перевозчиками, справочники и ЭТрН — для микро-парка.',
+    items:['Создание и контроль заявок','Биржа и назначение водителей','Водители, авто, тарифы','ЭТрН и биллинг в одном окне'],
+    foot:'<a href="help.html#admin">Помощь</a> · <a href="kp.html">Пилот и тарифы</a> · <a href="/downloads/">Материалы</a>'
+  },
+  customer:{
+    badge:'Заказчик',
+    title:'Портал заказчика',
+    lead:'Отправьте заявку и смотрите расчёт минимальной цены. Статус заказа — в личном кабинете.',
+    items:['Новая заявка с телефона','Минимальная цена до отправки','Статус: биржа, назначен, в работе'],
+    foot:'<a href="help.html#customer">Как это работает</a> · <a href="/kp-zakaz.html">Коммерческое предложение</a>'
+  }
+};
+function clearEntrySkin(){
+  try{
+    document.body.classList.remove('entry-page','entry-driver','entry-admin','entry-customer');
+    document.querySelectorAll('.entry-aside').forEach(el=>el.remove());
+  }catch(_){}
+}
+function applyEntrySkin(screenId){
+  const mode=getEntryMode();
+  if(!mode || mode==='roles'){ clearEntrySkin(); return; }
+  const screen=$(screenId||entryLoginScreenId());
+  if(!screen||!screen.classList.contains('show')) return;
+  document.body.classList.add('entry-page','entry-'+mode);
+  if(screen.querySelector('.entry-aside')) return;
+  const cfg=ENTRY_ASIDE[mode];
+  if(!cfg) return;
+  const aside=document.createElement('div');
+  aside.className='entry-aside';
+  let carrierBlock='';
+  if(mode==='customer'){
+    const label=portalScopeCarrierLabel();
+    if(label){
+      const sp=typeof portalScopeCarrierSpace==='function'?portalScopeCarrierSpace():null;
+      carrierBlock=carrierBrandHtml(label, sp);
+    }
+  }
+  let foot=cfg.foot||'';
+  if(mode==='customer' && typeof customerKpPageUrl==='function'){
+    foot=`<a href="/help.html#customer">Как это работает</a> · <a href="${esc(customerKpPageUrl())}">Коммерческое предложение</a>`;
+  }
+  aside.innerHTML=`
+    <div class="entry-aside-inner">
+      ${carrierBlock}
+      <span class="entry-aside-badge">${esc(cfg.badge)}</span>
+      <h1>${esc(cfg.title)}</h1>
+      <p class="entry-aside-lead">${esc(cfg.lead)}</p>
+      <ul class="entry-aside-list">${(cfg.items||[]).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+      <p class="entry-aside-foot">${foot}</p>
+    </div>`;
+  const center=screen.querySelector('.center');
+  if(center) center.insertBefore(aside, center.firstChild);
+}
+function showDefaultAfterSplash(){
+  initEntryFromPage();
+  initPortalScopeFromPage();
+  const entryId=entryLoginScreenId();
+  if(entryId==='roles'){
+    clearEntrySkin();
+    show('roles');
+    if(window.ArmadaOnboarding) ArmadaOnboarding.showRolesWelcome();
+    return;
+  }
+  if(entryId==='driver-login') openDriverLogin(false);
+  else if(entryId==='admin-pin') openAdminLogin();
+  else if(entryId==='customer-login') openCustomerLogin();
+}
 // Сразу после загрузки localStorage — без PIN, если сессия была
 try{
-  const last=localStorage.getItem(LAST_ROLE_KEY)||'';
-  if(last==='driver' && restoreDriverSession()) show('driver');
-  else if(restoreAdminSession()) show('admin');
-  else if(restoreDriverSession()) show('driver');
+  const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
+  if(urlEntry==='driver' && restoreDriverSession()) show('driver');
+  else if(urlEntry==='admin' && restoreAdminSession()) show('admin');
+  else if(!urlEntry){
+    const last=localStorage.getItem(LAST_ROLE_KEY)||'';
+    if(last==='driver' && restoreDriverSession()) show('driver');
+    else if(last==='customer'){ /* customer.js ниже */ }
+    else if(restoreAdminSession()) show('admin');
+    else if(restoreDriverSession()) show('driver');
+  }
 }catch(_){}
 (async function boot(){
-  await initCloudSync();
+  try{
+  if(typeof initShareSheet==='function') initShareSheet();
+  initEntryFromPage();
+  initPortalScopeFromPage();
   migrateAdmins();
   let dirty=migrateDriverOwners();
   if(migrateSpaces()) dirty=true;
@@ -3130,10 +3972,10 @@ try{
   }
   if(dirty){
     bumpDataEpoch('migrate-boot');
-    persist();
+    persistLocalOnly();
   }
   updateSyncHint();
-  // Восстановить роль без PIN (админ или водитель)
+  // Восстановить роль без PIN — сразу из localStorage, сеть в фоне
   let lastRole='';
   try{ lastRole=localStorage.getItem(LAST_ROLE_KEY)||''; }catch(_){}
   const tryDriver=async()=>{
@@ -3143,71 +3985,106 @@ try{
     await enterAsDriver(rec);
     return true;
   };
-  if(lastRole==='driver'){
-    if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); }
+  const urlEntry=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():null;
+  if(urlEntry==='customer'){
+    try{ await initCloudSync(); }catch(_){}
+    initPortalScopeFromPage();
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(typeof openCustomerLogin==='function') openCustomerLogin();
+  } else if(urlEntry==='driver'){
+    if(lastRole==='driver' && (await tryDriver())){ /* ok */ }
+    else if(restoreDriverSession() && (await tryDriver())){ /* ok */ }
+    else openDriverLogin(false);
+  } else if(urlEntry==='admin'){
+    openAdminLogin();
+  } else if(lastRole==='driver'){
+    if(!(await tryDriver()) && restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
+  } else if(lastRole==='customer'){
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(restoreAdminSession()){ show('admin'); renderAdmin(); if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin(); }
   } else if(restoreAdminSession()){
     show('admin');
     renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
   } else if(!(await tryDriver())){
-    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show')){
-      // Холодный старт: дать бренду на splash чуть проявить себя
-      if(document.querySelector('#splash.show')) showAfterSplash('roles');
-      else show('roles');
+    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show')){
+      if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
+      else showDefaultAfterSplash();
     }
   }
   startAutoSync();
-  setTimeout(updateSyncHint, 700);
-  setTimeout(()=>pullRemoteUpdates('boot'), 1200);
-})();
-$('role-driver').onclick=()=>openDriverLogin(false);
-$('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
-  if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
-  openDriverLogin(true);
-});
-$('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
-$('drv-login-pin')&&($('drv-login-pin').onkeydown=e=>{ if(e.key==='Enter') loginDriver(); });
-$('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ($('drv-login-pin')||{}).focus?.(); } });
-$('btn-home')&&($('btn-home').onclick=showDriverHome);
-$('role-admin').onclick=()=>{
-  migrateAdmins();
-  if(restoreAdminSession()){
-    show('admin');
-    renderAdmin();
-    return;
+  if(urlEntry!=='customer'){
+    initCloudSync().then(()=>{
+      updateSyncHint();
+    }).catch(()=>updateSyncHint());
+  } else {
+    updateSyncHint();
   }
-  fillAdminLoginSelect();
-  $('pin-input').value='';
-  $('pin-error').textContent='';
-  show('admin-pin');
-};
-$('pin-back').onclick=()=>show('roles');
-$('pin-ok').onclick=loginAdmin;
-$('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter') loginAdmin(); });
-$('admin-exit').onclick=logoutAdmin;
-$('admin-catalogs').onclick=()=>setAdminNav('catalogs');
-$('admin-activity').onclick=()=>setAdminNav('activity');
-$('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
-  const sb=$('admin-sidebar');
-  if(sb && sb.classList.contains('open')) closeAdminSidebar();
-  else openAdminSidebar();
-});
-$('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
-document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
-  b.onclick=()=>setAdminNav(b.dataset.nav);
-});
-updateAdminChrome();
-$('btn-cabinet').onclick=showCabinet;
-$('btn-orders').onclick=showOrders;
-$('btn-shifts').onclick=showShifts;
-document.querySelectorAll('.back-driver').forEach(b=>{
-  b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
-});
-document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
-  state.adminFilter=b.dataset.filter;
-  document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
-  renderAdmin();
-});
-bindAdminCreate();
+  setTimeout(updateSyncHint, 700);
+  }catch(err){
+    console.error('АРМАДА boot', err);
+    if(!document.querySelector('#admin.show') && !document.querySelector('#admin-pin.show') && !document.querySelector('#driver.show') && !document.querySelector('#driver-login.show') && !document.querySelector('#customer-login.show') && !document.querySelector('#customer-portal.show')){
+      if(document.querySelector('#splash.show')) showAfterSplash(showDefaultAfterSplash);
+      else if(typeof showDefaultAfterSplash==='function') showDefaultAfterSplash();
+    }
+  }finally{
+    window.__armadaBootDone=true;
+  }
+})();
+function wireShellHandlers(){
+  $('role-driver')&&($('role-driver').onclick=()=>{ setEntryMode('driver'); if(typeof openDriverLogin==='function') openDriverLogin(false); });
+  $('admin-as-driver')&&($('admin-as-driver').onclick=()=>{
+    if(!currentAdmin && !restoreAdminSession()){ show('admin-pin'); return; }
+    if(typeof openDriverLogin==='function') openDriverLogin(true);
+  });
+  if(typeof loginDriver==='function'){
+    $('drv-login-ok')&&($('drv-login-ok').onclick=loginDriver);
+    $('drv-login-phone-ok')&&($('drv-login-phone-ok').onclick=continueDriverPhone);
+    $('drv-login-phone')&&($('drv-login-phone').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); continueDriverPhone(); } });
+  }
+  $('btn-home')&&typeof showDriverHome==='function'&&($('btn-home').onclick=showDriverHome);
+  $('role-admin')&&($('role-admin').onclick=()=>openAdminLogin());
+  $('pin-back')&&typeof backFromEntryLogin==='function'&&($('pin-back').onclick=()=>backFromEntryLogin());
+  if(typeof loginAdmin==='function'){
+    $('pin-ok')&&($('pin-ok').onclick=loginAdmin);
+    $('pin-input')&&($('pin-input').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); loginAdmin(); } });
+  }
+  $('admin-exit')&&typeof logoutAdmin==='function'&&($('admin-exit').onclick=logoutAdmin);
+  $('admin-help')&&($('admin-help').onclick=()=>{
+    window.open('help.html','_blank','noopener');
+  });
+  $('admin-catalogs')&&typeof setAdminNav==='function'&&($('admin-catalogs').onclick=()=>setAdminNav('catalogs'));
+  $('admin-activity')&&typeof setAdminNav==='function'&&($('admin-activity').onclick=()=>setAdminNav('activity'));
+  $('admin-billing')&&typeof setAdminNav==='function'&&($('admin-billing').onclick=()=>setAdminNav('billing'));
+  $('admin-menu-toggle')&&($('admin-menu-toggle').onclick=()=>{
+    const sb=$('admin-sidebar');
+    if(sb && sb.classList.contains('open')) closeAdminSidebar();
+    else openAdminSidebar();
+  });
+  $('admin-sidebar-backdrop')&&($('admin-sidebar-backdrop').onclick=closeAdminSidebar);
+  document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b=>{
+    b.onclick=()=>setAdminNav(b.dataset.nav);
+  });
+  document.querySelectorAll('#admin-park-ex [data-park-ex]').forEach(b=>{
+    b.onclick=()=>setAdminNav(b.dataset.parkEx==='exchange'?'exchange':'orders');
+  });
+  if(typeof updateAdminChrome==='function') updateAdminChrome();
+  if(typeof showCabinet==='function') $('btn-cabinet')&&($('btn-cabinet').onclick=showCabinet);
+  if(typeof showOrders==='function') $('btn-orders')&&($('btn-orders').onclick=showOrders);
+  if(typeof showShifts==='function') $('btn-shifts')&&($('btn-shifts').onclick=showShifts);
+  if(typeof hideDriverPanels==='function'){
+    document.querySelectorAll('.back-driver').forEach(b=>{
+      b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); hideDriverPanels(); };
+    });
+  }
+  document.querySelectorAll('#admin-filters button').forEach(b=>b.onclick=()=>{
+    state.adminFilter=b.dataset.filter;
+    document.querySelectorAll('#admin-filters button').forEach(x=>x.classList.toggle('on', x===b));
+    renderAdmin();
+  });
+  if(typeof bindAdminCreate==='function') bindAdminCreate();
+}
+wireShellHandlers();
 (function bindMobileFocusScroll(){
   let t=null;
   document.addEventListener('focusin',e=>{
@@ -3238,6 +4115,7 @@ if('serviceWorker' in navigator){
   });
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(reloading) return;
+    if(!navigator.serviceWorker.controller) return;
     reloading=true;
     location.reload();
   });
