@@ -785,6 +785,9 @@ function paintEpdServerStatus(){
 function renderAdminActivity(){
   migrateAdmins();
   migrateCustomerPortalLeads();
+  if(typeof syncAllEpdSpacesFromServer==='function'){
+    syncAllEpdSpacesFromServer().catch(()=>{});
+  }
   const online=onlineAdmins();
   const log=(state.adminLogins||[]).slice(0,40);
   const ops=(state.opsLog||[]).slice(0,25);
