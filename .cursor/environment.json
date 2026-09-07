@@ -1,0 +1,16 @@
+{
+  "name": "ARMADA (web + PocketBase)",
+  "install": ".cursor/dev/install.sh",
+  "start": ".cursor/dev/start.sh",
+  "terminals": [
+    {
+      "name": "pocketbase",
+      "command": ".cursor/dev/run-pocketbase.sh"
+    },
+    {
+      "name": "caddy",
+      "command": ".cursor/dev/run-caddy.sh"
+    }
+  ],
+  "ports": [8080, 8090]
+}
