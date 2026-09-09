@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <base href="/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=overlays-content" />
   <title>АРМАДА — учёт перевозок</title>
   <meta name="theme-color" content="#EF4444" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,87 +15,553 @@
   <meta name="apple-mobile-web-app-title" content="АРМАДА" />
   <meta name="application-name" content="АРМАДА" />
   <meta name="description" content="Учёт перевозок, ЕТО, заказы и финансы" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-    <link rel="stylesheet" href="styles.css?v=2026-08-13-admin-route-contacts" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
+    <link rel="stylesheet" href="/styles.css?v=2026-09-01-legal4317" />
+    <link rel="stylesheet" href="/entry.css?v=2026-09-01-legal4317" />
 
 </head>
 <body>
 <div class="phone" id="shell">
   <div id="splash" class="screen show"><div class="center splash-hero">
-    <img class="logo" src="logo.png" alt="АРМАДА" />
+    <img class="logo" src="/logo.png" alt="АРМАДА" />
     <div class="brand">АРМАДА</div>
     <div class="sub">Учёт перевозок</div>
     <div class="splash-accent" aria-hidden="true"></div>
   </div></div>
 
-  <div id="roles" class="screen"><div class="center roles-hero">
-    <img class="logo" src="logo.png" alt="АРМАДА" />
-    <div class="brand">АРМАДА</div>
-    <div class="sub">Выберите роль</div>
-    <div class="hint" id="sync-hint" style="display:none;margin-bottom:8px"></div>
-    <div class="stack roles-stack">
-      <button type="button" class="primary role-btn" id="role-driver">
-        <span class="role-btn-title">Водитель</span>
-        <span class="role-btn-desc">Смена, ЕТО и заказы в дороге</span>
-      </button>
-      <button type="button" class="secondary role-btn" id="role-admin">
-        <span class="role-btn-title">Администратор</span>
-        <span class="role-btn-desc">Заявки, биржа и справочники</span>
-      </button>
+  <div id="roles" class="screen"><div class="center roles-hub">
+    <div class="roles-hub-head">
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
+      <h1 class="roles-hub-title">Учёт перевозок — каждому своя выгода</h1>
+      <p class="roles-hub-lead">Заявки, парк, биржа и портал заказчика. Нажмите на роль — расскажем, что получите.</p>
+      <div class="hint" id="sync-hint" style="display:none;margin-bottom:4px"></div>
     </div>
+    <div class="role-hub-stack">
+      <a class="role-hub-card role-hub-logist" href="/kp-logist.html">
+        <span class="role-hub-icon" aria-hidden="true">📋</span>
+        <div class="role-hub-body">
+          <span class="role-hub-badge">Логист / диспетчер</span>
+          <strong class="role-hub-name">Кабинет · заявки и биржа</strong>
+          <span class="role-hub-teaser">Все заявки в одном месте — без Excel и WhatsApp. Свой парк, остаток партнёрам.</span>
+          <span class="role-hub-cta">Читать для логиста →</span>
+        </div>
+      </a>
+      <a class="role-hub-card role-hub-carrier" href="/kp.html">
+        <span class="role-hub-icon" aria-hidden="true">🚛</span>
+        <div class="role-hub-body">
+          <span class="role-hub-badge">Перевозчик</span>
+          <strong class="role-hub-name">Парк и заказы от логистов</strong>
+          <span class="role-hub-teaser">Забираете заявку кнопкой — ставка в цифрах, водитель ведёт рейс с телефона.</span>
+          <span class="role-hub-cta">Читать для перевозчика →</span>
+        </div>
+      </a>
+      <a class="role-hub-card role-hub-customer" href="/kp-zakaz.html">
+        <span class="role-hub-icon" aria-hidden="true">📦</span>
+        <div class="role-hub-body">
+          <span class="role-hub-badge">Заказчик</span>
+          <strong class="role-hub-name">Портал · заявка с телефона</strong>
+          <span class="role-hub-teaser">Цена и статус сразу — без звонков «где машина» и «сколько будет».</span>
+          <span class="role-hub-cta">Читать для заказчика →</span>
+        </div>
+      </a>
+    </div>
+    <div class="role-hub-login">
+      <p class="role-hub-login-label">Уже подключены — войти</p>
+      <div class="role-hub-login-row">
+        <a class="role-hub-login-btn role-hub-login-admin" href="/a/">Кабинет</a>
+        <a class="role-hub-login-btn" href="/v/">Водитель</a>
+        <a class="role-hub-login-btn" href="/z/">Заказчик</a>
+      </div>
+    </div>
+    <p class="hint" style="margin-top:10px;font-size:.78rem">
+      <a href="/help.html">Помощь</a> · <a href="/legal.html">Оферта</a> · <a href="mailto:support@armada.sx">support@armada.sx</a>
+    </p>
   </div></div>
 
   <div id="driver-login" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="driver-login-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" />
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
       <h2>Вход водителя</h2>
-      <div class="sub">Телефон и PIN из справочника</div>
+      <div class="sub">Сначала телефон — затем PIN</div>
       <label for="drv-login-phone">Телефон</label>
       <input id="drv-login-phone" inputmode="tel" placeholder="+79650730002" autocomplete="tel" />
-      <label for="drv-login-pin">PIN</label>
-      <input id="drv-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      <div id="driver-pick-panel" style="display:none">
+        <p class="hint">Несколько профилей на этот телефон — выберите фирму</p>
+        <div id="driver-pick-list"></div>
+      </div>
+      <div id="drv-login-pin-wrap" style="display:none">
+        <label for="drv-login-pin">PIN</label>
+        <input id="drv-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      </div>
       <div class="error" id="drv-login-error"></div>
-      <button class="primary" id="drv-login-ok">Войти</button>
-      <div class="hint">PIN задаёт админ в «Справочники → Водители». Если вы также админ — можно тот же PIN, что для входа в админку.</div>
+      <button class="primary" id="drv-login-phone-ok">Продолжить</button>
+      <button class="primary" id="drv-login-ok" style="display:none">Войти</button>
+      <div class="hint">PIN задаёт админ в «Справочники → Водители».</div>
     </div>
   </div></div>
 
   <div id="admin-pin" class="screen"><div class="center">
     <div class="auth-panel">
       <button type="button" class="auth-back" id="pin-back">← Назад</button>
-      <img class="logo" src="logo.png" alt="АРМАДА" />
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
       <h2>Вход администратора</h2>
-      <div class="sub">Выберите имя и введите PIN</div>
-      <label for="admin-name-select">Администратор</label>
-      <select id="admin-name-select"></select>
+      <div class="sub">Телефон или ИНН организации и PIN</div>
+      <label for="admin-login-inn">Телефон или ИНН</label>
+      <input id="admin-login-inn" inputmode="text" autocomplete="username" placeholder="+7… или 10/12 цифр ИНН" maxlength="18" />
       <label for="pin-input">PIN</label>
       <input id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
       <div class="error" id="pin-error"></div>
-      <button class="primary" id="pin-ok">Войти</button>
+      <div class="hint" id="pin-recovery-hint" style="display:none;margin-bottom:8px;padding:8px;background:rgba(245,158,11,.12);border-radius:8px;font-size:.78rem"></div>
+      <button type="button" class="primary" id="pin-ok">Войти</button>
     </div>
   </div></div>
+
+  <div id="customer-login" class="screen"><div class="center">
+    <div class="auth-panel">
+      <button type="button" class="auth-back" id="cust-login-back">← Назад</button>
+      <img class="logo" src="/logo.png" alt="АРМАДА" />
+      <h2>Вход заказчика</h2>
+      <div class="sub">Телефон и PIN из карточки заказчика</div>
+      <p class="hint" id="cust-login-scope" style="display:none"></p>
+      <label for="cust-login-phone">Телефон</label>
+      <input id="cust-login-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+      <label for="cust-login-pin">PIN</label>
+      <input id="cust-login-pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="current-password" />
+      <div class="error" id="cust-login-error"></div>
+      <button class="primary" id="cust-login-ok">Войти</button>
+      <div class="hint">Перевозчик включает портал в «Справочники → компания → Заказчик».</div>
+    </div>
+  </div></div>
+
+  <div id="customer-portal" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="cust-portal-back">← Выход</button>
+        <h1 id="cust-portal-head">Заказчик</h1>
+        <button type="button" class="hint" id="cust-notify-toggle" style="margin-left:auto;font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer">Уведомления</button>
+        <a href="help.html?role=customer" class="hint" style="font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
+      </header>
+      <nav class="cust-portal-tabs filters" id="cust-portal-tabs" role="tablist" aria-label="Разделы портала">
+        <button type="button" class="on" data-cust-tab="new" role="tab" aria-selected="true">Новая заявка</button>
+        <button type="button" data-cust-tab="calendar" role="tab" aria-selected="false">Календарь броней</button>
+        <button type="button" data-cust-tab="docs" role="tab" aria-selected="false">Бух доки<span class="cust-tab-badge" id="cust-docs-badge" hidden></span></button>
+        <button type="button" data-cust-tab="orders" role="tab" aria-selected="false">Мои заявки</button>
+      </nav>
+      <div class="admin-form-scroll" id="cust-portal-scroll">
+        <p class="cat-panel-hint" id="cust-portal-sub"></p>
+        <p class="cat-panel-hint" id="cust-armada-source-banner" hidden style="color:var(--brand,#0f766e);font-weight:600"></p>
+        <div id="cust-tab-new" class="cust-portal-tab-panel" role="tabpanel">
+        <div id="cust-draft-banner" class="cust-draft-banner" hidden>
+          <strong>Черновик заявки</strong>
+          <p id="cust-draft-banner-text"></p>
+          <div class="cust-draft-banner-actions">
+            <button type="button" class="primary" id="cust-draft-restore">Восстановить</button>
+            <button type="button" class="hint" id="cust-draft-discard">Удалить черновик</button>
+          </div>
+        </div>
+        <section class="form-section" id="cust-order-form">
+          <div class="cust-order-head">
+            <div class="cust-order-mode-tabs" role="tablist" aria-label="Способ оформления">
+              <button type="button" class="cust-order-mode-tab on" data-cust-mode="form" role="tab" aria-selected="true">Форма</button>
+              <button type="button" class="cust-order-mode-tab" data-cust-mode="chat" role="tab" aria-selected="false">Чат</button>
+            </div>
+            <a href="/customer-form-chat-preview.html" class="cust-chat-preview-link" target="_blank" rel="noopener" title="Статичный макет для обсуждения">Превью макета</a>
+          </div>
+          <div id="cust-form-panel">
+          <div class="cust-form-layout">
+            <div class="cust-form-main">
+          <div class="cust-form-blocks">
+            <div class="cust-form-block" data-cust-step="cargo">
+              <div class="cust-form-block-head">1. Груз</div>
+              <div class="cust-form-block-body">
+                <label for="cust-cargo-text">Что везём</label>
+                <input id="cust-cargo-text" placeholder="Паллеты, оборудование, продукты…" />
+                <input type="hidden" id="cust-cargo-kind" value="general" />
+                <div class="form-triple cust-cargo-meta-row">
+                  <div>
+                    <label for="cust-cargo-places">Мест</label>
+                    <input id="cust-cargo-places" inputmode="numeric" placeholder="8" aria-label="Количество мест" />
+                  </div>
+                  <div>
+                    <label for="cust-cargo-volume">Объём, м³</label>
+                    <input id="cust-cargo-volume" inputmode="decimal" placeholder="авто" aria-label="Объём, м³" />
+                  </div>
+                  <div>
+                    <label for="cust-cargo-packaging">Упаковка</label>
+                    <select id="cust-cargo-packaging">
+                      <option value="">—</option>
+                      <option value="pallets">Паллеты</option>
+                      <option value="boxes">Короба / места</option>
+                      <option value="bulk">Россыпь / навал</option>
+                      <option value="oversize">Негабарит</option>
+                      <option value="other">Другое</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="cust-cargo-flags">
+                  <label class="cust-check-item"><input type="checkbox" id="cust-cargo-fragile" /> хрупкий</label>
+                  <div class="cust-cargo-temp-wrap">
+                    <label class="cust-check-item cust-cargo-temp-check"><input type="checkbox" id="cust-cargo-temp" /> температурный режим</label>
+                    <span id="cust-cargo-temp-range" class="cust-cargo-temp-range" hidden>
+                      <span class="cust-temp-label">от</span>
+                      <input id="cust-cargo-temp-from" inputmode="decimal" placeholder="-18" class="cust-cargo-temp-input" aria-label="Температура от, °C" />
+                      <span class="cust-temp-label">до</span>
+                      <input id="cust-cargo-temp-to" inputmode="decimal" placeholder="+25" class="cust-cargo-temp-input" aria-label="Температура до, °C" />
+                      <span class="cust-temp-unit" aria-hidden="true">°C</span>
+                    </span>
+                  </div>
+                </div>
+                <label>Габариты, м (Д × Ш × В)</label>
+                <div class="form-triple cust-cargo-dims-row">
+                  <input id="cust-req-l" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Д" aria-label="Длина, м" />
+                  <span class="cust-dim-sep" aria-hidden="true">×</span>
+                  <input id="cust-req-w" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Ш" aria-label="Ширина, м" />
+                  <span class="cust-dim-sep" aria-hidden="true">×</span>
+                  <input id="cust-req-h" class="cust-cargo-dim-input" inputmode="decimal" placeholder="В" aria-label="Высота, м" />
+                </div>
+                <label>Вес груза</label>
+                <div class="form-pair">
+                  <div><input id="cust-weight-value" inputmode="decimal" placeholder="например 5000 или 5" /></div>
+                  <div>
+                    <label for="cust-weight-unit">Единица</label>
+                    <select id="cust-weight-unit"><option value="kg">кг</option><option value="t" selected>т</option></select>
+                  </div>
+                </div>
+                <input type="hidden" id="cust-req-pay" />
+              </div>
+            </div>
+            <div class="cust-form-block" data-cust-step="vehicle">
+              <div class="cust-form-block-head">2. Когда</div>
+              <div class="cust-form-block-body">
+                <div class="form-pair cust-datetime-pair">
+                  <div class="cust-date-field-wrap" id="cust-date-field-wrap">
+                    <label for="cust-vehicle-date">Дата</label>
+                    <div class="cust-date-input-row">
+                      <input id="cust-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
+                      <label class="cust-date-cal-toggle" for="cust-vehicle-date-cal-toggle">
+                        <input type="checkbox" id="cust-vehicle-date-cal-toggle" />
+                        Календарь
+                      </label>
+                    </div>
+                    <div id="cust-vehicle-date-cal" class="cust-date-cal cust-date-cal-drop" hidden></div>
+                  </div>
+                  <div class="cust-time-field">
+                    <label for="cust-vehicle-time">Время</label>
+                    <input id="cust-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="cust-form-block" data-cust-step="route">
+              <div class="cust-form-block-head">3. Маршрут</div>
+              <div class="cust-form-block-body">
+                <label for="cust-load">Адрес загрузки</label>
+                <input id="cust-load" placeholder="Город, улица, дом" autocomplete="off" />
+                <label for="cust-load-note">Комментарий к загрузке</label>
+                <input id="cust-load-note" placeholder="Пропуск, въезд, погрузчик, время окна…" />
+                <label for="cust-loading-contact-name">Контактное лицо на загрузке</label>
+                <div class="form-pair">
+                  <div><input id="cust-loading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
+                  <div>
+                    <label for="cust-loading-contact-phone">Телефон</label>
+                    <input id="cust-loading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+                  </div>
+                </div>
+                <label class="cust-check-item cust-shipper-toggle">
+                  <input type="checkbox" id="cust-shipper-same" checked />
+                  <span>Я грузоотправитель (подписывает ЭТрН на погрузке)</span>
+                </label>
+                <div id="cust-shipper-fields" class="cust-shipper-fields" hidden>
+                  <p class="hint">Грузоотправитель сдаёт груз и подписывает T1 в ЭТрН. Может отличаться от заказчика (кто платит за перевозку).</p>
+                  <label for="cust-shipper-name">Грузоотправитель</label>
+                  <input id="cust-shipper-name" placeholder="Организация или ФИО" />
+                  <div class="form-pair">
+                    <div>
+                      <label for="cust-shipper-phone">Телефон для подписи ЭТрН</label>
+                      <input id="cust-shipper-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+                    </div>
+                    <div>
+                      <label for="cust-shipper-inn">ИНН (если есть)</label>
+                      <input id="cust-shipper-inn" inputmode="numeric" placeholder="необязательно" />
+                    </div>
+                  </div>
+                </div>
+                <label for="cust-unload">Адрес выгрузки</label>
+                <input id="cust-unload" placeholder="Город, улица, дом" autocomplete="off" />
+                <label for="cust-unload-note">Комментарий к выгрузке</label>
+                <input id="cust-unload-note" placeholder="Пропуск, ворота, разгрузка с …" />
+                <label for="cust-unloading-contact-name">Контактное лицо на выгрузке</label>
+                <div class="form-pair">
+                  <div><input id="cust-unloading-contact-name" placeholder="ФИО" autocomplete="name" /></div>
+                  <div>
+                    <label for="cust-unloading-contact-phone">Телефон</label>
+                    <input id="cust-unloading-contact-phone" inputmode="tel" placeholder="+7…" autocomplete="tel" />
+                  </div>
+                </div>
+                <div class="cust-route-map-wrap" id="cust-route-map-wrap">
+                  <div class="cust-route-map" id="cust-route-map" aria-hidden="true"></div>
+                  <p class="hint" id="cust-route-km-hint">Укажите адреса — построим маршрут для грузового транспорта.</p>
+                </div>
+                <div class="cust-trip-row">
+                  <span class="cust-trip-label">Тип перевозки</span>
+                  <span class="cust-trip-badge" id="cust-trip-mode-display">—</span>
+                </div>
+                <input type="hidden" id="cust-trip-mode" value="auto" />
+              </div>
+            </div>
+            <div class="cust-form-block" data-cust-step="transport">
+              <div class="cust-form-block-head">4. Транспорт</div>
+              <div class="cust-form-block-body cust-form-block-body-flush">
+                <div id="cust-vehicle-types" class="cust-vtype-panel">
+                  <div class="cust-vtype-cols">
+              <div class="cust-vtype-col">
+                <div class="cust-vtype-col-head">
+                  <span class="cust-vtype-col-title">Кузов <span class="req">*</span></span>
+                </div>
+                <div class="cust-vtype-search-wrap cust-vtype-search-collapsed" id="cust-vtype-search-wrap">
+                  <button type="button" class="cust-vtype-search-toggle" id="cust-vtype-search-toggle" aria-expanded="false">Найти по названию</button>
+                  <input type="search" id="cust-vtype-search" class="cust-vtype-search" placeholder="Поиск: тр, тент, трал…" autocomplete="off" aria-label="Поиск типа кузова" hidden />
+                </div>
+                <div class="cust-vtype-col-body" id="cust-vtype-body-list">
+                  <label class="cust-vtype-master cust-vtype-tree-root">
+                    <input type="checkbox" id="cust-vtype-closed-all" />
+                    <span>все закр. + изотерм</span>
+                  </label>
+                  <div class="cust-vtype-tree">
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="tent" /> тентованный</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="container" /> контейнер</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="van" /> фургон</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="metal" /> цельнометалл.</label>
+                  </div>
+                  <label class="cust-vtype-item cust-vtype-isotherm"><input type="checkbox" data-vtype="isotherm" /> изотермический</label>
+                  <label class="cust-vtype-master cust-vtype-tree-root cust-vtype-group-gap">
+                    <input type="checkbox" id="cust-vtype-refr-all" />
+                    <span>реф.+изотерм</span>
+                  </label>
+                  <div class="cust-vtype-tree">
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="reefer" /> рефрижератор</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="reefer_partition" /> реф. с перегородкой</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="reefer_multimode" /> реф. мультирежимный</label>
+                  </div>
+                  <label class="cust-vtype-master cust-vtype-tree-root cust-vtype-group-gap">
+                    <input type="checkbox" id="cust-vtype-open-all" />
+                    <span>все открытые</span>
+                  </label>
+                  <div class="cust-vtype-tree">
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="board" /> бортовой</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="open" /> открытый конт.</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="dump" /> самосвал</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="platform" /> площадка</label>
+                    <label class="cust-vtype-item cust-vtype-child"><input type="checkbox" data-vtype="shalanda" /> шаланда</label>
+                  </div>
+                  <div id="cust-vtype-extra-list" class="cust-vtype-extra-list" hidden></div>
+                </div>
+              </div>
+              <div class="cust-vtype-col cust-vtype-col-load" id="cust-load-col">
+                <div class="cust-vtype-col-head">
+                  <span class="cust-vtype-col-title">Загрузка</span>
+                </div>
+                <label class="cust-vtype-match-all">
+                  <input type="checkbox" id="cust-load-match-all" disabled />
+                  <span>учитывать все выбранные</span>
+                </label>
+                <div class="cust-vtype-col-body cust-check-grid" id="cust-load-methods">
+                  <label class="cust-check-item"><input type="checkbox" data-load="top" disabled /> верхняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="side" disabled /> боковая</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="rear" disabled /> задняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="full_tent" disabled /> с полной растентовкой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="remove_crossbars" disabled /> со снятием поперечных перекладин</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="remove_posts" disabled /> со снятием стоек</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="no_gates" disabled /> без ворот</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="tail_lift" disabled /> гидроборт</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="ramps" disabled /> аппарели</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="crate" disabled /> с обрешеткой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="boards" disabled /> с бортами</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="side_both" disabled /> боковая с двух сторон</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="pour" disabled /> налив</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="pneumatic" disabled /> пневматический</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="hydraulic" disabled /> гидравлический</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="electric" disabled /> электрический</label>
+                  <label class="cust-check-item"><input type="checkbox" data-load="diesel_compressor" disabled /> дизельный компрессор</label>
+                </div>
+              </div>
+              <div class="cust-vtype-col cust-vtype-col-unload" id="cust-unload-col">
+                <div class="cust-vtype-col-head">
+                  <span class="cust-vtype-col-title">Выгрузка</span>
+                </div>
+                <label class="cust-vtype-match-all">
+                  <input type="checkbox" id="cust-unload-match-all" disabled />
+                  <span>учитывать все выбранные</span>
+                </label>
+                <div class="cust-vtype-col-body cust-check-grid" id="cust-unload-methods">
+                  <label class="cust-check-item"><input type="checkbox" data-unload="top" disabled /> верхняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="side" disabled /> боковая</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="rear" disabled /> задняя</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="full_tent" disabled /> с полной растентовкой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="remove_crossbars" disabled /> со снятием поперечных перекладин</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="remove_posts" disabled /> со снятием стоек</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="no_gates" disabled /> без ворот</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="tail_lift" disabled /> гидроборт</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="ramps" disabled /> аппарели</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="crate" disabled /> с обрешеткой</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="boards" disabled /> с бортами</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="side_both" disabled /> боковая с двух сторон</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="pour" disabled /> налив</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="pneumatic" disabled /> пневматический</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="hydraulic" disabled /> гидравлический</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="electric" disabled /> электрический</label>
+                  <label class="cust-check-item"><input type="checkbox" data-unload="diesel_compressor" disabled /> дизельный компрессор</label>
+                </div>
+              </div>
+                  </div>
+                </div>
+                <input type="hidden" id="cust-body-type" value="tent" />
+              </div>
+            </div>
+            <div class="cust-form-block" data-cust-step="terms">
+              <div class="cust-form-block-head">5. Условия и цена</div>
+              <div class="cust-form-block-body">
+                <label for="cust-fulfillment">Как закрыть рейс</label>
+                <select id="cust-fulfillment">
+                  <option value="logist">Логисту / диспетчеру — как можно скорее (ставка в цене)</option>
+                  <option value="direct">Свой парк перевозчика — заранее, без срочного подбора</option>
+                </select>
+                <p class="hint" id="cust-fulfill-hint">Вы говорите диспетчеру: закройте заказ как можно быстрее и готовы оплатить его работу по ставке. Свободную машину можно запросить — бронь подтвердит перевозчик.</p>
+                <div id="cust-fleet-box">
+                  <label for="cust-book-plate">Свободные машины</label>
+                  <select id="cust-book-plate"></select>
+                  <p class="hint" id="cust-fleet-hint">Запрос брони подтвердит перевозчик. После подтверждения дата подачи появится в календаре у вас и у него.</p>
+                </div>
+                <div id="cust-price-preview" class="schedule-box"></div>
+                <label for="cust-price">Ваша цена, ₽ (не ниже минимума, если он есть)</label>
+                <input id="cust-price" inputmode="decimal" placeholder="из расчёта или уточнит перевозчик" />
+                <div class="error" id="cust-form-error"></div>
+                <button type="button" class="primary" id="cust-submit">Отправить заявку</button>
+                <div class="cust-submit-success" id="cust-submit-success" hidden></div>
+              </div>
+            </div>
+          </div>
+            </div>
+            <aside class="cust-form-checklist" id="cust-form-checklist" aria-label="Прогресс заявки">
+              <div class="cust-checklist-items">
+                <button type="button" class="cust-checklist-item" data-cust-step="cargo">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Груз</span>
+                    <span class="cust-checklist-detail" id="cust-check-cargo">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="vehicle">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Когда</span>
+                    <span class="cust-checklist-detail" id="cust-check-vehicle">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="route">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Маршрут</span>
+                    <span class="cust-checklist-detail" id="cust-check-route">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="transport">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Транспорт</span>
+                    <span class="cust-checklist-detail" id="cust-check-transport">не заполнено</span>
+                  </span>
+                </button>
+                <button type="button" class="cust-checklist-item" data-cust-step="terms">
+                  <span class="cust-checklist-icon" aria-hidden="true"></span>
+                  <span class="cust-checklist-body">
+                    <span class="cust-checklist-title">Условия и цена</span>
+                    <span class="cust-checklist-detail" id="cust-check-terms">логисту</span>
+                  </span>
+                </button>
+              </div>
+              <button type="button" class="primary cust-checklist-submit" id="cust-checklist-submit" disabled>Отправить заявку</button>
+            </aside>
+          </div>
+          </div>
+          <div id="cust-chat-panel" class="cust-chat-shell" hidden>
+            <div class="chat-progress" aria-hidden="true"><div class="chat-progress-fill" id="cust-chat-progress"></div></div>
+            <p class="chat-step-hint" id="cust-chat-step-hint"></p>
+            <div class="chat-thread" id="cust-chat-thread" role="log" aria-live="polite"></div>
+            <div class="chat-action-tray" id="cust-chat-tray" hidden></div>
+            <div class="cust-chat-footer">
+              <div class="chat-compose" id="cust-chat-compose">
+                <input id="cust-chat-input" placeholder="Сообщение…" aria-label="Сообщение" autocomplete="off" enterkeyhint="send" />
+                <button type="button" id="cust-chat-send" aria-label="Отправить">➤</button>
+              </div>
+              <div class="error" id="cust-chat-error"></div>
+            </div>
+          </div>
+        </section>
+        </div>
+        <div id="cust-tab-calendar" class="cust-portal-tab-panel" role="tabpanel" hidden>
+          <p class="hint">Точка на дате подачи — когда логист подтвердил бронь своей машины или нашёл перевозчика на бирже. Нажмите дату — заявки откроются во вкладке «Мои заявки».</p>
+          <div id="cust-book-cal"></div>
+        </div>
+        <div id="cust-tab-docs" class="cust-portal-tab-panel" role="tabpanel" hidden>
+          <section class="cust-docs-alert-panel" id="cust-docs-alert-panel" hidden aria-label="Требует внимания">
+            <header class="cust-docs-alert-panel-head">
+              <span class="cust-docs-alert-panel-title">Требует внимания</span>
+              <span class="cust-docs-alert-panel-count" id="cust-docs-alert-count" hidden></span>
+            </header>
+            <div class="cust-docs-alerts" id="cust-docs-alerts"></div>
+          </section>
+          <section class="form-section">
+            <h2 class="form-section-title">Счета</h2>
+            <p class="hint">Счета формируются автоматически после отправки заявки. QR-код — для оплаты через приложение банка.</p>
+            <div id="cust-invoices-list"></div>
+          </section>
+          <section class="form-section">
+            <h2 class="form-section-title">Акты, договоры и ЭТрН по заявкам</h2>
+            <p class="hint">Рамочный договор, заявка на перевозку, договор‑заявка, акт и ЭТрН. T1 подписывает грузоотправитель на погрузке.</p>
+            <div id="cust-docs-by-order"></div>
+          </section>
+        </div>
+        <div id="cust-tab-orders" class="cust-portal-tab-panel" role="tabpanel" hidden>
+          <p class="hint" id="cust-orders-day-hint" hidden></p>
+          <div id="cust-orders-list"></div>
+        </div>
+      </div>
+    </div>
+    <div id="cust-shipper-etrn-overlay" class="cust-shipper-etrn-overlay" hidden>
+      <div class="cust-shipper-etrn-card">
+        <h2>ЭТрН · подпись грузоотправителя (T1)</h2>
+        <div id="cust-shipper-etrn-body"></div>
+      </div>
+    </div>
+  </div>
 
   <div id="admin" class="screen">
     <div class="admin-layout">
       <aside class="admin-sidebar" id="admin-sidebar" aria-label="Меню админки">
         <div class="admin-sidebar-brand">
-          <img class="admin-sidebar-logo" src="icons/icon-192.png" alt="" width="28" height="28" />
+          <img class="admin-sidebar-logo" src="/icons/icon-192.png" alt="" width="28" height="28" />
           <span>АРМАДА</span>
         </div>
         <div class="admin-sidebar-user" id="admin-sidebar-user"></div>
         <nav class="admin-sidebar-nav">
-          <button type="button" class="admin-nav-item on" data-nav="orders">Заявки</button>
+          <button type="button" class="admin-nav-item on" data-nav="orders">Парк</button>
           <button type="button" class="admin-nav-item" data-nav="eto">ЕТО</button>
           <button type="button" class="admin-nav-item" data-nav="exchange">Биржа</button>
           <button type="button" class="admin-nav-item" data-nav="catalogs" id="admin-catalogs">Справочники</button>
+          <button type="button" class="admin-nav-item" data-nav="links" id="admin-links">Ссылки</button>
+          <button type="button" class="admin-nav-item" data-nav="documents" id="admin-documents">Документы</button>
+          <button type="button" class="admin-nav-item" data-nav="profile" id="admin-profile">Профиль логиста</button>
           <button type="button" class="admin-nav-item" data-nav="activity" id="admin-activity" style="display:none">Активность</button>
+          <button type="button" class="admin-nav-item" data-nav="billing" id="admin-billing" style="display:none">Тарифы</button>
+          <button type="button" class="admin-nav-item" data-nav="plans" id="admin-plans" style="display:none">Планы</button>
         </nav>
         <div class="admin-sidebar-foot">
+          <button type="button" class="admin-nav-item ghost" id="admin-help">Помощь</button>
           <button type="button" class="admin-nav-item ghost" id="admin-as-driver" title="Войти как водитель">Водитель</button>
           <button type="button" class="admin-nav-item ghost" id="admin-exit">Выход</button>
         </div>
@@ -103,16 +570,27 @@
       <div class="admin-main">
         <header class="admin-topbar">
           <button type="button" class="admin-menu-toggle" id="admin-menu-toggle" aria-label="Меню">☰</button>
-          <h1 id="admin-title">Заявки</h1>
+          <h1 id="admin-title">Парк</h1>
+          <div class="park-ex-switch" id="admin-park-ex" role="tablist" aria-label="Парк или биржа">
+            <button type="button" class="on" data-park-ex="park" id="admin-goto-park">Парк</button>
+            <button type="button" data-park-ex="exchange" id="admin-goto-exchange">Биржа</button>
+          </div>
+          <button type="button" class="admin-top-notify" id="admin-notify-toggle" title="Уведомления о входящих заявках">🔔</button>
           <button type="button" class="admin-top-cta" id="admin-new">+ Заказ</button>
         </header>
         <div class="filters" id="admin-filters">
           <button data-filter="all" class="on">Все</button>
+          <button data-filter="inbox" class="admin-filter-inbox">Входящие<span class="admin-filter-badge" id="admin-inbox-badge" hidden></span></button>
           <button data-filter="assigned">Назначен</button>
           <button data-filter="progress">В работе</button>
+          <button data-filter="etrn-sign" class="admin-filter-etrn">ЭТrН · моя подпись<span class="admin-filter-badge" id="admin-etrn-sign-badge" hidden></span></button>
+          <button data-filter="etrn-wait-customer" class="admin-filter-etrn">ЭТrН · T1<span class="admin-filter-badge" id="admin-etrn-t1-badge" hidden></span></button>
+          <button data-filter="etrn-wait-driver" class="admin-filter-etrn">ЭТrН · водитель<span class="admin-filter-badge" id="admin-etrn-driver-badge" hidden></span></button>
           <button data-filter="closed">Закрыт</button>
         </div>
         <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
+        <div class="hint" id="admin-billing-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);font-size:.78rem"></div>
+        <div class="hint admin-inbox-banner" id="admin-inbox-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.28);font-size:.78rem"></div>
         <div class="table-wrap admin-content" id="admin-list"></div>
       </div>
     </div>
@@ -125,142 +603,177 @@
         <h1>Новый заказ</h1>
       </header>
       <div class="admin-form-scroll">
-        <section class="form-section">
-          <h2 class="form-section-title">Основание</h2>
-          <p class="form-section-hint">Номер за день и фирма по договору — от неё же берётся парк</p>
-          <div class="form-fields">
-            <label>Номер за день</label>
-            <div class="nums" id="create-day"><button type="button" data-cday="1">1</button><button type="button" data-cday="2">2</button><button type="button" data-cday="3">3</button><button type="button" data-cday="4">4</button><button type="button" data-cday="5">5</button></div>
-            <label for="create-own-company">От нашей фирмы (договор)</label>
-            <select id="create-own-company"></select>
-          </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Заказчик</h2>
-          <p class="form-section-hint">ИНН → «Загрузить» из ЕГРЮЛ ФНС (на сервере). Полный адрес: ключ API-ФНС в Активность.</p>
-          <div class="form-fields">
-            <label for="create-customer-inn">ИНН заказчика</label>
-            <div class="row" style="gap:8px;align-items:center">
-              <input id="create-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" />
-              <button type="button" class="secondary" id="create-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
-            </div>
-            <div class="hint" id="create-customer-inn-status"></div>
-            <label for="create-customer">Заказчик (наименование)</label>
-            <input id="create-customer" placeholder="Название компании" />
-            <div class="form-pair">
-              <div>
-                <label for="create-contact-name">Контактное лицо</label>
-                <input id="create-contact-name" placeholder="ФИО контакта" />
-              </div>
-              <div>
-                <label for="create-contact-phone">Телефон</label>
-                <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
-              </div>
+        <div class="cust-form-blocks admin-order-blocks">
+          <div class="cust-form-block" data-admin-step="basis">
+            <div class="cust-form-block-head">1. Основание</div>
+            <div class="cust-form-block-body">
+              <label for="create-copy-from">Скопировать с прошлого заказа</label>
+              <select id="create-copy-from"><option value="">— новый заказ —</option></select>
+              <p class="hint" id="create-copy-hint">Выберите заказ — подставим заказчика, маршрут, груз и цены. Дату подачи и водителя укажите заново.</p>
+              <p class="form-section-hint">Номер за день и фирма по договору — от неё же берётся парк</p>
+              <label>Номер за день</label>
+              <div class="nums" id="create-day"><button type="button" data-cday="1">1</button><button type="button" data-cday="2">2</button><button type="button" data-cday="3">3</button><button type="button" data-cday="4">4</button><button type="button" data-cday="5">5</button></div>
+              <label for="create-own-company">От нашей фирмы (договор)</label>
+              <select id="create-own-company"></select>
             </div>
           </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Маршрут и подача</h2>
-          <div class="form-fields">
-            <label>Подача ТС</label>
-            <div class="form-pair">
-              <div>
-                <label for="create-vehicle-date">Дата</label>
-                <input id="create-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
+          <div class="cust-form-block" data-admin-step="customer">
+            <div class="cust-form-block-head">2. Заказчик</div>
+            <div class="cust-form-block-body">
+              <p class="form-section-hint">ИНН → «Загрузить» из ЕГРЮЛ ФНС (на сервере). Полный адрес: ключ API-ФНС в Активность.</p>
+              <label for="create-customer-inn">ИНН заказчика</label>
+              <div class="row" style="gap:8px;align-items:center">
+                <input id="create-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" />
+                <button type="button" class="secondary" id="create-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
               </div>
-              <div>
-                <label for="create-vehicle-time">Время</label>
-                <input id="create-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
-              </div>
-            </div>
-            <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
-            <div class="form-pair">
-              <div>
-                <label for="create-load">Адрес загрузки</label>
-                <textarea id="create-load" rows="2" placeholder="Город, улица, дом"></textarea>
-                <label for="create-loading-contact-name">Контакт на загрузке</label>
-                <input id="create-loading-contact-name" placeholder="ФИО" />
-                <label for="create-loading-contact-phone">Телефон на загрузке</label>
-                <input id="create-loading-contact-phone" inputmode="tel" placeholder="+79650730002" />
-              </div>
-              <div>
-                <label for="create-unload">Адрес выгрузки</label>
-                <textarea id="create-unload" rows="2" placeholder="Город, улица, дом"></textarea>
-                <label for="create-unloading-contact-name">Контакт на выгрузке</label>
-                <input id="create-unloading-contact-name" placeholder="ФИО" />
-                <label for="create-unloading-contact-phone">Телефон на выгрузке</label>
-                <input id="create-unloading-contact-phone" inputmode="tel" placeholder="+79650730002" />
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Цены</h2>
-          <div class="form-fields">
-            <div class="form-pair">
-              <div>
-                <label for="create-price-client">Цена для заказчика, ₽</label>
-                <input id="create-price-client" inputmode="decimal" placeholder="сумма" />
-              </div>
-              <div>
-                <label for="create-price-carrier">Цена для перевозчика, ₽</label>
-                <input id="create-price-carrier" inputmode="decimal" placeholder="сумма" />
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="form-section">
-          <h2 class="form-section-title">Исполнение</h2>
-          <p class="form-section-hint">Свой водитель, перевозчик или биржа</p>
-          <div class="form-fields">
-            <label for="create-exec-mode">Кто везёт</label>
-            <select id="create-exec-mode">
-              <option value="own">Наш водитель</option>
-              <option value="carrier">Водитель перевозчика</option>
-              <option value="exchange">На биржу</option>
-            </select>
-            <div id="create-own-box">
-              <div class="hint" id="create-fleet-hint" style="margin:0 0 6px">Авто и водитель — только парк выбранной фирмы</div>
+              <div class="hint" id="create-customer-inn-status"></div>
+              <label for="create-customer">Заказчик (наименование)</label>
+              <input id="create-customer" placeholder="Название компании" />
               <div class="form-pair">
                 <div>
-                  <label for="create-plate">Автомобиль</label>
-                  <select id="create-plate"></select>
+                  <label for="create-contact-name">Контактное лицо</label>
+                  <input id="create-contact-name" placeholder="ФИО контакта" />
                 </div>
                 <div>
-                  <label for="create-driver">Водитель</label>
-                  <select id="create-driver"></select>
+                  <label for="create-contact-phone">Телефон</label>
+                  <input id="create-contact-phone" inputmode="tel" placeholder="+79650730002" />
                 </div>
               </div>
             </div>
-            <label for="create-carrier-company">Перевозчик (компания)</label>
-            <select id="create-carrier-company"></select>
-            <div id="create-carrier-people">
+          </div>
+          <div class="cust-form-block" data-admin-step="when">
+            <div class="cust-form-block-head">3. Когда</div>
+            <div class="cust-form-block-body">
+              <div class="form-pair cust-datetime-pair">
+                <div>
+                  <label for="create-vehicle-date">Дата</label>
+                  <input id="create-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" autocomplete="off" />
+                </div>
+                <div class="cust-time-field">
+                  <label for="create-vehicle-time">Время</label>
+                  <input id="create-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+                </div>
+              </div>
+              <div class="hint" id="create-free-hint">Ориентир освобождения: укажите подачу (мин. заказ = часы работы из справочника)</div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="route">
+            <div class="cust-form-block-head">4. Маршрут</div>
+            <div class="cust-form-block-body">
+              <label for="create-route-template">Шаблон маршрута</label>
+              <div class="row bulk-route-row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+                <select id="create-route-template" style="flex:1;min-width:160px"><option value="">— выберите шаблон —</option></select>
+                <button type="button" class="secondary" id="create-route-template-apply" style="width:auto;flex:0 0 auto;padding:8px 12px">Применить</button>
+                <button type="button" class="secondary" id="create-route-template-save" style="width:auto;flex:0 0 auto;padding:8px 12px">Сохранить</button>
+                <button type="button" class="secondary" id="create-route-template-del" style="width:auto;flex:0 0 auto;padding:8px 12px" title="Удалить выбранный шаблон">✕</button>
+              </div>
+              <p class="hint" id="create-route-template-hint">Типовые маршруты фирмы — быстрее, чем копировать из прошлого заказа.</p>
+              <label for="create-load">Адрес загрузки</label>
+              <textarea id="create-load" rows="2" placeholder="Город, улица, дом" autocomplete="off"></textarea>
+              <label for="create-loading-contact-name">Контакт на загрузке</label>
+              <div class="form-pair">
+                <div><input id="create-loading-contact-name" placeholder="ФИО" /></div>
+                <div>
+                  <label for="create-loading-contact-phone">Телефон</label>
+                  <input id="create-loading-contact-phone" inputmode="tel" placeholder="+79650730002" />
+                </div>
+              </div>
+              <label for="create-unload">Адрес выгрузки</label>
+              <textarea id="create-unload" rows="2" placeholder="Город, улица, дом" autocomplete="off"></textarea>
+              <label for="create-unloading-contact-name">Контакт на выгрузке</label>
+              <div class="form-pair">
+                <div><input id="create-unloading-contact-name" placeholder="ФИО" /></div>
+                <div>
+                  <label for="create-unloading-contact-phone">Телефон</label>
+                  <input id="create-unloading-contact-phone" inputmode="tel" placeholder="+79650730002" />
+                </div>
+              </div>
+              <p class="hint" id="create-route-km-hint">Укажите адреса — построим маршрут для расчёта км и стоимости.</p>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="cargo" id="create-req-block">
+            <div class="cust-form-block-head">5. Груз и ТС</div>
+            <div class="cust-form-block-body">
+              <label for="create-cargo-desc">Наименование груза</label>
+              <input id="create-cargo-desc" placeholder="Паллеты, оборудование, продукты…" autocomplete="off" />
+              <label for="create-cargo-kind">Тип груза</label>
+              <select id="create-cargo-kind">
+                <option value="">— не указан —</option>
+              </select>
+              <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
+              <label>Грузоподъёмность и кузов (т / Д × Ш × В)</label>
+              <div class="form-triple cust-cargo-dims-row">
+                <input id="create-req-pay" class="cust-cargo-dim-input" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" aria-label="Тоннаж, т" />
+                <input id="create-req-l" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Д" title="Длина кузова, м" aria-label="Длина, м" />
+                <span class="cust-dim-sep" aria-hidden="true">×</span>
+                <input id="create-req-w" class="cust-cargo-dim-input" inputmode="decimal" placeholder="Ш" title="Ширина, м" aria-label="Ширина, м" />
+                <span class="cust-dim-sep" aria-hidden="true">×</span>
+                <input id="create-req-h" class="cust-cargo-dim-input" inputmode="decimal" placeholder="В" title="Высота, м" aria-label="Высота, м" />
+              </div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="exec">
+            <div class="cust-form-block-head">6. Исполнение</div>
+            <div class="cust-form-block-body">
+              <p class="form-section-hint" id="create-exec-hint">Сначала свой водитель. Остаток — биржа, там вы заказчик перевозки</p>
+              <span class="create-exec-label" id="create-exec-mode-label">Кто везёт</span>
+              <div class="park-ex-switch create-exec-switch" id="create-exec-switch" role="group" aria-labelledby="create-exec-mode-label">
+                <button type="button" data-exec="own" class="on">Парк</button>
+                <button type="button" data-exec="exchange">Биржа</button>
+              </div>
+              <select id="create-exec-mode" hidden aria-hidden="true">
+                <option value="own">Наш водитель</option>
+                <option value="carrier">Водитель перевозчика</option>
+                <option value="exchange">На биржу</option>
+              </select>
+              <p class="hint" id="create-exec-carrier-wrap"><button type="button" class="text-link" id="create-exec-carrier">Перевозчик из справочника</button></p>
+              <div id="create-own-box">
+                <div class="hint" id="create-fleet-hint" style="margin:0">Авто и водитель — только парк выбранной фирмы</div>
+                <div class="form-pair">
+                  <div>
+                    <label for="create-plate">Автомобиль</label>
+                    <select id="create-plate"></select>
+                  </div>
+                  <div>
+                    <label for="create-driver">Водитель</label>
+                    <select id="create-driver"></select>
+                  </div>
+                </div>
+              </div>
+              <label for="create-carrier-company">Перевозчик (компания)</label>
+              <select id="create-carrier-company"></select>
+              <div id="create-carrier-people">
+                <div class="form-pair">
+                  <div>
+                    <label for="create-carrier-driver">Водитель перевозчика</label>
+                    <select id="create-carrier-driver"></select>
+                  </div>
+                  <div>
+                    <label for="create-carrier-vehicle">ТС перевозчика</label>
+                    <select id="create-carrier-vehicle"></select>
+                  </div>
+                </div>
+              </div>
+              <div id="create-exchange-hint" class="hint" style="display:none">Штатный логист сначала закрывает свои машины. Остаток — на биржу: там вы заказчик перевозки, партнёр везёт. Для грузоотправителя исполнителем остаётесь вы. Маржа — цена заказчику минус цена перевозчику.</div>
+            </div>
+          </div>
+          <div class="cust-form-block" data-admin-step="price">
+            <div class="cust-form-block-head">7. Цены</div>
+            <div class="cust-form-block-body">
+              <div id="create-price-preview" class="schedule-box"></div>
               <div class="form-pair">
                 <div>
-                  <label for="create-carrier-driver">Водитель перевозчика</label>
-                  <select id="create-carrier-driver"></select>
+                  <label for="create-price-client">Цена для заказчика, ₽</label>
+                  <input id="create-price-client" inputmode="decimal" placeholder="сумма" />
                 </div>
                 <div>
-                  <label for="create-carrier-vehicle">ТС перевозчика</label>
-                  <select id="create-carrier-vehicle"></select>
+                  <label for="create-price-carrier">Цена для перевозчика, ₽</label>
+                  <input id="create-price-carrier" inputmode="decimal" placeholder="сумма" />
                 </div>
               </div>
             </div>
-            <div id="create-exchange-hint" class="hint" style="display:none">Заказ увидят другие фирмы на бирже. Укажите требования к ТС — забрать сможет только подходящий транспорт.</div>
           </div>
-        </section>
-        <section class="form-section" id="create-req-block">
-          <h2 class="form-section-title">Требования к ТС</h2>
-          <p class="form-section-hint">Для биржи и подбора: тоннаж и габариты кузова</p>
-          <div class="form-fields">
-            <div class="row">
-              <input id="create-req-pay" inputmode="decimal" placeholder="т" title="Грузоподъёмность, т" style="flex:0 0 64px;text-align:center" />
-              <input id="create-req-l" inputmode="decimal" placeholder="Д, м" title="Длина кузова, м" style="flex:1;text-align:center" />
-              <input id="create-req-w" inputmode="decimal" placeholder="Ш, м" title="Ширина, м" style="flex:1;text-align:center" />
-              <input id="create-req-h" inputmode="decimal" placeholder="В, м" title="Высота, м" style="flex:1;text-align:center" />
-            </div>
-          </div>
-        </section>
+        </div>
       </div>
       <div class="admin-form-actions">
         <div class="error" id="create-error"></div>
@@ -295,8 +808,21 @@
       <div class="admin-form-actions" id="detail-actions" style="display:none">
         <div class="ok" id="detail-ok" style="display:none">Сохранено — маршрут и ЗП обновлены</div>
         <button class="primary" id="detail-save">Сохранить</button>
+        <button class="secondary" id="detail-copy-order">Повторить заказ</button>
+        <button class="secondary" id="detail-return-exchange" style="display:none">На биржу снова</button>
         <button class="secondary" id="detail-cancel-order" style="display:none">Отменить заказ</button>
       </div>
+    </div>
+  </div>
+
+  <div id="admin-cabinet-settings-screen" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="cabinet-settings-back">← Назад</button>
+        <h1 id="cabinet-settings-title">Настройки кабинета</h1>
+      </header>
+      <div class="filters cat-owner-filters" id="cabinet-owner-filters" aria-label="Кабинет"></div>
+      <div class="admin-form-scroll" id="cabinet-settings-form"></div>
     </div>
   </div>
 
@@ -304,8 +830,9 @@
     <div class="admin-form-shell">
       <header class="form-topbar">
         <button type="button" class="form-back" id="cat-back">← Назад</button>
-        <h1>Справочники</h1>
+        <h1 id="cat-title">Справочники</h1>
       </header>
+      <div class="filters cat-owner-filters" id="cat-owner-filters" aria-label="Кабинет справочника"></div>
       <nav class="cat-tabs" id="cat-tabs" role="tablist" aria-label="Разделы справочников"></nav>
       <div class="admin-form-scroll" id="catalogs-form"></div>
     </div>
@@ -321,6 +848,73 @@
     </div>
   </div>
 
+  <div id="admin-billing-screen" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="billing-back">← Назад</button>
+        <h1>Тарифы и оплата</h1>
+      </header>
+      <div class="admin-form-scroll" id="billing-form"></div>
+    </div>
+  </div>
+
+  <div id="admin-links-screen" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="links-back">← Назад</button>
+        <h1>Входы и ссылки</h1>
+      </header>
+      <div class="admin-form-scroll" id="links-form"></div>
+    </div>
+  </div>
+
+  <div id="admin-profile-screen" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="profile-back">← Назад</button>
+        <h1 id="admin-profile-title">Профиль логиста</h1>
+      </header>
+      <div class="admin-form-scroll" id="admin-profile-form"></div>
+    </div>
+  </div>
+
+  <div id="admin-docs-screen" class="screen">
+    <div class="admin-form-shell adm-docs-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="docs-back">← Назад</button>
+        <h1>Документы</h1>
+      </header>
+      <div class="adm-docs-scroll">
+        <nav class="adm-docs-tabs" id="adm-docs-tabs" role="tablist" aria-label="Разделы документов">
+          <button type="button" class="adm-docs-tab" data-adm-docs-tab="legal">Юридические</button>
+          <button type="button" class="adm-docs-tab on" data-adm-docs-tab="buh">Бух.доки</button>
+          <button type="button" class="adm-docs-tab" data-adm-docs-tab="letters">Письма</button>
+          <button type="button" class="adm-docs-tab" data-adm-docs-tab="constructor">Конструктор</button>
+        </nav>
+        <div class="adm-docs-panel" id="adm-docs-panel-legal"></div>
+        <div class="adm-docs-panel on" id="adm-docs-panel-buh"></div>
+        <div class="adm-docs-panel" id="adm-docs-panel-letters"></div>
+        <div class="adm-docs-panel" id="adm-docs-panel-constructor"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-plans-screen" class="screen">
+    <div class="admin-form-shell admin-plans-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="plans-back">← Назад</button>
+        <h1>Планы разработки</h1>
+      </header>
+      <p class="cat-panel-hint plans-hint">Дорожные карты по ролям. ✅ готово · 🟡 в работе · ⬜ не начато. Источник: <code>docs/plans/</code></p>
+      <div class="plans-layout">
+        <nav class="plans-nav" id="plans-nav" aria-label="Разделы планов"></nav>
+        <div class="admin-form-scroll plans-scroll" id="plans-scroll">
+          <div id="plans-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="admin-vehicle-card" class="screen">
     <div class="admin-form-shell">
       <header class="form-topbar">
@@ -328,6 +922,22 @@
         <h1 id="veh-card-title">Авто</h1>
       </header>
       <div class="admin-form-scroll" id="vehicle-card-form"></div>
+    </div>
+  </div>
+
+  <div id="admin-driver-card" class="screen">
+    <div class="admin-form-shell">
+      <header class="form-topbar">
+        <button type="button" class="form-back" id="drv-card-back">← Водители</button>
+        <h1 id="drv-card-title">Водитель</h1>
+      </header>
+      <div class="admin-form-scroll" id="driver-card-form"></div>
+      <div class="admin-form-actions" id="driver-card-actions">
+        <div class="ok" id="drv-card-ok" style="display:none">Сохранено</div>
+        <button type="button" class="primary" id="dc-save">Сохранить</button>
+        <button type="button" class="secondary" id="dc-invite">Ссылка водителю (7 дн.)</button>
+        <button type="button" class="secondary danger-text" id="dc-delete">Удалить из фирмы</button>
+      </div>
     </div>
   </div>
 
@@ -352,10 +962,10 @@
       <button type="button" id="btn-home" class="on" aria-current="page"><span class="tab-ico" aria-hidden="true">●</span>Главная</button>
       <button type="button" id="btn-orders"><span class="tab-ico" aria-hidden="true">☰</span>Заявки</button>
       <button type="button" id="btn-shifts"><span class="tab-ico" aria-hidden="true">◷</span>История</button>
-      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль</button>
+      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль водителя</button>
     </nav>
     <div id="cabinet-panel" class="driver-panel">
-      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль</h1></header>
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль водителя</h1></header>
       <div class="panel-body" id="cabinet-list"></div>
     </div>
     <div id="orders-panel" class="driver-panel">
@@ -368,9 +978,7 @@
     </div>
   </div>
 </div>
-  <script src="store.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="driver.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="admin.js?v=2026-08-13-fix-company-name-esc"></script>
-<script src="app.js?v=2026-08-13-fix-company-name-esc"></script>
+  <script src="/entry-route.js?v=2026-09-01-legal4317"></script>
+  <script src="/boot-loader.js?v=2026-09-01-legal4317"></script>
 </body>
 </html>

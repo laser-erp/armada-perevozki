@@ -1,6 +1,6 @@
-/* АРМАДА PWA — HTML с сети; офлайн — оболочка из кэша; уведомления */
-const CACHE = 'armada-shell-v16';
-const SHELL = ['./', './index.html', './styles.css', './store.js', './driver.js', './admin.js', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
+/* АРМАДА PWA — JS/CSS network-first (не держать сломанный кэш) */
+const CACHE = 'armada-shell-v72';
+const SHELL = ['./manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -10,11 +10,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim()).then(() =>
-      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-        clients.forEach((c) => c.postMessage({ type: 'ARMADA_SW_UPDATED', cache: CACHE }));
-      })
-    )
+    ).then(() => self.clients.claim())
   );
 });
 
@@ -25,6 +21,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   const path = url.pathname;
   const isDoc = req.mode === 'navigate' || path.endsWith('/') || /index\.html$/i.test(path) || /\/sw\.js$/i.test(path);
+  const isScriptOrStyle = /\.(js|css)$/i.test(path);
   if (isDoc) {
     event.respondWith(
       fetch(req, { cache: 'no-store' }).catch(() =>
@@ -33,14 +30,37 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+  if (isScriptOrStyle) {
+    const versioned = url.searchParams.has('v');
+    if (versioned) {
+      event.respondWith(
+        caches.open(CACHE).then(async (cache) => {
+          const cached = await cache.match(req);
+          const net = fetch(req).then((res) => {
+            if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
+            return res;
+          });
+          return cached || net;
+        })
+      );
+      return;
+    }
+    event.respondWith(
+      fetch(req).catch(() => caches.match(req))
+    );
+    return;
+  }
   event.respondWith(
-    fetch(req).then((res) => {
-      if (res && res.ok) {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-      }
-      return res;
-    }).catch(() => caches.match(req))
+    caches.match(req).then((cached) => {
+      const net = fetch(req).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        }
+        return res;
+      }).catch(() => cached);
+      return cached || net;
+    })
   );
 });
 

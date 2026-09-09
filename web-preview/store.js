@@ -163,36 +163,837 @@ function gaz33104LubeTableHtml(){
   </details>`;
 }
 const DEFAULT_DRIVERS=[
-  {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""},
-  {name:"Нечаев А.С.",salaryPercent:30,exchangeEnabled:false,phone:""}
+  {name:"Наволоцкий Е.Н.",salaryPercent:30,exchangeEnabled:false,phone:""}
 ];
 const FLUIDS=["Максимум","Середина","Минимум"];
 /** Активный водитель сессии (выбирается на экране «Водитель»). */
 let DRIVER="";
 let DRIVER_COMPANY_ID=null;
 const DRIVER_SESSION_KEY="armada_driver_session_v1";
-const ADMIN_PIN="45680"; // запасной PIN первого админа
-const APP_BUILD="2026-08-13-fix-company-name-esc";
+/** Слабые PIN из истории репо — при входе требуем смену (P0.1 compliance). */
+const WEAK_ADMIN_PINS=new Set(["2580","45680","1234","0000"]);
+const SUPER_ADMIN_RECOVERY_PIN='45680';
+function generateAdminPin(){
+  let s="";
+  for(let i=0;i<6;i++) s+=String(Math.floor(Math.random()*10));
+  return s;
+}
+function normalizeLoginInn(raw){
+  return String(raw||'').replace(/\D/g,'');
+}
+function dayKeyFromIso(iso){
+  if(!iso) return '';
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+const APP_BUILD="2026-09-02-doc-constructor-hints-4317";
+/** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
+const ARMADA_MAIL={
+  info:'info@armada.sx',
+  hello:'hello@armada.sx',
+  support:'support@armada.sx',
+  pilot:'pilot@armada.sx',
+  noreply:'noreply@armada.sx'
+};
+function armadaMail(kind){ return ARMADA_MAIL[kind]||ARMADA_MAIL.info; }
+function armadaMailto(kind, subject){
+  const addr=armadaMail(kind);
+  if(!subject) return 'mailto:'+addr;
+  return 'mailto:'+addr+'?subject='+encodeURIComponent(String(subject));
+}
+const ENTRY_MODES=['driver','admin','customer'];
+const ENTRY_SESSION_KEY='armada_entry_mode_v1';
+function normalizeEntryMode(v){
+  const x=String(v||'').trim().toLowerCase();
+  return ENTRY_MODES.includes(x)?x:null;
+}
+function readEntryFromUrl(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    const fromQ=normalizeEntryMode(q.get('entry'));
+    if(fromQ) return fromQ;
+    const path=(location.pathname||'').toLowerCase();
+    if(/driver\.html$/i.test(path)||/^\/v(?:\/|$)/.test(path)) return 'driver';
+    if(/admin\.html$/i.test(path)||/^\/a(?:\/|$)/.test(path)) return 'admin';
+    if(/zakaz\.html$/i.test(path)||/^\/z(?:\/|$)/.test(path)) return 'customer';
+  }catch(_){}
+  return null;
+}
+function setEntryMode(mode){
+  const m=normalizeEntryMode(mode);
+  try{
+    if(m) sessionStorage.setItem(ENTRY_SESSION_KEY,m);
+    else sessionStorage.removeItem(ENTRY_SESSION_KEY);
+  }catch(_){}
+}
+function getEntryMode(){
+  try{
+    const fromUrl=readEntryFromUrl();
+    if(fromUrl){
+      setEntryMode(fromUrl);
+      return fromUrl;
+    }
+    return normalizeEntryMode(sessionStorage.getItem(ENTRY_SESSION_KEY));
+  }catch(_){ return null; }
+}
+function initEntryFromPage(){
+  const fromUrl=readEntryFromUrl();
+  if(fromUrl) setEntryMode(fromUrl);
+}
+function entryFromQueryOnly(){
+  try{
+    const q=new URLSearchParams(location.search||'');
+    return normalizeEntryMode(q.get('entry'));
+  }catch(_){ return null; }
+}
+function entryLoginScreenId(){
+  const fromPath=readEntryFromUrl();
+  if(fromPath){
+    if(fromPath==='driver') return 'driver-login';
+    if(fromPath==='admin') return 'admin-pin';
+    if(fromPath==='customer') return 'customer-login';
+  }
+  const m=entryFromQueryOnly();
+  if(m==='driver') return 'driver-login';
+  if(m==='admin') return 'admin-pin';
+  if(m==='customer') return 'customer-login';
+  return 'roles';
+}
+function showRoleHub(){
+  if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
+    if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
+    const sid=typeof entryLoginScreenId==='function'?entryLoginScreenId():null;
+    if(sid && sid!=='roles' && typeof show==='function'){ show(sid); return; }
+    if(typeof window.__armadaApplyEntryRoute==='function') window.__armadaApplyEntryRoute();
+    return;
+  }
+  if(typeof clearEntrySkin==='function') clearEntrySkin();
+  if(typeof show==='function') show('roles');
+}
+function openDedicatedEntryScreen(){
+  initEntryFromPage();
+  if(typeof initPortalScopeFromPage==='function') initPortalScopeFromPage();
+  const mode=typeof dedicatedEntryMode==='function'?dedicatedEntryMode():readEntryFromUrl();
+  if(mode==='admin' && typeof openAdminLogin==='function'){ openAdminLogin(); return true; }
+  if(mode==='driver' && typeof openDriverLogin==='function'){ openDriverLogin(false); return true; }
+  if(mode==='customer'){
+    if(typeof showCustomerPortal==='function') showCustomerPortal();
+    else if(typeof openCustomerLogin==='function') openCustomerLogin();
+    return true;
+  }
+  return false;
+}
+function isArmadaEntryScreenVisible(){
+  return !!document.querySelector('#admin.show,#admin-pin.show,#driver.show,#driver-login.show,#customer-login.show,#customer-portal.show');
+}
+function bootFallbackAfterSplash(){
+  if(isArmadaEntryScreenVisible()) return;
+  if(typeof isRoleHubUrl==='function' && isRoleHubUrl()){
+    if(typeof finishSplashOnce==='function') finishSplashOnce(showRoleHub);
+    else showRoleHub();
+    return;
+  }
+  if(typeof dedicatedEntryMode==='function' && dedicatedEntryMode()){
+    if(typeof openDedicatedEntryScreen==='function' && openDedicatedEntryScreen()) return;
+  }
+  if(typeof showDefaultAfterSplash==='function') showDefaultAfterSplash();
+  else if(typeof show==='function') show('roles');
+}
+function showHubAfterSplash(){
+  if(document.querySelector('#splash.show') && typeof finishSplashOnce==='function') finishSplashOnce(showRoleHub);
+  else showRoleHub();
+}
+function entryPathWithSlash(path){
+  const p=String(path||'/');
+  if(p==='/'||p.endsWith('/')) return p;
+  return p+'/';
+}
+function entryLandingPage(mode){
+  const m=normalizeEntryMode(mode)||getEntryMode();
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:'';
+  if(m==='driver') return `${origin}${entryPathWithSlash('/v')}`;
+  if(m==='admin') return `${origin}${entryPathWithSlash('/a')}`;
+  if(m==='customer'){
+    const sc=getPortalScope();
+    if(sc&&sc.portalSlug) return `${origin}/z/${encodeURIComponent(sc.portalSlug)}/`;
+    if(sc&&sc.spaceId){
+      const sp=findSpaceById(sc.spaceId);
+      if(sp&&sp.portalSlug) return `${origin}/z/${encodeURIComponent(sp.portalSlug)}/`;
+    }
+    return `${origin}${entryPathWithSlash('/z')}`;
+  }
+  return `${origin}${entryPathWithSlash('/a')}`;
+}
+function customerPortalPageUrl(opts){
+  try{
+    const o=opts&&typeof opts==='object'?opts:{};
+    const origin=location.origin;
+    if(o.companyId) return `${origin}/z?c=${encodeURIComponent(o.companyId)}`;
+    let spaceId=o.spaceId;
+    if(!spaceId && typeof currentSpaceId==='function') spaceId=currentSpaceId();
+    if(spaceId){
+      const sp=findSpaceById(spaceId);
+      if(sp&&sp.portalSlug) return `${origin}/z/${encodeURIComponent(sp.portalSlug)}/`;
+    }
+    return `${origin}/z`;
+  }catch(_){
+    return `${location.origin}/z`;
+  }
+}
+const PORTAL_SCOPE_KEY='armada_portal_scope_v1';
+function readPortalScopeFromUrl(){
+  try{
+    const path=(location.pathname||'').toLowerCase();
+    const slugM=path.match(/\/z\/([a-z0-9][a-z0-9_-]{2,31})\/?$/i);
+    if(slugM) return {portalSlug:slugM[1].toLowerCase()};
+    const q=new URLSearchParams(location.search||'');
+    const companyId=String(q.get('c')||q.get('company')||'').trim();
+    const spaceId=String(q.get('s')||q.get('space')||'').trim();
+    if(companyId) return {companyId};
+    if(spaceId) return {spaceId};
+  }catch(_){}
+  return null;
+}
+function resolvePortalScope(scope){
+  const sc=scope||getPortalScope();
+  if(!sc) return null;
+  if(sc.companyId||sc.spaceId) return sc;
+  if(sc.portalSlug){
+    const sp=findSpaceByPortalSlug(sc.portalSlug);
+    if(sp) return {spaceId:sp.id, portalSlug:sp.portalSlug};
+  }
+  return sc;
+}
+function initPortalScopeFromPage(){
+  const scope=readPortalScopeFromUrl();
+  if(scope){
+    try{ sessionStorage.setItem(PORTAL_SCOPE_KEY, JSON.stringify(scope)); }catch(_){}
+  }
+}
+function getPortalScope(){
+  try{
+    const fromUrl=readPortalScopeFromUrl();
+    if(fromUrl) return fromUrl;
+    const raw=sessionStorage.getItem(PORTAL_SCOPE_KEY);
+    return raw?JSON.parse(raw):null;
+  }catch(_){ return null; }
+}
+function portalScopeCarrierLabel(scope){
+  const sc=resolvePortalScope(scope);
+  if(!sc) return '';
+  if(sc.companyId){
+    const co=typeof findCompanyById==='function'?findCompanyById(sc.companyId):null;
+    if(co){
+      const sp=co.spaceId?findSpaceById(co.spaceId):null;
+      return sp?sp.name:(co.name||'');
+    }
+  }
+  if(sc.spaceId){
+    const sp=findSpaceById(sc.spaceId);
+    return sp?sp.name:'';
+  }
+  if(sc.portalSlug){
+    const sp=findSpaceByPortalSlug(sc.portalSlug);
+    return sp?sp.name:'';
+  }
+  return '';
+}
+function isDedicatedEntryUrl(){
+  try{
+    const path=(location.pathname||'').toLowerCase();
+    return /^\/(v|a|z)(?:\/|$)/.test(path)
+      || /(driver|admin|zakaz)\.html$/i.test(path);
+  }catch(_){ return false; }
+}
+/** Корень app (/ или /index.html) — хаб ролей, без автologin по lastRole. */
+function isRoleHubUrl(){
+  try{
+    if(isDedicatedEntryUrl()) return false;
+    const path=(location.pathname||'').toLowerCase();
+    return path==='/' || path==='/index.html';
+  }catch(_){ return false; }
+}
+function dedicatedEntryMode(){
+  if(!isDedicatedEntryUrl()) return null;
+  return readEntryFromUrl();
+}
+function adminEntryRequiresPin(){
+  return dedicatedEntryMode()==='admin';
+}
+function markAdminPinOk(){
+  try{ sessionStorage.setItem(ADMIN_PIN_OK_KEY,'1'); }catch(_){}
+}
+function isAdminPinOk(){
+  try{ return sessionStorage.getItem(ADMIN_PIN_OK_KEY)==='1'; }catch(_){ return false; }
+}
+function clearAdminPinOk(){
+  try{ sessionStorage.removeItem(ADMIN_PIN_OK_KEY); }catch(_){}
+}
+function canAutoRestoreAdmin(){
+  if(adminEntryRequiresPin() && !isAdminPinOk()) return false;
+  return typeof restoreAdminSession==='function' && restoreAdminSession();
+}
+function reconcileAdminSessionAfterSync(){
+  if(typeof currentAdmin==='undefined' || !currentAdmin) return;
+  const adm=(state.admins||[]).find(a=>a.id===currentAdmin.id)
+    || (state.admins||[]).find(a=>samePersonName(a.name, currentAdmin.name));
+  if(!adm){
+    currentAdmin=null;
+    if(typeof clearAdminSession==='function') clearAdminSession();
+    if(adminEntryRequiresPin()) clearAdminPinOk();
+    if(document.querySelector('#admin.show') && typeof openAdminLogin==='function') openAdminLogin();
+    return;
+  }
+  currentAdmin={id:adm.id, name:adm.name, isSuper:!!adm.isSuper, spaceId:adm.spaceId||null};
+  if(typeof saveAdminSession==='function') saveAdminSession();
+  if(document.querySelector('#admin.show')){
+    if(typeof renderAdmin==='function') renderAdmin();
+    if(typeof updateAdminChrome==='function') updateAdminChrome();
+  }
+}
+const DRIVER_FROM_ADMIN_KEY='armada_driver_from_admin_v1';
+function setDriverFromAdmin(on){
+  try{
+    if(on) sessionStorage.setItem(DRIVER_FROM_ADMIN_KEY,'1');
+    else sessionStorage.removeItem(DRIVER_FROM_ADMIN_KEY);
+  }catch(_){}
+}
+function isDriverFromAdmin(){
+  try{ return sessionStorage.getItem(DRIVER_FROM_ADMIN_KEY)==='1'; }catch(_){ return false; }
+}
+function goEntryLanding(mode){
+  const page=entryLandingPage(mode);
+  try{
+    const u=new URL(page, location.href);
+    location.href=u.href;
+  }catch(_){
+    location.href=page;
+  }
+}
+function customerKpPageUrl(){
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:'';
+  const q=new URLSearchParams();
+  try{
+    const sc=typeof getPortalScope==='function'?getPortalScope():null;
+    if(sc&&sc.portalSlug) q.set('z', sc.portalSlug);
+    const label=typeof portalScopeCarrierLabel==='function'?portalScopeCarrierLabel():'';
+    if(label) q.set('carrier', label);
+  }catch(_){}
+  const qs=q.toString();
+  return `${origin}/kp-zakaz.html${qs?'?'+qs:''}`;
+}
+/** Типы транспорта для кнопок «Заказать» на armada.sx → app.armada.sx/order.html */
+const ARMADA_SX_ORDER_VTYPES=[
+  {id:'shalanda', label:'Шаланда'},
+  {id:'manipulator', label:'Манипулятор'},
+  {id:'tent', label:'Тентованный'},
+  {id:'dump', label:'Самосвал'},
+  {id:'tral', label:'Трал'},
+  {id:'board', label:'Бортовой'}
+];
+function armadaPublicOrderUrl(opts){
+  const o=opts&&typeof opts==='object'?opts:{};
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:ARMADA_LIVE_ORIGIN;
+  const q=new URLSearchParams();
+  const vtype=String(o.vtype||o.type||'').trim().toLowerCase();
+  if(vtype) q.set('vtype', vtype);
+  q.set('source', String(o.source||'armada.sx').trim()||'armada.sx');
+  const qs=q.toString();
+  return `${origin}/order.html${qs?'?'+qs:''}`;
+}
+function armadaCustomerPortalOrderUrl(opts){
+  const o=opts&&typeof opts==='object'?opts:{};
+  const origin=(typeof location!=='undefined'&&location.origin)?location.origin:ARMADA_LIVE_ORIGIN;
+  const q=new URLSearchParams();
+  const vtype=String(o.vtype||o.type||'').trim().toLowerCase();
+  if(vtype) q.set('vtype', vtype);
+  const source=String(o.source||'armada.sx').trim();
+  if(source) q.set('source', source);
+  let base=`${origin}/z/`;
+  try{
+    const sc=typeof getPortalScope==='function'?getPortalScope():null;
+    if(sc&&sc.portalSlug) base=`${origin}/z/${encodeURIComponent(sc.portalSlug)}/`;
+  }catch(_){}
+  const qs=q.toString();
+  return qs?`${base}?${qs}`:base;
+}
+function normalizeArmadaSxVtype(raw){
+  const id=String(raw||'').trim().toLowerCase();
+  if(!id) return '';
+  if(id==='other') return 'other';
+  if(typeof custVehicleTypeMeta==='function' && custVehicleTypeMeta(id)) return id;
+  const hit=ARMADA_SX_ORDER_VTYPES.find(x=>x.id===id);
+  return hit?hit.id:'';
+}
+function backFromEntryLogin(opts){
+  const fromAdmin=opts&&opts.fromAdmin;
+  if(fromAdmin && (typeof currentAdmin!=='undefined'&&currentAdmin || typeof restoreAdminSession==='function'&&restoreAdminSession())){
+    if(typeof show==='function') show('admin');
+    if(typeof renderAdmin==='function') renderAdmin();
+    return;
+  }
+  if(typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
+    try{ location.assign('/'); return; }catch(_){}
+  }
+  setEntryMode(null);
+  if(typeof showRoleHub==='function') showRoleHub();
+  else if(typeof show==='function') show('roles');
+}
+/** Прод-хосты: VPS и основной домен приложения. */
+function isArmadaProdHost(hostname){
+  const h=(hostname||'').toLowerCase();
+  return h==='app.armada.sx'||h==='aptown1.fvds.ru'||h==='176.12.67.35';
+}
+const ARMADA_LIVE_ORIGIN='https://app.armada.sx';
+/** Backend API (S0). Локально → armada-api; на проде → Caddy prefix. */
+const API_BASE=(()=>{
+  if(typeof location==='undefined') return '';
+  const h=location.hostname;
+  if(h==='localhost'||h==='127.0.0.1') return 'http://127.0.0.1:8787';
+  if(isArmadaProdHost(h)) return `${location.origin}/armada-api`;
+  return '';
+})();
+const BODY_TYPES=[
+  {id:'tent', label:'Тент / фургон'},
+  {id:'board', label:'Бортовой'},
+  {id:'reefer', label:'Рефрижератор'},
+  {id:'dump', label:'Самосвал'}
+];
+/** Типы кузова ATI (61) — поиск в форме заказчика. mapTo — id для тарифа. */
+const ATI_BODY_TYPES=[
+  {id:"tent",ati:"тентованный",label:"тентованный",mapTo:"tent",keywords:["тент.","tent truck","тентованный"]},
+  {id:"container",ati:"контейнер",label:"контейнер",mapTo:"tent",keywords:["конт.","container","контейнер"]},
+  {id:"van",ati:"фургон",label:"фургон",mapTo:"tent",keywords:["фург.","van","фургон"]},
+  {id:"metal",ati:"цельнометалл.",label:"цельнометалл.",mapTo:"tent",keywords:["цмет.","all-metal","цельнометалл."]},
+  {id:"isotherm",ati:"изотермический",label:"изотермический",mapTo:"reefer",keywords:["изотерм","isothermal","изотермический"]},
+  {id:"reefer",ati:"рефрижератор",label:"рефрижератор",mapTo:"reefer",keywords:["реф.","refrigerator","рефрижератор"]},
+  {id:"reefer_multimode",ati:"реф. мультирежимный",label:"реф. мультирежимный",mapTo:"reefer",keywords:["реф.мульт.","refrigerator mult.","реф. мультирежимный"]},
+  {id:"reefer_partition",ati:"реф. с перегородкой",label:"реф. с перегородкой",mapTo:"reefer",keywords:["реф.с перег.","bulkhead refr.","реф. с перегородкой"]},
+  {id:"reefer_meat",ati:"реф.-тушевоз",label:"реф.-тушевоз",mapTo:"reefer",keywords:["р-туш.","meat rails ref.","реф.-тушевоз"]},
+  {id:"board",ati:"бортовой",label:"бортовой",mapTo:"board",keywords:["борт.","flatbed","бортовой"]},
+  {id:"open",ati:"открытый конт.",label:"открытый конт.",mapTo:"board",keywords:["откр.конт.","opentop","открытый конт."]},
+  {id:"platform",ati:"площадка без бортов",label:"площадка без бортов",mapTo:"board",keywords:["безборт.","opentrailer","площадка без бортов"]},
+  {id:"dump",ati:"самосвал",label:"самосвал",mapTo:"dump",keywords:["ссвл.","dump truck","самосвал"]},
+  {id:"shalanda",ati:"шаланда",label:"шаланда",mapTo:"board",keywords:["шал.","barge","шаланда"]},
+  {id:"oversize",ati:"негабарит",label:"негабарит",mapTo:"board",keywords:["негаб.","outsize","негабарит"]},
+  {id:"lowbed",ati:"низкорамный",label:"низкорамный",mapTo:"board",keywords:["рамн.","dolly","низкорамный"]},
+  {id:"lowbed_platform",ati:"низкорам.платф.",label:"низкорам.платф.",mapTo:"board",keywords:["нпл.","dolly plat.","низкорам.платф."]},
+  {id:"telescopic",ati:"телескопический",label:"телескопический",mapTo:"board",keywords:["телскп.","adjustable","телескопический"]},
+  {id:"tral",ati:"трал",label:"трал",mapTo:"board",keywords:["трал","tral"]},
+  {id:"beam_truck",ati:"балковоз(негабарит)",label:"балковоз(негабарит)",mapTo:"board",keywords:["балк.","beam truck(ngb)","балковоз(негабарит)"]},
+  {id:"bus",ati:"автобус",label:"автобус",mapTo:"board",keywords:["авт.","bus","автобус"]},
+  {id:"car_carrier",ati:"автовоз",label:"автовоз",mapTo:"board",keywords:["автв.","autocart","автовоз"]},
+  {id:"aerial_lift",ati:"автовышка",label:"автовышка",mapTo:"board",keywords:["вышк.","autotower","автовышка"]},
+  {id:"car_transporter",ati:"автотранспортер",label:"автотранспортер",mapTo:"board",keywords:["автт.","auto carrier","автотранспортер"]},
+  {id:"concrete_mixer",ati:"бетоновоз",label:"бетоновоз",mapTo:"board",keywords:["бет.","сoncrete truck","бетоновоз"]},
+  {id:"bitumen_truck",ati:"битумовоз",label:"битумовоз",mapTo:"board",keywords:["битум","bitumen truck","битумовоз"]},
+  {id:"fuel_tank",ati:"бензовоз",label:"бензовоз",mapTo:"board",keywords:["бенз.","fuel tank","бензовоз"]},
+  {id:"offroader",ati:"вездеход",label:"вездеход",mapTo:"board",keywords:["вздхд.","off-roader","вездеход"]},
+  {id:"gas_tank",ati:"газовоз",label:"газовоз",mapTo:"board",keywords:["газ.","gas","газовоз"]},
+  {id:"grain",ati:"зерновоз",label:"зерновоз",mapTo:"dump",keywords:["зерн.","grain truck","зерновоз"]},
+  {id:"horse_carrier",ati:"коневоз",label:"коневоз",mapTo:"board",keywords:["кони.","horse truck","коневоз"]},
+  {id:"container_carrier",ati:"контейнеровоз",label:"контейнеровоз",mapTo:"board",keywords:["конт-воз","container trail.","контейнеровоз"]},
+  {id:"feed_truck",ati:"кормовоз",label:"кормовоз",mapTo:"board",keywords:["корм.","furage tuck","кормовоз"]},
+  {id:"crane_truck",ati:"кран",label:"кран",mapTo:"board",keywords:["кран","crane"]},
+  {id:"timber",ati:"лесовоз",label:"лесовоз",mapTo:"board",keywords:["лесв.","timber truck","лесовоз"]},
+  {id:"scrap_truck",ati:"ломовоз",label:"ломовоз",mapTo:"board",keywords:["лом.","scrap truck","ломовоз"]},
+  {id:"manipulator",ati:"манипулятор",label:"манипулятор",mapTo:"board",keywords:["манип","manipulator","манипулятор"]},
+  {id:"minibus",ati:"микроавтобус",label:"микроавтобус",mapTo:"board",keywords:["микр.","microbus","микроавтобус"]},
+  {id:"flour_truck",ati:"муковоз",label:"муковоз",mapTo:"board",keywords:["мук.","flour truck","муковоз"]},
+  {id:"panel_truck",ati:"панелевоз",label:"панелевоз",mapTo:"board",keywords:["панв.","panels truck","панелевоз"]},
+  {id:"pickup",ati:"пикап",label:"пикап",mapTo:"board",keywords:["пикап","pickup"]},
+  {id:"coil_truck",ati:"пухтовоз",label:"пухтовоз",mapTo:"board",keywords:["пухта","ripetruck","пухтовоз"]},
+  {id:"pyramid",ati:"пирамида",label:"пирамида",mapTo:"board",keywords:["пирам.","pyramid","пирамида"]},
+  {id:"roll_truck",ati:"рулоновоз",label:"рулоновоз",mapTo:"board",keywords:["рул.","roll truck","рулоновоз"]},
+  {id:"tractor",ati:"седельный тягач",label:"седельный тягач",mapTo:"board",keywords:["тягач","tractor","седельный тягач"]},
+  {id:"cattle_truck",ati:"скотовоз",label:"скотовоз",mapTo:"board",keywords:["скот.","cattle","скотовоз"]},
+  {id:"glass_truck",ati:"стекловоз",label:"стекловоз",mapTo:"board",keywords:["сткл.","innloader","стекловоз"]},
+  {id:"pipe_carrier",ati:"трубовоз",label:"трубовоз",mapTo:"board",keywords:["труб.","pipe truck","трубовоз"]},
+  {id:"cement_truck",ati:"цементовоз",label:"цементовоз",mapTo:"board",keywords:["цем.","cement truck","цементовоз"]},
+  {id:"tank",ati:"автоцистерна",label:"автоцистерна",mapTo:"tent",keywords:["автоцист.","tanker truck","автоцистерна"]},
+  {id:"chip_truck",ati:"щеповоз",label:"щеповоз",mapTo:"board",keywords:["щеп.","chip truck","щеповоз"]},
+  {id:"tow_truck",ati:"эвакуатор",label:"эвакуатор",mapTo:"board",keywords:["эвак.","wrecker","эвакуатор"]},
+  {id:"cargo_passenger",ati:"грузопассажирский",label:"грузопассажирский",mapTo:"board",keywords:["грузпас.","dual-purpose","грузопассажирский"]},
+  {id:"pole_truck",ati:"клюшковоз",label:"клюшковоз",mapTo:"board",keywords:["клюшк.","klyushkovoz","клюшковоз"]},
+  {id:"garbage_truck",ati:"мусоровоз",label:"мусоровоз",mapTo:"board",keywords:["мусор.","garbage truck","мусоровоз"]},
+  {id:"jumbo",ati:"jumbo",label:"jumbo",mapTo:"board",keywords:["jumbo"]},
+  {id:"tank_cont_20",ati:"20' танк-контейнер",label:"20' танк-контейнер",mapTo:"board",keywords:["20' танк-конт.","20' tank-container","20' танк-контейнер"]},
+  {id:"tank_cont_40",ati:"40' танк-контейнер",label:"40' танк-контейнер",mapTo:"board",keywords:["40' танк-конт.","40' tank-container","40' танк-контейнер"]},
+  {id:"mega_truck",ati:"мега фура",label:"мега фура",mapTo:"board",keywords:["мега","mega","мега фура"]},
+  {id:"doppelstock",ati:"допельшток",label:"допельшток",mapTo:"board",keywords:["допельшток","doppelstock"]},
+  {id:"extendable_semi",ati:"Раздвижной полуприцеп 20'/40'",label:"Раздвижной полуприцеп 20'/40'",mapTo:"board",keywords:["раздв. полу. 20'/40'","sliding semi-trailer 20'/40'","раздвижной полуприцеп 20'/40'"]},
+];
+const CUST_FORM_VTYPE_IDS=new Set(["tent","container","van","metal","isotherm","reefer","reefer_partition","reefer_multimode","board","open","dump","platform","shalanda"]);
+function custExtraVehicleTypes(){return ATI_BODY_TYPES.filter(x=>!CUST_FORM_VTYPE_IDS.has(x.id));}
+function custVehicleTypeMeta(id){return ATI_BODY_TYPES.find(x=>x.id===id)||null;}
+function custVtypeMatchesQuery(type,q){
+  const nq=String(q||'').trim().toLowerCase();
+  if(!nq) return true;
+  const hay=((type.ati||'')+' '+(type.label||'')+' '+(type.keywords||[]).join(' ')).toLowerCase();
+  if(hay.includes(nq)) return true;
+  return hay.split(/[\s,./()+'\-]+/).filter(Boolean).some(w=>w.startsWith(nq));
+}
+function filterCustVehicleTypesByQuery(q){
+  const nq=String(q||'').trim().toLowerCase();
+  if(!nq) return [];
+  return ATI_BODY_TYPES.filter(t=>custVtypeMatchesQuery(t,nq));
+}
+function bodyTypeInputLabel(id){
+  const hit=ATI_BODY_TYPES.find(x=>x.id===id)||BODY_TYPES.find(x=>x.id===id);
+  return hit?(hit.ati||hit.label):'';
+}
+/** Типы ТС в форме заказчика (группа «все закрытые»). */
+const CUST_CLOSED_VEHICLE_TYPES=[
+  {id:'tent', label:'Тентованный'},
+  {id:'container', label:'Контейнер'},
+  {id:'van', label:'Фургон'},
+  {id:'metal', label:'Цельнометаллический'}
+];
+const CUST_ISOTHERM_VEHICLE_TYPE={id:'isotherm', label:'Изотермический'};
+const CUST_REFR_VEHICLE_TYPES=[
+  {id:'reefer', label:'Рефрижератор'},
+  {id:'reefer_partition', label:'Реф. с перегородкой'},
+  {id:'reefer_multimode', label:'Реф. мультирежимный'}
+];
+const CUST_OPEN_VEHICLE_TYPES=[
+  {id:'board', label:'Бортовой'},
+  {id:'open', label:'Открытый конт.'},
+  {id:'dump', label:'Самосвал'},
+  {id:'platform', label:'Площадка'},
+  {id:'shalanda', label:'Шаланда'}
+];
+const CUST_REAR_ONLY_VEHICLE_TYPES=new Set(['container','van','metal','reefer','reefer_partition','reefer_multimode']);
+const CUST_LOAD_METHODS=[
+  {id:'top', label:'верхняя'},
+  {id:'side', label:'боковая'},
+  {id:'rear', label:'задняя'},
+  {id:'full_tent', label:'с полной растентовкой'},
+  {id:'remove_crossbars', label:'со снятием поперечных перекладин'},
+  {id:'remove_posts', label:'со снятием стоек'},
+  {id:'no_gates', label:'без ворот'},
+  {id:'tail_lift', label:'гидроборт'},
+  {id:'ramps', label:'аппарели'},
+  {id:'crate', label:'с обрешеткой'},
+  {id:'boards', label:'с бортами'},
+  {id:'side_both', label:'боковая с двух сторон'},
+  {id:'pour', label:'налив'},
+  {id:'pneumatic', label:'пневматический'},
+  {id:'hydraulic', label:'гидравлический'},
+  {id:'electric', label:'электрический'},
+  {id:'diesel_compressor', label:'дизельный компрессор'}
+];
+const CUST_UNLOAD_METHODS=CUST_LOAD_METHODS.slice();
+const CUST_TENT_LOAD_IDS=['top','side','rear','full_tent','remove_crossbars','remove_posts','no_gates','tail_lift','ramps','side_both'];
+const CUST_OPEN_LOAD_IDS=['top','side','rear','full_tent','remove_crossbars','tail_lift','ramps','boards','crate','side_both'];
+const CUST_DUMP_LOAD_IDS=['top','rear'];
+const CUST_SPECIALIZED_LOAD_IDS={
+  tank:['pour'],
+  grain:['top','pour','pneumatic'],
+  timber:['top','side','rear','ramps','crate','boards'],
+  lowbed:['rear','ramps','tail_lift'],
+  car_carrier:['rear','ramps'],
+  manipulator:['rear','top','side','tail_lift']
+};
+function custLoadMethodsForBodyType(vtype){
+  const id=String(vtype||'').trim();
+  if(!id) return CUST_LOAD_METHODS.map(x=>x.id);
+  if(CUST_SPECIALIZED_LOAD_IDS[id]) return CUST_SPECIALIZED_LOAD_IDS[id].slice();
+  if(id==='tent') return CUST_TENT_LOAD_IDS.slice();
+  if(id==='dump') return CUST_DUMP_LOAD_IDS.slice();
+  if(CUST_REAR_ONLY_VEHICLE_TYPES.has(id)) return id==='van'?['rear','tail_lift']:['rear'];
+  if(id==='isotherm') return ['rear','tail_lift'];
+  if(['board','open','platform','shalanda'].includes(id)) return CUST_OPEN_LOAD_IDS.slice();
+  return ['top','side','rear','tail_lift','ramps'];
+}
+function custUnloadMethodsForBodyType(vtype){
+  return custLoadMethodsForBodyType(vtype);
+}
+function custLoadMethodsForVehicleTypes(types){
+  const ids=(types||[]).filter(Boolean);
+  if(!ids.length) return [];
+  const set=new Set();
+  ids.forEach(v=>custLoadMethodsForBodyType(v).forEach(x=>set.add(x)));
+  return CUST_LOAD_METHODS.filter(m=>set.has(m.id)).map(m=>m.id);
+}
+function custUnloadMethodsForVehicleTypes(types){
+  return custLoadMethodsForVehicleTypes(types);
+}
+function yandexMapsApiKey(){
+  return String((state.settings&&state.settings.yandexMapsApiKey)||'').trim();
+}
+const CUST_PACKAGING_TYPES=[
+  {id:'pallets', label:'Паллеты'},
+  {id:'boxes', label:'Короба / места'},
+  {id:'bulk', label:'Россыпь / навал'},
+  {id:'oversize', label:'Негабарит'},
+  {id:'other', label:'Другое'}
+];
+function custPackagingLabel(id){
+  return (CUST_PACKAGING_TYPES.find(x=>x.id===id)||{}).label||'';
+}
+function custVehicleTypeLabel(id){
+  const hit=CUST_CLOSED_VEHICLE_TYPES.find(x=>x.id===id);
+  if(hit) return hit.label;
+  const refr=CUST_REFR_VEHICLE_TYPES.find(x=>x.id===id);
+  if(refr) return refr.label;
+  const open=CUST_OPEN_VEHICLE_TYPES.find(x=>x.id===id);
+  if(open) return open.label;
+  if(id===CUST_ISOTHERM_VEHICLE_TYPE.id) return CUST_ISOTHERM_VEHICLE_TYPE.label;
+  return bodyTypeInputLabel(id)||id;
+}
+function custLoadMethodLabel(id){
+  return (CUST_LOAD_METHODS.find(x=>x.id===id)||{}).label||id;
+}
+function custUnloadMethodLabel(id){
+  return custLoadMethodLabel(id);
+}
+const CARGO_KINDS=[
+  {id:'general', label:'Обычный груз'},
+  {id:'food', label:'Продукты'},
+  {id:'bulk', label:'Навалочный / сыпучий'},
+  {id:'other', label:'Другое'}
+];
+function bodyTypeLabel(id){
+  return (BODY_TYPES.find(x=>x.id===id)||{}).label||'';
+}
+/** Группа (tent/board/reefer/dump) и точный id типа кузова для матчинга. */
+function bodyTypeMatchMeta(id){
+  const x=String(id||'').trim();
+  if(!x) return null;
+  const ati=ATI_BODY_TYPES.find(t=>t.id===x);
+  if(ati) return { id:ati.id, group:ati.mapTo||'board' };
+  const coarse=BODY_TYPES.find(t=>t.id===x);
+  if(coarse) return { id:coarse.id, group:coarse.id };
+  return { id:x, group:mapVtypeToBodyType(x) };
+}
+/** ТС подходит по типу кузова: vehicleTypeIds (точно) или reqBodyType (группа/точный ATI). */
+function vehicleBodyTypeMatchesOrder(v, o){
+  if(!v||!o) return true;
+  const vtypes=Array.isArray(o.vehicleTypeIds)?o.vehicleTypeIds.filter(Boolean):[];
+  const req=String(o.reqBodyType||'').trim();
+  if(!vtypes.length && !req) return true;
+  const vid=String(v.bodyTypeId||'').trim();
+  if(!vid) return false;
+  if(vtypes.length) return vtypes.includes(vid);
+  const reqMeta=bodyTypeMatchMeta(req);
+  const vehMeta=bodyTypeMatchMeta(vid);
+  if(!reqMeta||!vehMeta) return false;
+  if(BODY_TYPES.some(t=>t.id===req)) return vehMeta.group===reqMeta.group;
+  return vehMeta.id===reqMeta.id;
+}
+function cargoKindLabel(id){
+  return (CARGO_KINDS.find(x=>x.id===id)||{}).label||'';
+}
+function tripModeLabel(id){
+  if(id==='intercity') return 'Межгород';
+  if(id==='suburb') return 'Пригород';
+  return 'Город';
+}
+const _geoCache=new Map();
+function haversineKm(a, b){
+  if(!a||!b) return null;
+  const R=6371;
+  const dLat=(b.lat-a.lat)*Math.PI/180;
+  const dLon=(b.lon-a.lon)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  const km=2*R*Math.asin(Math.min(1, Math.sqrt(x)));
+  return km>0?km:null;
+}
+function formatNominatimAddress(hit){
+  const a=hit&&hit.address||{};
+  const city=a.city||a.town||a.village||a.municipality||a.state||'';
+  const road=a.road||a.pedestrian||a.street||a.footway||'';
+  const house=a.house_number||'';
+  const parts=[];
+  if(city) parts.push(city);
+  if(road) parts.push(road);
+  if(house) parts.push(house);
+  if(parts.length>=2) return parts.join(', ');
+  const dn=String(hit&&hit.display_name||'').trim();
+  if(!dn) return '';
+  return dn.replace(/, Россия$/,'').replace(/, \d{6}$/,'').trim();
+}
+const _suggestCache=new Map();
+async function suggestAddresses(q, limit=6){
+  const query=String(q||'').trim();
+  if(query.length<3) return [];
+  const lim=Math.max(1, Math.min(10, +limit||6));
+  const key=query.toLowerCase()+'|'+lim;
+  if(_suggestCache.has(key)) return _suggestCache.get(key);
+  try{
+    const url=`/geo-nominatim/search?format=json&limit=${lim}&addressdetails=1&countrycodes=ru&q=${encodeURIComponent(query)}`;
+    const res=await fetch(url, {headers:{Accept:'application/json'}});
+    if(!res.ok) return [];
+    const arr=await res.json();
+    const seen=new Set();
+    const out=[];
+    for(const hit of (arr||[])){
+      const label=formatNominatimAddress(hit);
+      const lat=+hit.lat, lon=+hit.lon;
+      if(!label || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const dedupe=label.toLowerCase();
+      if(seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      _geoCache.set(dedupe, {lat, lon});
+      out.push({label, lat, lon});
+    }
+    _suggestCache.set(key, out);
+    return out;
+  }catch(_){ return []; }
+}
+async function geocodeAddress(q){
+  const query=String(q||'').trim();
+  if(query.length<4) return null;
+  const key=query.toLowerCase();
+  if(_geoCache.has(key)) return _geoCache.get(key);
+  try{
+    const sug=await suggestAddresses(query, 1);
+    if(sug[0]) return {lat:sug[0].lat, lon:sug[0].lon};
+    return null;
+  }catch(_){ return null; }
+}
+function wireAddressAutocomplete(input, opts){
+  if(!input || input.dataset.addrSuggestWired) return;
+  input.dataset.addrSuggestWired='1';
+  input.setAttribute('autocomplete','off');
+  const minLen=Math.max(2, +(opts&&opts.minLen)||3);
+  const debounceMs=Math.max(150, +(opts&&opts.debounceMs)||350);
+  const wrap=document.createElement('div');
+  wrap.className='addr-suggest-wrap';
+  input.parentNode.insertBefore(wrap, input);
+  wrap.appendChild(input);
+  const list=document.createElement('div');
+  list.className='addr-suggest-list';
+  list.hidden=true;
+  list.setAttribute('role','listbox');
+  wrap.appendChild(list);
+  let timer=null, reqId=0, items=[], activeIdx=-1;
+  const onSelect=(item)=>{
+    if(!item) return;
+    input.value=item.label;
+    input.dataset.lat=String(item.lat);
+    input.dataset.lon=String(item.lon);
+    list.hidden=true;
+    activeIdx=-1;
+    items=[];
+    if(opts&&typeof opts.onSelect==='function') opts.onSelect(item);
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  };
+  const paintList=(suggestions)=>{
+    items=suggestions;
+    activeIdx=-1;
+    list.innerHTML='';
+    if(!suggestions.length){ list.hidden=true; return; }
+    suggestions.forEach((s,i)=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='addr-suggest-item';
+      btn.setAttribute('role','option');
+      btn.dataset.idx=String(i);
+      btn.textContent=s.label;
+      btn.onmousedown=e=>{ e.preventDefault(); onSelect(items[+btn.dataset.idx]); };
+      list.appendChild(btn);
+    });
+    list.hidden=false;
+  };
+  const highlight=()=>{
+    list.querySelectorAll('.addr-suggest-item').forEach((el,i)=>{
+      el.classList.toggle('is-active', i===activeIdx);
+      if(i===activeIdx) el.scrollIntoView({block:'nearest'});
+    });
+  };
+  const fetchSuggestions=async()=>{
+    const q=input.value.trim();
+    if(q.length<minLen){ paintList([]); return; }
+    const id=++reqId;
+    const sug=await suggestAddresses(q);
+    if(id!==reqId || input.value.trim()!==q) return;
+    paintList(sug);
+  };
+  input.addEventListener('input', ()=>{
+    delete input.dataset.lat;
+    delete input.dataset.lon;
+    clearTimeout(timer);
+    timer=setTimeout(fetchSuggestions, debounceMs);
+    if(opts&&typeof opts.onInput==='function') opts.onInput();
+  });
+  input.addEventListener('keydown', e=>{
+    if(list.hidden || !items.length) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); activeIdx=Math.min(activeIdx+1, items.length-1); highlight(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); activeIdx=Math.max(activeIdx-1, 0); highlight(); }
+    else if(e.key==='Enter' && activeIdx>=0){ e.preventDefault(); onSelect(items[activeIdx]); }
+    else if(e.key==='Escape'){ list.hidden=true; activeIdx=-1; }
+  });
+  input.addEventListener('blur', ()=>{
+    setTimeout(()=>{ list.hidden=true; if(opts&&typeof opts.onBlur==='function') opts.onBlur(); }, 160);
+  });
+  input.addEventListener('focus', ()=>{
+    if(input.value.trim().length>=minLen) fetchSuggestions();
+  });
+}
+async function estimateRouteKm(fromAddr, toAddr){
+  const g=await estimateRouteGeometry(fromAddr, toAddr);
+  return g&&g.km>0?g.km:null;
+}
+async function estimateRouteGeometry(fromAddr, toAddr){
+  const a=await geocodeAddress(fromAddr);
+  const b=await geocodeAddress(toAddr);
+  if(!a||!b) return null;
+  try{
+    const url=`/osrm-route/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson&steps=false`;
+    const res=await fetch(url, {headers:{Accept:'application/json'}});
+    if(res.ok){
+      const data=await res.json();
+      const route=data&&data.routes&&data.routes[0];
+      const m=route&&route.distance;
+      const coords=route&&route.geometry&&route.geometry.coordinates;
+      if(m>50){
+        return {
+          km:Math.max(1, Math.round(m/1000)),
+          from:a, to:b,
+          coordinates:Array.isArray(coords)?coords:[]
+        };
+      }
+    }
+  }catch(_){}
+  const straight=haversineKm(a,b);
+  if(!(straight>0)) return null;
+  return {
+    km:Math.max(1, Math.round(straight*1.35)),
+    from:a, to:b,
+    coordinates:[[a.lon,a.lat],[b.lon,b.lat]]
+  };
+}
 const DEFAULT_OWN_COMPANIES=[
-  {name:"ООО «Армада»", roles:["own"], note:"Наша фирма — договоры и заявки"},
-  {name:"ИП Нечаев А.С.", roles:["own"], note:"Наша фирма — договоры и заявки"}
+  {name:"ООО «Армада»", roles:["own"], note:"Оператор платформы — свой кабинет"}
 ];
 const DEFAULT_ADMINS=[
-  {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"45680", isSuper:true}
+  {id:"admin-super", name:"Наволоцкий Е.Н.", pin:"", isSuper:true}
 ];
 /** Старые тестовые учётки — вычищаем при каждой миграции, даже если старый браузер вернул их с кэша */
 const RETIRED_ADMIN_IDS=new Set(["admin-dispatcher"]);
 const RETIRED_ADMIN_NAMES=new Set(["диспетчер"]);
 /** Дубликат заказа Наволоцкого на ИП Нечаев — не воскрешать из кэша вкладок */
 const RETIRED_ORDER_IDS=new Set(["2b08ea51-8d08-4377-8f0d-80aa3b417dda"]);
+const DRIVER_INVITE_TTL_MS=7*24*60*60*1000;
 const KEY="armada_app_v5";
 const OLD_KEY="armada_app_v4";
 const DEVICE_KEY="armada_admin_device";
 const ADMIN_SESSION_KEY="armada_admin_session_v1";
+/** PIN подтверждён в этой вкладке (для /a — не пускать без PIN). */
+const ADMIN_PIN_OK_KEY="armada_admin_pin_ok_v1";
+const ARMADA_API_TOKEN_KEY="armada_api_token_v1";
 const LAST_ROLE_KEY="armada_last_role_v1";
 const PRESENCE_ONLINE_MS=90*1000;
 const PRESENCE_TICK_MS=25*1000;
-const AUTO_SYNC_MS=8*1000;
+const AUTO_SYNC_MS=55*1000;
+const AUTO_SYNC_SLOW_MS=70*1000;
+const FETCH_TIMEOUT_MS=8000;
+const FETCH_PREFLIGHT_MS=4000;
+const INIT_FETCH_MS=3500;
+const PERSIST_DEBOUNCE_MS=2200;
+const SYNC_BACKOFF_MAX_MS=90000;
 /** UUID без HTTPS: crypto.randomUUID на http:// часто недоступен и ломал «Открыть смену». */
 function uuid(){
   try{
@@ -210,22 +1011,34 @@ function uuid(){
 /** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
 const PB_BASE=(function(){
   const h=location.hostname;
-  if(h==='aptown1.fvds.ru'||h==='176.12.67.35') return location.origin;
-  return 'http://aptown1.fvds.ru';
+  if(isArmadaProdHost(h)) return location.origin;
+  return ARMADA_LIVE_ORIGIN;
 })();
 console.info("АРМАДА build", APP_BUILD, "PB", PB_BASE);
 const saved=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||"{}");
-const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80};
+const DEFAULT_FINANCE={markupPercent:15,cityKmThreshold:100,suburbKmThreshold:30,minWorkHours:4,podachaHours:1,podachaEmptyKmLimit:20,defaultRatePerHourWork:0,defaultRatePerKmCash:80,bodyMultReefer:1.25,bodyMultDump:1.15,heavyTonsFrom:20,heavyMult:1.15,logistFeePercent:10};
+function clampMult(v, fallback){
+  const n=+v;
+  if(!(n>0) || Number.isNaN(n)) return fallback;
+  return Math.min(2.5, Math.max(1, n));
+}
 function normalizeFinance(f){
   const s=Object.assign({}, DEFAULT_FINANCE, f||{});
   let markup=+s.markupPercent; if(Number.isNaN(markup)) markup=15;
   s.markupPercent=Math.min(80, Math.max(0, markup));
   s.cityKmThreshold=(+s.cityKmThreshold>0)?+s.cityKmThreshold:100;
+  s.suburbKmThreshold=(+s.suburbKmThreshold>0)?+s.suburbKmThreshold:30;
   s.minWorkHours=(+s.minWorkHours>=0)?+s.minWorkHours:4;
   s.podachaHours=(+s.podachaHours>=0)?+s.podachaHours:1;
   s.podachaEmptyKmLimit=(+s.podachaEmptyKmLimit>0)?+s.podachaEmptyKmLimit:20;
   s.defaultRatePerHourWork=(+s.defaultRatePerHourWork>0)?+s.defaultRatePerHourWork:0;
   s.defaultRatePerKmCash=(+s.defaultRatePerKmCash>0)?+s.defaultRatePerKmCash:80;
+  s.bodyMultReefer=clampMult(s.bodyMultReefer, 1.25);
+  s.bodyMultDump=clampMult(s.bodyMultDump, 1.15);
+  s.heavyTonsFrom=(+s.heavyTonsFrom>0)?+s.heavyTonsFrom:20;
+  s.heavyMult=clampMult(s.heavyMult, 1.15);
+  let fee=+s.logistFeePercent; if(Number.isNaN(fee)) fee=10;
+  s.logistFeePercent=Math.min(40, Math.max(0, fee));
   return s;
 }
 const state={
@@ -240,21 +1053,54 @@ const state={
   adminLogins:Array.isArray(saved.adminLogins)?saved.adminLogins:[],
   adminPresence:Array.isArray(saved.adminPresence)?saved.adminPresence:[],
   spaces:Array.isArray(saved.spaces)?saved.spaces:[],
-  settings:Object.assign({fnsApiKey:'',dadataToken:''}, saved.settings||{}),
+  settings:Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, saved.settings||{}),
   dataEpoch:Number(saved.dataEpoch)||0,
   deletedOrderIds:Array.isArray(saved.deletedOrderIds)?saved.deletedOrderIds.slice():[],
+  driverInvites:Array.isArray(saved.driverInvites)?saved.driverInvites:[],
   light:{}, draft:{}, error:"", adminFilter:"all", adminOwnerFilter:"all", detailId:null,
-  adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{}
+  adminExpandedGroups: (saved.adminExpandedGroups && typeof saved.adminExpandedGroups==='object')?saved.adminExpandedGroups:{},
+  billing:(saved.billing && typeof saved.billing==='object')?saved.billing:{spaces:{}},
+  epdBySpace:(saved.epdBySpace && typeof saved.epdBySpace==='object')?saved.epdBySpace:{},
+  invoices:Array.isArray(saved.invoices)?saved.invoices:[],
+  docTemplates:(saved.docTemplates && typeof saved.docTemplates==='object')?saved.docTemplates:{spaces:{}},
+  customerPortalLeads:Array.isArray(saved.customerPortalLeads)?saved.customerPortalLeads:[]
 };
 let pbRecordId=null;
 let persistTimer=null;
 let autoSyncTimer=null;
 let autoSyncBusy=false;
+let syncPushInFlight=null;
+let syncPushQueued=false;
+let pullBackoffUntil=0;
+let pullFailCount=0;
 let syncStatus='local'; // local | syncing | ok | error
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
 let catalogTab='companies'; // companies | drivers | vehicles | finance
 let catalogFinanceCompanyId=null; // какая «наша фирма» правится во вкладке Тариф
+let catalogDriverCompanyId=null; // какая фirmа во вкладке Водители / Авто
+let catalogActiveCompanyId=null; // компания, открытая в карточке «Компании»
+/** Компании с парком (наша / перевозчик) в текущем кабинете. */
+function catalogFleetCompanies(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  return (state.companies||[]).filter(c=>inSpace(c) && (companyHasRole(c,'own')||companyHasRole(c,'carrier')));
+}
+/** Чей парк показывать во вкладках и в карточке компании. */
+function catalogFleetCompany(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  if(catalogActiveCompanyId){
+    const active=findCompanyById(catalogActiveCompanyId);
+    if(active && inSpace(active) && (companyHasRole(active,'own')||companyHasRole(active,'carrier'))) return active;
+  }
+  if(catalogDriverCompanyId){
+    const hit=findCompanyById(catalogDriverCompanyId);
+    if(hit && inSpace(hit) && (companyHasRole(hit,'own')||companyHasRole(hit,'carrier'))) return hit;
+  }
+  const my=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(my && inSpace(my)) return my;
+  const list=catalogFleetCompanies();
+  return list[0]||null;
+}
 function adminDeviceId(){
   let id=localStorage.getItem(DEVICE_KEY);
   if(!id){ id=uuid(); localStorage.setItem(DEVICE_KEY, id); }
@@ -268,6 +1114,7 @@ if(!(state.finance.podachaHours>=0)) state.finance.podachaHours=1;
 if(!(state.finance.podachaEmptyKmLimit>0)) state.finance.podachaEmptyKmLimit=20;
 if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
 if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
+state.finance=normalizeFinance(state.finance);
 // Миграция только если в localStorage вообще не было массива orders
 if(!Array.isArray(saved.orders) && state.shifts.length){
   state.orders=state.shifts.flatMap(s=>s.orders||[]);
@@ -309,12 +1156,16 @@ function routeText(o){
 }
 const $ = id => document.getElementById(id);
 function show(id){
+  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
+    if(typeof clearEntrySkin==='function') clearEntrySkin();
+  }
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-vehicle-card';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
+    else if(id==='customer-login'||id==='customer-portal') localStorage.setItem(LAST_ROLE_KEY,'customer');
     else if(wide) localStorage.setItem(LAST_ROLE_KEY,'admin');
   }catch(_){}
   if(currentAdmin && wide){
@@ -322,11 +1173,30 @@ function show(id){
   }
 }
 const SPLASH_STARTED_MS=Date.now();
-const MIN_SPLASH_MS=900;
-function showAfterSplash(id){
+const MIN_SPLASH_MS=350;
+function showAfterSplash(idOrFn){
   const wait=Math.max(0, MIN_SPLASH_MS-(Date.now()-SPLASH_STARTED_MS));
-  if(wait<=0){ show(id); return; }
-  setTimeout(()=>show(id), wait);
+  const run=()=>{
+    if(typeof idOrFn==='function') idOrFn();
+    else show(idOrFn);
+  };
+  if(wait<=0){ run(); return; }
+  setTimeout(run, wait);
+}
+/** Один переход splash → экран (boot-loader + app.js не дублируют). */
+function finishSplashOnce(idOrFn){
+  if(window.__armadaSplashDone){
+    if(typeof idOrFn==='function') idOrFn();
+    else if(idOrFn) show(idOrFn);
+    return;
+  }
+  window.__armadaSplashDone=true;
+  const run=()=>{
+    if(typeof idOrFn==='function') idOrFn();
+    else if(idOrFn) show(idOrFn);
+  };
+  if(document.querySelector('#splash.show')) showAfterSplash(run);
+  else run();
 }
 function isCancelledOrder(o){
   return !!(o && (o.cancelledAt || (o.closedAt && o.cancelReason)));
@@ -396,9 +1266,372 @@ function nextSequentialNumber(){
   state.seq=(Number(state.seq)||0)+1;
   return state.seq;
 }
+function normalizeCustomerPortalLead(raw){
+  if(!raw||typeof raw!=='object') return null;
+  const kindRaw=String(raw.kind||'portal').trim().toLowerCase();
+  const kind=kindRaw==='transport'?'transport':kindRaw==='pilot'?'pilot':'portal';
+  const company=String(raw.company||raw.companyName||'').trim();
+  const phone=typeof formatPhone==='function'?formatPhone(raw.phone||''):String(raw.phone||'').trim();
+  const contactName=String(raw.contactName||raw.name||'').trim();
+  if(kind==='transport'){
+    if(!phone) return null;
+    if(!company && !contactName) return null;
+  }else if(kind==='pilot'){
+    if(!phone) return null;
+    if(!company && !contactName) return null;
+  }else if(!company||!phone) return null;
+  const inn=String(raw.inn||'').replace(/\D/g,'');
+  const vehicleTypeId=normalizeArmadaSxVtype(raw.vehicleTypeId||raw.vtype||'');
+  const pilotRole=String(raw.pilotRole||raw.role||'').trim().toLowerCase()||null;
+  const city=String(raw.city||'').trim()||null;
+  const fleetSize=String(raw.fleetSize||raw.vehicles||raw.fleet||'').trim()||null;
+  return {
+    id:raw.id||uuid(),
+    kind,
+    company:company||contactName||'—',
+    inn:inn||null,
+    phone,
+    contactName:contactName||null,
+    comment:String(raw.comment||'').trim()||null,
+    carrierHint:String(raw.carrierHint||raw.carrier||'').trim()||null,
+    pilotRole,
+    city,
+    fleetSize,
+    vehicleTypeId:vehicleTypeId||null,
+    loadAddress:String(raw.loadAddress||raw.address||'').trim()||null,
+    unloadAddress:String(raw.unloadAddress||'').trim()||null,
+    vehicleAt:String(raw.vehicleAt||'').trim()||null,
+    source:String(raw.source||'').trim()||null,
+    orderId:raw.orderId||null,
+    customerId:raw.customerId||null,
+    spaceId:raw.spaceId||null,
+    logistCompanyId:raw.logistCompanyId||null,
+    logistCompanyName:raw.logistCompanyName||null,
+    status:raw.status==='done'?'done':'pending',
+    createdAt:raw.createdAt||new Date().toISOString(),
+    doneAt:raw.doneAt||null
+  };
+}
+function migrateCustomerPortalLeads(){
+  state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
+}
+function companyOwnRole(c){
+  return !!(c&&Array.isArray(c.roles)&&c.roles.includes('own'));
+}
+function findArmadaLogistCompany(){
+  if(typeof migrateSpaces==='function') migrateSpaces();
+  const companies=state.companies||[];
+  let hit=companies.find(c=>companyOwnRole(c)&&String(c.name||'').toLowerCase().includes('армада'));
+  if(hit) return hit;
+  const sp=(state.spaces||[]).find(s=>String(s.name||'').toLowerCase().includes('армада'));
+  if(sp){
+    hit=companies.find(c=>companyOwnRole(c)&&c.spaceId===sp.id);
+    if(hit) return hit;
+  }
+  return null;
+}
+function mergeUniqueAddresses(existing, extra){
+  const seen=new Set();
+  const out=[];
+  [...(existing||[]), ...(Array.isArray(extra)?extra:[extra])].forEach(a=>{
+    const s=String(a||'').trim();
+    if(!s) return;
+    const k=s.toLowerCase();
+    if(seen.has(k)) return;
+    seen.add(k);
+    out.push(s);
+  });
+  return out;
+}
+function mapVtypeToBodyType(vtypeId){
+  const id=String(vtypeId||'').trim();
+  if(!id) return 'board';
+  const meta=ATI_BODY_TYPES.find(x=>x.id===id);
+  return meta&&meta.mapTo?meta.mapTo:'board';
+}
+function findArmadaCustomerByPhone(spaceId, phone){
+  const ph=typeof formatPhone==='function'?formatPhone(phone||''):String(phone||'').trim();
+  if(!ph) return null;
+  return (state.companies||[]).find(c=>{
+    if(spaceId&&c.spaceId!==spaceId) return false;
+    if(!Array.isArray(c.roles)||!c.roles.includes('customer')) return false;
+    if(typeof formatPhone==='function'&&formatPhone(c.portalPhone||'')===ph) return true;
+    if((c.phones||[]).some(p=>formatPhone(p)===ph)) return true;
+    return (c.contacts||[]).some(p=>formatPhone(p.phone||p)===ph);
+  })||null;
+}
+function ensureArmadaCustomerFromLead(lead, armadaCo){
+  if(!lead||!armadaCo) return null;
+  const spaceId=armadaCo.spaceId||null;
+  const phone=lead.phone;
+  let co=findArmadaCustomerByPhone(spaceId, phone);
+  const loadAddr=lead.loadAddress||'';
+  const unloadAddr=lead.unloadAddress||'';
+  if(co){
+    if(loadAddr) co.loadingAddresses=mergeUniqueAddresses(co.loadingAddresses, loadAddr);
+    if(unloadAddr) co.unloadingAddresses=mergeUniqueAddresses(co.unloadingAddresses, unloadAddr);
+    if(lead.inn&&!co.inn) co.inn=lead.inn;
+    if(!co.spaceId&&spaceId) co.spaceId=spaceId;
+    if(!co.portalPhone) co.portalPhone=phone;
+    if(lead.contactName){
+      const has=(co.contacts||[]).some(p=>String(p.name||'').trim().toLowerCase()===lead.contactName.toLowerCase());
+      if(!has){
+        co.contacts=(co.contacts||[]).concat([{name:lead.contactName, phone, role:''}]);
+      }
+    }
+    return co;
+  }
+  co={
+    id:uuid(),
+    name:lead.company,
+    roles:['customer'],
+    spaceId,
+    inn:lead.inn||'',
+    note:lead.source?`С ${lead.source}`:'',
+    portalPhone:phone,
+    portalEnabled:false,
+    portalPin:'',
+    loadingAddresses:loadAddr?[loadAddr]:[],
+    unloadingAddresses:unloadAddr?[unloadAddr]:[],
+    contacts:lead.contactName?[{name:lead.contactName, phone, role:''}]:[],
+    phones:[phone],
+    vehicles:[],
+    drivers:[]
+  };
+  state.companies=(state.companies||[]).concat([co]);
+  state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  if(typeof syncCustomersFromCompanies==='function') syncCustomersFromCompanies();
+  return co;
+}
+function insertPublicTransportOrder(lead, customerCo, armadaCo){
+  const spaceId=armadaCo.spaceId||null;
+  const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId)||(state.admins||[]).find(a=>a.isSuper)||null;
+  const seqNo=nextSequentialNumber();
+  const now=new Date().toISOString();
+  const load=String(lead.loadAddress||'').trim()||'—';
+  const unload=String(lead.unloadAddress||'').trim()||load;
+  const vtypes=lead.vehicleTypeId?[lead.vehicleTypeId]:[];
+  const order={
+    id:uuid(),
+    sequentialNumber:seqNo,
+    dayNumber:1,
+    createdAt:now,
+    source:'armada_sx',
+    customerSubmitted:true,
+    publicLeadId:lead.id,
+    ownerAdminId:spaceAdm&&spaceAdm.id||null,
+    ownerAdminName:spaceAdm&&spaceAdm.name||'',
+    spaceId,
+    customer:customerCo.name,
+    customerId:customerCo.id,
+    customerInn:customerCo.inn||'',
+    ownCompanyId:armadaCo.id,
+    ownCompanyName:armadaCo.name,
+    contactName:lead.contactName||lead.company||'',
+    contactPhone:lead.phone||'',
+    loadingContactName:lead.contactName||'',
+    loadingContactPhone:lead.phone||'',
+    cargoDescription:lead.comment||'',
+    loadingAddress:load,
+    unloadingAddress:unload,
+    routePoints:defaultRoutePoints(load, unload),
+    vehicleAt:lead.vehicleAt||null,
+    vehiclePlate:'—',
+    driverName:'Диспетчер',
+    driverPercent:0,
+    executorType:'logist',
+    onExchange:false,
+    fulfillment:'logist',
+    pricePending:true,
+    priceForClient:null,
+    reqBodyType:mapVtypeToBodyType(lead.vehicleTypeId),
+    vehicleTypeIds:vtypes,
+    partnerSpaceId:null,
+    transportApp:null
+  };
+  ensureRoutePoints(order);
+  state.orders=state.orders||[];
+  state.orders.unshift(order);
+  lead.orderId=order.id;
+  lead.customerId=customerCo.id;
+  lead.spaceId=spaceId;
+  lead.logistCompanyId=armadaCo.id;
+  lead.logistCompanyName=armadaCo.name;
+  return order;
+}
+function attachArmadaTransportLead(rec){
+  if(!rec||rec.kind!=='transport'||rec.orderId) return null;
+  const armada=findArmadaLogistCompany();
+  if(!armada){
+    console.warn('ООО «Армада» не найдена в справочнике — заявка сохранена без заказа');
+    return null;
+  }
+  const customer=ensureArmadaCustomerFromLead(rec, armada);
+  if(!customer) return null;
+  return insertPublicTransportOrder(rec, customer, armada);
+}
+async function appendCustomerPortalLead(raw){
+  migrateCustomerPortalLeads();
+  const rec=normalizeCustomerPortalLead(raw);
+  if(!rec) return {ok:false, error:'Заполните компанию и телефон'};
+  const dup=(state.customerPortalLeads||[]).find(l=>
+    l.status==='pending' && l.phone===rec.phone && l.company.toLowerCase()===rec.company.toLowerCase()
+  );
+  if(dup) return {ok:true, id:dup.id, duplicate:true, orderId:dup.orderId||null};
+  state.customerPortalLeads.unshift(rec);
+  let order=null;
+  if(rec.kind==='transport'){
+    order=attachArmadaTransportLead(rec);
+    if(order) bumpDataEpoch('armada-sx-order');
+  }
+  bumpDataEpoch('customer-portal-lead');
+  persistLocalOnly();
+  try{
+    await persist();
+    return {
+      ok:true,
+      id:rec.id,
+      orderId:rec.orderId||null,
+      orderNumber:order&&order.sequentialNumber||null,
+      customerId:rec.customerId||null
+    };
+  }catch(err){
+    console.warn('customer portal lead persist', err);
+    return {
+      ok:true,
+      id:rec.id,
+      offline:true,
+      orderId:rec.orderId||null,
+      orderNumber:order&&order.sequentialNumber||null,
+      customerId:rec.customerId||null
+    };
+  }
+}
+function markCustomerPortalLeadDone(leadId){
+  migrateCustomerPortalLeads();
+  const lead=(state.customerPortalLeads||[]).find(l=>l.id===leadId);
+  if(!lead) return false;
+  lead.status='done';
+  lead.doneAt=new Date().toISOString();
+  bumpDataEpoch('customer-lead-done');
+  persist();
+  return true;
+}
+function pendingCustomerPortalLeads(){
+  migrateCustomerPortalLeads();
+  return (state.customerPortalLeads||[]).filter(l=>l.status==='pending');
+}
+function pendingTransportOrders(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='transport');
+}
+function pendingPortalAccessLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='portal');
+}
+function pendingPilotLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot');
+}
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
   console.info('dataEpoch →', state.dataEpoch, reason||'');
+}
+/** S3-2.6: журнал ops для супер-админа (ЭТрН, API). */
+function logOpsEvent(kind, detail, meta){
+  if(!state.opsLog) state.opsLog=[];
+  state.opsLog.unshift({
+    id:uuid(),
+    at:new Date().toISOString(),
+    kind:String(kind||'info'),
+    detail:String(detail||''),
+    meta:meta&&typeof meta==='object'?meta:null
+  });
+  if(state.opsLog.length>60) state.opsLog.length=60;
+}
+function normalizeEpdSpaceRecord(rec, spaceId){
+  const sp=spaceId?findSpaceById(spaceId):null;
+  const co=spaceId&&typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(spaceId):null;
+  const boxId=String(rec&&rec.boxId||'').trim();
+  let status=rec&&rec.status;
+  if(!['pending','connected','error'].includes(status)) status=boxId?'connected':'pending';
+  return {
+    operator:String(rec&&rec.operator||'kontur').trim()||'kontur',
+    sandbox:rec&&rec.sandbox!=null?!!rec.sandbox:true,
+    orgInn:normalizeLoginInn(rec&&rec.orgInn||(co&&co.inn)||(sp&&sp.inn)||''),
+    boxId,
+    status,
+    connectedAt:rec&&rec.connectedAt||null,
+    lastError:rec&&rec.lastError?String(rec.lastError):''
+  };
+}
+function epdSpaceForSpaceId(spaceId){
+  if(!spaceId) return normalizeEpdSpaceRecord(null, null);
+  if(!state.epdBySpace||typeof state.epdBySpace!=='object') state.epdBySpace={};
+  return normalizeEpdSpaceRecord(state.epdBySpace[spaceId], spaceId);
+}
+function setEpdSpaceRecord(spaceId, patch){
+  if(!spaceId) return null;
+  if(!state.epdBySpace||typeof state.epdBySpace!=='object') state.epdBySpace={};
+  const prev=state.epdBySpace[spaceId]||{};
+  const next=normalizeEpdSpaceRecord(Object.assign({}, prev, patch||{}), spaceId);
+  if(patch&&patch.boxId!==undefined && next.boxId && !next.connectedAt) next.connectedAt=new Date().toISOString();
+  state.epdBySpace[spaceId]=next;
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('epd-space');
+  return next;
+}
+function epdBySpaceSnapshotSlice(){
+  const out={};
+  Object.keys(state.epdBySpace||{}).forEach(sid=>{
+    out[sid]=normalizeEpdSpaceRecord(state.epdBySpace[sid], sid);
+  });
+  return out;
+}
+function applyEpdBySpacePayload(raw){
+  if(!raw||typeof raw!=='object') return;
+  if(!state.epdBySpace||typeof state.epdBySpace!=='object') state.epdBySpace={};
+  Object.keys(raw).forEach(sid=>{
+    state.epdBySpace[sid]=normalizeEpdSpaceRecord(raw[sid], sid);
+  });
+}
+function epdSpaceStatusLabel(st){
+  if(st==='connected') return 'подключено';
+  if(st==='error') return 'ошибка';
+  return 'ждём boxId';
+}
+async function fetchEpdSpaceFromApi(spaceId){
+  if(!API_BASE||!spaceId) return null;
+  try{
+    const headers=typeof armadaApiJsonHeaders==='function'?armadaApiJsonHeaders():{Accept:'application/json'};
+    const res=await fetch(`${API_BASE}/epd/space/${encodeURIComponent(spaceId)}`, { headers });
+    if(!res.ok) return null;
+    const data=await res.json().catch(()=>({}));
+    return data&&data.epd?normalizeEpdSpaceRecord(data.epd, spaceId):null;
+  }catch(_){ return null; }
+}
+async function saveEpdSpaceToApi(spaceId, patch){
+  if(!API_BASE||!spaceId) return null;
+  try{
+    const headers=typeof armadaApiJsonHeaders==='function'?armadaApiJsonHeaders():{Accept:'application/json','Content-Type':'application/json'};
+    const res=await fetch(`${API_BASE}/epd/space/${encodeURIComponent(spaceId)}`, {
+      method:'PUT', headers, body:JSON.stringify(patch||{})
+    });
+    if(!res.ok) return null;
+    return await res.json().catch(()=>null);
+  }catch(_){ return null; }
+}
+async function syncEpdSpaceFromServer(spaceId){
+  const remote=await fetchEpdSpaceFromApi(spaceId);
+  if(!remote) return false;
+  setEpdSpaceRecord(spaceId, remote);
+  if(typeof persist==='function') persist();
+  return true;
+}
+async function syncAllEpdSpacesFromServer(){
+  if(!API_BASE) return 0;
+  const ids=(state.spaces||[]).map(s=>s&&s.id).filter(Boolean);
+  let n=0;
+  for(const sid of ids){
+    if(await syncEpdSpaceFromServer(sid)) n++;
+  }
+  return n;
 }
 function snapshot(){
   // Отменённые никогда не уезжают на сервер — иначе старая вкладка воскрешает их.
@@ -423,7 +1656,15 @@ function snapshot(){
     spaces:state.spaces,
     settings:state.settings,
     deletedOrderIds:Array.from(deletedOrderIdSet()),
+    deletedDriverKeys:Array.isArray(state.deletedDriverKeys)?state.deletedDriverKeys:[],
+    driverInvites:Array.isArray(state.driverInvites)?state.driverInvites:[],
     dataEpoch:Number(state.dataEpoch)||0,
+    billing:typeof billingSnapshotSlice==='function'?billingSnapshotSlice():state.billing,
+    epdBySpace:typeof epdBySpaceSnapshotSlice==='function'?epdBySpaceSnapshotSlice():(state.epdBySpace||{}),
+    invoices:Array.isArray(state.invoices)?state.invoices:[],
+    docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
+    customerPortalLeads:Array.isArray(state.customerPortalLeads)?state.customerPortalLeads:[],
+    opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
   };
@@ -439,6 +1680,7 @@ function applyPayload(p, opts){
   const keepOrders=opts&&opts.keepOrders;
   // Сначала tombstone (+ RETIRED), потом фильтр заказов — иначе дубль снова попадает в список
   unionDeletedOrderIds(p.deletedOrderIds||[]);
+  state.deletedDriverKeys=Array.isArray(p.deletedDriverKeys)?p.deletedDriverKeys:[];
   state.shifts=Array.isArray(p.shifts)?p.shifts:[];
   (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
   // Явный массив orders с сервера (в т.ч. []) — закон. Не поднимаем заказы из смен.
@@ -453,9 +1695,19 @@ function applyPayload(p, opts){
   state.companies=Array.isArray(p.companies)?p.companies:[];
   state.finance=Object.assign({}, DEFAULT_FINANCE, p.finance||{});
   state.spaces=Array.isArray(p.spaces)?p.spaces:[];
-  state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{}, p.settings||{});
+  if(typeof applyBillingPayload==='function') applyBillingPayload(p.billing);
+  else if(p.billing&&typeof p.billing==='object') state.billing=p.billing;
+  if(typeof applyEpdBySpacePayload==='function') applyEpdBySpacePayload(p.epdBySpace);
+  else if(p.epdBySpace&&typeof p.epdBySpace==='object') state.epdBySpace=p.epdBySpace;
+  state.invoices=Array.isArray(p.invoices)?p.invoices:[];
+  if(typeof applyDocTemplatesPayload==='function') applyDocTemplatesPayload(p.docTemplates);
+  else if(p.docTemplates&&typeof p.docTemplates==='object') state.docTemplates=p.docTemplates;
+  state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{}, p.settings||{});
+  state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
+  state.customerPortalLeads=Array.isArray(p.customerPortalLeads)?p.customerPortalLeads.map(normalizeCustomerPortalLead).filter(Boolean):[];
+  state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
   state.dataEpoch=Number(p.dataEpoch)||0;
-  mergeAdminAuthFromRemote(p);
+  mergeAdminAuthFromRemote(p, opts);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -464,6 +1716,7 @@ function applyPayload(p, opts){
   if(!(state.finance.podachaEmptyKmLimit>0)) state.finance.podachaEmptyKmLimit=20;
   if(!(state.finance.defaultRatePerHourWork>=0)) state.finance.defaultRatePerHourWork=0;
   if(!(state.finance.defaultRatePerKmCash>0)) state.finance.defaultRatePerKmCash=80;
+  state.finance=normalizeFinance(state.finance);
   // Только если поле orders вообще отсутствовало в старых дампах.
   if(!('orders' in p) && state.shifts.length && !state.orders.length){
     state.orders=stripCancelledFromOrders(state.shifts.flatMap(s=>s.orders||[]));
@@ -480,7 +1733,9 @@ function applyPayload(p, opts){
   migrateAdmins();
   migrateDriverOwners();
   migrateSpaces();
+  if(typeof migrateBilling==='function') migrateBilling();
   migrateDriverOrderOwners();
+  if(typeof migrateRepairOrderOwnersBySpace==='function') migrateRepairOrderOwnersBySpace();
   migrateShiftOwners();
   migrateDriverPins();
   migrateCompanyFinance();
@@ -502,6 +1757,9 @@ function applyPayload(p, opts){
   healOrphanOrdersIntoShifts();
   healAllOrders();
   purgeCancelledOrders();
+  if(typeof pruneInvoicesForDeletedOrders==='function') pruneInvoicesForDeletedOrders();
+  if(typeof migrateRestoreNechaevDriver==='function') migrateRestoreNechaevDriver();
+  purgeDeletedDrivers();
   compactSequentialNumbers();
 }
 /** Водитель без владельца → админ с тем же ФИО (после migrateAdmins). */
@@ -509,7 +1767,7 @@ function migrateDriverOwners(){
   let changed=false;
   (state.drivers||[]).forEach(d=>{
     if(d.ownerAdminId) return;
-    const adm=(state.admins||[]).find(a=>(a.name||'').trim().toLowerCase()===(d.name||'').trim().toLowerCase());
+    const adm=(state.admins||[]).find(a=>samePersonName(a.name, d.name));
     if(adm){ d.ownerAdminId=adm.id; d.ownerAdminName=adm.name; changed=true; }
   });
   return changed;
@@ -520,12 +1778,83 @@ function defaultFirmNameForAdmin(adminName){
   if(n.includes('наволоцк')) return 'ООО «Армада»';
   return adminName||'Фирма';
 }
+function slugifyPortalSlug(name, id){
+  let s=String(name||'').trim().toLowerCase()
+    .replace(/^(ооо|ип|ооо\s+|ип\s+)\s*/i,'')
+    .replace(/[«»"'„]/g,'')
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-+|-+$/g,'')
+    .slice(0,24);
+  if(s.length>=3 && /^[a-z0-9][a-z0-9-]*$/.test(s)) return s;
+  const tail=String(id||'').replace(/-/g,'').slice(0,8);
+  return 'p'+(tail||'x');
+}
+function findSpaceByPortalSlug(slug){
+  const s=String(slug||'').trim().toLowerCase();
+  if(!s) return null;
+  return (state.spaces||[]).find(sp=>String(sp.portalSlug||'').toLowerCase()===s)||null;
+}
+function normalizeRouteTemplate(t){
+  if(!t||typeof t!=='object') return null;
+  const load=String(t.loadingAddress||'').trim();
+  const unload=String(t.unloadingAddress||'').trim();
+  const name=String(t.name||'').trim();
+  if(!name||!load||!unload) return null;
+  return {
+    id:t.id||uuid(),
+    name,
+    loadingAddress:load,
+    unloadingAddress:unload,
+    loadingContactName:String(t.loadingContactName||'').trim(),
+    loadingContactPhone:String(t.loadingContactPhone||'').trim(),
+    unloadingContactName:String(t.unloadingContactName||'').trim(),
+    unloadingContactPhone:String(t.unloadingContactPhone||'').trim(),
+    createdAt:t.createdAt||new Date().toISOString()
+  };
+}
+function routeTemplatesForSpace(spaceId){
+  const sp=findSpaceById(spaceId);
+  if(!sp) return [];
+  return (Array.isArray(sp.routeTemplates)?sp.routeTemplates:[])
+    .map(normalizeRouteTemplate).filter(Boolean)
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+}
+function upsertRouteTemplate(spaceId, raw){
+  const sp=findSpaceById(spaceId);
+  if(!sp) return {ok:false, message:'Нет пространства фирмы'};
+  const tpl=normalizeRouteTemplate(Object.assign({}, raw, {id:raw&&raw.id||uuid()}));
+  if(!tpl) return {ok:false, message:'Укажите название и оба адреса'};
+  const list=routeTemplatesForSpace(spaceId).filter(t=>t.id!==tpl.id);
+  list.push(tpl);
+  sp.routeTemplates=list;
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('route-template');
+  if(typeof persist==='function') persist();
+  return {ok:true, template:tpl};
+}
+function deleteRouteTemplate(spaceId, templateId){
+  const sp=findSpaceById(spaceId);
+  if(!sp) return {ok:false, message:'Нет пространства фирмы'};
+  const before=routeTemplatesForSpace(spaceId).length;
+  sp.routeTemplates=routeTemplatesForSpace(spaceId).filter(t=>t.id!==templateId);
+  if(sp.routeTemplates.length===before) return {ok:false, message:'Шаблон не найден'};
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('route-template');
+  if(typeof persist==='function') persist();
+  return {ok:true};
+}
 function normalizeSpace(s){
   if(!s||typeof s!=='object') return null;
   const id=s.id||uuid();
   const name=String(s.name||'').trim(); if(!name) return null;
+  let portalSlug=String(s.portalSlug||'').trim().toLowerCase()
+    .replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'').slice(0,32);
+  if(!portalSlug) portalSlug=slugifyPortalSlug(name, id);
+  const portalLogo=String(s.portalLogo||'').trim();
+  const routeTemplates=(Array.isArray(s.routeTemplates)?s.routeTemplates:[])
+    .map(normalizeRouteTemplate).filter(Boolean);
   return {
     id, name,
+    portalSlug,
+    portalLogo:portalLogo.startsWith('data:image')?portalLogo:'',
     inn:String(s.inn||'').trim(),
     ogrn:String(s.ogrn||'').trim(),
     kpp:String(s.kpp||'').trim(),
@@ -534,13 +1863,75 @@ function normalizeSpace(s){
     adminId:s.adminId||null,
     adminName:String(s.adminName||'').trim(),
     ownCompanyId:s.ownCompanyId||null,
+    routeTemplates,
     createdAt:s.createdAt||new Date().toISOString()
   };
 }
 function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
 function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
+function personSurnameKey(name){
+  const parts=String(name||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '';
+  return parts[0].replace(/\./g,'');
+}
+function personInitials(name){
+  const parts=String(name||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(parts.length<2) return '';
+  return parts.slice(1).map(p=>p.replace(/\./g,'').charAt(0)).join('');
+}
+/** «Нечаев» и «Нечаев А.С.» — один человек (PIN админа ↔ водитель). */
 function samePersonName(a,b){
-  return String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+  const na=String(a||'').trim().toLowerCase();
+  const nb=String(b||'').trim().toLowerCase();
+  if(!na||!nb) return false;
+  if(na===nb) return true;
+  const sa=personSurnameKey(na);
+  const sb=personSurnameKey(nb);
+  if(sa.length<3||sb.length<3||sa!==sb) return false;
+  const ia=personInitials(na);
+  const ib=personInitials(nb);
+  if(!ia||!ib) return true;
+  return ia.charAt(0)===ib.charAt(0);
+}
+function adminMirrorDriverBlocked(adm, co){
+  if(!adm||!co) return true;
+  if(adm.skipDriverMirror) return true;
+  return isDriverDeleted(adm.name, co.id);
+}
+/** PIN админа → водительские профили; при восстановлении доступа — сразу на сервер. */
+function syncAdminAuthToDrivers(adm){
+  if(!adm||!adm.id) return false;
+  if(typeof migrateSpaces==='function') migrateSpaces();
+  let changed=false;
+  const pin=String(adm.pin||'').trim();
+  const co=typeof ownCompanyForAdminId==='function'?ownCompanyForAdminId(adm.id):null;
+  const sp=findSpaceById(adm.spaceId);
+  const existing=(state.drivers||[]).find(d=>samePersonName(d.name, adm.name));
+  const driverName=existing?existing.name:adm.name;
+  if(co && !adminMirrorDriverBlocked(adm, co) && ensureDriverInCompany({
+    name:driverName, companyId:co.id, companyName:co.name,
+    spaceId:adm.spaceId||co.spaceId||null,
+    ownerAdminId:adm.id, ownerAdminName:adm.name,
+    pin:pin.length>=4?pin:'',
+    phone:adm.phone||''
+  })) changed=true;
+  (state.drivers||[]).forEach(d=>{
+    if(!samePersonName(d.name, adm.name)) return;
+    if(pin.length>=4 && String(d.pin||'').trim()!==pin){ d.pin=pin; changed=true; }
+    if(adm.phone && formatPhone(d.phone||'')!==formatPhone(adm.phone)){ d.phone=formatPhone(adm.phone); changed=true; }
+    if(!d.ownerAdminId){ d.ownerAdminId=adm.id; d.ownerAdminName=adm.name; changed=true; }
+    if(adm.spaceId && co && (!d.companyId || d.companyId===co.id || d.ownerAdminId===adm.id)){
+      if(d.spaceId!==adm.spaceId){ d.spaceId=adm.spaceId; changed=true; }
+      if(d.companyId!==co.id){ d.companyId=co.id; d.companyName=co.name; changed=true; }
+    }
+  });
+  if(existing && existing.name.length>String(adm.name||'').length && existing.name!==adm.name){
+    adm.name=existing.name;
+    if(sp) sp.adminName=existing.name;
+    changed=true;
+  }
+  if(changed && typeof bumpDataEpoch==='function') bumpDataEpoch('admin-driver-sync');
+  return changed;
 }
 /** «Наша фирма» пространства — у каждого админа своя. */
 function ensureOwnCompanyForSpace(space){
@@ -564,7 +1955,12 @@ function ensureOwnCompanyForSpace(space){
   }
   let co=(state.companies||[]).find(c=>c.spaceId===space.id && companyHasRole(c,'own'));
   if(!co){
-    co=(state.companies||[]).find(c=>companyHasRole(c,'own') && (c.name||'').trim().toLowerCase()===(space.name||'').trim().toLowerCase());
+    co=(state.companies||[]).find(c=>c.spaceId===space.id && (c.name||'').trim().toLowerCase()===(space.name||'').trim().toLowerCase());
+    if(co){
+      const roles=(co.roles||[]).slice();
+      if(!roles.includes('own')) roles.push('own');
+      co=upsertCompany(Object.assign({}, co, {roles, spaceId:space.id}));
+    }
   }
   if(!co){
     co=upsertCompany({
@@ -573,9 +1969,12 @@ function ensureOwnCompanyForSpace(space){
       spaceId:space.id, inn:space.inn, ogrn:space.ogrn, kpp:space.kpp, address:space.address
     });
   } else {
-    co.spaceId=space.id;
-    if(!companyHasRole(co,'own')) co.roles.push('own');
-    upsertCompany(co);
+    if(co.spaceId!==space.id) co.spaceId=space.id;
+    if(!companyHasRole(co,'own')){
+      const roles=(co.roles||[]).slice();
+      roles.push('own');
+      co=upsertCompany(Object.assign({}, co, {roles, spaceId:space.id}));
+    }
   }
   if(co) space.ownCompanyId=co.id;
   return co||null;
@@ -590,7 +1989,9 @@ function ensureDriverInCompany(opts){
   const companyId=opts.companyId;
   if(!name||!companyId) return false;
   if(driverExistsInCompany(name, companyId)) return false;
+  if(isDriverDeleted(name, companyId)) return false;
   state.drivers.push({
+    id:uuid(),
     name,
     salaryPercent:opts.salaryPercent??30,
     exchangeEnabled:!!opts.exchangeEnabled,
@@ -634,6 +2035,67 @@ function findDriversByPhone(phone){
   if(!p) return [];
   return (state.drivers||[]).filter(d=>formatPhone(d.phone||'')===p);
 }
+function driverInviteKey(d){
+  if(!d) return '';
+  return `${String(d.name||'').trim()}|${d.companyId||''}`;
+}
+function findValidDriverInvite(token){
+  if(!token) return null;
+  const inv=(state.driverInvites||[]).find(x=>x&&x.token===token && !x.usedAt && !x.revokedAt);
+  if(!inv) return null;
+  if(inv.expiresAt && new Date(inv.expiresAt).getTime()<Date.now()) return null;
+  return inv;
+}
+function driverInvitePageUrl(token){
+  const dir=location.pathname.replace(/[^/]*$/,'');
+  return `${location.origin}${dir}invite.html?token=${encodeURIComponent(token)}`;
+}
+async function createDriverInvite(driverIndex){
+  const d=(state.drivers||[])[driverIndex];
+  if(!d) return {ok:false, message:'Водитель не найден'};
+  const phone=formatPhone(d.phone||'');
+  if(!phone) return {ok:false, message:'Укажите телефон водителя'};
+  if(currentAdmin && typeof billingGuardCurrentAdminWithServer==='function'){
+    const g=await billingGuardCurrentAdminWithServer('add_driver');
+    if(!g.ok) return {ok:false, message:g.message};
+  }
+  if(!state.driverInvites) state.driverInvites=[];
+  const key=driverInviteKey(d);
+  state.driverInvites.forEach(inv=>{
+    if(inv && inv.driverKey===key && !inv.usedAt && !inv.revokedAt) inv.revokedAt=new Date().toISOString();
+  });
+  const token=uuid();
+  const inv={
+    id:uuid(), token, driverKey:key,
+    driverName:String(d.name||'').trim(),
+    companyId:d.companyId||null,
+    spaceId:d.spaceId||null,
+    phone,
+    createdAt:new Date().toISOString(),
+    expiresAt:new Date(Date.now()+DRIVER_INVITE_TTL_MS).toISOString(),
+    createdByAdminId:currentAdmin&&currentAdmin.id,
+    createdByAdminName:currentAdmin&&currentAdmin.name,
+    usedAt:null, revokedAt:null
+  };
+  state.driverInvites.push(inv);
+  bumpDataEpoch('driver-invite');
+  persist();
+  return {ok:true, invite:inv, url:driverInvitePageUrl(token)};
+}
+function consumeDriverInvite(token, pin){
+  const inv=findValidDriverInvite(token);
+  if(!inv) return {ok:false, message:'Ссылка недействительна, истекла или уже использована'};
+  const pinStr=String(pin||'').trim();
+  if(pinStr.length<4) return {ok:false, message:'PIN — минимум 4 цифры'};
+  const rec=findDriverRecord(inv.driverName, inv.companyId);
+  if(!rec) return {ok:false, message:'Водитель не найден — обратитесь к администратору'};
+  if(formatPhone(rec.phone||'')!==inv.phone) return {ok:false, message:'Телефон водителя изменился — запросите новую ссылку'};
+  rec.pin=pinStr;
+  inv.usedAt=new Date().toISOString();
+  bumpDataEpoch('driver-invite-used');
+  persist();
+  return {ok:true, driver:rec};
+}
 function pickDriverHomeRecord(list){
   if(!list||!list.length) return null;
   const home=list.find(d=>{
@@ -642,9 +2104,30 @@ function pickDriverHomeRecord(list){
   });
   return home||list[0];
 }
+/** Подтянуть companyName/spaceId у водителей и авто из справочника компаний. */
+function migrateSyncDriverCompanyNames(){
+  let changed=false;
+  (state.drivers||[]).forEach(d=>{
+    if(!d) return;
+    const co=d.companyId&&findCompanyById(d.companyId);
+    if(co){
+      if(d.companyName!==co.name){ d.companyName=co.name; changed=true; }
+      if(co.spaceId && d.spaceId!==co.spaceId){ d.spaceId=co.spaceId; changed=true; }
+      return;
+    }
+    if(d.companyId && !co){ d.companyId=null; d.companyName=null; changed=true; }
+  });
+  (state.vehicles||[]).forEach(v=>{
+    if(!v||!v.companyId) return;
+    const co=findCompanyById(v.companyId);
+    if(co && v.companyName!==co.name){ v.companyName=co.name; changed=true; }
+  });
+  return changed;
+}
 /** Парк (водители/авто) — отдельно на каждую «нашу фирму». */
 function ensureFleetPerSpaces(){
   let changed=false;
+  if(migrateSyncDriverCompanyNames()) changed=true;
   // Старые «общие» водители без фирмы — привязать к фирме владельца/админа с тем же ФИО
   (state.drivers||[]).forEach(d=>{
     if(d.companyId && findCompanyById(d.companyId)) return;
@@ -665,7 +2148,7 @@ function ensureFleetPerSpaces(){
     if(!co) return;
     if(co.spaceId!==sp.id){ co.spaceId=sp.id; changed=true; }
     (state.drivers||[]).forEach(d=>{
-      if(d.spaceId===sp.id && d.companyId!==co.id){
+      if(d.spaceId===sp.id && !d.companyId){
         d.companyId=co.id; d.companyName=co.name; changed=true;
       }
     });
@@ -677,37 +2160,11 @@ function ensureFleetPerSpaces(){
     });
     const adm=(state.admins||[]).find(a=>a.id===sp.adminId)
       || (state.admins||[]).find(a=>a.spaceId===sp.id);
-    // В каждую фирму — известные водители (копии), чтобы не вводить заново
-    DEFAULT_DRIVERS.forEach(def=>{
-      if(ensureDriverInCompany({
-        name:def.name,
-        salaryPercent:def.salaryPercent??30,
-        exchangeEnabled:!!def.exchangeEnabled,
-        phone:def.phone||'',
-        companyId:co.id, companyName:co.name, spaceId:sp.id,
-        ownerAdminId:adm?adm.id:null, ownerAdminName:adm?adm.name:null
-      })) changed=true;
-    });
-    if(adm && ensureDriverInCompany({
+    if(adm && co && !adminMirrorDriverBlocked(adm, co) && ensureDriverInCompany({
       name:adm.name, companyId:co.id, companyName:co.name, spaceId:sp.id,
       ownerAdminId:adm.id, ownerAdminName:adm.name
     })) changed=true;
-    // У каждой «нашей фирмы» должен быть хотя бы один автомобиль для смены/ЕТО
-    if(!fleetVehiclesForCompany(co.id).length){
-      const nm=(co.name||'').toLowerCase();
-      const seedPlate=nm.includes('нечаев')?'К 001 КК 47'
-        :(nm.includes('армада')?(DEFAULT_VEHICLES[0]&&DEFAULT_VEHICLES[0].plate)||'О 535 МВ 198'
-        :`Х ${String(100+((co.id||co.name||'').length*17)%900).padStart(3,'0')} ХХ 47`);
-      const def=DEFAULT_VEHICLES[0]||{consumptionPer100Km:20,payloadTons:5,bodyLengthM:6,bodyWidthM:2.4,bodyHeightM:2.2};
-      state.vehicles.push(normalizeFleetVehicle({
-        plate:seedPlate,
-        consumptionPer100Km:def.consumptionPer100Km||20,
-        payloadTons:def.payloadTons||5,
-        bodyLengthM:def.bodyLengthM||6, bodyWidthM:def.bodyWidthM||2.4, bodyHeightM:def.bodyHeightM||2.2,
-        makeModel:'', spaceId:sp.id, companyId:co.id, companyName:co.name
-      }));
-      changed=true;
-    }
+    // Пустой парк — нормально; авто добавляют вручную в «Справочники → Авто».
   });
   // Телефоны: из контактов «нашей фирмы» / других копий того же ФИО
   (state.drivers||[]).forEach(d=>{
@@ -750,6 +2207,10 @@ function currentOwnCompany(){
   if(!currentAdmin) return null;
   return ownCompanyForAdminId(currentAdmin.id) || ownCompanyForSpaceId(currentSpaceId());
 }
+function currentAdminOwnCompanyId(){
+  const co=currentOwnCompany();
+  return co?co.id:'';
+}
 function ownCompaniesList(){
   return (state.companies||[]).filter(c=>companyHasRole(c,'own'));
 }
@@ -766,15 +2227,100 @@ function financeForOrder(o){
   if(my) return financeForCompanyId(my.id);
   return normalizeFinance(state.finance);
 }
+function driverTombstoneKey(name, companyId){
+  return `${String(name||'').trim().toLowerCase()}|${companyId||''}`;
+}
+function markDriverDeleted(d){
+  if(!d) return;
+  if(!Array.isArray(state.deletedDriverKeys)) state.deletedDriverKeys=[];
+  const key=driverTombstoneKey(d.name, d.companyId);
+  if(!state.deletedDriverKeys.includes(key)) state.deletedDriverKeys.push(key);
+}
+function unmarkDriverDeleted(name, companyId){
+  if(!Array.isArray(state.deletedDriverKeys)) return false;
+  const key=driverTombstoneKey(name, companyId);
+  const i=state.deletedDriverKeys.indexOf(key);
+  if(i<0) return false;
+  state.deletedDriverKeys.splice(i,1);
+  return true;
+}
+function restoreDriverInCompany(opts){
+  const name=String(opts.name||'').trim();
+  const companyId=opts.companyId;
+  if(!name||!companyId) return false;
+  unmarkDriverDeleted(name, companyId);
+  return ensureDriverInCompany(opts);
+}
+function isDriverDeleted(name, companyId){
+  return (state.deletedDriverKeys||[]).includes(driverTombstoneKey(name, companyId));
+}
+/** Вернуть Нечаева А.С. в ИП Нечаев (tombstone после удаления в справочнике). */
+function migrateRestoreNechaevDriver(){
+  const CANON='Нечаев А.С.';
+  const adm=(state.admins||[]).find(a=>samePersonName(a.name, CANON));
+  const name=adm?String(adm.name||'').trim():CANON;
+  if(!name) return false;
+  const owns=(typeof ownCompaniesList==='function'?ownCompaniesList():[])
+    .filter(c=>(c.name||'').toLowerCase().includes('нечаев'));
+  let co=owns[0]||null;
+  if(!co&&adm&&adm.spaceId){
+    const sp=findSpaceById(adm.spaceId);
+    if(sp) co=ensureOwnCompanyForSpace(sp);
+  }
+  if(!co) return false;
+  let changed=false;
+  (state.deletedDriverKeys||[]).slice().forEach(key=>{
+    const sep=key.lastIndexOf('|');
+    if(sep<0) return;
+    const nm=key.slice(0, sep);
+    const cid=key.slice(sep+1);
+    if(cid===co.id && nm.includes('нечаев') && unmarkDriverDeleted(nm, co.id)) changed=true;
+  });
+  if(driverExistsInCompany(name, co.id)) return changed;
+  const def=DEFAULT_DRIVERS.find(d=>samePersonName(d.name, CANON))||{};
+  if(restoreDriverInCompany({
+    name, companyId:co.id, companyName:co.name,
+    spaceId:co.spaceId||adm?.spaceId||null,
+    ownerAdminId:adm?.id||null, ownerAdminName:adm?.name||null,
+    salaryPercent:def.salaryPercent??30,
+    exchangeEnabled:!!def.exchangeEnabled,
+    phone:def.phone||adm?.phone||''
+  })) changed=true;
+  return changed;
+}
+function purgeDeletedDrivers(){
+  if(!Array.isArray(state.drivers)) return false;
+  const before=state.drivers.length;
+  state.drivers=state.drivers.filter(d=>!isDriverDeleted(d.name, d.companyId));
+  return state.drivers.length!==before;
+}
+/** Водители как во вкладке «Справочники → Водители». */
+function catalogDriverCompany(){
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
+  const owns=(typeof ownCompaniesList==='function'?ownCompaniesList():[]).filter(inSpace);
+  if(catalogDriverCompanyId){
+    const hit=findCompanyById(catalogDriverCompanyId);
+    if(hit && companyHasRole(hit,'own') && inSpace(hit)) return hit;
+  }
+  const my=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(my) return my;
+  return owns[0]||null;
+}
 function catalogFinanceCompany(){
-  if(!isSuperAdmin()) return currentOwnCompany();
+  const inSpace=(c)=>typeof companyInMySpace==='function'?companyInMySpace(c):true;
   if(catalogFinanceCompanyId){
     const hit=findCompanyById(catalogFinanceCompanyId);
-    if(hit && companyHasRole(hit,'own')) return hit;
+    if(hit && companyHasRole(hit,'own') && inSpace(hit)) return hit;
   }
-  const my=currentOwnCompany();
-  if(my) return my;
-  return ownCompaniesList()[0]||null;
+  if(catalogActiveCompanyId){
+    const active=findCompanyById(catalogActiveCompanyId);
+    if(active && companyHasRole(active,'own') && inSpace(active)) return active;
+  }
+  const my=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(my && inSpace(my)) return my;
+  const list=typeof catalogOwnCompaniesInView==='function'?catalogOwnCompaniesInView()
+    :ownCompaniesList().filter(inSpace);
+  return list[0]||null;
 }
 /** Раздать общий тариф по «нашим фирмам», если у фирмы ещё нет своего. */
 function migrateCompanyFinance(){
@@ -801,21 +2347,136 @@ function createSpaceForAdmin(admin, firm){
     createdAt:new Date().toISOString()
   });
   state.spaces=(state.spaces||[]).concat([space]);
+  if(typeof bootstrapPilotSpace==='function') bootstrapPilotSpace(space.id);
+  else if(typeof getBillingForSpace==='function') getBillingForSpace(space.id);
   admin.spaceId=space.id;
-  const co=ensureOwnCompanyForSpace(space);
-  if(co){
-    ensureDriverInCompany({
-      name:admin.name, companyId:co.id, companyName:co.name, spaceId:space.id,
-      ownerAdminId:admin.id, ownerAdminName:admin.name
-    });
-  }
+  ensureOwnCompanyForSpace(space);
   return space;
 }
+function ensureAdminDriverMirror(adm, opts){
+  if(!adm||!adm.spaceId) return false;
+  const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(adm.spaceId):null;
+  if(!co||adminMirrorDriverBlocked(adm, co)) return false;
+  if(typeof unmarkDriverDeleted==='function') unmarkDriverDeleted(adm.name, co.id);
+  adm.skipDriverMirror=false;
+  return ensureDriverInCompany(Object.assign({
+    name:adm.name, companyId:co.id, companyName:co.name, spaceId:adm.spaceId,
+    ownerAdminId:adm.id, ownerAdminName:adm.name,
+    phone:adm.phone||'', pin:String(adm.pin||'').trim()
+  }, opts||{}));
+}
 /** У каждого админа — пространство + своя «наша фирма»; водители/авто к ней. */
+/** Автозаглушки парка (legacy seed) — не настоящие машины. */
+function isAutoSeedVehiclePlate(plate){
+  const p=typeof normPlateKey==='function'?normPlateKey(plate):String(plate||'').toLowerCase().replace(/\s+/g,'');
+  if(!p) return false;
+  if(p==='к001кк47') return true;
+  return /^х\d{3}хх47$/.test(p);
+}
+function vehiclePlateInUse(plate){
+  const key=typeof normPlateKey==='function'?normPlateKey(plate):String(plate||'').toLowerCase().replace(/\s+/g,'');
+  if(!key) return false;
+  const matchPl=(p)=>typeof normPlateKey==='function'?normPlateKey(p)===key:String(p||'').toLowerCase().replace(/\s+/g,'')===key;
+  if((state.orders||[]).some(o=>matchPl(o.vehiclePlate)||matchPl(o.bookedPlate))) return true;
+  if((state.shifts||[]).some(s=>matchPl(s.vehiclePlate))) return true;
+  if((state.drivers||[]).some(d=>{
+    if(!d.vehicleId) return false;
+    const v=(state.vehicles||[]).find(x=>x.id===d.vehicleId);
+    return v&&matchPl(v.plate);
+  })) return true;
+  return false;
+}
+/** Админ явно удалил зеркало водителя — не создавать снова. */
+function migrateAdminSkipDriverMirror(){
+  let changed=false;
+  (state.admins||[]).forEach(adm=>{
+    const co=typeof ownCompanyForAdminId==='function'?ownCompanyForAdminId(adm.id):null;
+    if(!co) return;
+    if(isDriverDeleted(adm.name, co.id) && !adm.skipDriverMirror){
+      adm.skipDriverMirror=true;
+      changed=true;
+    }
+  });
+  return changed;
+}
+/** Удалить автосозданные заглушки без заказов и смен. */
+function migrateRemoveAutoSeedVehicles(){
+  let changed=false;
+  const before=(state.vehicles||[]).length;
+  state.vehicles=(state.vehicles||[]).filter(v=>{
+    if(!v||!isAutoSeedVehiclePlate(v.plate)) return true;
+    if(vehiclePlateInUse(v.plate)) return true;
+    changed=true;
+    return false;
+  });
+  if(changed && typeof bumpDataEpoch==='function') bumpDataEpoch('purge-auto-seed-vehicles');
+  return changed || before!==(state.vehicles||[]).length;
+}
+/** Водитель с ФИО админа другого кабинета не должен висеть в чужом space (legacy). */
+function migratePurgeCrossTenantGhostDrivers(){
+  let changed=false;
+  const admins=(state.admins||[]).filter(a=>a&&a.spaceId);
+  (state.drivers||[]).slice().forEach(d=>{
+    if(!d||!d.name) return;
+    const home=admins.find(a=>samePersonName(a.name, d.name));
+    if(!home||!home.spaceId) return;
+    if(d.spaceId===home.spaceId) return;
+    const hasHomeCopy=(state.drivers||[]).some(x=>x!==d && samePersonName(x.name,d.name) && x.spaceId===home.spaceId);
+    if(!hasHomeCopy && d.ownerAdminId===home.id){
+      d.spaceId=home.spaceId;
+      const co=ownCompanyForSpaceId(home.spaceId);
+      if(co){ d.companyId=co.id; d.companyName=co.name; }
+      changed=true;
+      return;
+    }
+    state.drivers=state.drivers.filter(x=>x!==d);
+    changed=true;
+  });
+  return changed;
+}
+/** Снять «Наша фирма» у записей в чужом кабинете (legacy: МБН/Нечаев в справочнике Армады). */
+function migrateStripSpuriousOwnRoles(){
+  let changed=false;
+  (state.spaces||[]).forEach(sp=>{
+    if(!sp.ownCompanyId) return;
+    (state.companies||[]).forEach(c=>{
+      if(!companyHasRole(c,'own') || c.id===sp.ownCompanyId) return;
+      if(c.spaceId===sp.id){
+        c.roles=(c.roles||[]).filter(r=>r!=='own');
+        if(!c.roles.length) c.roles=['customer'];
+        changed=true;
+      }
+    });
+  });
+  (state.companies||[]).forEach(c=>{
+    if(!companyHasRole(c,'own')) return;
+    if((state.spaces||[]).some(sp=>sp.ownCompanyId===c.id)) return;
+    c.roles=(c.roles||[]).filter(r=>r!=='own');
+    if(!c.roles.length) c.roles=['customer'];
+    changed=true;
+  });
+  if(changed && typeof syncCustomersFromCompanies==='function') syncCustomersFromCompanies();
+  return changed;
+}
 function migrateSpaces(){
-  state.settings=Object.assign({fnsApiKey:'',dadataToken:''}, state.settings||{});
+  state.settings=Object.assign({fnsApiKey:'',dadataToken:'',yandexMapsApiKey:''}, state.settings||{});
   state.spaces=(state.spaces||[]).map(normalizeSpace).filter(Boolean);
   let changed=false;
+  const slugUsed=new Set();
+  (state.spaces||[]).forEach(sp=>{
+    let slug=String(sp.portalSlug||'').toLowerCase();
+    if(!slug || slugUsed.has(slug)){
+      slug=slugifyPortalSlug(sp.name, sp.id);
+      let n=0;
+      while(slugUsed.has(slug)){
+        n++;
+        slug=slugifyPortalSlug(sp.name, sp.id)+'-'+n;
+      }
+      sp.portalSlug=slug;
+      changed=true;
+    }
+    slugUsed.add(slug);
+  });
   (state.admins||[]).forEach(a=>{
     if(a.spaceId && findSpaceById(a.spaceId)) return;
     const byAdmin=state.spaces.find(s=>s.adminId===a.id);
@@ -827,6 +2488,12 @@ function migrateSpaces(){
     const before=sp.ownCompanyId;
     ensureOwnCompanyForSpace(sp);
     if(sp.ownCompanyId!==before) changed=true;
+    const co=ownCompanyForSpaceId(sp.id);
+    const coInn=co&&normalizeLoginInn(co.inn);
+    if(coInn && normalizeLoginInn(sp.inn)!==coInn){
+      sp.inn=coInn;
+      changed=true;
+    }
   });
   const superAdm=(state.admins||[]).find(a=>a.isSuper);
   const fallbackSpace=superAdm&&superAdm.spaceId;
@@ -848,6 +2515,11 @@ function migrateSpaces(){
     }
   });
   (state.vehicles||[]).forEach(v=>{
+    if(!v) return;
+    if(!v.spaceId && v.companyId){
+      const co=findCompanyById(v.companyId);
+      if(co&&co.spaceId){ v.spaceId=co.spaceId; changed=true; }
+    }
     if(!v.spaceId && fallbackSpace){ v.spaceId=fallbackSpace; changed=true; }
     if(!v.companyId && v.spaceId){
       const co=ownCompanyForSpaceId(v.spaceId);
@@ -861,6 +2533,10 @@ function migrateSpaces(){
     else if(fallbackSpace){ o.spaceId=fallbackSpace; changed=true; }
   });
   if(ensureFleetPerSpaces()) changed=true;
+  if(migrateRemoveAutoSeedVehicles()) changed=true;
+  if(migrateAdminSkipDriverMirror()) changed=true;
+  if(migratePurgeCrossTenantGhostDrivers()) changed=true;
+  if(migrateStripSpuriousOwnRoles()) changed=true;
   return changed;
 }
 function isValidInn(inn){
@@ -905,10 +2581,9 @@ async function lookupPartyByInnDaData(inn, token){
 }
 function egrulNalogBase(){
   const h=(location.hostname||'').toLowerCase();
-  if(h==='aptown1.fvds.ru'||h==='176.12.67.35'||h==='localhost'||h==='127.0.0.1')
+  if(isArmadaProdHost(h)||h==='localhost'||h==='127.0.0.1')
     return location.origin.replace(/\/$/,'')+'/egrul-api';
-  // С любого другого URL (GitHub Pages, закладка) — прокси на live, как PB_BASE
-  return 'http://aptown1.fvds.ru/egrul-api';
+  return ARMADA_LIVE_ORIGIN+'/egrul-api';
 }
 function parseEgrulDirectorField(g){
   const s=String(g||'').trim();
@@ -1024,108 +2699,287 @@ async function lookupPartyByInn(inn){
     throw egrulErr;
   }
 }
-async function fetchServerState(){
+function networkSlow(){
+  try{
+    const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    if(!c) return false;
+    if(c.saveData) return true;
+    const t=c.effectiveType;
+    return t==='slow-2g'||t==='2g'||t==='3g';
+  }catch(_){ return false; }
+}
+function autoSyncIntervalMs(){
+  return networkSlow()?AUTO_SYNC_SLOW_MS:AUTO_SYNC_MS;
+}
+async function fetchWithTimeout(url, options, timeoutMs){
+  const ms=timeoutMs||FETCH_TIMEOUT_MS;
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(), ms);
+  try{
+    return await fetch(url, {...(options||{}), signal:ctrl.signal});
+  }finally{ clearTimeout(timer); }
+}
+function persistLocalOnly(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    if(currentAdmin) saveAdminSession();
+    if(typeof armadaSyncBroadcast==='function') armadaSyncBroadcast('local_save');
+  }catch(err){ console.warn('local persist', err); }
+}
+function pushServerStateQueued(){
+  if(syncPushInFlight){
+    syncPushQueued=true;
+    return syncPushInFlight;
+  }
+  syncPushInFlight=pushServerState()
+    .catch(err=>{ throw err; })
+    .finally(()=>{
+      syncPushInFlight=null;
+      if(syncPushQueued){
+        syncPushQueued=false;
+        pushServerStateQueued();
+      }
+    });
+  return syncPushInFlight;
+}
+function armadaApiToken(){
+  try{ return localStorage.getItem(ARMADA_API_TOKEN_KEY)||''; }catch(_){ return ''; }
+}
+function setArmadaApiToken(token){
+  try{
+    if(token) localStorage.setItem(ARMADA_API_TOKEN_KEY, token);
+    else localStorage.removeItem(ARMADA_API_TOKEN_KEY);
+  }catch(_){}
+}
+function armadaApiJsonHeaders(){
+  const h={ Accept:'application/json', 'Content-Type':'application/json' };
+  const t=armadaApiToken();
+  if(t) h.Authorization='Bearer '+t;
+  return h;
+}
+async function refreshAdminListForLogin(){
+  return refreshAuthFromServer({pin:'sync', meta:{role:'admin', purpose:'login-list'}});
+}
+async function refreshAuthFromServer(opts){
+  if(navigator.onLine===false || typeof fetchServerState!=='function') return false;
+  try{
+    const rec=await fetchServerState(3500, opts||{pin:'sync', meta:{role:'sync'}});
+    if(!rec||!rec.payload) return false;
+    pbRecordId=rec.id;
+    if(typeof mergeAdminAuthFromRemote==='function'){
+      mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
+    }
+    if(typeof migrateSpaces==='function') migrateSpaces();
+    if(typeof migrateDriverPins==='function') migrateDriverPins();
+    if(typeof migrateAdmins==='function') migrateAdmins();
+    persistLocalOnly();
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+async function ensureArmadaApiToken(opts){
+  if(!API_BASE) return false;
+  if(armadaApiToken()) return true;
+  if(typeof armadaApiLogin!=='function') return false;
+  const o=opts||{};
+  const token=await armadaApiLogin(o.pin||'sync', o.meta||{role:'sync'});
+  return !!token;
+}
+async function armadaApiLogin(pin, meta){
+  if(!API_BASE || !pin) return null;
+  try{
+    const res=await fetchWithTimeout(`${API_BASE}/auth/login`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Accept:'application/json' },
+      body:JSON.stringify({ pin, role:'admin', adminId:meta&&meta.id, spaceId:meta&&meta.spaceId })
+    }, 8000);
+    const data=await res.json().catch(()=>({}));
+    if(res.ok && data.token){ setArmadaApiToken(data.token); return data.token; }
+  }catch(err){ console.warn('armada-api login', err); }
+  return null;
+}
+async function fetchArmadaApiHealth(timeoutMs){
+  if(!API_BASE) return null;
+  try{
+    const res=await fetchWithTimeout(`${API_BASE}/health`, { headers:{ Accept:'application/json' } }, timeoutMs||6000);
+    const data=await res.json().catch(()=>null);
+    return res.ok&&data?data:null;
+  }catch(_){ return null; }
+}
+async function fetchServerStateFromApi(timeoutMs){
+  const res=await fetchWithTimeout(`${API_BASE}/state`, { headers:armadaApiJsonHeaders() }, timeoutMs);
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error||'API state '+res.status);
+  if(!data.payload) return null;
+  return { id:data.recordId, payload:data.payload, viaApi:true };
+}
+async function fetchServerStateFromPb(timeoutMs){
   const filter=encodeURIComponent("key='main'");
-  const res=await fetch(`${PB_BASE}/api/collections/app_state/records?filter=${filter}&perPage=1`);
+  const res=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records?filter=${filter}&perPage=1`, {}, timeoutMs);
   if(!res.ok) throw new Error('Не удалось загрузить базу ('+res.status+')');
   const data=await res.json();
   return (data.items&&data.items[0])||null;
 }
-async function pushServerState(){
-  // Перед записью сверяем эпоху: старая вкладка не должна затирать более новую базу.
-  try{
-    const rec=await fetchServerState();
-    if(rec){
-      pbRecordId=rec.id;
-      const remote=rec.payload||{};
-      // tombstone только расширяем — старая вкладка не должна очищать удалённые id
-      unionDeletedOrderIds(remote.deletedOrderIds||[]);
-      state.orders=stripCancelledFromOrders(state.orders);
-      (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
-      const remoteEpoch=Number(remote.dataEpoch)||0;
-      const localEpoch=Number(state.dataEpoch)||0;
-      if(remoteEpoch>localEpoch){
-        const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
-        const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-        const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
-        // Сначала сервер, потом аккуратно вернём локальный прогресс ЕТО/заказов
-        applyPayload(remote, {remoteSeq:true});
-        let merged=false;
-        if(mergeLocalShifts(localShifts)) merged=true;
-        if(liveShift && mergeLocalShifts([liveShift])) merged=true;
-        if(mergeLocalOrders(localOrders)) merged=true;
-        if(healOrphanOrdersIntoShifts()) merged=true;
-        if(migrateEtoFromMessages()) merged=true;
-        if(merged){
-          bumpDataEpoch('merge-local-remote-ahead');
-          localStorage.setItem(KEY, JSON.stringify(snapshot()));
-          // сразу догоняем сервер своей сменой/ЕТО/заказами
-          try{
-            const body={key:'main', payload:snapshot()};
-            await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
-              method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
-            });
-            console.warn('PB push merged local into remote epoch', remoteEpoch);
-            return {aborted:false, merged:true};
-          }catch(e){ console.warn('PB merge push', e); }
-        } else {
-          localStorage.setItem(KEY, JSON.stringify(snapshot()));
-        }
-        console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
-        return {aborted:true, reason:'remote_ahead'};
-      }
-    }
-  }catch(err){
-    console.warn('PB preflight', err);
+async function fetchServerState(timeoutMs, opts){
+  if(API_BASE){
+    await ensureArmadaApiToken(opts);
+    try{ return await fetchServerStateFromApi(timeoutMs); }
+    catch(err){ console.warn('API state fetch, fallback PB', err); }
   }
-  const payload=snapshot();
-  localStorage.setItem(KEY, JSON.stringify(payload));
-  const body={key:'main', payload};
+  return await fetchServerStateFromPb(timeoutMs);
+}
+async function patchServerStatePayload(payload){
+  if(API_BASE){
+    try{
+      const res=await fetchWithTimeout(`${API_BASE}/state`, {
+        method:'PATCH',
+        headers:armadaApiJsonHeaders(),
+        body:JSON.stringify({ payload })
+      });
+      const data=await res.json().catch(()=>({}));
+      if(res.status===409){
+        return { ok:false, aborted:true, remotePayload:data.payload, remoteEpoch:data.remoteEpoch, viaApi:true };
+      }
+      if(!res.ok) throw new Error(data.error||'API patch '+res.status);
+      if(data.recordId) pbRecordId=data.recordId;
+      return { ok:true, aborted:false, viaApi:true };
+    }catch(err){ console.warn('API patch fallback PB', err); }
+  }
+  const body={ key:'main', payload };
   if(pbRecordId){
-    const res=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+    const res=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
       method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
     });
     if(!res.ok) throw new Error('Не удалось сохранить ('+res.status+')');
-    return {aborted:false};
+    return { ok:true, aborted:false };
   }
-  const res=await fetch(`${PB_BASE}/api/collections/app_state/records`,{
+  const res=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records`,{
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
   });
   if(res.ok){
     const rec=await res.json();
     pbRecordId=rec.id;
-    return {aborted:false};
+    return { ok:true, aborted:false };
   }
-  const existing=await fetchServerState();
+  const existing=await fetchServerStateFromPb();
   if(!existing) throw new Error('Не удалось создать запись базы');
   pbRecordId=existing.id;
-  const res2=await fetch(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
+  const res2=await fetchWithTimeout(`${PB_BASE}/api/collections/app_state/records/${pbRecordId}`,{
     method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
   });
   if(!res2.ok) throw new Error('Не удалось сохранить ('+res2.status+')');
-  return {aborted:false};
+  return { ok:true, aborted:false };
+}
+async function mergeRemoteAheadOnPush(remote){
+  if(!remote||typeof remote!=='object') return {aborted:true, reason:'remote_ahead'};
+  unionDeletedOrderIds(remote.deletedOrderIds||[]);
+  state.orders=stripCancelledFromOrders(state.orders);
+  (state.shifts||[]).forEach(s=>{ if(Array.isArray(s.orders)) s.orders=stripCancelledFromOrders(s.orders); });
+  const remoteEpoch=Number(remote.dataEpoch)||0;
+  const localEpoch=Number(state.dataEpoch)||0;
+  if(remoteEpoch<=localEpoch) return {aborted:false};
+  const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+  const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+  const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+  applyPayload(remote, {remoteSeq:true, remoteWinsAuth:true});
+  let merged=false;
+  if(mergeLocalShifts(localShifts)) merged=true;
+  if(liveShift && mergeLocalShifts([liveShift])) merged=true;
+  if(mergeLocalOrders(localOrders)) merged=true;
+  if(healOrphanOrdersIntoShifts()) merged=true;
+  if(migrateEtoFromMessages()) merged=true;
+  if(merged){
+    bumpDataEpoch('merge-local-remote-ahead');
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    try{
+      await patchServerStatePayload(snapshot());
+      console.warn('push merged local into remote epoch', remoteEpoch);
+      return {aborted:false, merged:true};
+    }catch(e){ console.warn('merge push', e); }
+  } else {
+    localStorage.setItem(KEY, JSON.stringify(snapshot()));
+  }
+  console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
+  return {aborted:true, reason:'remote_ahead'};
+}
+async function pushServerState(){
+  if(API_BASE) await ensureArmadaApiToken({});
+  const payload=snapshot();
+  localStorage.setItem(KEY, JSON.stringify(payload));
+  try{
+    const pushed=await patchServerStatePayload(payload);
+    if(pushed.ok) return {aborted:false};
+    if(pushed.aborted){
+      if(pushed.remotePayload) return mergeRemoteAheadOnPush(pushed.remotePayload);
+      return {aborted:true, reason:'remote_ahead'};
+    }
+  }catch(err){
+    console.warn('PB push', err);
+    throw err;
+  }
+  throw new Error('Не удалось сохранить');
 }
 function persist(){
-  localStorage.setItem(KEY, JSON.stringify(snapshot()));
-  if(currentAdmin) saveAdminSession();
+  persistLocalOnly();
   if(navigator.onLine===false){
     syncStatus='error';
     updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
     return;
   }
-  syncStatus='syncing';
-  updateDriverNetHint();
   clearTimeout(persistTimer);
   persistTimer=setTimeout(()=>{
-    pushServerState()
-      .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
-      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); });
-  }, 350);
+    syncStatus='syncing';
+    updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
+    pushServerStateQueued()
+      .then(()=>{ syncStatus='ok'; pullFailCount=0; updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); })
+      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); });
+  }, PERSIST_DEBOUNCE_MS);
+}
+/** Сохранить PIN админа локально и сразу отправить на сервер (без debounce). */
+async function persistAdminPinImmediate(){
+  persistLocalOnly();
+  if(navigator.onLine===false){
+    syncStatus='error';
+    updateDriverNetHint();
+    if(typeof updateSyncHint==='function') updateSyncHint();
+    return { ok:false, offline:true };
+  }
+  clearTimeout(persistTimer);
+  persistTimer=null;
+  syncStatus='syncing';
+  updateDriverNetHint();
+  if(typeof updateSyncHint==='function') updateSyncHint();
+  let lastErr=null;
+  for(let attempt=0; attempt<3; attempt++){
+    if(attempt>0) await new Promise(r=>setTimeout(r, 800*attempt));
+    try{
+      await pushServerStateQueued();
+      syncStatus='ok';
+      pullFailCount=0;
+      updateDriverNetHint();
+      if(typeof updateSyncHint==='function') updateSyncHint();
+      return { ok:true };
+    }catch(err){
+      lastErr=err;
+      console.warn('admin pin push attempt', attempt+1, err);
+    }
+  }
+  syncStatus='error';
+  updateDriverNetHint();
+  if(typeof updateSyncHint==='function') updateSyncHint();
+  return { ok:false, offline:false, err:lastErr };
+}
+/** Сохранить справочник компаний на сервер сразу (без debounce). */
+async function persistCompanyImmediate(){
+  return persistAdminPinImmediate();
 }
 async function initCloudSync(){
   syncStatus='syncing';
   try{
-    const rec=await fetchServerState();
+    const rec=await fetchServerState(INIT_FETCH_MS);
     if(rec){
       pbRecordId=rec.id;
       const remote=rec.payload||{};
@@ -1136,12 +2990,22 @@ async function initCloudSync(){
       if(remoteEpoch>=localEpoch || !localEpoch){
         const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
         const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true});
+        applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true, remoteWinsAuth:true});
         healOrphanOrdersIntoShifts();
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
       } else {
-        // Локальная эпоха строго выше — осознанная очистка/миграция с этого устройства.
+        // Локальная эпоха выше — tombstone удалений с сервера всё равно применяем.
+        unionDeletedOrderIds(remote.deletedOrderIds||[]);
+        if(typeof purgeDeadOrdersEverywhere==='function') purgeDeadOrdersEverywhere();
+        if(typeof pruneInvoicesForDeletedOrders==='function') pruneInvoicesForDeletedOrders();
+        if(typeof mergeAdminAuthFromRemote==='function'){
+          mergeAdminAuthFromRemote(remote, {remoteWinsAuth:true});
+        }
+        if(typeof migrateAdmins==='function') migrateAdmins();
+        if(typeof migrateSpaces==='function') migrateSpaces();
+        if(typeof migrateDriverPins==='function') migrateDriverPins();
+        persistLocalOnly();
         await pushServerState();
       }
     } else {
@@ -1153,9 +3017,15 @@ async function initCloudSync(){
     console.warn('PB init', err);
   }
 }
+function scheduleAdminRerender(){
+  if(typeof renderAdminDebounced==='function') renderAdminDebounced();
+  else if(typeof renderAdmin==='function') renderAdmin();
+}
 /** Подтянуть новую эпоху с сервера без перезагрузки и без повторного PIN. */
 async function pullRemoteUpdates(reason){
   if(autoSyncBusy) return false;
+  if(!navigator.onLine) return false;
+  if(Date.now()<pullBackoffUntil) return false;
   // Не мешаем активному вводу закрытия/создания — только если шаг idle или просмотр
   const busyStep=state.orderStep&&state.orderStep!=='idle'&&state.orderStep!=='postCloseWhere';
   if(busyStep && reason==='poll') return false;
@@ -1180,7 +3050,7 @@ async function pullRemoteUpdates(reason){
     const keepUiStep=state.step;
     const ordersOpen=!!document.querySelector('#orders-panel.show');
     const cabinetOpen=!!document.querySelector('#cabinet-panel.show');
-    applyPayload(remote, {remoteSeq:true});
+    applyPayload(remote, {remoteSeq:true, remoteWinsAuth:true});
     mergeLocalShifts(localShifts);
     if(liveShift) mergeLocalShifts([liveShift]);
     mergeLocalOrders(localOrders);
@@ -1212,18 +3082,29 @@ async function pullRemoteUpdates(reason){
       if(ordersOpen) showOrders();
       if(cabinetOpen) showCabinet();
     } else if(inAdmin){
-      restoreAdminSession();
+      if(typeof reconcileAdminSessionAfterSync==='function') reconcileAdminSessionAfterSync();
+      else if(typeof restoreAdminSession==='function') restoreAdminSession();
       if(detailId && (state.orders||[]).some(o=>o.id===detailId)) openDetail(detailId);
       else if(document.querySelector('#admin-vehicle-card.show') && state._vehicleCardId) openVehicleCard(state._vehicleCardId);
+      else if(document.querySelector('#admin-driver-card.show') && state._driverCardId) openDriverCard(state._driverCardId);
       else if(document.querySelector('#admin-catalogs-screen.show')) openCatalogs();
-      else if(document.querySelector('#admin.show')) renderAdmin();
+      else if(document.querySelector('#admin.show')) scheduleAdminRerender();
+      if(typeof maybeNotifyAdminInboxUpdates==='function') maybeNotifyAdminInboxUpdates();
+    } else if(typeof currentCustomer!=='undefined' && currentCustomer || document.querySelector('#customer-portal.show')){
+      if(typeof restoreCustomerSession==='function') restoreCustomerSession();
+      if(typeof renderCustomerPortal==='function') renderCustomerPortal();
+      if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
     }
     syncStatus='ok';
+    pullFailCount=0;
+    pullBackoffUntil=0;
     updateSyncHint();
     console.info('auto-sync', reason, 'epoch', remoteEpoch);
     return true;
   }catch(err){
     syncStatus='error';
+    pullFailCount=Math.min(pullFailCount+1, 12);
+    pullBackoffUntil=Date.now()+Math.min(SYNC_BACKOFF_MAX_MS, 4000*pullFailCount);
     updateSyncHint();
     console.warn('auto-sync', reason, err);
     return false;
@@ -1232,9 +3113,69 @@ async function pullRemoteUpdates(reason){
   }
 }
 function stopAutoSync(){
-  if(autoSyncTimer){ clearInterval(autoSyncTimer); autoSyncTimer=null; }
+  if(autoSyncTimer){ clearTimeout(autoSyncTimer); autoSyncTimer=null; }
 }
 function startAutoSync(){
   stopAutoSync();
-  autoSyncTimer=setInterval(()=>{ pullRemoteUpdates('poll'); }, AUTO_SYNC_MS);
+  const tick=()=>{
+    if(!document.hidden) pullRemoteUpdates('poll');
+    autoSyncTimer=setTimeout(tick, autoSyncIntervalMs());
+  };
+  autoSyncTimer=setTimeout(tick, autoSyncIntervalMs());
+}
+if(typeof document!=='undefined'){
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden) stopAutoSync();
+    else startAutoSync();
+  });
+  let syncStorageTimer=null;
+  window.addEventListener('storage', (e)=>{
+    if(e.key!==KEY || !e.newValue) return;
+    clearTimeout(syncStorageTimer);
+    syncStorageTimer=setTimeout(()=>{
+      try{
+        const parsed=JSON.parse(e.newValue);
+        const remoteEpoch=Number(parsed.dataEpoch)||0;
+        const localEpoch=Number(state.dataEpoch)||0;
+        if(remoteEpoch<=localEpoch) return;
+        unionDeletedOrderIds(parsed.deletedOrderIds||[]);
+        const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
+        const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+        const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
+        applyPayload(parsed, {remoteSeq:true});
+        if(typeof mergeLocalShifts==='function'){
+          mergeLocalShifts(localShifts);
+          if(liveShift) mergeLocalShifts([liveShift]);
+        }
+        if(typeof mergeLocalOrders==='function') mergeLocalOrders(localOrders);
+        if(typeof healOrphanOrdersIntoShifts==='function') healOrphanOrdersIntoShifts();
+        if(typeof migrateEtoFromMessages==='function') migrateEtoFromMessages();
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        syncStatus='ok';
+        if(typeof updateSyncHint==='function') updateSyncHint();
+        if(typeof updateDriverNetHint==='function') updateDriverNetHint();
+        if(currentAdmin) scheduleAdminRerender();
+        if(typeof maybeNotifyAdminInboxUpdates==='function') maybeNotifyAdminInboxUpdates();
+        if(DRIVER && typeof renderDriverBanner==='function') renderDriverBanner();
+        if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
+        if(typeof currentCustomer!=='undefined' && currentCustomer && typeof renderCustomerPortal==='function') renderCustomerPortal();
+      }catch(err){ console.warn('storage-tab sync', err); }
+    }, 120);
+  });
+}
+const ARMADA_SYNC_BC='armada_sync_v1';
+let armadaSyncChannel=null;
+function armadaSyncBroadcast(kind){
+  try{
+    if(!armadaSyncChannel && typeof BroadcastChannel!=='undefined'){
+      armadaSyncChannel=new BroadcastChannel(ARMADA_SYNC_BC);
+      armadaSyncChannel.onmessage=(ev)=>{
+        const d=ev&&ev.data;
+        if(!d || d.type!=='state_touch') return;
+        if(d.epoch && Number(d.epoch)<=Number(state.dataEpoch||0)) return;
+        pullRemoteUpdates('broadcast');
+      };
+    }
+    if(armadaSyncChannel) armadaSyncChannel.postMessage({type:'state_touch', epoch:state.dataEpoch, kind});
+  }catch(_){}
 }

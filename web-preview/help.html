@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru" class="doc-page">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>АРМАДА — помощь и инструкции</title>
+  <meta name="theme-color" content="#EF4444" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2026-08-31-help-roles4317" />
+  <style>
+    body{background:var(--bg0);padding:16px;max-width:720px;margin:0 auto}
+    .help-wrap{padding-bottom:32px}
+    .help-top{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+    .help-top img{width:48px;border-radius:10px}
+    .help-top h1{margin:0;font-size:1.25rem}
+    .help-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .help-nav a{
+      padding:8px 12px;border-radius:var(--radius);background:var(--surface);
+      border:1px solid var(--border);text-decoration:none;color:var(--text);font-size:.85rem;font-weight:600
+    }
+    .help-section{margin-bottom:24px}
+    .help-section h2{font-size:1.05rem;margin:0 0 10px;color:var(--text)}
+    .help-section h3{font-size:.92rem;margin:16px 0 6px}
+    .help-section p,.help-section li{font-size:.9rem;line-height:1.5;color:var(--text)}
+    .help-section ol,.help-section ul{padding-left:1.2rem;margin:8px 0}
+    .help-section li{margin-bottom:6px}
+    .help-back{display:inline-block;margin-bottom:16px;color:var(--accent);font-weight:600;text-decoration:none;font-size:.9rem}
+    .help-note{
+      padding:10px 12px;border-radius:var(--radius);background:rgba(239,68,68,.08);
+      border:1px solid rgba(239,68,68,.25);font-size:.85rem;margin:12px 0
+    }
+    .help-role-pick{display:grid;gap:10px;margin:20px 0}
+    .help-role-pick a{
+      display:block;padding:14px 16px;border-radius:var(--radius);background:var(--surface);
+      border:1px solid var(--border);text-decoration:none;color:var(--text);font-weight:600
+    }
+    .help-role-pick a span{display:block;font-weight:400;font-size:.85rem;color:var(--muted);margin-top:4px}
+    .help-role-switch{font-size:.82rem;margin-bottom:12px}
+    .help-role-switch a{color:var(--accent);font-weight:600}
+    .help-hidden{display:none!important}
+  </style>
+</head>
+<body class="doc-page">
+  <a class="help-back" id="help-back" href="/">← На главную</a>
+  <div class="help-wrap">
+    <div class="help-top">
+      <img src="logo.png" alt="" />
+      <div>
+        <h1 id="help-title">Помощь и инструкции</h1>
+        <p class="hint" id="help-lead" style="margin:0">АРМАДА — учёт перевозок</p>
+      </div>
+    </div>
+
+    <div id="help-role-picker" class="help-section">
+      <h2>Выберите вашу роль</h2>
+      <p>Инструкции разделены: перевозчик (логист, водитель) и заказчик видят только своё.</p>
+      <div class="help-role-pick">
+        <a href="help.html?role=carrier"><strong>Перевозчик</strong><span>Администратор, логист, водитель · парк, биржа, смены</span></a>
+        <a href="help.html?role=customer"><strong>Заказчик</strong><span>Портал заявок · адреса, цена, бронь машины</span></a>
+      </div>
+    </div>
+
+    <p class="help-role-switch help-hidden" id="help-role-switch"></p>
+    <nav class="help-nav help-hidden" id="help-nav" aria-label="Разделы"></nav>
+
+    <section class="help-section help-hidden" id="start-carrier" data-help-role="carrier admin driver">
+      <h2>С чего начать (перевозчик)</h2>
+      <ol>
+        <li>Откройте вход:
+          <a href="/a/">администратор / логист</a> или
+          <a href="/v/">водитель</a>.
+        </li>
+        <li>На первом входе появится короткое приветствие — пролистайте или пропустите.</li>
+        <li>Введите телефон или ИНН организации и PIN (выдаёт администратор перевозчика).</li>
+        <li>После входа запустится тур по экрану. Его можно перезапустить из меню «Помощь».</li>
+      </ol>
+      <div class="help-note">PIN водителя задаётся в админке: Справочники → Водители.</div>
+    </section>
+
+    <section class="help-section help-hidden" id="start-customer" data-help-role="customer">
+      <h2>С чего начать (заказчик)</h2>
+      <ol>
+        <li>Портал включает перевозчик в карточке вашей компании.</li>
+        <li>Откройте <a href="/z/">портал заказчика</a> (ссылку даёт диспетчер).</li>
+        <li>Войдите по телефону и PIN из письма или звонка диспетчера.</li>
+        <li>После входа — тур по форме заявки. Перезапуск: ссылка «Помощь» на экране входа.</li>
+      </ol>
+      <div class="help-note">PIN заказчика задаётся в карточке компании в админке перевозчика.</div>
+    </section>
+
+    <section class="help-section help-hidden" id="admin" data-help-role="carrier admin">
+      <h2>Администратор и логист</h2>
+      <h3>Парк и биржа</h3>
+      <ul>
+        <li>Сверху <strong>Парк</strong>. Если в справочнике нашей фирмы включён <strong>Диспетчер</strong> — появляется кнопка <strong>Биржа</strong>.</li>
+        <li>Логист и диспетчер — одна должность. Парк как обычно; биржа — чтобы отдать остаток партнёрам. Биржа уже в тарифе «Бизнес».</li>
+        <li><strong>+ Заказ</strong> — новая заявка. Кто везёт: Парк (наш водитель) и, если диспетчер включён, Биржа.</li>
+        <li>Фильтры парка: все / входящие / назначен / в работе / закрыт. «Входящие» — заявки заказчика.</li>
+        <li>Карточка заявки — маршрут, одометры, расчёт ЗП, ЭТрН (если подключён оператор).</li>
+      </ul>
+      <h3>ЕТО</h3>
+      <p>Таблица техосмотров по автомобилям: что водитель прошёл в смене, просрочки ТО-1 / ТО-2.</p>
+      <h3>Диспетчер</h3>
+      <p>Та же должность, что логист. Галочка в справочнике нашей фирмы включает кнопку «Биржа». Свой парк не отключается. Биржа входит в тариф «Бизнес».</p>
+      <h3>Справочники</h3>
+      <ul>
+        <li><strong>Водители</strong> — ФИО, телефон, PIN, фирма.</li>
+        <li><strong>Авто</strong> — госномер, парк, расход, ТО, чек-листы.</li>
+        <li><strong>Компании</strong> — заказчики, перевозчики, портал заказчика.</li>
+        <li><strong>Тариф</strong> — ₽/км и ₽/ч для расчёта минимальной цены.</li>
+      </ul>
+      <h3>Тарифы (супер-админ)</h3>
+      <p>Оплата подписки сервиса АРМАДА для вашей организации.</p>
+    </section>
+
+    <section class="help-section help-hidden" id="etrn" data-help-role="carrier admin driver customer">
+      <h2>ЭТrН (электронная транспортная накладная)</h2>
+      <p>Модуль доступен в тарифе «Бизнес+». Оператор на платформе — Контур.Логистика. Подписи T1–T4 проходят через аккредитованного оператора; АРМАДА показывает статус в заказах.</p>
+      <h3>Роли и титулы</h3>
+      <ul>
+        <li><strong>T1</strong> — грузоотправитель (заказчик или отдельное лицо на погрузке).</li>
+        <li><strong>T2</strong> — перевозчик (логист в кабинете на погрузке).</li>
+        <li><strong>T3</strong> — водитель, приём груза на погрузке.</li>
+        <li><strong>T4</strong> — водитель, выдача на выгрузке.</li>
+      </ul>
+      <h3>Логист</h3>
+      <ul>
+        <li>В списке заказов — бейдж ЭТrН и фильтры: «моя подпись», «T1», «водитель».</li>
+        <li>В карточке заказа — блок ЭТrН: лента титулов, QR для инспектора, печать.</li>
+        <li>Статус подключения Контура — в жёлтом баннере тарифа («подключено» / «ждём boxId»).</li>
+        <li>Письма на выпуск подписи — на бланке вашей фирмы: Справочники → компания или профиль.</li>
+      </ul>
+      <h3>Водитель</h3>
+      <ul>
+        <li>После выезда по заказу — QR ЭТrН для инспектора (баннер на главной).</li>
+        <li>Подписи T3/T4 — кнопка «Подписать ЭТrН» в баннере или в карточке заказа.</li>
+      </ul>
+      <h3>Заказчик</h3>
+      <p>Если вы грузоотправитель — в портале появится блок «Подписать T1» на погрузке. Иначе скопируйте ссылку для грузоотправителя из карточки заявки.</p>
+      <div class="help-note">boxId организации в Контуре вводит только супер-админ АРМАДА (Активность → Оператор ЭПД). Без boxId черновики ЭТrН работают в sandbox.</div>
+    </section>
+
+    <section class="help-section help-hidden" id="driver" data-help-role="carrier driver">
+      <h2>Водитель</h2>
+      <h3>Типичный день</h3>
+      <ol>
+        <li>Откройте <a href="/v/">страницу входа водителя</a> (или ссылку из SMS).</li>
+        <li>Войти по телефону и PIN.</li>
+        <li>На главной нажать <strong>«Открыть смену»</strong>.</li>
+        <li>Выбрать автомобиль, ввести одометр на стоянке.</li>
+        <li>Пройти ЕТО: ГУР, ОЖ, свет, масло — ответы кнопками.</li>
+        <li>В разделе <strong>Заявки</strong> или на главной — взять заказ: выехал → прибыл → одометры.</li>
+        <li>После последнего заказа — закрыть смену (одометр на стоянке).</li>
+      </ol>
+      <h3>Разделы нижнего меню</h3>
+      <ul>
+        <li><strong>Главная</strong> — сводка и активные заказы.</li>
+        <li><strong>Заявки</strong> — все ваши заказы и действия.</li>
+        <li><strong>История</strong> — закрытые смены.</li>
+        <li><strong>Профиль</strong> — начисления, уведомления, выход, «Показать подсказки».</li>
+      </ul>
+      <div class="help-note">Без сети черновик смены сохраняется на телефоне. При появлении связи данные отправятся на сервер.</div>
+    </section>
+
+    <section class="help-section help-hidden" id="customer" data-help-role="customer">
+      <h2>Заказчик</h2>
+      <p>Портал включается перевозчиком в карточке вашей компании.</p>
+      <ol>
+        <li>Откройте <a href="/z/">портал заказчика</a> (ссылку даёт перевозчик).</li>
+        <li>Войти по телефону и PIN из письма/звонка диспетчера.</li>
+        <li>Заполнить адреса, дату подачи, тоннаж, тип кузова и что везёте.</li>
+        <li>Километраж считается по адресам. Для рефрижератора, самосвала, продуктов и 20 т в ориентир входит надбавка.</li>
+        <li>Если цена не посчиталась — заявку всё равно можно отправить: цену уточнит диспетчер.</li>
+        <li>Режим «логисту» — закрыть как можно скорее, ставка логиста уже в ориентире цены. Свободную машину можно запросить: перевозчик подтвердит бронь, и дата подачи появится в календаре у вас и у него.</li>
+        <li>Режим «свой парк» — заранее, без срочной ставки. Тоже запрос брони, пока перевозчик не подтвердит.</li>
+      </ol>
+    </section>
+
+    <section class="help-section help-hidden" id="sync" data-help-role="carrier admin">
+      <h2>Синхронизация</h2>
+      <p>Данные хранятся в браузере (localStorage) и на сервере перевозчика. Несколько диспетчеров видят одни заявки.</p>
+      <p>Если на экране входа текст <strong>«Нет связи с сервером»</strong> — проверьте интернет или обратитесь к администратору сервера.</p>
+    </section>
+
+    <section class="help-section help-hidden" id="faq-carrier" data-help-role="carrier admin driver">
+      <h2>Частые вопросы</h2>
+      <h3>Забыл PIN</h3>
+      <p>Обратитесь к администратору перевозчика — PIN сбросят в справочнике водителей. Или напишите на <a href="mailto:support@armada.sx">support@armada.sx</a>.</p>
+      <h3>Не вижу заказы</h3>
+      <p>Водитель: заказ должен быть назначен на вас. Админ: проверьте фильтр фирмы и статус заявки.</p>
+      <h3>Как снова показать подсказки на экране?</h3>
+      <p>Админ: кнопка «Помощь» в левом меню. Водитель: Профиль → «Показать подсказки».</p>
+      <h3>Юридические документы</h3>
+      <p><a href="legal.html">Оферта</a>, <a href="legal.html#privacy">политика ПДн</a>, <a href="kp.html">коммерческое предложение для перевозчика</a>.</p>
+    </section>
+
+    <section class="help-section help-hidden" id="faq-customer" data-help-role="customer">
+      <h2>Частые вопросы</h2>
+      <h3>Забыл PIN</h3>
+      <p>Обратитесь к диспетчеру перевозчика — PIN задаётся в карточке вашей компании. Или <a href="mailto:support@armada.sx">support@armada.sx</a>.</p>
+      <h3>Не посчиталась цена</h3>
+      <p>Отправьте заявку без цены — диспетчер уточнит сумму и свяжется с вами.</p>
+      <h3>Как снова показать подсказки?</h3>
+      <p>На экране входа заказчика — ссылка «Помощь» под формой.</p>
+      <h3>Юридические документы</h3>
+      <p><a href="legal.html">Оферта</a>, <a href="legal.html#privacy">политика ПДн</a>, <a href="kp-zakaz.html">коммерческое предложение для заказчика</a>.</p>
+    </section>
+  </div>
+  <footer style="max-width:720px;margin:16px auto;padding:0 16px 32px;font-size:.85rem;color:var(--muted)">
+    <p><a href="mailto:support@armada.sx">support@armada.sx</a> · <a href="mailto:hello@armada.sx">hello@armada.sx</a> · <a href="/">На главную</a></p>
+  </footer>
+  <script>
+    (function () {
+      var NAV = {
+        carrier: [
+          { href: '#start-carrier', label: 'С чего начать' },
+          { href: '#admin', label: 'Логист' },
+          { href: '#etrn', label: 'ЭТrН' },
+          { href: '#driver', label: 'Водитель' },
+          { href: '#sync', label: 'Синхронизация' },
+          { href: '#faq-carrier', label: 'Вопросы' }
+        ],
+        admin: [
+          { href: '#start-carrier', label: 'С чего начать' },
+          { href: '#admin', label: 'Логист' },
+          { href: '#etrn', label: 'ЭТrН' },
+          { href: '#sync', label: 'Синхронизация' },
+          { href: '#faq-carrier', label: 'Вопросы' }
+        ],
+        driver: [
+          { href: '#start-carrier', label: 'С чего начать' },
+          { href: '#driver', label: 'Водитель' },
+          { href: '#etrn', label: 'ЭТrН' },
+          { href: '#faq-carrier', label: 'Вопросы' }
+        ],
+        customer: [
+          { href: '#start-customer', label: 'С чего начать' },
+          { href: '#customer', label: 'Портал заказчика' },
+          { href: '#etrn', label: 'ЭТrН' },
+          { href: '#faq-customer', label: 'Вопросы' }
+        ]
+      };
+      var TITLES = {
+        carrier: ['Помощь перевозчику', 'Логист, диспетчер и водитель'],
+        admin: ['Помощь логисту', 'Администратор перевозчика'],
+        driver: ['Помощь водителю', 'Смены, заявки, ЕТО'],
+        customer: ['Помощь заказчику', 'Портал заявок на перевозку']
+      };
+      var BACK = {
+        carrier: '/a/',
+        admin: '/a/',
+        driver: '/v/',
+        customer: '/z/'
+      };
+
+      function parseRole() {
+        var q = new URLSearchParams(location.search);
+        var role = (q.get('role') || '').trim().toLowerCase();
+        if (role === 'перевозчик') role = 'carrier';
+        if (role === 'заказчик') role = 'customer';
+        if (role === 'водитель') role = 'driver';
+        if (role === 'админ' || role === 'логист') role = 'admin';
+        if (!role && location.hash) {
+          var h = location.hash.replace(/^#/, '').toLowerCase();
+          if (h === 'customer') role = 'customer';
+          else if (h === 'driver') role = 'driver';
+          else if (h === 'admin') role = 'admin';
+          else if (h === 'start') role = 'carrier';
+        }
+        if (role && !NAV[role]) role = '';
+        return role;
+      }
+
+      function sectionMatches(el, role) {
+        var roles = (el.getAttribute('data-help-role') || '').split(/\s+/);
+        if (role === 'carrier') return roles.indexOf('carrier') >= 0 || roles.indexOf('admin') >= 0 || roles.indexOf('driver') >= 0;
+        return roles.indexOf(role) >= 0;
+      }
+
+      function renderNav(role) {
+        var nav = document.getElementById('help-nav');
+        var items = NAV[role] || [];
+        nav.innerHTML = items.map(function (it) {
+          return '<a href="' + it.href + '">' + it.label + '</a>';
+        }).join('');
+        nav.classList.remove('help-hidden');
+      }
+
+      function applyRole(role) {
+        var picker = document.getElementById('help-role-picker');
+        var title = document.getElementById('help-title');
+        var lead = document.getElementById('help-lead');
+        var back = document.getElementById('help-back');
+        var sw = document.getElementById('help-role-switch');
+
+        if (!role) {
+          document.title = 'АРМАДА — помощь';
+          picker.classList.remove('help-hidden');
+          return;
+        }
+
+        picker.classList.add('help-hidden');
+        var meta = TITLES[role] || TITLES.carrier;
+        title.textContent = meta[0];
+        lead.textContent = meta[1];
+        document.title = 'АРМАДА — ' + meta[0];
+        if (BACK[role]) {
+          back.href = BACK[role];
+          back.textContent = '← Назад в сервис';
+        }
+
+        sw.innerHTML = 'Другая роль: <a href="help.html?role=carrier">перевозчик</a> · <a href="help.html?role=customer">заказчик</a> · <a href="help.html">все роли</a>';
+        sw.classList.remove('help-hidden');
+
+        document.querySelectorAll('[data-help-role]').forEach(function (el) {
+          el.classList.toggle('help-hidden', !sectionMatches(el, role));
+        });
+
+        renderNav(role);
+
+        var hash = location.hash;
+        if (hash) {
+          var target = document.querySelector(hash);
+          if (target && !target.classList.contains('help-hidden')) {
+            setTimeout(function () { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 0);
+          }
+        }
+      }
+
+      applyRole(parseRole());
+    })();
+  </script>
+</body>
+</html>

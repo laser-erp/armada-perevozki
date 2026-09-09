@@ -102,6 +102,15 @@ function restoreDriverSession(){
   if(!rec){ clearDriverSession(); return false; }
   DRIVER=rec.name;
   DRIVER_COMPANY_ID=rec.companyId||raw.companyId||null;
+  if(!DRIVER_COMPANY_ID){
+    const bind=typeof resolveDriverOrderBinding==='function'?resolveDriverOrderBinding(rec.name, ''):{};
+    DRIVER_COMPANY_ID=bind.ownCompanyId||null;
+  }
+  if(DRIVER_COMPANY_ID && !rec.companyId){
+    rec.companyId=DRIVER_COMPANY_ID;
+    const co=findCompanyById(DRIVER_COMPANY_ID);
+    if(co && !rec.companyName) rec.companyName=co.name;
+  }
   return true;
 }
 function peekAdminSessionName(){
@@ -205,7 +214,8 @@ function updateDriverChrome(){
     renderDriverHome();
     return;
   }
-  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const firm=typeof driverSessionCompanyLabel==='function'?driverSessionCompanyLabel(DRIVER_COMPANY_ID, DRIVER)
+    :(DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'');
   if(t){ t.textContent=DRIVER; t.title=firm?`${DRIVER} · ${firm}`:DRIVER; }
   if(sub) sub.textContent=firm||'';
   if(chip){
@@ -239,15 +249,111 @@ function driverPickRows(preferName){
   });
   return rows;
 }
+let driverLoginStep='phone';
+let driverLoginCandidates=[];
+let driverLoginSelected=null;
+function driverLoginPhoneEl(){ return $('drv-login-phone'); }
+function driverLoginPinWrap(){ return $('drv-login-pin-wrap'); }
+function driverLoginPickPanel(){ return $('driver-pick-panel'); }
+function resetDriverLoginUi(){
+  driverLoginStep='phone';
+  driverLoginCandidates=[];
+  driverLoginSelected=null;
+  const pinWrap=driverLoginPinWrap();
+  const pick=driverLoginPickPanel();
+  const phoneOk=$('drv-login-phone-ok');
+  const loginOk=$('drv-login-ok');
+  if(pinWrap) pinWrap.style.display='none';
+  if(pick) pick.style.display='none';
+  if(phoneOk) phoneOk.style.display='';
+  if(loginOk) loginOk.style.display='none';
+}
+function showDriverPinStep(){
+  driverLoginStep='pin';
+  const pinWrap=driverLoginPinWrap();
+  const pick=driverLoginPickPanel();
+  const phoneOk=$('drv-login-phone-ok');
+  const loginOk=$('drv-login-ok');
+  if(pick) pick.style.display='none';
+  if(pinWrap) pinWrap.style.display='';
+  if(phoneOk) phoneOk.style.display='none';
+  if(loginOk) loginOk.style.display='';
+  const pinEl=$('drv-login-pin');
+  if(pinEl){ pinEl.value=''; setTimeout(()=>pinEl.focus(), 40); }
+}
+function showDriverPickStep(list){
+  driverLoginStep='pick';
+  driverLoginCandidates=list||[];
+  const pick=driverLoginPickPanel();
+  const listEl=$('driver-pick-list');
+  const pinWrap=driverLoginPinWrap();
+  const phoneOk=$('drv-login-phone-ok');
+  const loginOk=$('drv-login-ok');
+  if(pinWrap) pinWrap.style.display='none';
+  if(phoneOk) phoneOk.style.display='none';
+  if(loginOk) loginOk.style.display='none';
+  if(!pick||!listEl) return;
+  pick.style.display='block';
+  listEl.innerHTML=driverLoginCandidates.map((d,i)=>{
+    const firm=typeof driverCompanyLabel==='function'?driverCompanyLabel(d):(d.companyName||(d.companyId&&(findCompanyById(d.companyId)||{}).name)||'');
+    return `<button type="button" class="secondary role-btn" data-drv-pick="${i}" style="margin-bottom:8px">
+      <span class="role-btn-title">${esc(d.name||'—')}</span>
+      <span class="role-btn-desc">${esc(firm||'фирма')}</span>
+    </button>`;
+  }).join('');
+  listEl.querySelectorAll('[data-drv-pick]').forEach(btn=>{
+    btn.onclick=()=>{
+      const idx=+btn.dataset.drvPick;
+      driverLoginSelected=driverLoginCandidates[idx];
+      if(!driverLoginSelected) return;
+      showDriverPinStep();
+    };
+  });
+}
+function continueDriverPhone(){
+  migrateDriverPins();
+  const err=$('drv-login-error');
+  const showErr=msg=>{ if(err) err.textContent=msg; };
+  showErr('');
+  const phone=formatPhone((driverLoginPhoneEl()&&driverLoginPhoneEl().value||'').trim());
+  if(!phone){ showErr('Введите телефон'); return; }
+  tryDriverPhoneLogin(phone, showErr);
+}
+async function tryDriverPhoneLogin(phone, showErr){
+  let byPhone=findDriversByPhone(phone);
+  if(!byPhone.length && typeof refreshAuthFromServer==='function'){
+    await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+    byPhone=findDriversByPhone(phone);
+  }
+  if(!byPhone.length){
+    showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
+    return;
+  }
+  const uniqNames=new Set(byPhone.map(d=>String(d.name||'').trim().toLowerCase()).filter(Boolean));
+  if(byPhone.length===1 || uniqNames.size===1){
+    driverLoginSelected=byPhone[0];
+    showDriverPinStep();
+    return;
+  }
+  const sorted=byPhone.slice().sort((a,b)=>{
+    const fa=a.companyName||'', fb=b.companyName||'';
+    const c=fa.localeCompare(fb,'ru');
+    if(c) return c;
+    return String(a.name).localeCompare(String(b.name),'ru');
+  });
+  showDriverPickStep(sorted);
+}
 function openDriverLogin(fromAdmin){
+  setDriverFromAdmin(!!fromAdmin);
   migrateSpaces();
   let dirty=ensureFleetPerSpaces();
   if(migrateDriverPins()) dirty=true;
   if(dirty){ bumpDataEpoch('driver-login-prep'); persist(); }
   DRIVER='';
   DRIVER_COMPANY_ID=null;
+  resetDriverLoginUi();
   const err=$('drv-login-error'); if(err) err.textContent='';
-  const phoneEl=$('drv-login-phone');
+  const phoneEl=driverLoginPhoneEl();
   const pinEl=$('drv-login-pin');
   if(pinEl) pinEl.value='';
   // Если зашли из админки — подставить телефон своего водительского профиля
@@ -265,13 +371,17 @@ function openDriverLogin(fromAdmin){
   const back=$('driver-login-back');
   if(back){
     back.onclick=()=>{
-      if(fromAdmin || currentAdmin || peekAdminSessionName()){
-        if(currentAdmin || restoreAdminSession()){ show('admin'); renderAdmin(); return; }
+      if(fromAdmin && (currentAdmin || restoreAdminSession())){
+        show('admin');
+        if(typeof renderAdmin==='function') renderAdmin();
+        return;
       }
-      show('roles');
+      backFromEntryLogin({fromAdmin:false});
     };
   }
   show('driver-login');
+  applyEntrySkin('driver-login');
+  if(typeof wireDriverLoginHandlers==='function') wireDriverLoginHandlers();
   setTimeout(()=>{
     const focusEl=(phoneEl && phoneEl.value)?($('drv-login-pin')||phoneEl):($('drv-login-phone')||phoneEl);
     if(focusEl && focusEl.focus) focusEl.focus();
@@ -283,25 +393,41 @@ function loginDriver(){
   migrateDriverPins();
   const err=$('drv-login-error');
   const showErr=msg=>{ if(err) err.textContent=msg; };
-  const phone=formatPhone((($('drv-login-phone')||{}).value||'').trim());
+  if(driverLoginStep==='phone'){ continueDriverPhone(); return; }
+  doLoginDriverPin(showErr);
+}
+async function doLoginDriverPin(showErr){
+  const phone=formatPhone((driverLoginPhoneEl()&&driverLoginPhoneEl().value||'').trim());
   const pin=(($('drv-login-pin')||{}).value||'').trim();
   if(!phone){ showErr('Введите телефон'); return; }
   if(!pin||pin.length<4){ showErr('Введите PIN (от 4 цифр)'); return; }
-  const byPhone=findDriversByPhone(phone);
-  if(!byPhone.length){
-    showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
-    return;
+  let rec=driverLoginSelected;
+  if(rec){
+    if(formatPhone(rec.phone||'')!==phone){ showErr('Телефон не совпадает с выбранным профилем'); return; }
+    if(resolveDriverPin(rec)!==pin){ showErr('Неверный PIN'); return; }
+  } else {
+    let byPhone=findDriversByPhone(phone);
+    if(!byPhone.length && typeof refreshAuthFromServer==='function'){
+      await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+      byPhone=findDriversByPhone(phone);
+    }
+    if(!byPhone.length){
+      showErr('Телефон не найден. Админ должен указать его в «Справочники → Водители».');
+      return;
+    }
+    const matched=byPhone.filter(d=>resolveDriverPin(d)===pin);
+    if(!matched.length){ showErr('Неверный PIN'); return; }
+    if(matched.length>1){
+      showDriverPickStep(matched);
+      showErr('Выберите профиль и введите PIN снова');
+      return;
+    }
+    rec=matched[0];
   }
-  const matched=byPhone.filter(d=>resolveDriverPin(d)===pin);
-  if(!matched.length){ showErr('Неверный PIN'); return; }
-  // Одно ФИО в нескольких фирмах с тем же телефоном — берём «домашнюю» (где водитель = админ фирмы)
-  const rec=pickDriverHomeRecord(matched);
   if(!rec){ showErr('Профиль водителя не найден'); return; }
-  // закрепить pin в записи, если был только из админа/телефона
   if(String(rec.pin||'').trim()!==pin){
     rec.pin=pin;
-    // синхронизировать pin на все копии с тем же телефоном и ФИО
-    byPhone.forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
+    findDriversByPhone(phone).forEach(d=>{ if(samePersonName(d.name, rec.name)) d.pin=pin; });
     bumpDataEpoch('driver-pin-bind');
     persist();
   }
@@ -316,6 +442,11 @@ async function enterAsDriver(rec){
     const bind=resolveDriverOrderBinding(DRIVER, '');
     DRIVER_COMPANY_ID=bind.ownCompanyId||null;
   }
+  if(DRIVER_COMPANY_ID){
+    if(!rec.companyId) rec.companyId=DRIVER_COMPANY_ID;
+    const lbl=typeof driverCompanyLabel==='function'?driverCompanyLabel(rec):'';
+    if(lbl && rec.companyName!==lbl){ rec.companyName=lbl; bumpDataEpoch('driver-company-label'); persist(); }
+  }
   // Админ-сессию в localStorage оставляем — из водителя можно вернуться.
   // В памяти currentAdmin сбрасываем, чтобы режим водителя не смешивался с правами админа.
   if(currentAdmin){
@@ -327,35 +458,48 @@ async function enterAsDriver(rec){
   updateDriverChrome();
   show('driver');
   setDriverNav('btn-home');
-  // Сервер — источник правды по открытой смене водителя (локальный кэш не должен откатить ЕТО)
-  try{
-    const localOrders=(state.orders||[]).map(o=>structuredClone(o));
-    const recState=await fetchServerState();
-    if(recState){
-      pbRecordId=recState.id;
-      applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
-      migrateEtoFromMessages();
-      // Подтянуть только локальные заказы «в пути/в работе», смены — строго с сервера
-      localStorage.setItem(KEY, JSON.stringify(snapshot()));
-    }
-  }catch(err){ console.warn('enterAsDriver sync', err); }
-  state.shift=null; // сброс живой ссылки — resume возьмёт серверную смену
+  state.shift=null;
   resetChat();
-  // Явно показать, под кем вошли (не дублируем, если уже есть в перенесённом чате)
-  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const firm=typeof driverSessionCompanyLabel==='function'?driverSessionCompanyLabel(DRIVER_COMPANY_ID, DRIVER)
+    :(DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'');
   if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
     state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}.`});
   }
   renderChat();
-  renderDriverBanner();
   renderInput();
+  renderDriverBanner();
+  if(window.ArmadaOnboarding) ArmadaOnboarding.maybeDriver();
+  // Сервер — в фоне, не блокируем UI
+  (async()=>{
+    try{
+      const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+      const recState=await fetchServerState(FETCH_PREFLIGHT_MS);
+      if(recState){
+        pbRecordId=recState.id;
+        applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
+        migrateEtoFromMessages();
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        state.shift=null;
+        resetChat();
+        if(!(state.messages||[]).some(m=>String(m.text||'').includes('Вы вошли как'))){
+          state.messages.unshift({author:'bot', text:`Вы вошли как ${DRIVER}${firm?' · '+firm:''}.`});
+        }
+        renderChat();
+        renderInput();
+        renderDriverBanner();
+      }
+    }catch(err){ console.warn('enterAsDriver sync', err); }
+  })();
 }
 function leaveDriverMode(){
   clearDriverSession();
   state.shift=null; state.step='idle'; state.orderStep='idle'; state.messages=[]; state.draft={}; state.error='';
-  if(restoreAdminSession()){
+  if(isDriverFromAdmin() && restoreAdminSession()){
+    setDriverFromAdmin(false);
     show('admin');
-    renderAdmin();
+    if(typeof renderAdmin==='function') renderAdmin();
+  } else if(getEntryMode()==='driver'){
+    openDriverLogin(false);
   } else {
     show('roles');
   }
@@ -886,7 +1030,7 @@ function selectFluid(level){
     persist();
     // Сразу на сервер — иначе remote_ahead с другой вкладки может затереть ЕТО
     clearTimeout(persistTimer);
-    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
+    pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
     renderInput();
     return;
   }
@@ -973,7 +1117,8 @@ function acceptDepart(value){
   if(!state.shift.orders) state.shift.orders=[];
   if(!state.shift.orders.some(o=>o.id===order.id)) state.shift.orders.push(order);
   upsertOrder(order); add('driver',String(value));
-  add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}\nВремя: ${dateTime(order.departAt)}\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
+  if(typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(order, {silent:true});
+  add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}\nВремя: ${dateTime(order.departAt)}\n\nЭТрН создан (черновик) — QR для инспектора в баннере. Подписи T1–T3 — на погрузке.\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
 function acceptArrive(value){
@@ -993,7 +1138,9 @@ function acceptArrive(value){
   const linked=linkEmptyAfterFromNextEmptyBefore(order);
   const tTo=order.timeToOrderMin!=null?`\nВремя до заказа: ${formatDurationMin(order.timeToOrderMin)}`:'';
   const linkNote=linked?`\nУ заказа №${linked.sequentialNumber} «до стоянки» = ${order.emptyKmBefore} км (как нулевой до этого).`:'';
-  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}`);
+  if(typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(order, {silent:true});
+  if(typeof signEtrnTitulsAtLoading==='function') signEtrnTitulsAtLoading(order.id);
+  add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}\n\nЭТрН: T2 (перевозчик) подписан. T1 — грузоотправитель в личном кабинете. T3 — водитель после подписи T1.`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
 }
@@ -1174,6 +1321,8 @@ function finalizeClose(refueled,price,liters){
   }
   applyFuelRemainingOnClose(order, state.shift, refueled?liters:null);
   applyClientTariff(order);
+  if(typeof onOrderClosedBilling==='function') onOrderClosedBilling(order);
+  if(typeof signEtrnTitulSandboxAuto==='function') signEtrnTitulSandboxAuto(order.id,'t4',DRIVER||'driver');
   bumpDataEpoch('finalize-close');
   upsertOrder(order);
   // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.
@@ -1190,7 +1339,7 @@ function finalizeClose(refueled,price,liters){
   upsertShift();
   persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
   renderInput();
 }
 /** После закрытия: следующий заказ / стоянка / уже на стоянке — без повторного одометра. */
@@ -1240,7 +1389,7 @@ function finishPostCloseWhere(where){
       state.draft={};
       upsertShift(); persist();
       clearTimeout(persistTimer);
-      pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+      pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
       acceptCloseShiftParking(+end);
       return;
     }
@@ -1251,7 +1400,7 @@ function finishPostCloseWhere(where){
       : 'Укажите одометр на стоянке — смена закроется.');
     upsertShift(); persist();
     clearTimeout(persistTimer);
-    pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+    pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
     renderInput();
     return;
   }
@@ -1260,7 +1409,7 @@ function finishPostCloseWhere(where){
   state.orderStep='idle'; state.draft={}; state.error='';
   upsertShift(); persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
   renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ ${orderDayLabel(n)}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
@@ -1319,7 +1468,7 @@ function finishOrder(unloading){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
   persist();
   clearTimeout(persistTimer);
-  pushServerState().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
+  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
   renderInput();
   renderDriverHome();
 }
@@ -1345,6 +1494,9 @@ function driverPayText(o){
   return 'ЗП: —';
 }
 function driverProfilePlate(){
+  const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);
+  const assigned=rec&&typeof vehicleForDriver==='function'?vehicleForDriver(rec):null;
+  if(assigned&&assigned.plate) return assigned.plate;
   const open=state.shift&&!state.shift.endedAt?state.shift:(findOpenShift()||null);
   if(open && open.vehiclePlate) return open.vehiclePlate;
   const last=(state.shifts||[])
@@ -1360,13 +1512,23 @@ function showCabinet(){
   const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const pending=mine.filter(o=>looksClosedOrder(o) && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const total=paid.reduce((s,o)=>s+(effectivePay(o)||0),0);
-  const firm=DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'';
+  const firm=typeof driverSessionCompanyLabel==='function'?driverSessionCompanyLabel(DRIVER_COMPANY_ID, DRIVER)
+    :(DRIVER_COMPANY_ID?((findCompanyById(DRIVER_COMPANY_ID)||{}).name||''):'');
   const phone=formatPhone(driverPhone(DRIVER, DRIVER_COMPANY_ID)||'')||'—';
   const plate=driverProfilePlate();
+  const rec=findDriverRecord(DRIVER, DRIVER_COMPANY_ID);
+  const passport=formatPassportText(rec);
+  const passportIssued=formatPassportIssuedText(rec);
+  const license=rec&&rec.licenseNo?String(rec.licenseNo).trim():'';
+  const licenseIssued=rec&&rec.licenseIssuedAt?String(rec.licenseIssuedAt).trim():'';
   const shiftsN=(state.shifts||[]).filter(s=>samePersonName(s.driverName, DRIVER)).length;
   const closedN=mine.filter(o=>looksClosedOrder(o)).length;
-  let html=`<div class="drv-earn">
-    <span class="lbl">Профиль</span>
+  let html='';
+  if(typeof epdSignCardHtml==='function'){
+    html+=epdSignCardHtml('driver');
+  }
+  html+=`<div class="drv-earn">
+    <span class="lbl">Профиль водителя</span>
     <span class="val" style="font-size:1.25rem">${esc(DRIVER||'—')}</span>
     <span class="sub">${esc(firm||'Водитель')}</span>
   </div>`;
@@ -1374,7 +1536,14 @@ function showCabinet(){
     <div class="drv-profile-row"><span>Телефон</span><b>${esc(phone)}</b></div>
     <div class="drv-profile-row"><span>Фирма</span><b>${esc(firm||'—')}</b></div>
     <div class="drv-profile-row"><span>Авто</span><b>${esc(plate)}</b></div>
+    ${passport?`<div class="drv-profile-row"><span>Паспорт</span><b>${esc(passport)}${passportIssued?`<br><small style="font-weight:500;color:var(--muted)">${esc(passportIssued)}</small>`:''}</b></div>`:''}
+    ${license?`<div class="drv-profile-row"><span>ВУ</span><b>${esc(license)}${licenseIssued?`<br><small style="font-weight:500;color:var(--muted)">выдано ${esc(licenseIssued)}</small>`:''}</b></div>`:''}
+    ${!passport&&!license?`<div class="hint" style="margin:8px 0">Паспорт и ВУ заполняет диспетчер в справочнике.</div>`:''}
   </div>`;
+  const docGallery=typeof driverDocPhotoGalleryHtml==='function'?driverDocPhotoGalleryHtml(rec):'';
+  if(docGallery){
+    html+=`<div class="drv-section-label">Снимки документов</div>${docGallery}`;
+  }
   html+=`<div class="drv-profile-stats">
     <div class="m"><span>Смен</span><b>${shiftsN}</b></div>
     <div class="m"><span>Заказов</span><b>${closedN}</b></div>
@@ -1416,15 +1585,21 @@ function showCabinet(){
   }
   html+=`<div class="drv-section-label">Аккаунт</div>
     <button type="button" class="secondary" id="profile-exit" style="margin-top:4px">Выход</button>
+    <div class="drv-section-label" style="margin-top:14px">Помощь</div>
+    <button type="button" class="secondary" id="profile-help-tour" style="margin-top:4px">Показать подсказки</button>
+    <a href="help.html?role=driver" class="hint" style="display:block;margin-top:6px" target="_blank" rel="noopener">Полная инструкция</a>
     <div class="drv-section-label" style="margin-top:14px">О приложении</div>
     <div class="hint" style="margin-top:4px">АРМАДА · учёт перевозок<br>Сборка ${esc(APP_BUILD)}</div>`;
   $('cabinet-list').innerHTML=html;
+  if(typeof wireEpdSignCard==='function') wireEpdSignCard($('cabinet-list'));
   const ex=$('profile-exit');
   if(ex) ex.onclick=()=>leaveDriverMode();
   const nOn=$('profile-notify-on');
   if(nOn) nOn.onclick=async()=>{ await enableDriverNotifications(); showCabinet(); };
   const nOff=$('profile-notify-off');
   if(nOff) nOff.onclick=()=>{ setDriverNotifyWanted(false); showCabinet(); };
+  const helpTour=$('profile-help-tour');
+  if(helpTour) helpTour.onclick=()=>{ if(window.ArmadaOnboarding) ArmadaOnboarding.replay('driver'); };
 }
 function hideDriverPanels(){
   ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
@@ -1511,7 +1686,7 @@ function showOrders(){
   let html='';
   if(board.length){
     html+=`<div class="drv-section-label">Биржа</div>`;
-    html+=`<div class="orders-hint">Маршрут и подача; заказчик скрыт до взятия</div>`;
+    html+=`<div class="orders-hint">Логист ищет машину. Если вы владелец и сами за рулём — берите заказ здесь: планированием занимается логист.</div>`;
     html+=board.map(o=>`<div class="drv-order-card" style="margin-bottom:8px">
       <h3>№${o.sequentialNumber} · ${esc(orderDayLabel(o.dayNumber))}</h3>
       <div class="st wait">На бирже</div>
@@ -1826,5 +2001,4 @@ function showShifts(){
   wireDriverOrderCards($('shifts-list'));
 }
 
-const COLS=["Дата","Госномер","Водитель","Заказчик","Маршрут","За день","Нулевой","С грузом","До стоянки","Общий день","₽/л","₽/км нал","С НДС","Без НДС","Нал","Доплата ЗП","ГСМ л","₽/км без НДС","ГСМ ₽","Аренда","Подушка","Прибыль","№ базы"];
 /** Ключ календарного дня (локально). */
