@@ -1,0 +1,17 @@
+[Unit]
+Description=ARMADA API (JWT proxy to PocketBase)
+After=network.target pocketbase.service
+Wants=pocketbase.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/armada-api
+EnvironmentFile=/etc/armada/api.env
+ExecStart=/usr/bin/node /opt/armada-api/server.mjs
+Restart=always
+RestartSec=3
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target
