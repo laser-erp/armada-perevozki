@@ -517,7 +517,11 @@ async function loginAdmin(){
   if(!adm){
     if(pinErr){
       if(looksLikeAdminPhoneInput(loginRaw)){
-        pinErr.textContent='Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
+        const phone=typeof formatPhone==='function'?formatPhone(loginRaw):String(loginRaw||'').trim();
+        const phoneKnown=(state.admins||[]).some(a=>adminLoginPhone(a)===phone);
+        pinErr.textContent=phoneKnown
+          ? 'Неверный PIN для этого телефона'
+          : 'Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
       }else{
         pinErr.textContent=spaceIdsForLoginInn(inn).size
           ? 'Неверный PIN для этой организации'
