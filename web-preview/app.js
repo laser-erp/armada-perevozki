@@ -4713,11 +4713,15 @@ async function openAdminLoginAsync(){
   if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
     refreshAdminListForLogin().then(synced=>{
       if(!synced&&pinErr&&!pinErr.textContent){
-        pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
+        pinErr.classList.add('hint-warn');
+        pinErr.textContent='Список с сервера не обновился — войдите по телефону или ИНН и PIN';
       }
     }).catch(err=>{
       console.warn('admin login list', err);
-      if(pinErr&&!pinErr.textContent) pinErr.textContent='Ошибка загрузки с сервера — попробуйте войти';
+      if(pinErr&&!pinErr.textContent){
+        pinErr.classList.add('hint-warn');
+        pinErr.textContent='Сервер не ответил — попробуйте войти по телефону или ИНН и PIN';
+      }
     });
   }
 }

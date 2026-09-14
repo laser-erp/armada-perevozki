@@ -502,13 +502,9 @@ async function loginAdmin(){
     if(pinErr) pinErr.textContent='ИНН: 10 цифр для организации или 12 для ИП';
     return;
   }
-  const admPre=findAdminByLoginAndPin(loginRaw, pin);
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
-      const rec=await fetchServerState(3500, {
-        pin,
-        meta: admPre ? {id: admPre.id, spaceId: admPre.spaceId, role:'admin'} : {role:'admin'}
-      });
+      const rec=await fetchServerState(8000, { pin, meta: { role:'admin' } });
       if(rec&&rec.payload){
         pbRecordId=rec.id;
         mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
