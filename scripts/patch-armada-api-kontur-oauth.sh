@@ -30,7 +30,10 @@ oauth_js = r'''/**
  * Kontur OAuth (Authorization Code) → boxId через GetMyOrganizations.
  */
 const IDENTITY = 'https://identity.kontur.ru';
-const DIADOC = (process.env.EPD_API_URL || 'https://diadoc-api.kontur.ru').replace(/\/$/, '');
+const DIADOC_PRIMARY = (process.env.EPD_API_URL || 'https://diadoc-api.kontur.ru').replace(/\/$/, '');
+const DIADOC_FALLBACK = DIADOC_PRIMARY.includes('testkontur')
+  ? 'https://diadoc-api.kontur.ru'
+  : 'https://diadoc-api.testkontur.ru';
 const CLIENT_ID = process.env.KONTUR_API_CLIENT_ID || 'ci_7802655283_ooo_armada';
 const CLIENT_SECRET = process.env.KONTUR_API_CLIENT_SECRET || process.env.EPD_API_KEY || '';
 const REDIRECT_URI = process.env.KONTUR_REDIRECT_URI || 'https://app.armada.sx/armada-api/oauth/kontur/callback';
