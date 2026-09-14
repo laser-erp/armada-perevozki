@@ -60,13 +60,23 @@ function findAdminByPhoneAndPin(phoneRaw, pin){
 }
 function findAdminByLoginAndPin(loginRaw, pin){
   const raw=String(loginRaw||'').trim();
-  if(!raw) return null;
+  const pinStr=String(pin||'').trim();
+  if(!raw || !pinStr) return null;
   if(looksLikeAdminPhoneInput(raw)){
     const byPhone=findAdminByPhoneAndPin(raw, pin);
     if(byPhone) return byPhone;
+    const phone=typeof formatPhone==='function'?formatPhone(raw):String(raw||'').trim();
+    const superByPhone=(state.admins||[]).filter(a=>{
+      if(!a.isSuper || String(a.pin||'').trim()!==pinStr) return false;
+      return adminLoginPhone(a)===phone;
+    });
+    if(superByPhone.length===1) return superByPhone[0];
   }
   const inn=normalizeLoginInn(raw);
-  if(inn && (inn.length===10 || inn.length===12)) return findAdminByInnAndPin(inn, pin);
+  if(inn && (inn.length===10 || inn.length===12)){
+    const byInn=findAdminByInnAndPin(inn, pin);
+    if(byInn) return byInn;
+  }
   return findAdminByPhoneAndPin(raw, pin);
 }
 function paintOwnerFiltersBox(box, onPick){
@@ -532,7 +542,9 @@ async function loginAdmin(){
   startPresenceHeartbeat();
   armadaApiLogin(pin, currentAdmin).finally(()=>persist());
   updateAdminChrome();
-  show('admin');
+  if(typeof clearEntrySkin==='function') clearEntrySkin();
+  if(typeof finishSplashOnce==='function') finishSplashOnce('admin');
+  else show('admin');
   renderAdmin();
   seedAdminInboxNotifySnapshot();
   syncAdminNotifyToggle();

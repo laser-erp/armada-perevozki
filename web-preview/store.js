@@ -436,8 +436,11 @@ function canAutoRestoreAdmin(){
 }
 function reconcileAdminSessionAfterSync(){
   if(typeof currentAdmin==='undefined' || !currentAdmin) return;
-  const adm=(state.admins||[]).find(a=>a.id===currentAdmin.id)
+  if(typeof migrateAdmins==='function') migrateAdmins();
+  if(typeof migrateSpaces==='function') migrateSpaces();
+  let adm=(state.admins||[]).find(a=>a.id===currentAdmin.id)
     || (state.admins||[]).find(a=>samePersonName(a.name, currentAdmin.name));
+  if(!adm && isAdminPinOk() && typeof restoreAdminSession==='function' && restoreAdminSession()) return;
   if(!adm){
     currentAdmin=null;
     if(typeof clearAdminSession==='function') clearAdminSession();
@@ -3179,3 +3182,14 @@ function armadaSyncBroadcast(kind){
     if(armadaSyncChannel) armadaSyncChannel.postMessage({type:'state_touch', epoch:state.dataEpoch, kind});
   }catch(_){}
 }
+(function wrapEntryRouteApply(){
+  const raw=typeof window!=='undefined'?window.__armadaApplyEntryRoute:null;
+  if(typeof raw!=='function') return;
+  window.__armadaApplyEntryRoute=function(){
+    try{
+      if(typeof currentAdmin!=='undefined'&&currentAdmin&&typeof isAdminPinOk==='function'&&isAdminPinOk()) return true;
+      if(document.querySelector('#admin.show')) return true;
+    }catch(_){}
+    return raw();
+  };
+})();

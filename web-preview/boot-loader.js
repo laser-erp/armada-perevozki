@@ -101,7 +101,12 @@
         var loginBtn = document.getElementById('pin-ok');
         if (loginBtn) loginBtn.disabled = false;
       }
-      if (typeof openDedicatedEntryScreen === 'function') openDedicatedEntryScreen();
+      if (typeof canAutoRestoreAdmin === 'function' && canAutoRestoreAdmin()) {
+        if (typeof show === 'function') show('admin');
+        if (typeof renderAdmin === 'function') renderAdmin();
+      } else if (typeof openDedicatedEntryScreen === 'function') {
+        openDedicatedEntryScreen();
+      }
       return;
     }
     setTimeout(function () {

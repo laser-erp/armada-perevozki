@@ -1025,8 +1025,10 @@ function migrateAdmins(){
       const ph=typeof formatPhone==='function'?formatPhone(drv.phone):String(drv.phone||'').trim();
       if(ph) a.phone=ph;
     }
+    if((a.id==='admin-super' || a.isSuper) && a.phone && a.loginBy!=='phone') a.loginBy='phone';
     if(!a.loginBy){
       if(samePersonName(a.name,'Нечаев А.С.') && (a.phone || (drv&&drv.phone))) a.loginBy='phone';
+      else if(a.isSuper && a.phone) a.loginBy='phone';
       else a.loginBy='inn';
     }
   });
@@ -4680,6 +4682,13 @@ function openAdminLogin(){
 }
 async function openAdminLoginAsync(){
   migrateAdmins();
+  if(currentAdmin && typeof isAdminPinOk==='function' && isAdminPinOk()){
+    clearEntrySkin();
+    show('admin');
+    renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+    return;
+  }
   if(canAutoRestoreAdmin()){
     clearEntrySkin();
     show('admin');
@@ -4687,7 +4696,7 @@ async function openAdminLoginAsync(){
     if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     return;
   }
-  if(adminEntryRequiresPin()) currentAdmin=null;
+  if(adminEntryRequiresPin() && !(typeof isAdminPinOk==='function' && isAdminPinOk())) currentAdmin=null;
   const innIn=$('admin-login-inn');
   const pinIn=$('pin-input');
   const hadInn=innIn&&innIn.value.trim();
@@ -4861,7 +4870,8 @@ try{
   }finally{
     window.__armadaBootDone=true;
     if(typeof window.__armadaApplyEntryRoute==='function' && typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
-      if(!isArmadaEntryScreenVisible()) window.__armadaApplyEntryRoute();
+      const adminLive=!!(typeof currentAdmin!=='undefined'&&currentAdmin&&typeof isAdminPinOk==='function'&&isAdminPinOk());
+      if(!isArmadaEntryScreenVisible() && !adminLive) window.__armadaApplyEntryRoute();
     }
     if(document.querySelector('#splash.show') && !isArmadaEntryScreenVisible() && !window.__armadaSplashDone){
       if(typeof finishSplashOnce==='function') finishSplashOnce(typeof bootFallbackAfterSplash==='function'?bootFallbackAfterSplash:showRoleHub);
