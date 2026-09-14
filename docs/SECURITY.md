@@ -23,7 +23,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://app.armada.sx/api/collections/
 # Должен быть 200:
 curl -sS https://app.armada.sx/armada-api/health
 
-# State без токена — 401:
+# State без токена — 401 или 403:
 curl -sS -o /dev/null -w '%{http_code}\n' https://app.armada.sx/armada-api/state
 ```
 
