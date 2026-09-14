@@ -24,7 +24,7 @@ function findAdminByInnAndPin(innRaw, pin){
   const spaceIds=spaceIdsForLoginInn(inn);
   if(!spaceIds.size) return null;
   const matches=(state.admins||[]).filter(a=>{
-    if(a.loginBy==='phone') return false;
+    if(a.loginBy==='phone' && !a.isSuper) return false;
     if(String(a.pin||'').trim()!==pinStr) return false;
     return !!(a.spaceId && spaceIds.has(a.spaceId));
   });
@@ -76,6 +76,12 @@ function findAdminByLoginAndPin(loginRaw, pin){
   if(inn && (inn.length===10 || inn.length===12)){
     const byInn=findAdminByInnAndPin(inn, pin);
     if(byInn) return byInn;
+    const spaceIds=spaceIdsForLoginInn(inn);
+    const superByInn=(state.admins||[]).filter(a=>{
+      if(!a.isSuper || String(a.pin||'').trim()!==pinStr) return false;
+      return !!(a.spaceId && spaceIds.has(a.spaceId));
+    });
+    if(superByInn.length===1) return superByInn[0];
   }
   return findAdminByPhoneAndPin(raw, pin);
 }
