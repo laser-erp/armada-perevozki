@@ -76,6 +76,14 @@ PY
 
 echo "→ $USER@$HOST:$DEST"
 deploy_tar
+
+# Скрипт бэкапа на сервер (cron — install-backup-cron.sh)
+if [ -f "$ROOT/scripts/backup-armada.sh" ]; then
+  echo "→ backup script /opt/armada/scripts/"
+  tar czf - -C "$ROOT/scripts" backup-armada.sh | run_ssh \
+    "mkdir -p /opt/armada/scripts /var/backups/armada && tar xzf - -C /opt/armada/scripts && chmod +x /opt/armada/scripts/backup-armada.sh"
+fi
+
 BUILD="$(grep -m1 'APP_BUILD=' "$SRC/store.js" | sed 's/.*"\(.*\)".*/\1/')"
 echo "Готово. Проверка APP_BUILD на сервере:"
 run_ssh "grep -m1 APP_BUILD $DEST/store.js || true"

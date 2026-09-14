@@ -25,7 +25,6 @@ Cron на VPS: **03:15** каждый день.
 ## Установка / обновление
 
 ```bash
-cd DriverReport
 FVDS_SSH_PASSWORD='…' bash scripts/install-backup-cron.sh
 ```
 

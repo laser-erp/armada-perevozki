@@ -17,14 +17,14 @@
 ## Проверка
 
 ```bash
-# Должен быть 404 (не 200):
-curl -sS -o /dev/null -w '%{http_code}\n' http://aptown1.fvds.ru/api/collections/app_state/records
+# Должен быть 403 (не 200):
+curl -sS -o /dev/null -w '%{http_code}\n' https://app.armada.sx/api/collections/app_state/records
 
 # Должен быть 200:
-curl -sS http://aptown1.fvds.ru/armada-api/health
+curl -sS https://app.armada.sx/armada-api/health
 
 # State без токена — 401:
-curl -sS -o /dev/null -w '%{http_code}\n' http://aptown1.fvds.ru/armada-api/state
+curl -sS -o /dev/null -w '%{http_code}\n' https://app.armada.sx/armada-api/state
 ```
 
 ## Скелет фазы 1 (в коде)
