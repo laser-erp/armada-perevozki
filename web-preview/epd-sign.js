@@ -523,6 +523,57 @@
     </div>`;
   }
 
+  function epdKonturOAuthStartUrl(spaceId){
+    const sid=String(spaceId||'').trim()||(typeof currentSpaceId==='function'?currentSpaceId():'')||'';
+    const base=(typeof API_BASE==='string'&&API_BASE)?String(API_BASE).replace(/\/$/,''):(`${location.origin}/armada-api`);
+    return sid?`${base}/oauth/kontur/start?spaceId=${encodeURIComponent(sid)}`:`${base}/oauth/kontur/start`;
+  }
+
+  function epdKonturConnectCardHtml(opts){
+    opts=opts||{};
+    const sid=(typeof currentSpaceId==='function'?currentSpaceId():null)||opts.spaceId;
+    if(!sid) return '';
+    const et=typeof billingCanUseEtrn==='function'?billingCanUseEtrn(sid):{ok:false};
+    if(!et.ok) return '';
+    const epd=typeof epdSpaceForSpaceId==='function'?epdSpaceForSpaceId(sid):{status:'pending',boxId:'',orgInn:''};
+    const connected=epd.status==='connected'&&!!String(epd.boxId||'').trim();
+    const stLbl=typeof epdSpaceStatusLabel==='function'?epdSpaceStatusLabel(epd.status):'';
+    const op=epdOperatorInfo();
+    const url=epdKonturOAuthStartUrl(sid);
+    const inn=epd.orgInn?` · ИНН ${esc(epd.orgInn)}`:'';
+    const boxHint=connected&&epd.boxId?`<p class="meta epd-sign-card-meta">Ящик Контура: …${esc(String(epd.boxId).slice(-12))}</p>`:'';
+    const actions=connected
+      ? `<div class="epd-sign-card-actions">
+          <button type="button" class="secondary epd-kontur-connect-btn" data-oauth-url="${esc(url)}">Переподключить</button>
+        </div>`
+      : `<div class="epd-sign-card-actions">
+          <button type="button" class="primary epd-kontur-connect-btn" data-oauth-url="${esc(url)}">Подключить Контур</button>
+        </div>
+        <p class="hint epd-sign-card-hint">1) Зарегистрируйте ваше ИП/ООО на <a href="${esc(op.signup)}" target="_blank" rel="noopener">kontur.ru/logistika</a>. 2) Нажмите кнопку → «Разрешить» в Контуре. Страницу после входа не обновляйте.</p>`;
+    const plaque=connected
+      ? `<div class="epd-sign-plaque epd-sign-plaque--active" role="status"><span class="epd-sign-plaque-icon" aria-hidden="true">✓</span><div class="epd-sign-plaque-body"><strong>Организация подключена</strong><span class="hint">ЭТrН можно создавать и подписывать в заказах</span></div></div>`
+      : `<div class="epd-sign-plaque epd-sign-plaque--none" role="status"><span class="epd-sign-plaque-icon" aria-hidden="true">○</span><div class="epd-sign-plaque-body"><strong>Организация не подключена</strong><span class="hint">Привяжите ваше ИП/ООО к Контуру — один раз</span></div></div>`;
+    return `<section class="epd-sign-card epd-sign-card--${connected?'active':'none'} epd-kontur-connect-card">
+      <h3 class="epd-sign-section-title">ЭТrН · ${esc(op.name)}</h3>
+      ${plaque}
+      <p class="meta epd-sign-card-meta">Статус: <strong>${esc(stLbl||'ждём')}</strong>${inn}</p>
+      ${boxHint}
+      ${actions}
+    </section>`;
+  }
+
+  function wireEpdKonturConnect(root){
+    (root||document).querySelectorAll('.epd-kontur-connect-btn').forEach(btn=>{
+      if(btn.dataset.konturWired) return;
+      btn.dataset.konturWired='1';
+      btn.onclick=e=>{
+        e.preventDefault();
+        const href=btn.getAttribute('data-oauth-url')||'';
+        if(href) location.href=href;
+      };
+    });
+  }
+
   function epdSignCardHtml(role, opts){
     opts=opts||{};
     const meta=EPD_SIGN_ROLES[role];
@@ -607,6 +658,9 @@
   globalThis.ensureEpdSignState=ensureEpdSignState;
   globalThis.getEpdSignProfile=getEpdSignProfile;
   globalThis.upsertEpdSignProfile=upsertEpdSignProfile;
+  globalThis.epdKonturOAuthStartUrl=epdKonturOAuthStartUrl;
+  globalThis.epdKonturConnectCardHtml=epdKonturConnectCardHtml;
+  globalThis.wireEpdKonturConnect=wireEpdKonturConnect;
   globalThis.epdSignCardHtml=epdSignCardHtml;
   globalThis.epdSignCustomerStripHtml=epdSignCustomerStripHtml;
   globalThis.wireEpdSignCard=wireEpdSignCard;
