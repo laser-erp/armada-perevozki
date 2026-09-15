@@ -542,14 +542,16 @@
     const url=epdKonturOAuthStartUrl(sid);
     const inn=epd.orgInn?` · ИНН ${esc(epd.orgInn)}`:'';
     const boxHint=connected&&epd.boxId?`<p class="meta epd-sign-card-meta">Ящик Контура: …${esc(String(epd.boxId).slice(-12))}</p>`:'';
+    const signupLink=`<a class="secondary" href="${esc(op.signup)}" target="_blank" rel="noopener">Зарегистрироваться в Контуре</a>`;
     const actions=connected
       ? `<div class="epd-sign-card-actions">
           <button type="button" class="secondary epd-kontur-connect-btn" data-oauth-url="${esc(url)}">Переподключить</button>
         </div>`
       : `<div class="epd-sign-card-actions">
+          ${signupLink}
           <button type="button" class="primary epd-kontur-connect-btn" data-oauth-url="${esc(url)}">Подключить Контур</button>
         </div>
-        <p class="hint epd-sign-card-hint">1) Зарегистрируйте ваше ИП/ООО на <a href="${esc(op.signup)}" target="_blank" rel="noopener">kontur.ru/logistika</a>. 2) Нажмите кнопку → «Разрешить» в Контуре. Страницу после входа не обновляйте.</p>`;
+        <p class="hint epd-sign-card-hint">Сначала регистрация ИП/ООО в Контуре, затем «Подключить Контур» → «Разрешить». Страницу после входа не обновляйте.</p>`;
     const plaque=connected
       ? `<div class="epd-sign-plaque epd-sign-plaque--active" role="status"><span class="epd-sign-plaque-icon" aria-hidden="true">✓</span><div class="epd-sign-plaque-body"><strong>Организация подключена</strong><span class="hint">ЭТrН можно создавать и подписывать в заказах</span></div></div>`
       : `<div class="epd-sign-plaque epd-sign-plaque--none" role="status"><span class="epd-sign-plaque-icon" aria-hidden="true">○</span><div class="epd-sign-plaque-body"><strong>Организация не подключена</strong><span class="hint">Привяжите ваше ИП/ООО к Контуру — один раз</span></div></div>`;
