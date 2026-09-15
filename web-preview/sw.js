@@ -1,5 +1,5 @@
 /* АРМАДА PWA — JS/CSS network-first (не держать сломанный кэш) */
-const CACHE = 'armada-shell-v72';
+const CACHE = 'armada-shell-v74';
 const SHELL = ['./manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {
@@ -34,14 +34,7 @@ self.addEventListener('fetch', (event) => {
     const versioned = url.searchParams.has('v');
     if (versioned) {
       event.respondWith(
-        caches.open(CACHE).then(async (cache) => {
-          const cached = await cache.match(req);
-          const net = fetch(req).then((res) => {
-            if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
-            return res;
-          });
-          return cached || net;
-        })
+        fetch(req, { cache: 'no-store' }).catch(() => caches.match(req))
       );
       return;
     }

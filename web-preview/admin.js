@@ -24,7 +24,7 @@ function findAdminByInnAndPin(innRaw, pin){
   const spaceIds=spaceIdsForLoginInn(inn);
   if(!spaceIds.size) return null;
   const matches=(state.admins||[]).filter(a=>{
-    if(a.loginBy==='phone') return false;
+    if(a.loginBy==='phone' && !a.isSuper) return false;
     if(String(a.pin||'').trim()!==pinStr) return false;
     return !!(a.spaceId && spaceIds.has(a.spaceId));
   });
@@ -60,13 +60,29 @@ function findAdminByPhoneAndPin(phoneRaw, pin){
 }
 function findAdminByLoginAndPin(loginRaw, pin){
   const raw=String(loginRaw||'').trim();
-  if(!raw) return null;
+  const pinStr=String(pin||'').trim();
+  if(!raw || !pinStr) return null;
   if(looksLikeAdminPhoneInput(raw)){
     const byPhone=findAdminByPhoneAndPin(raw, pin);
     if(byPhone) return byPhone;
+    const phone=typeof formatPhone==='function'?formatPhone(raw):String(raw||'').trim();
+    const superByPhone=(state.admins||[]).filter(a=>{
+      if(!a.isSuper || String(a.pin||'').trim()!==pinStr) return false;
+      return adminLoginPhone(a)===phone;
+    });
+    if(superByPhone.length===1) return superByPhone[0];
   }
   const inn=normalizeLoginInn(raw);
-  if(inn && (inn.length===10 || inn.length===12)) return findAdminByInnAndPin(inn, pin);
+  if(inn && (inn.length===10 || inn.length===12)){
+    const byInn=findAdminByInnAndPin(inn, pin);
+    if(byInn) return byInn;
+    const spaceIds=spaceIdsForLoginInn(inn);
+    const superByInn=(state.admins||[]).filter(a=>{
+      if(!a.isSuper || String(a.pin||'').trim()!==pinStr) return false;
+      return !!(a.spaceId && spaceIds.has(a.spaceId));
+    });
+    if(superByInn.length===1) return superByInn[0];
+  }
   return findAdminByPhoneAndPin(raw, pin);
 }
 function paintOwnerFiltersBox(box, onPick){
@@ -486,13 +502,9 @@ async function loginAdmin(){
     if(pinErr) pinErr.textContent='ИНН: 10 цифр для организации или 12 для ИП';
     return;
   }
-  const admPre=findAdminByLoginAndPin(loginRaw, pin);
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
-      const rec=await fetchServerState(3500, {
-        pin,
-        meta: admPre ? {id: admPre.id, spaceId: admPre.spaceId, role:'admin'} : {role:'admin'}
-      });
+      const rec=await fetchServerState(8000, { pin, meta: { role:'admin' } });
       if(rec&&rec.payload){
         pbRecordId=rec.id;
         mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
@@ -507,7 +519,11 @@ async function loginAdmin(){
   if(!adm){
     if(pinErr){
       if(looksLikeAdminPhoneInput(loginRaw)){
-        pinErr.textContent='Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
+        const phone=typeof formatPhone==='function'?formatPhone(loginRaw):String(loginRaw||'').trim();
+        const phoneKnown=(state.admins||[]).some(a=>adminLoginPhone(a)===phone);
+        pinErr.textContent=phoneKnown
+          ? 'Неверный PIN для этого телефона'
+          : 'Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
       }else{
         pinErr.textContent=spaceIdsForLoginInn(inn).size
           ? 'Неверный PIN для этой организации'
@@ -532,7 +548,9 @@ async function loginAdmin(){
   startPresenceHeartbeat();
   armadaApiLogin(pin, currentAdmin).finally(()=>persist());
   updateAdminChrome();
-  show('admin');
+  if(typeof clearEntrySkin==='function') clearEntrySkin();
+  if(typeof finishSplashOnce==='function') finishSplashOnce('admin');
+  else show('admin');
   renderAdmin();
   seedAdminInboxNotifySnapshot();
   syncAdminNotifyToggle();

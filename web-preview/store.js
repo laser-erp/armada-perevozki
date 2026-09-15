@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-02-doc-constructor-hints-4317";
+const APP_BUILD="2026-09-15-kontur-signup-btn";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -436,8 +436,11 @@ function canAutoRestoreAdmin(){
 }
 function reconcileAdminSessionAfterSync(){
   if(typeof currentAdmin==='undefined' || !currentAdmin) return;
-  const adm=(state.admins||[]).find(a=>a.id===currentAdmin.id)
+  if(typeof migrateAdmins==='function') migrateAdmins();
+  if(typeof migrateSpaces==='function') migrateSpaces();
+  let adm=(state.admins||[]).find(a=>a.id===currentAdmin.id)
     || (state.admins||[]).find(a=>samePersonName(a.name, currentAdmin.name));
+  if(!adm && isAdminPinOk() && typeof restoreAdminSession==='function' && restoreAdminSession()) return;
   if(!adm){
     currentAdmin=null;
     if(typeof clearAdminSession==='function') clearAdminSession();
@@ -3179,3 +3182,14 @@ function armadaSyncBroadcast(kind){
     if(armadaSyncChannel) armadaSyncChannel.postMessage({type:'state_touch', epoch:state.dataEpoch, kind});
   }catch(_){}
 }
+(function wrapEntryRouteApply(){
+  const raw=typeof window!=='undefined'?window.__armadaApplyEntryRoute:null;
+  if(typeof raw!=='function') return;
+  window.__armadaApplyEntryRoute=function(){
+    try{
+      if(typeof currentAdmin!=='undefined'&&currentAdmin&&typeof isAdminPinOk==='function'&&isAdminPinOk()) return true;
+      if(document.querySelector('#admin.show')) return true;
+    }catch(_){}
+    return raw();
+  };
+})();

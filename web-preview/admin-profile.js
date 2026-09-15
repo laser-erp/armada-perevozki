@@ -196,6 +196,7 @@ function renderAdminProfile() {
       <div class="toast-ok" id="adm-profile-ok" style="display:none"></div>
       <div class="hint err" id="adm-profile-err" style="display:none"></div>
     </div>
+    ${typeof epdKonturConnectCardHtml==='function'?epdKonturConnectCardHtml():''}
     <h2 class="form-section-title" style="margin-top:20px">Печать и подпись</h2>
     <p class="cat-panel-hint">Подставляются при печати писем и документов от вашего имени. PNG или JPG, до ${ADMIN_DOC_IMAGE_MAX_KB} КБ каждый файл.</p>
     ${typeof epdSignCardHtml==='function'?epdSignCardHtml('carrier', { extra:'<p class="hint">ПЭП водителя (T3/T4) — в приложении «Водитель» → Профиль.</p>' }):''}
@@ -253,6 +254,7 @@ function renderAdminProfile() {
     };
   }
   if (typeof wireEpdSignCard === 'function') wireEpdSignCard(host);
+  if (typeof wireEpdKonturConnect === 'function') wireEpdKonturConnect(host);
 }
 
 function openAdminProfile() {
@@ -265,16 +267,25 @@ function openAdminProfile() {
   document.querySelectorAll('.admin-nav-item[data-nav]').forEach(b => {
     b.classList.toggle('on', b.dataset.nav === 'profile');
   });
-  renderAdminProfile();
-  const back = $('profile-back');
-  if (back) back.onclick = () => {
-    if (typeof cabinetSettingsOpenProfile !== 'undefined' && cabinetSettingsOpenProfile) {
-      cabinetSettingsOpenProfile = false;
-      if (typeof openCabinetSettings === 'function') openCabinetSettings('staff');
-      return;
-    }
-    show('admin');
-    renderAdmin();
+  const paintProfile=()=>{
+    renderAdminProfile();
+    const back = $('profile-back');
+    if (back) back.onclick = () => {
+      if (typeof cabinetSettingsOpenProfile !== 'undefined' && cabinetSettingsOpenProfile) {
+        cabinetSettingsOpenProfile = false;
+        if (typeof openCabinetSettings === 'function') openCabinetSettings('staff');
+        return;
+      }
+      show('admin');
+      renderAdmin();
+    };
+    show('admin-profile-screen');
   };
-  show('admin-profile-screen');
+  const sid=typeof currentSpaceId==='function'?currentSpaceId():null;
+  if(sid && typeof fetchEpdSpaceFromApi==='function' && typeof setEpdSpaceRecord==='function'){
+    fetchEpdSpaceFromApi(sid).then(epd=>{
+      if(epd) setEpdSpaceRecord(sid, epd);
+      paintProfile();
+    }).catch(()=>paintProfile());
+  } else paintProfile();
 }
