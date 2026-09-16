@@ -273,6 +273,7 @@ const CUSTOMER_ORDER_SEEN_KEY='armada_customer_order_seen_v1';
 function customerOrderStatusLabel(o){
   if(!o) return '—';
   if(o.cancelledAt) return 'Отменён';
+  if(typeof isUnassignedPortalOrder==='function' && isUnassignedPortalOrder(o)) return 'У диспетчера';
   if(looksClosedOrder(o)) return 'Закрыт';
   if(o.bookStatus==='rejected' && (typeof waitingLogistDriver==='function'?waitingLogistDriver(o.driverName):true) && !o.onExchange)
     return 'Бронь отклонена';
