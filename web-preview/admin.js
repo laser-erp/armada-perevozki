@@ -2034,12 +2034,17 @@ function updateAdminOrderPickUi(){
 function orderCanBulkAssign(o){
   if(!o||looksClosedOrder(o)||o.cancelledAt||o.startOdometer!=null) return false;
   if(o.executorType==='partner') return false;
-  if(!isMyFirmOrder(o)&&!isSuperAdmin()) return false;
+  if(typeof adminOrderUsesMyFleet==='function'&&!adminOrderUsesMyFleet(o)) return false;
+  if(!isSuperAdmin()&&!isMyFirmOrder(o)) return false;
   return true;
 }
 function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
   const skipDocsConfirm=opts&&opts.skipDocsConfirm;
   if(!o||!driver||!plate) return {ok:false, message:'Нет водителя или авто'};
+  const expected=typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):firmId;
+  if(!expected) return {ok:false, message:'Нет парка для назначения'};
+  if(firmId!==expected) return {ok:false, message:'Назначайте только парк своей фирмы'};
+  firmId=expected;
   if(!fleetDriversForCompany(firmId).some(d=>samePersonName(d.name,driver))){
     return {ok:false, message:`Водитель ${driver} не из парка фирмы`};
   }
@@ -2109,9 +2114,9 @@ function adminBulkAssignSelectedOrders(){
   let assigned=0;
   const skipped=[];
   okOrders.forEach(o=>{
-    const orderFirmId=o.ownCompanyId||(myCo&&myCo.id);
+    const orderFirmId=typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):(myCo&&myCo.id);
     if(!orderFirmId){ skipped.push(o.sequentialNumber); return; }
-    if(!isSuperAdmin() && myCo && orderFirmId!==myCo.id){ skipped.push(o.sequentialNumber); return; }
+    if(typeof adminOrderUsesMyFleet==='function'&&!adminOrderUsesMyFleet(o)){ skipped.push(o.sequentialNumber); return; }
     const res=applyOwnFleetAssignment(o, driver, plate, orderFirmId, {skipDocsConfirm:true});
     if(res.ok){
       upsertOrder(o);
@@ -2638,7 +2643,11 @@ function assignExchangeToOwn(id){
   const plate=(($('ex-plate-'+id)||{}).value||'').trim();
   if(!driver){ alert('Выберите водителя'); return; }
   if(!plate){ alert('Выберите авто'); return; }
-  const firmId=o.ownCompanyId || (currentOwnCompany()||{}).id;
+  if(typeof adminOrderUsesMyFleet==='function'&&!adminOrderUsesMyFleet(o)){
+    alert('Назначать можно только свой парк на заказы своей фирмы');
+    return;
+  }
+  const firmId=typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):(currentOwnCompany()||{}).id;
   const res=applyOwnFleetAssignment(o, driver, plate, firmId);
   if(!res.ok){ alert(res.message||'Не удалось назначить'); return; }
   bumpDataEpoch('assign-exchange-own');
@@ -2806,7 +2815,7 @@ function renderAdminExchangeBoard(orders){
   const cards=orders.map(o=>{
     const mine=isMyFirmOrder(o);
     const req=orderReqText(o);
-    const firmId=mine?(o.ownCompanyId||(myCo&&myCo.id)): (myCo&&myCo.id);
+    const firmId=mine?(typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):(myCo&&myCo.id)):(myCo&&myCo.id);
     const drvList=firmId?fleetDriversForCompany(firmId):[];
     const platePack=adminFleetPlateOptionsForOrder(o, firmId);
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
@@ -2885,7 +2894,8 @@ function renderAdminInboxBoard(orders){
   }
   const myCo=currentOwnCompany();
   const cards=orders.map(o=>{
-    const firmId=o.ownCompanyId||(myCo&&myCo.id);
+    const usesMyFleet=typeof adminOrderUsesMyFleet==='function'?adminOrderUsesMyFleet(o):isMyFirmOrder(o);
+    const firmId=usesMyFleet&&typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):(myCo&&myCo.id);
     const drvList=firmId?fleetDriversForCompany(firmId):[];
     const bookedPlate=String(o.bookedPlate||'').trim();
     const platePack=adminFleetPlateOptionsForOrder(o, firmId, {bookedPlate});
@@ -2916,10 +2926,10 @@ function renderAdminInboxBoard(orders){
       <p style="margin-top:6px">ТС нужно: <strong style="color:var(--text)">${esc(orderReqText(o)||'не указано')}</strong>${bookedPlate?` · ${esc(bookedPlate)}`:''}</p>
       ${bookLine}
       ${margin?`<p class="order-money">${esc(margin)}</p>`:''}
-      ${!hasPark?`
-      <p class="hint">${dispatcher?'Своего парка нет. На бирже вы заказчик перевозки.':'Своего парка нет. Включите «Диспетчер» в справочнике — появится Биржа.'}</p>
+      ${!hasPark||!usesMyFleet?`
+      <p class="hint">${!usesMyFleet?'Заказ другой фирмы — назначение только своим парком на свои заявки.':(dispatcher?'Своего парка нет. На бирже вы заказчик перевозки.':'Своего парка нет. Включите «Диспетчер» в справочнике — появится Биржа.')}</p>
       <div class="ex-actions">
-        ${dispatcher?`<button type="button" class="primary pub-exchange" data-id="${o.id}">Биржа</button>`:''}
+        ${usesMyFleet&&dispatcher?`<button type="button" class="primary pub-exchange" data-id="${o.id}">Биржа</button>`:''}
         <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
       </div>
       `:`
@@ -3026,9 +3036,10 @@ function adminKanbanIncludeClosed(o){
 }
 function adminKanbanAssignBlockHtml(o){
   if(typeof isLogistInboxOrder!=='function'||!isLogistInboxOrder(o)) return '';
+  if(typeof adminOrderUsesMyFleet==='function'&&!adminOrderUsesMyFleet(o)) return '';
   if(typeof companyHasOwnPark==='function'&&!companyHasOwnPark(currentOwnCompany())) return '';
   const myCo=currentOwnCompany();
-  const firmId=o.ownCompanyId||(myCo&&myCo.id);
+  const firmId=typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):(myCo&&myCo.id);
   if(!firmId) return '';
   const drvList=fleetDriversForCompany(firmId);
   const vehList=(fleetVehiclesForCompany(firmId)||[]).filter(v=>vehicleFitsOrder(v,o));

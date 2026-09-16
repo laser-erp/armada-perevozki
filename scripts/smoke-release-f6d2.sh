@@ -20,7 +20,7 @@ done < <(find web-preview -name '*.js' -type f | sort)
 echo "== 3. APP_BUILD =="
 BUILD=$(rg -o 'APP_BUILD="[^"]+"' web-preview/store.js | head -1)
 echo "  $BUILD"
-test "$BUILD" = 'APP_BUILD="2026-09-16-fleet-save"'
+test "$BUILD" = 'APP_BUILD="2026-09-16-fleet-isolation"'
 
 echo "== 4. Logic unit checks =="
 node <<'NODE'
@@ -68,6 +68,19 @@ if(!vehicleFitsOrder({payloadTons:null},{reqPayloadTons:3})) throw new Error('mi
 if(vehicleFitsOrder({payloadTons:2},{reqPayloadTons:3})) throw new Error('2t should fail 3t req');
 if(!orderHasDriverVehicleAssigned({driverName:'Иванов',vehiclePlate:'А123'})) throw new Error('assigned check');
 if(orderHasDriverVehicleAssigned({driverName:'Диспетчер',vehiclePlate:'—'})) throw new Error('dispatcher placeholder');
+function adminFleetCompanyId(o, ctx){
+  const myCo=ctx.myCo;
+  if(!myCo) return null;
+  if(ctx.isSuper){
+    const f=ctx.filter||'all';
+    if(f&&f!=='all'&&f!=='_none') return f==='space-nech'?ctx.nechCo:ctx.armCo;
+    if(o&&o.ownCompanyId) return o.ownCompanyId;
+    return myCo;
+  }
+  return myCo;
+}
+if(adminFleetCompanyId({ownCompanyId:'arm-co'},{isSuper:false,myCo:'nech-co',armCo:'arm-co',nechCo:'nech-co'})!=='nech-co') throw new Error('non-super must use own fleet only');
+if(adminFleetCompanyId({ownCompanyId:'arm-co'},{isSuper:true,filter:'all',myCo:'nech-co',armCo:'arm-co',nechCo:'nech-co'})!=='arm-co') throw new Error('super all uses order firm');
 console.log('  OK logic checks');
 NODE
 

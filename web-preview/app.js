@@ -1212,8 +1212,9 @@ function orderBelongsToAdmin(o, adminId){
     const mine=fleetDriversForCompany(co.id).some(d=>samePersonName(d.name, o.driverName));
     if(mine) return true;
   }
-  // Своё пространство, если водитель наш или owner не чужой
+  // Своё пространство — только если заказ на нашу фirmу (legacy: space совпал, firm чужой)
   if(adm && adm.spaceId && o.spaceId===adm.spaceId){
+    if(co && o.ownCompanyId && o.ownCompanyId!==co.id) return false;
     if(!o.ownerAdminId || o.ownerAdminId===adminId) return true;
     if(co && o.driverName && fleetDriversForCompany(co.id).some(d=>samePersonName(d.name, o.driverName))) return true;
   }
@@ -1232,6 +1233,41 @@ function orderBelongsToAdmin(o, adminId){
 function isMyFirmOrder(o){
   if(!o || !currentAdmin) return false;
   return orderBelongsToAdmin(o, currentAdmin.id);
+}
+/** Чей парк показывать и назначать текущему админу (не чужой firm по ownCompanyId заказа). */
+function adminFleetCompanyId(o){
+  const myCo=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  if(!myCo) return null;
+  if(isSuperAdmin()){
+    const f=state.adminOwnerFilter||'all';
+    if(f&&f!=='all'&&f!=='_none'){
+      const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(f):null;
+      return co?co.id:null;
+    }
+    if(o&&o.ownCompanyId){
+      const oc=findCompanyById(o.ownCompanyId);
+      if(oc&&companyHasRole(oc,'own')) return o.ownCompanyId;
+    }
+    return myCo.id;
+  }
+  return myCo.id;
+}
+/** Назначение своим парком — только на заказы своей firmы (не Armada из кабинета Nechaev). */
+function adminOrderUsesMyFleet(o){
+  if(!o||!currentAdmin) return false;
+  const myCo=currentOwnCompany();
+  if(!myCo) return false;
+  if(!isMyFirmOrder(o)) return false;
+  if(isSuperAdmin()){
+    const f=state.adminOwnerFilter||'all';
+    if(f&&f!=='all'&&f!=='_none'){
+      const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(f):null;
+      return !!(co&&o.ownCompanyId===co.id);
+    }
+    return true;
+  }
+  if(o.ownCompanyId&&o.ownCompanyId!==myCo.id) return false;
+  return true;
 }
 /**
  * Привязка заказа, созданного водителем: фирма авто смены → домашний профиль водителя
@@ -1633,7 +1669,8 @@ function availableFleetForCustomer(companyId, reqs, atIso){
 }
 function freeOwnFleetForOrder(o, exceptOrderId){
   if(!o) return [];
-  const firmId=o.ownCompanyId || ((typeof currentOwnCompany==='function' && currentOwnCompany())||{}).id;
+  const firmId=typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o)
+    :(o.ownCompanyId||((typeof currentOwnCompany==='function'&&currentOwnCompany())||{}).id);
   if(!firmId) return [];
   return fleetVehiclesForCompany(firmId).filter(v=>{
     if(!vehicleFitsOrder(v, o)) return false;
@@ -1641,8 +1678,15 @@ function freeOwnFleetForOrder(o, exceptOrderId){
   });
 }
 function myCatalogDrivers(){
-  if(isSuperAdmin()) return state.drivers||[];
   if(!currentAdmin) return [];
+  if(isSuperAdmin()){
+    const f=state.adminOwnerFilter||'all';
+    if(f&&f!=='all'&&f!=='_none'){
+      const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(f):null;
+      return co?fleetDriversForCompany(co.id):[];
+    }
+    if(f==='all') return state.drivers||[];
+  }
   const co=currentOwnCompany();
   if(co) return fleetDriversForCompany(co.id);
   const sid=currentSpaceId();
@@ -1650,7 +1694,14 @@ function myCatalogDrivers(){
   return driversOwnedByAdminId(currentAdmin.id);
 }
 function myCatalogVehicles(){
-  if(isSuperAdmin()) return state.vehicles||[];
+  if(isSuperAdmin()){
+    const f=state.adminOwnerFilter||'all';
+    if(f&&f!=='all'&&f!=='_none'){
+      const co=typeof ownCompanyForSpaceId==='function'?ownCompanyForSpaceId(f):null;
+      return co?fleetVehiclesForCompany(co.id):[];
+    }
+    if(f==='all') return state.vehicles||[];
+  }
   const co=currentOwnCompany();
   if(co) return fleetVehiclesForCompany(co.id);
   const sid=currentSpaceId();
