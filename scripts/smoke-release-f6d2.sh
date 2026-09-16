@@ -20,7 +20,7 @@ done < <(find web-preview -name '*.js' -type f | sort)
 echo "== 3. APP_BUILD =="
 BUILD=$(rg -o 'APP_BUILD="[^"]+"' web-preview/store.js | head -1)
 echo "  $BUILD"
-test "$BUILD" = 'APP_BUILD="2026-09-16-driver-assign-v2"'
+test "$BUILD" = 'APP_BUILD="2026-09-16-assign-push"'
 
 echo "== 4. Logic unit checks =="
 node <<'NODE'

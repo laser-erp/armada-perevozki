@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-driver-assign-v2";
+const APP_BUILD="2026-09-16-assign-push";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2957,8 +2957,33 @@ async function mergeRemoteAheadOnPush(remote){
   console.warn('PB push aborted: remote epoch ahead', remoteEpoch, '>', localEpoch);
   return {aborted:true, reason:'remote_ahead'};
 }
+/** Перед push: не затереть на сервере назначение логиста локальной «Диспетчер». */
+async function reconcileBeforePush(){
+  if(!navigator.onLine||typeof fetchServerState!=='function') return false;
+  try{
+    const rec=await fetchServerState(4500);
+    if(!rec||!rec.payload) return false;
+    const remote=rec.payload;
+    pbRecordId=rec.id||pbRecordId;
+    const remoteEpoch=Number(remote.dataEpoch)||0;
+    const localEpoch=Number(state.dataEpoch)||0;
+    if(localEpoch<remoteEpoch) return false;
+    let changed=false;
+    if(typeof mergeRemoteOrderAssignments==='function'&&mergeRemoteOrderAssignments(remote)) changed=true;
+    if(typeof reconcileOrdersAfterSync==='function'&&reconcileOrdersAfterSync()) changed=true;
+    if(changed){
+      bumpDataEpoch('pre-push-reconcile');
+      persistLocalOnly();
+    }
+    return changed;
+  }catch(err){
+    console.warn('pre-push reconcile', err);
+    return false;
+  }
+}
 async function pushServerState(){
   if(API_BASE) await ensureArmadaApiToken({});
+  await reconcileBeforePush();
   const payload=snapshot();
   localStorage.setItem(KEY, JSON.stringify(payload));
   try{
@@ -3028,6 +3053,10 @@ async function persistAdminPinImmediate(){
 }
 /** Сохранить справочник компаний на сервер сразу (без debounce). */
 async function persistCompanyImmediate(){
+  return persistAdminPinImmediate();
+}
+/** Назначение водителя/ТС — сразу на сервер (без debounce 2.2 с). */
+async function persistOrderAssignmentImmediate(){
   return persistAdminPinImmediate();
 }
 async function initCloudSync(){

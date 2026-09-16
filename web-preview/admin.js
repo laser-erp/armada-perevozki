@@ -2086,7 +2086,16 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
   stampOrderDriverPhone(o);
   if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
   if(typeof bumpDataEpoch==='function') bumpDataEpoch('assign-fleet');
-  return {ok:true};
+  return {ok:true, order:o};
+}
+function commitOwnFleetAssignment(o){
+  if(!o) return;
+  upsertOrder(o);
+  if(typeof persistOrderAssignmentImmediate==='function'){
+    persistOrderAssignmentImmediate().then(r=>{
+      if(!r||!r.ok) console.warn('assign push', r);
+    });
+  }else persist();
 }
 function adminBulkAssignSelectedOrders(){
   const sel=ensureAdminOrderSelection();
@@ -2127,8 +2136,8 @@ function adminBulkAssignSelectedOrders(){
     } else skipped.push(o.sequentialNumber);
   });
   if(assigned){
-    bumpDataEpoch('bulk-assign');
-    if(typeof persist==='function') persist();
+    if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate();
+    else if(typeof persist==='function') persist();
   }
   let msg=`Назначено: ${assigned} из ${orders.length}`;
   if(blocked.length) msg+=`\nПропущено (статус): ${blocked.map(o=>o.sequentialNumber).join(', ')}`;
@@ -2653,8 +2662,7 @@ function assignExchangeToOwn(id){
   const firmId=typeof adminFleetCompanyId==='function'?adminFleetCompanyId(o):(currentOwnCompany()||{}).id;
   const res=applyOwnFleetAssignment(o, driver, plate, firmId);
   if(!res.ok){ alert(res.message||'Не удалось назначить'); return; }
-  bumpDataEpoch('assign-exchange-own');
-  upsertOrder(o);
+  commitOwnFleetAssignment(o);
   renderAdmin();
 }
 let claimOrderId=null;
@@ -3037,8 +3045,9 @@ function adminKanbanIncludeClosed(o){
   if(!at) return true;
   return (Date.now()-new Date(at).getTime())<=ADMIN_KANBAN_CLOSED_DAYS*86400000;
 }
-function adminKanbanAssignBlockHtml(o){
-  if(typeof isLogistInboxOrder!=='function'||!isLogistInboxOrder(o)) return '';
+function adminKanbanAssignControlsHtml(o, opts){
+  opts=opts||{};
+  const reassign=!!opts.reassign;
   if(typeof adminOrderUsesMyFleet==='function'&&!adminOrderUsesMyFleet(o)) return '';
   if(typeof companyHasOwnPark==='function'&&!companyHasOwnPark(currentOwnCompany())) return '';
   const myCo=currentOwnCompany();
@@ -3048,15 +3057,34 @@ function adminKanbanAssignBlockHtml(o){
   const vehList=(fleetVehiclesForCompany(firmId)||[]).filter(v=>vehicleFitsOrder(v,o));
   if(!drvList.length||!vehList.length) return '';
   const bookedPlate=String(o.bookedPlate||'').trim();
-  const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
-  const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}</option>`).join('');
+  const curDrv=String(o.driverName||'').trim();
+  const curPlate=String(o.vehiclePlate||'').trim();
+  const drvOpts=drvList.map(d=>{
+    const sel=reassign&&curDrv&&samePersonName(d.name, curDrv)?' selected':'';
+    return `<option value="${esc(d.name)}"${sel}>${esc(d.name)}</option>`;
+  }).join('');
+  const plateOpts=vehList.map(v=>{
+    const sel=(bookedPlate&&v.plate===bookedPlate)||(reassign&&curPlate&&curPlate!=='—'&&v.plate===curPlate)?' selected':'';
+    return `<option value="${esc(v.plate)}"${sel}>${esc(v.plate)}</option>`;
+  }).join('');
+  const btnLabel=reassign?'Сохранить назначение':'Назначить';
   return `<div class="kanban-assign-box ex-assign-box">
     <label for="ex-drv-${o.id}">Водитель</label>
     <select id="ex-drv-${o.id}">${drvOpts}</select>
     <label for="ex-plate-${o.id}">ТС</label>
     <select id="ex-plate-${o.id}">${plateOpts}</select>
-    <button type="button" class="primary ex-assign" data-id="${esc(o.id)}">Назначить</button>
+    <button type="button" class="primary ex-assign" data-id="${esc(o.id)}">${btnLabel}</button>
   </div>`;
+}
+function adminKanbanAssignBlockHtml(o){
+  if(typeof isLogistInboxOrder!=='function'||!isLogistInboxOrder(o)) return '';
+  return adminKanbanAssignControlsHtml(o, {reassign:false});
+}
+function adminKanbanReassignBlockHtml(o){
+  if(!o||looksClosedOrder(o)||o.cancelledAt||o.onExchange||o.startOdometer!=null||o.departOdometer!=null) return '';
+  if(typeof isLogistInboxOrder==='function'&&isLogistInboxOrder(o)) return '';
+  if(typeof orderHasDriverVehicleAssigned==='function'&&!orderHasDriverVehicleAssigned(o)) return '';
+  return adminKanbanAssignControlsHtml(o, {reassign:true});
 }
 function adminKanbanCardHtml(o){
   const st=statusText(o);
@@ -3098,6 +3126,7 @@ function adminKanbanCardHtml(o){
     ${drv}
     ${badges.length||etrn?`<div class="kanban-card-badges">${badges.join('')}${etrn||''}</div>`:''}
     ${adminKanbanAssignBlockHtml(o)}
+    ${adminKanbanReassignBlockHtml(o)}
     <div class="kanban-card-actions">${quick.join('')}</div>
   </article>`;
 }
@@ -4468,6 +4497,9 @@ function openDetail(id){
     const pay=metrics(order).driverPay; order.earnings=pay!=null?pay:null;
     if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(order);
     upsertOrder(order);
+    if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(order)&&typeof persistOrderAssignmentImmediate==='function'){
+      persistOrderAssignmentImmediate();
+    }
     openDetail(id);
     $('detail-ok').style.display='block';
   };
