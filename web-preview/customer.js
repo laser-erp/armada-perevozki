@@ -1789,11 +1789,38 @@ function loadCustomerOrderDraftRaw(){
       localStorage.removeItem(key);
       return null;
     }
+    if(!customerOrderDraftHasContent(raw)){
+      localStorage.removeItem(key);
+      return null;
+    }
     return raw;
   }catch(_){ return null; }
 }
+function customerChatDraftIsSubmitted(chat){
+  return (chat&&chat.messages||[]).some(m=>m&&m.stepId==='submitted');
+}
+function customerDraftLikelySubmitted(draft){
+  if(!draft||!currentCustomer) return false;
+  const f=draft.fields||{};
+  const load=String(f['cust-load']||'').trim();
+  const unload=String(f['cust-unload']||'').trim();
+  if(!load||!unload) return false;
+  const cargo=String(f['cust-cargo-text']||'').trim();
+  return customerOrders().some(o=>{
+    if(!o||o.cancelledAt||(typeof looksClosedOrder==='function'&&looksClosedOrder(o))) return false;
+    if(String(o.loadingAddress||'').trim()!==load) return false;
+    if(String(o.unloadingAddress||'').trim()!==unload) return false;
+    if(cargo){
+      const oc=String(o.cargoDescription||'').trim();
+      if(oc&&oc!==cargo) return false;
+    }
+    return true;
+  });
+}
 function customerOrderDraftHasContent(d){
   if(!d) return false;
+  if(customerChatDraftIsSubmitted(d.chat)) return false;
+  if(customerDraftLikelySubmitted(d)) return false;
   const f=d.fields||{};
   const textKeys=['cust-cargo-text','cust-load','cust-unload','cust-weight-value','cust-load-note','cust-unload-note',
     'cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone',
@@ -1846,6 +1873,7 @@ function collectCustomerOrderDraft(){
 }
 function persistCustomerOrderDraft(){
   if(customerDraftApplying || !currentCustomer) return;
+  if(customerChatDraftIsSubmitted(customerChat)) return;
   const key=customerOrderDraftKey();
   if(!key) return;
   try{
@@ -2114,7 +2142,10 @@ function customerPortalFormIsEmpty(){
 function maybePromptCustomerOrderDraft(){
   if(!currentCustomer) return;
   const draft=loadCustomerOrderDraftRaw();
-  if(!draft || !customerOrderDraftHasContent(draft)) return;
+  if(!draft || !customerOrderDraftHasContent(draft)){
+    hideCustomerDraftBanner();
+    return;
+  }
   if(customerDraftPromptLoaded && customerDraftPromptLoaded===draft.savedAt) return;
   if(customerPortalFormIsEmpty()){
     applyCustomerOrderDraft(draft);
@@ -2130,7 +2161,7 @@ function saveCustomerChatState(){
       messages:customerChat.messages, stepIndex:customerChat.stepIndex,
       data:customerChat.data, summaryReady:customerChat.summaryReady
     }));
-    scheduleCustomerOrderDraftSave();
+    if(!customerChatDraftIsSubmitted(customerChat)) scheduleCustomerOrderDraftSave();
   }catch(_){}
 }
 function restoreCustomerChatState(){
