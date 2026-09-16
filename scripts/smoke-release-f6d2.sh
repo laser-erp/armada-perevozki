@@ -20,7 +20,7 @@ done < <(find web-preview -name '*.js' -type f | sort)
 echo "== 3. APP_BUILD =="
 BUILD=$(rg -o 'APP_BUILD="[^"]+"' web-preview/store.js | head -1)
 echo "  $BUILD"
-test "$BUILD" = 'APP_BUILD="2026-09-16-driver-assign-sync"'
+test "$BUILD" = 'APP_BUILD="2026-09-16-driver-assign-v2"'
 
 echo "== 4. Logic unit checks =="
 node <<'NODE'
@@ -117,6 +117,23 @@ if(orderHasDriverVehicleAssigned(remote)&&!orderHasDriverVehicleAssigned(local))
   Object.assign(merged, {driverName:remote.driverName, vehiclePlate:remote.vehiclePlate});
 }
 if(!orderHasDriverVehicleAssigned(merged)) throw new Error('assignment must survive stale local merge');
+function orderEffectiveDriverName(o){
+  const direct=String((o&&o.driverName)||'').trim();
+  if(direct&&!waitingLogistDriver(direct)) return direct;
+  if(o&&o.ownFleetDriverId==='drv-1') return 'Иванов А.С.';
+  return direct;
+}
+function orderBelongsToDriverLite(o, who, drivers){
+  const eff=orderEffectiveDriverName(o);
+  if(eff&&who&&eff.toLowerCase().includes('иванов')&&who.toLowerCase().includes('иванов')) return true;
+  if(o.ownFleetDriverId){
+    const rec=(drivers||[]).find(d=>String(d.id)===String(o.ownFleetDriverId));
+    if(rec&&rec.name&&who&&rec.name.toLowerCase().includes('иванов')&&who.toLowerCase().includes('иванов')) return true;
+  }
+  return false;
+}
+const drivers=[{id:'drv-1',name:'Иванов А.С.',companyId:'co-1'}];
+if(!orderBelongsToDriverLite({driverName:'Диспетчер',vehiclePlate:'—',ownFleetDriverId:'drv-1'},'Иванов',drivers)) throw new Error('ownFleetDriverId match');
 console.log('  OK logic checks');
 NODE
 

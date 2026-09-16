@@ -2600,10 +2600,65 @@ function stampOrderDriverPhone(o){
 }
 function round2(v){ return Math.round(v*100)/100; }
 function fmt(v){ if(v==null||v==='') return '—'; const n=+v; if(Number.isNaN(n)) return String(v); return n===Math.round(n)?String(Math.round(n)):n.toFixed(2); }
+function orderEffectiveDriverName(o){
+  if(!o) return '';
+  const direct=String(o.driverName||'').trim();
+  if(direct && !waitingLogistDriver(direct)) return direct;
+  if(o.ownFleetDriverId){
+    const rec=(state.drivers||[]).find(d=>String(d.id)===String(o.ownFleetDriverId));
+    if(rec&&rec.name) return String(rec.name).trim();
+  }
+  const app=o.transportApp;
+  const appDrv=app&&String(app.driverName||'').trim();
+  if(appDrv && !waitingLogistDriver(appDrv)) return appDrv;
+  return direct;
+}
+/** Починить driverName / ownFleetDriverId из transportApp и справочника. */
+function healOrderDriverAssignment(o){
+  if(!o) return false;
+  let changed=false;
+  const firmId=o.ownCompanyId||null;
+  if(o.ownFleetDriverId){
+    const rec=(state.drivers||[]).find(d=>String(d.id)===String(o.ownFleetDriverId));
+    if(rec&&rec.name){
+      const nm=String(rec.name).trim();
+      if(nm&&!samePersonName(o.driverName||'', nm)){ o.driverName=nm; changed=true; }
+    }
+  }
+  if(typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)){
+    const app=o.transportApp;
+    if(app){
+      const drv=String(app.driverName||'').trim();
+      const plate=String(app.vehiclePlate||'').trim();
+      if(drv&&!waitingLogistDriver(drv)&&plate&&plate!=='—'){
+        if(o.driverName!==drv){ o.driverName=drv; changed=true; }
+        if(o.vehiclePlate!==plate){ o.vehiclePlate=plate; changed=true; }
+        if(!o.ownFleetDriverId&&firmId){
+          const rec=findDriverRecord(drv, firmId);
+          if(rec&&rec.id){ o.ownFleetDriverId=rec.id; changed=true; }
+        }
+      }
+    }
+  }
+  if(!o.ownFleetDriverId&&typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)&&firmId){
+    const rec=findDriverRecord(o.driverName, firmId);
+    if(rec&&rec.id){ o.ownFleetDriverId=rec.id; changed=true; }
+  }
+  if(changed&&typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
+  return changed;
+}
 function orderBelongsToDriver(o, name){
   const who=name||DRIVER;
   if(!o || !who) return false;
-  return samePersonName(o.driverName||'', who);
+  if(typeof healOrderDriverAssignment==='function') healOrderDriverAssignment(o);
+  const eff=orderEffectiveDriverName(o);
+  if(samePersonName(eff, who)) return true;
+  const sessionRec=findDriverRecord(who, DRIVER_COMPANY_ID||o.ownCompanyId);
+  if(!sessionRec||!sessionRec.id) return false;
+  if(o.ownFleetDriverId&&String(o.ownFleetDriverId)===String(sessionRec.id)) return true;
+  const assignedRec=findDriverRecord(eff, o.ownCompanyId||DRIVER_COMPANY_ID);
+  if(assignedRec&&assignedRec.id&&String(assignedRec.id)===String(sessionRec.id)) return true;
+  return false;
 }
 function orderNeverStartedTrip(o){
   return !!(o && o.startOdometer==null && o.departOdometer==null);
@@ -3660,7 +3715,7 @@ function etoProgressScore(s){
   if(isEtoDone(s)) n+=5;
   return n;
 }
-const ORDER_ASSIGN_KEYS=['driverName','vehiclePlate','driverPhone','driverPercent','onExchange','executorType','executorAdminId','carrierCompanyId','carrierDriverId','carrierVehicleId','carrierCompanyName','partnerSpaceId'];
+const ORDER_ASSIGN_KEYS=['driverName','vehiclePlate','driverPhone','driverPercent','onExchange','executorType','executorAdminId','ownFleetDriverId','carrierCompanyId','carrierDriverId','carrierVehicleId','carrierCompanyName','partnerSpaceId'];
 function orderAssignmentSnapshot(o){
   if(!o) return null;
   const snap={};
@@ -3989,10 +4044,51 @@ function mergeLocalOrders(localOrders){
   });
   return changed;
 }
+/** Подтянуть назначения с сервера, если локальная копия устарела (эпоха выше, но без водителя). */
+function mergeRemoteOrderAssignments(remote){
+  if(!remote||typeof remote!=='object') return false;
+  const remoteOrders=Array.isArray(remote.orders)?remote.orders:[];
+  if(!remoteOrders.length) return false;
+  let changed=false;
+  const byId=new Map((state.orders||[]).map(o=>[o.id,o]));
+  const dead=typeof deletedOrderIdSet==='function'?deletedOrderIdSet():new Set();
+  remoteOrders.forEach(ro=>{
+    if(!ro||!ro.id||ro.cancelledAt||dead.has(ro.id)) return;
+    let cur=byId.get(ro.id);
+    if(!cur){
+      const pull=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(ro);
+      if(pull){
+        state.orders=(state.orders||[]);
+        state.orders.unshift(structuredClone(ro));
+        byId.set(ro.id, state.orders[0]);
+        cur=state.orders[0];
+        changed=true;
+      }else return;
+    }
+    const roOk=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(ro);
+    const curOk=orderHasDriverVehicleAssigned(cur);
+    if(roOk&&!curOk){
+      if(mergeOrderAssignmentFields(cur, ro)) changed=true;
+      if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(cur)) changed=true;
+      if(healOrderDriverAssignment(cur)) changed=true;
+    }else if(roOk&&curOk){
+      if(ro.ownFleetDriverId&&!cur.ownFleetDriverId){
+        cur.ownFleetDriverId=ro.ownFleetDriverId;
+        changed=true;
+      }
+      if(ro.ownFleetDriverId&&cur.ownFleetDriverId&&String(ro.ownFleetDriverId)!==String(cur.ownFleetDriverId)){
+        if(mergeOrderAssignmentFields(cur, ro)) changed=true;
+        if(healOrderDriverAssignment(cur)) changed=true;
+      }
+    }
+  });
+  return changed;
+}
 /** После sync: канон state.orders, назначение и снятие ложного «закрыт». */
 function reconcileOrdersAfterSync(){
   let changed=false;
   (state.orders||[]).forEach(o=>{
+    if(healOrderDriverAssignment(o)) changed=true;
     if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(o)) changed=true;
     if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
   });

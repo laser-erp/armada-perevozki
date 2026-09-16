@@ -2061,8 +2061,8 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
       return {ok:false, message:`${plate} не подходит по т/габаритам для №${o.sequentialNumber}`};
     }
   }
+  const drvRec=findDriverRecord(driver, firmId);
   if(!skipDocsConfirm){
-    const drvRec=findDriverRecord(driver, firmId);
     if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)){
       return {ok:false, message:'Назначение отменено'};
     }
@@ -2074,6 +2074,7 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
   o.vehiclePlate=plate;
   o.driverPercent=driverPercent(driver, firmId);
   o.driverPhone=driverPhone(driver, firmId);
+  o.ownFleetDriverId=drvRec&&drvRec.id?drvRec.id:null;
   o.carrierCompanyId=null;
   o.carrierDriverId=null;
   o.carrierVehicleId=null;

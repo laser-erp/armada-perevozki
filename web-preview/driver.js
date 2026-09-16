@@ -477,6 +477,9 @@ async function enterAsDriver(rec){
       if(recState){
         pbRecordId=recState.id;
         applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
+        if(typeof mergeRemoteOrderAssignments==='function') mergeRemoteOrderAssignments(recState.payload||{});
+        if(typeof reconcileOrdersAfterSync==='function') reconcileOrdersAfterSync();
+        else if(typeof healOrphanOrdersIntoShifts==='function') healOrphanOrdersIntoShifts();
         migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
         state.shift=null;
@@ -487,6 +490,8 @@ async function enterAsDriver(rec){
         renderChat();
         renderInput();
         renderDriverBanner();
+        renderDriverHome();
+        if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
       }
     }catch(err){ console.warn('enterAsDriver sync', err); }
   })();
