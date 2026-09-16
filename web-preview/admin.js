@@ -512,10 +512,12 @@ async function loginAdmin(){
     if(pinErr) pinErr.textContent='ИНН: 10 цифр для организации или 12 для ИП';
     return;
   }
+  let loginSyncOk=false;
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
       const rec=await fetchServerState(8000, { pin, meta: { role:'admin' } });
       if(rec&&rec.payload){
+        loginSyncOk=true;
         pbRecordId=rec.id;
         if(typeof mergeLoginCatalogFromRemote==='function') mergeLoginCatalogFromRemote(rec.payload);
         mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
@@ -529,7 +531,9 @@ async function loginAdmin(){
   const adm=findAdminByLoginAndPin(loginRaw, pin);
   if(!adm){
     if(pinErr){
-      if(looksLikeAdminPhoneInput(loginRaw)){
+      if(!loginSyncOk && navigator.onLine!==false){
+        pinErr.textContent='Не удалось загрузить данные с сервера. Обновите страницу (Ctrl+F5) и попробуйте снова';
+      }else if(looksLikeAdminPhoneInput(loginRaw)){
         const phone=typeof formatPhone==='function'?formatPhone(loginRaw):String(loginRaw||'').trim();
         const phoneKnown=(state.admins||[]).some(a=>adminLoginPhone(a)===phone);
         pinErr.textContent=phoneKnown

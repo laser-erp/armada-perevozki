@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-batch-features";
+const APP_BUILD="2026-09-16-admin-login-sync";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2820,9 +2820,12 @@ async function fetchArmadaApiHealth(timeoutMs){
 async function fetchServerStateFromApi(timeoutMs){
   const res=await fetchWithTimeout(`${API_BASE}/state`, { headers:armadaApiJsonHeaders() }, timeoutMs);
   const data=await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(data.error||'API state '+res.status);
-  if(!data.payload) return null;
-  return { id:data.recordId, payload:data.payload, viaApi:true };
+  if(!res.ok) throw new Error(data.error||data.message||'API state '+res.status);
+  const rec=data.record;
+  const payload=(rec&&rec.payload!=null)?rec.payload:data.payload;
+  const id=(rec&&rec.id!=null)?rec.id:(data.recordId||null);
+  if(!payload) return null;
+  return { id, payload, viaApi:true };
 }
 async function fetchServerStateFromPb(timeoutMs){
   const filter=encodeURIComponent("key='main'");
@@ -2834,8 +2837,11 @@ async function fetchServerStateFromPb(timeoutMs){
 async function fetchServerState(timeoutMs, opts){
   if(API_BASE){
     await ensureArmadaApiToken(opts);
-    try{ return await fetchServerStateFromApi(timeoutMs); }
-    catch(err){ console.warn('API state fetch, fallback PB', err); }
+    try{
+      const rec=await fetchServerStateFromApi(timeoutMs);
+      if(rec&&rec.payload) return rec;
+      console.warn('API state empty, fallback PB');
+    }catch(err){ console.warn('API state fetch, fallback PB', err); }
   }
   return await fetchServerStateFromPb(timeoutMs);
 }
