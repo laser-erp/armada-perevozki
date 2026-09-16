@@ -3905,6 +3905,83 @@ function saveDispatcherOrderAfterBillingGuard(seqNo, ownCo, orderSpaceId, mode, 
 
 /* Документооборот — order-documents.js */
 
+function adminDetailFleetId(o){
+  if(typeof adminFleetCompanyId==='function') return adminFleetCompanyId(o);
+  const myCo=currentOwnCompany();
+  return (myCo&&myCo.id)||(o&&o.ownCompanyId)||null;
+}
+function adminDetailDisplayDriver(o){
+  const raw=typeof orderDocDriverName==='function'?orderDocDriverName(o):String(o.driverName||'');
+  const n=String(raw||'').trim();
+  if(!n||n==='—'||n==='Диспетчер'||n==='Биржа'||(typeof waitingLogistDriver==='function'&&waitingLogistDriver(n))) return 'не назначен';
+  return n;
+}
+function adminDetailDisplayPlate(o){
+  const raw=typeof orderVehiclePlate==='function'?orderVehiclePlate(o)
+    :(typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||''));
+  const p=String(raw||'').trim();
+  if(!p||p==='—'||p==='-') return 'не назначено';
+  return p;
+}
+function adminOrderDetailHeroHtml(o){
+  const route=typeof routeText==='function'?routeText(o):'—';
+  const when=o.vehicleAt&&typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(o.vehicleAt):'—';
+  const drv=adminDetailDisplayDriver(o);
+  const plate=adminDetailDisplayPlate(o);
+  const price=o.priceForClient?`${fmt(o.priceForClient)} ₽`:o.pricePending?'цена уточняется':'—';
+  const assigned=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o);
+  const phone=orderDriverPhone(o);
+  return `<section class="form-section admin-order-hero">
+    <div class="admin-order-hero-grid">
+      <div class="admin-order-hero-main">
+        <div class="admin-order-hero-customer">${esc(o.customer||'—')}</div>
+        <div class="admin-order-hero-route">${esc(route)}</div>
+        <div class="admin-order-hero-meta">Подача ${esc(when)} · ${esc(price)}</div>
+      </div>
+      <div class="admin-order-hero-assign ${assigned?'ok':'wait'}">
+        <div><span class="lbl">Водитель</span><b class="${assigned?'':'muted'}">${esc(drv)}</b></div>
+        <div><span class="lbl">Госномер</span><b class="admin-order-hero-plate ${assigned?'':'muted'}">${esc(plate)}</b></div>
+        ${phone?`<a href="tel:${esc(phone)}" class="admin-order-hero-phone">${esc(phone)}</a>`:''}
+      </div>
+    </div>
+    ${!assigned?`<p class="admin-order-hero-warn">Водитель и авто не назначены — выберите ниже и нажмите «Сохранить назначение».</p>`:''}
+    ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="form-section-hint">${esc(logistMarginLine(o))}</p>`:''}
+  </section>`;
+}
+function adminOrderDetailAssignSectionHtml(o){
+  const firmId=adminDetailFleetId(o);
+  const canFleet=typeof adminOrderUsesMyFleet!=='function'||adminOrderUsesMyFleet(o);
+  const openTrip=!o.startOdometer&&!o.departOdometer&&!looksClosedOrder(o)&&!o.cancelledAt;
+  if(!canFleet||!openTrip||!firmId) return '';
+  const drvList=fleetDriversForCompany(firmId);
+  const vehList=(fleetVehiclesForCompany(firmId)||[]).filter(v=>typeof vehicleFitsOrder!=='function'||vehicleFitsOrder(v,o));
+  const curDrv=typeof orderDocDriverName==='function'?orderDocDriverName(o):String(o.driverName||'');
+  let curPlate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'');
+  if(curPlate==='—'||curPlate==='-') curPlate='';
+  const drvVal=curDrv==='Диспетчер'||curDrv==='Биржа'||curDrv==='—'?'':curDrv;
+  const drvField=drvList.length
+    ?`<select id="d-driver-name">${drvList.map(d=>`<option value="${esc(d.name)}"${samePersonName(d.name,drvVal||curDrv)?' selected':''}>${esc(d.name)}</option>`).join('')}</select>`
+    :`<input id="d-driver-name" value="${esc(drvVal)}" placeholder="ФИО водителя" />`;
+  const plateField=vehList.length
+    ?`<select id="d-vehicle-plate"><option value="">— выберите ТС —</option>${vehList.map(v=>`<option value="${esc(v.plate)}"${curPlate&&v.plate===curPlate?' selected':''}>${esc(v.plate)}</option>`).join('')}</select>`
+    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Госномер" />`;
+  return `<section class="form-section admin-order-assign">
+    <h2 class="form-section-title">Назначение парка</h2>
+    <p class="form-section-hint">Выберите водителя и авто — номер появится в карточке и у водителя в «Мои заявки».</p>
+    <div class="form-fields">
+      <div class="form-pair">
+        <div><label for="d-driver-name">Водитель</label>${drvField}</div>
+        <div><label for="d-vehicle-plate">Авто · госномер</label>${plateField}</div>
+      </div>
+      <div class="form-pair">
+        <div><label for="d-driver-phone">Телефон</label><input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="+79650730002" /></div>
+        <div class="admin-order-assign-actions"><button type="button" class="primary" id="detail-assign-apply">Сохранить назначение</button></div>
+      </div>
+      <div id="d-driver-docs-warn" hidden></div>
+    </div>
+  </section>`;
+}
+
 function openDetail(id){
   state.detailId=id;
   const o=state.orders.find(x=>x.id===id); if(!o) return;
@@ -4003,46 +4080,60 @@ function openDetail(id){
   };
   const detailTitle=$('detail-title');
   if(detailTitle) detailTitle.textContent=`Заявка №${o.sequentialNumber}`;
+  const portalOpen=typeof orderKeepsLogist==='function'&&orderKeepsLogist(o)&&!o.startOdometer&&!looksClosedOrder(o);
+  const assignSection=adminOrderDetailAssignSectionHtml(o);
+  const hasTripTimes=(o.timeToOrderMin!=null||o.timeLoadedMin!=null||o.departOdometer!=null||o.startOdometer!=null);
   const detailMeta=$('detail-meta');
   if(detailMeta){
     const etrnSum=typeof orderEtrnSummary==='function'?orderEtrnSummary(o):null;
-    detailMeta.textContent=`${statusText(o)} · ${orderDayLabel(o.dayNumber)} · ${o.driverName||'—'}${m.percent!=null?` (${m.percent}%)`:''}${etrnSum?` · ${etrnSum.label}`:''}`;
+    const plate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'');
+    const drv=typeof orderDocDriverName==='function'?orderDocDriverName(o):String(o.driverName||'—');
+    detailMeta.textContent=`${statusText(o)} · ${esc(o.customer||'—')}${plate&&plate!=='—'?` · ${plate}`:''}${drv&&drv!=='Диспетчер'&&drv!=='—'?` · ${drv}`:''}${etrnSum?` · ${etrnSum.label}`:''}`;
   }
-  $('detail-form').innerHTML=`
-    <div class="cust-form-blocks admin-order-blocks">
-    <section class="form-section">
-      <h2 class="form-section-title">Сводка</h2>
+  const svodkaSection=hasTripTimes?`<section class="form-section">
+      <h2 class="form-section-title">Сводка рейса</h2>
       <div class="metric-strip">
         <div class="m"><span>До заказа</span><b>${esc(formatDurationMin(o.timeToOrderMin))}</b></div>
         <div class="m"><span>С грузом</span><b>${esc(formatDurationMin(o.timeLoadedMin))}</b></div>
         <div class="m"><span>До стоянки</span><b>${esc(formatDurationMin(o.timeToParkingMin))}</b></div>
         <div class="m"><span>Всего</span><b>${esc(formatDurationMin(o.timeTotalMin))}</b></div>
       </div>
-      <p class="form-section-hint">Тариф: пакет (часы + подача, в т.ч. N км) + сверхкм × ₽/км. Без НДС и с НДС — от нал.</p>
       ${o.transportApp?`<div class="claim-box">
         <h3>Договор‑заявка подписана</h3>
         <p>${esc(o.transportApp.customerCompanyName||'')} → ${esc(o.transportApp.carrierCompanyName||'')}</p>
-        <p>Водитель: ${esc(o.transportApp.driverName||o.driverName)} · авто: ${esc(o.transportApp.vehiclePlate||o.vehiclePlate)}${orderDriverPhone(o)?` · ☎ ${esc(orderDriverPhone(o))}`:''}</p>
         <p class="hint">${o.transportApp.signedAt?esc(dateTime(o.transportApp.signedAt)):''}</p>
       </div>`:''}
-    </section>
-    ${orderDocsSectionHtml(o)}
-    ${orderEtrnSectionHtml(o)}
-    <section class="form-section">
-      <h2 class="form-section-title">1. Заказчик и груз</h2>
-      <div class="form-fields">
-        <div class="form-pair">
+    </section>`:'';
+  const tariffWrapOpen=portalOpen?'<details class="admin-order-advanced"><summary class="admin-order-advanced-summary">Тариф и итоги (для закрытых рейсов)</summary>':'';
+  const tariffWrapClose=portalOpen?'</details>':'';
+  const docsBlock=`${orderDocsSectionHtml(o)}${orderEtrnSectionHtml(o)}`;
+  const driverFieldsFallback=assignSection?'':`<div class="form-pair">
           <div>
             <label for="d-driver-name">Водитель</label>
             <input id="d-driver-name" value="${esc(o.driverName||'')}" placeholder="ФИО водителя" />
           </div>
           <div>
+            <label for="d-vehicle-plate">Авто · госномер</label>
+            <input id="d-vehicle-plate" value="${esc((typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):o.vehiclePlate)||'').replace(/^—$/,'')}" placeholder="Госномер" />
+          </div>
+        </div>
+        <div class="form-pair">
+          <div>
             <label for="d-driver-phone">Телефон</label>
             <input id="d-driver-phone" inputmode="tel" value="${esc(orderDriverPhone(o))}" placeholder="+79650730002" />
           </div>
         </div>
-        ${orderDriverPhone(o)?`<a class="hint" href="tel:${esc(orderDriverPhone(o))}" style="color:var(--accent)">Позвонить водителю</a>`:''}
-        <div id="d-driver-docs-warn" hidden></div>
+        <div id="d-driver-docs-warn" hidden></div>`;
+  $('detail-form').innerHTML=`
+    <div class="cust-form-blocks admin-order-blocks">
+    ${adminOrderDetailHeroHtml(o)}
+    ${assignSection}
+    ${svodkaSection}
+    ${portalOpen?'':docsBlock}
+    <section class="form-section">
+      <h2 class="form-section-title">${portalOpen?'Заказчик и груз':'1. Заказчик и груз'}</h2>
+      <div class="form-fields">
+        ${driverFieldsFallback}
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
         <label>Требования к ТС (т / Д×Ш×В)</label>
@@ -4196,8 +4287,10 @@ function openDetail(id){
         <input id="d-empty-after" inputmode="numeric" value="${o.emptyKmAfter??''}" placeholder="например 40" />
       </div>
     </section>
+    ${portalOpen?docsBlock:''}
+    ${tariffWrapOpen}
     <section class="form-section">
-      <h2 class="form-section-title">3. Тариф клиенту</h2>
+      <h2 class="form-section-title">${portalOpen?'Тариф клиенту':'3. Тариф клиенту'}</h2>
       <p class="form-section-hint">${(()=>{ const f=financeForOrder(o); return `Пакет: мин ${f.minWorkHours} ч + ${f.podachaHours} ч подачи; в пакете ${f.cityKmThreshold} км. Нулевой до ≤${f.podachaEmptyKmLimit??20} км и дешевле 1 ч подачи — 1 ч; иначе 2 ч. Сверх — ₽/км.`; })()}</p>
       <div class="form-fields">
         <div class="form-pair">
@@ -4302,6 +4395,7 @@ function openDetail(id){
         <div class="calc-row"><span>Рекомендация +${Math.round(m.markupPercent)}%</span><span>${fmt(m.recommendedRate)} руб</span></div>
       </div>
     </section>
+    ${tariffWrapClose}
     </div>
   `;
   show('admin-detail');
@@ -4347,8 +4441,27 @@ function openDetail(id){
     refreshDriverDocsWarnBox($('d-driver-docs-warn'), nm, detailFirmId());
   };
   $('d-driver-name')&&($('d-driver-name').oninput=refreshDetailDrvWarn);
+  $('d-driver-name')&&($('d-driver-name').onchange=refreshDetailDrvWarn);
   $('d-own-company')&&($('d-own-company').onchange=refreshDetailDrvWarn);
   refreshDetailDrvWarn();
+  const detailAssignBtn=$('detail-assign-apply');
+  if(detailAssignBtn){
+    detailAssignBtn.onclick=()=>{
+      const order=state.orders.find(x=>x.id===id);
+      if(!order) return;
+      const driver=(($('d-driver-name')||{}).value||'').trim();
+      const plate=(($('d-vehicle-plate')||{}).value||'').trim();
+      if(!driver){ alert('Выберите водителя'); return; }
+      if(!plate){ alert('Выберите авто'); return; }
+      const firmId=adminDetailFleetId(order);
+      const res=applyOwnFleetAssignment(order, driver, plate, firmId);
+      if(!res.ok){ alert(res.message||'Не удалось назначить'); return; }
+      order.driverPhone=formatPhone((($('d-driver-phone')||{}).value||'').trim())||order.driverPhone;
+      commitOwnFleetAssignment(order);
+      openDetail(id);
+      flashCatOk('Назначение сохранено на сервере');
+    };
+  }
   $('d-sync-drv-docs')&&($('d-sync-drv-docs').onclick=()=>{
     const order=state.orders.find(x=>x.id===id);
     if(!order) return;
@@ -4403,7 +4516,7 @@ function openDetail(id){
     if(!cleaned.some(p=>p.kind==='loading')){ showErr('Добавьте хотя бы одну точку «Загрузка»'); return; }
     if(!cleaned.some(p=>p.kind==='unloading')){ showErr('Добавьте хотя бы одну точку «Выгрузка»'); return; }
     const drvNameEarly=(($('d-driver-name')||{}).value||'').trim();
-    const plateEarly=String(order.vehiclePlate||'').trim();
+    const plateEarly=(($('d-vehicle-plate')||{}).value||String(order.vehiclePlate||'')).trim();
     const willAssign=drvNameEarly&&plateEarly&&plateEarly!=='—'&&shouldCheckDriverDocs(drvNameEarly);
     if(willAssign){
       const firmIdEarly=order.executorType==='partner'?(order.carrierCompanyId||order.ownCompanyId):((findCompanyById((($('d-own-company')||{}).value)||'')||{}).id||order.ownCompanyId);
@@ -4419,7 +4532,9 @@ function openDetail(id){
     if(order.priceForClient!=null&&order.priceForClient<=0) order.priceForClient=null;
     if(order.priceForCarrier!=null&&order.priceForCarrier<=0) order.priceForCarrier=null;
     const drvName=(($('d-driver-name')||{}).value||'').trim();
+    const plate=(($('d-vehicle-plate')||{}).value||'').trim();
     if(drvName) order.driverName=drvName;
+    if(plate) order.vehiclePlate=plate;
     order.driverPhone=formatPhone((($('d-driver-phone')||{}).value||'').trim());
     if(order.driverPhone && order.driverName){
       const firmId=order.executorType==='partner'?(order.carrierCompanyId||order.ownCompanyId):order.ownCompanyId;
