@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-assign-close-fix";
+const APP_BUILD="2026-09-16-driver-assign-sync";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2940,7 +2940,8 @@ async function mergeRemoteAheadOnPush(remote){
   if(liveShift && mergeLocalShifts([liveShift])) merged=true;
   if(mergeLocalOrders(localOrders)) merged=true;
   if(typeof mergeLocalInvoices==='function'&&mergeLocalInvoices(localInvoices)) merged=true;
-  if(healOrphanOrdersIntoShifts()) merged=true;
+  if(typeof reconcileOrdersAfterSync==='function'&&reconcileOrdersAfterSync()) merged=true;
+  else if(healOrphanOrdersIntoShifts()) merged=true;
   if(migrateEtoFromMessages()) merged=true;
   if(merged){
     bumpDataEpoch('merge-local-remote-ahead');
@@ -3109,7 +3110,8 @@ async function pullRemoteUpdates(reason){
     if(liveShift) mergeLocalShifts([liveShift]);
     mergeLocalOrders(localOrders);
     if(typeof mergeLocalInvoices==='function') mergeLocalInvoices(localInvoices);
-    healOrphanOrdersIntoShifts();
+    if(typeof reconcileOrdersAfterSync==='function') reconcileOrdersAfterSync();
+    else healOrphanOrdersIntoShifts();
     migrateEtoFromMessages();
     localStorage.setItem(KEY, JSON.stringify(snapshot()));
     if(inDriver){

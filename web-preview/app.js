@@ -3660,6 +3660,66 @@ function etoProgressScore(s){
   if(isEtoDone(s)) n+=5;
   return n;
 }
+const ORDER_ASSIGN_KEYS=['driverName','vehiclePlate','driverPhone','driverPercent','onExchange','executorType','executorAdminId','carrierCompanyId','carrierDriverId','carrierVehicleId','carrierCompanyName','partnerSpaceId'];
+function orderAssignmentSnapshot(o){
+  if(!o) return null;
+  const snap={};
+  ORDER_ASSIGN_KEYS.forEach(k=>{ if(o[k]!=null&&o[k]!=='') snap[k]=o[k]; });
+  if(o.transportApp) snap.transportApp=structuredClone(o.transportApp);
+  if(o.customerDriverDocsConfirm) snap.customerDriverDocsConfirm=structuredClone(o.customerDriverDocsConfirm);
+  return Object.keys(snap).length?snap:null;
+}
+/** Не подмешивать ложное закрытие из локальной копии (портал / назначен, но без выезда). */
+function shouldBlockPhantomCloseMerge(cur, k){
+  const closeKeys=new Set(['departOdometer','startOdometer','endOdometer','previousOdometer','emptyKmBefore','loadedKm','emptyKmAfter','departAt','arrivedAt','endAt','parkingAt','closedAt']);
+  if(!cur||!closeKeys.has(k)) return false;
+  if(typeof isUnassignedPortalOrder==='function'&&isUnassignedPortalOrder(cur)) return true;
+  if(orderNeverStartedTrip(cur)&&typeof orderKeepsLogist==='function'&&orderKeepsLogist(cur)) return true;
+  if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(cur)&&cur.startOdometer==null) return true;
+  return false;
+}
+/** Назначение логиста не откатывать к «Диспетчер» при sync. */
+function mergeOrderAssignmentFields(cur, lo){
+  if(!cur||!lo) return false;
+  let changed=false;
+  const curA=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(cur);
+  const loA=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(lo);
+  if(curA&&!loA) return false;
+  if(loA&&!curA){
+    ORDER_ASSIGN_KEYS.forEach(k=>{
+      if(lo[k]!=null&&lo[k]!==''&&cur[k]!==lo[k]){ cur[k]=lo[k]; changed=true; }
+    });
+    if(lo.transportApp&&!cur.transportApp){ cur.transportApp=lo.transportApp; changed=true; }
+    if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(cur);
+  }
+  return changed;
+}
+function restoreOrderAssignmentIfLost(cur, snap){
+  if(!cur||!snap||typeof orderHasDriverVehicleAssigned!=='function') return false;
+  const had=orderHasDriverVehicleAssigned(snap);
+  const has=orderHasDriverVehicleAssigned(cur);
+  if(!had||has) return false;
+  Object.assign(cur, snap);
+  if(typeof healPhantomPortalClose==='function') healPhantomPortalClose(cur);
+  if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(cur);
+  return true;
+}
+/** Слить две копии одного заказа (state.orders ↔ shift.orders). */
+function mergeTwoOrderCopies(cur, lo){
+  if(!cur||!lo) return false;
+  let changed=false;
+  const keepAssign=orderAssignmentSnapshot(cur);
+  if(orderProgressScore(lo)>orderProgressScore(cur)){
+    Object.assign(cur, lo);
+    changed=true;
+  } else if(mergeOrderFields(cur, lo)){
+    changed=true;
+  }
+  if(mergeOrderAssignmentFields(cur, lo)) changed=true;
+  if(restoreOrderAssignmentIfLost(cur, keepAssign)) changed=true;
+  if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(cur)) changed=true;
+  return changed;
+}
 /** Слить заказы двух копий смены — ничего не выбрасываем. */
 function mergeShiftOrders(cur, ls){
   if(!cur||!ls) return false;
@@ -3675,12 +3735,7 @@ function mergeShiftOrders(cur, ls){
       changed=true;
       return;
     }
-    if(orderProgressScore(lo)>orderProgressScore(existing)){
-      Object.assign(existing, lo);
-      changed=true;
-    } else if(mergeOrderFields(existing, lo)){
-      changed=true;
-    }
+    if(mergeTwoOrderCopies(existing, lo)) changed=true;
   });
   return changed;
 }
@@ -3892,19 +3947,22 @@ function mergeOrderFields(cur, lo){
   prefer.forEach(k=>{
     const a=cur[k], b=lo[k];
     if(b==null||b==='') return;
-    if(closeKeys.has(k) && typeof isUnassignedPortalOrder==='function' && isUnassignedPortalOrder(cur)) return;
+    if(shouldBlockPhantomCloseMerge(cur, k)) return;
     if(a==null||a===''){ cur[k]=b; changed=true; return; }
   });
   // Если локальная копия явно полнее — забираем недостающие метки времени/закрытия
   if(orderProgressScore(lo)>orderProgressScore(cur)){
     prefer.forEach(k=>{
+      if(shouldBlockPhantomCloseMerge(cur, k)) return;
       if(lo[k]!=null && lo[k]!=='' && cur[k]!==lo[k]){ cur[k]=lo[k]; changed=true; }
     });
   } else if(looksClosedOrder(lo) && !looksClosedOrder(cur) && !isUnassignedPortalOrder(cur)){
     ['endOdometer','loadedKm','emptyKmAfter','closedAt','endAt','parkingAt'].forEach(k=>{
+      if(shouldBlockPhantomCloseMerge(cur, k)) return;
       if(lo[k]!=null && lo[k]!==''){ cur[k]=lo[k]; changed=true; }
     });
   }
+  if(mergeOrderAssignmentFields(cur, lo)) changed=true;
   return changed;
 }
 /** Не потерять локальные открытые/в-пути заказы при remote_ahead. */
@@ -3927,8 +3985,18 @@ function mergeLocalOrders(localOrders){
       }
       return;
     }
-    if(mergeOrderFields(cur, lo)) changed=true;
+    if(mergeTwoOrderCopies(cur, lo)) changed=true;
   });
+  return changed;
+}
+/** После sync: канон state.orders, назначение и снятие ложного «закрыт». */
+function reconcileOrdersAfterSync(){
+  let changed=false;
+  (state.orders||[]).forEach(o=>{
+    if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(o)) changed=true;
+    if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
+  });
+  if(healOrphanOrdersIntoShifts()) changed=true;
   return changed;
 }
 /** Восстановить поля ЕТО из истории чата (если sync затёр поля, но сообщения остались). */

@@ -20,7 +20,7 @@ done < <(find web-preview -name '*.js' -type f | sort)
 echo "== 3. APP_BUILD =="
 BUILD=$(rg -o 'APP_BUILD="[^"]+"' web-preview/store.js | head -1)
 echo "  $BUILD"
-test "$BUILD" = 'APP_BUILD="2026-09-16-assign-close-fix"'
+test "$BUILD" = 'APP_BUILD="2026-09-16-driver-assign-sync"'
 
 echo "== 4. Logic unit checks =="
 node <<'NODE'
@@ -99,6 +99,24 @@ if(adminFleetCompanyId({ownCompanyId:'arm-co'},{isSuper:false,myCo:'nech-co',arm
 if(adminFleetCompanyId({ownCompanyId:'arm-co'},{isSuper:true,filter:'all',myCo:'nech-co',armCo:'arm-co',nechCo:'nech-co'})!=='arm-co') throw new Error('super all uses order firm');
 const phantom={customerSubmitted:true,closedAt:'2026-01-01',endOdometer:100,loadedKm:10,driverName:'Иванов',vehiclePlate:'А123'};
 if(looksClosedOrder(phantom)) throw new Error('portal assigned must not look closed without trip');
+function orderNeverStartedTrip(o){ return !!(o&&o.startOdometer==null&&o.departOdometer==null); }
+function orderKeepsLogist(o){ return !!(o&&o.customerSubmitted); }
+function shouldBlockPhantomCloseMerge(cur,k){
+  const closeKeys=new Set(['closedAt','endOdometer','loadedKm']);
+  if(!cur||!closeKeys.has(k)) return false;
+  if(orderNeverStartedTrip(cur)&&orderKeepsLogist(cur)) return true;
+  if(orderHasDriverVehicleAssigned(cur)&&cur.startOdometer==null) return true;
+  return false;
+}
+if(!shouldBlockPhantomCloseMerge({driverName:'Иванов',vehiclePlate:'А123',customerSubmitted:true},'closedAt')) throw new Error('block phantom on assigned');
+const remote={id:'x',driverName:'Иванов',vehiclePlate:'А123',customerSubmitted:true};
+const local={id:'x',driverName:'Диспетчер',vehiclePlate:'—',closedAt:'2026-01-01',endOdometer:100,loadedKm:10,customerSubmitted:true};
+const merged={...remote};
+Object.assign(merged,local);
+if(orderHasDriverVehicleAssigned(remote)&&!orderHasDriverVehicleAssigned(local)){
+  Object.assign(merged, {driverName:remote.driverName, vehiclePlate:remote.vehiclePlate});
+}
+if(!orderHasDriverVehicleAssigned(merged)) throw new Error('assignment must survive stale local merge');
 console.log('  OK logic checks');
 NODE
 
