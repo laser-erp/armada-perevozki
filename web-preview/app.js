@@ -2692,10 +2692,38 @@ function orderKeepsLogist(o){
   if(!o) return false;
   return o.executorType==='logist' || o.customerSubmitted || o.fulfillment==='logist' || o.fulfillment==='direct';
 }
+function isUnassignedPortalOrder(o){
+  if(!o||o.cancelledAt) return false;
+  if(!orderKeepsLogist(o)) return false;
+  return waitingLogistDriver(o.driverName) && o.startOdometer==null && o.departOdometer==null;
+}
 function isLogistInboxOrder(o){
   if(!o || looksClosedOrder(o) || o.cancelledAt || o.onExchange || o.startOdometer!=null) return false;
   if(!waitingLogistDriver(o.driverName)) return false;
   return orderKeepsLogist(o);
+}
+function orderLinkedToShift(shift, o){
+  return !!(shift&&o&&o.id&&(shift.orders||[]).some(x=>x&&x.id===o.id));
+}
+/** Не закрывать заказ по старому «Заказ №N закрыт» из чата другой смены / после перенумерации. */
+function canHydrateCloseFromShiftMessage(o, shift, msgAt){
+  if(!o||!shift) return false;
+  if(isUnassignedPortalOrder(o)) return false;
+  if(o.createdAt&&msgAt){
+    const tc=new Date(o.createdAt).getTime();
+    const tm=new Date(msgAt).getTime();
+    if(!Number.isNaN(tc)&&!Number.isNaN(tm)&&tm<tc) return false;
+  }
+  if(!orderLinkedToShift(shift,o)&&o.startOdometer==null) return false;
+  return true;
+}
+function healFalseClosedInboxOrder(o){
+  if(!isUnassignedPortalOrder(o)||!looksClosedOrder(o)) return false;
+  let changed=false;
+  ['closedAt','endAt','parkingAt','endOdometer','loadedKm','emptyKmAfter'].forEach(k=>{
+    if(o[k]!=null&&o[k]!==''){ o[k]=null; changed=true; }
+  });
+  return changed;
 }
 function logistMargin(o){
   const client=+o.priceForClient||0;
@@ -3778,7 +3806,7 @@ function mergeOrderFields(cur, lo){
     prefer.forEach(k=>{
       if(lo[k]!=null && lo[k]!=='' && cur[k]!==lo[k]){ cur[k]=lo[k]; changed=true; }
     });
-  } else if(looksClosedOrder(lo) && !looksClosedOrder(cur)){
+  } else if(looksClosedOrder(lo) && !looksClosedOrder(cur) && !isUnassignedPortalOrder(cur)){
     ['endOdometer','loadedKm','emptyKmAfter','closedAt','endAt','parkingAt'].forEach(k=>{
       if(lo[k]!=null && lo[k]!==''){ cur[k]=lo[k]; changed=true; }
     });
@@ -4009,6 +4037,7 @@ function orderTimesText(o){
 /** Восстановить закрытие/одометры, если sync стёр closedAt, но км остались. */
 function healOrderCloseState(o){
   if(!o||o.cancelledAt) return false;
+  if(healFalseClosedInboxOrder(o)) return true;
   let changed=false;
   if(o.loadedKm!=null && o.startOdometer!=null && o.endOdometer==null){
     o.endOdometer=o.startOdometer+o.loadedKm;
@@ -4018,7 +4047,7 @@ function healOrderCloseState(o){
     o.loadedKm=Math.max(0, o.endOdometer-o.startOdometer);
     changed=true;
   }
-  if(looksClosedOrder(o) && !o.closedAt){
+  if(looksClosedOrder(o) && !o.closedAt && !isUnassignedPortalOrder(o)){
     o.closedAt=o.parkingAt||o.endAt||o.arrivedAt||o.createdAt||new Date().toISOString();
     changed=true;
   }
@@ -4057,12 +4086,13 @@ function hydrateOrdersFromMessages(){
       const seq=+closed[1];
       const o=bySeq.get(seq);
       if(!o) continue;
+      const at=msgs[i].at||null;
+      if(!canHydrateCloseFromShiftMessage(o, s, at)) continue;
       let endOdo=closed[2]?+closed[2]:null;
       if(endOdo==null){
         const m=t.match(/Одометр окончания:\s*(\d+)/i);
         if(m) endOdo=+m[1];
       }
-      const at=msgs[i].at||null;
       if(endOdo!=null && o.endOdometer==null){ o.endOdometer=endOdo; changed=true; }
       if(endOdo!=null && o.startOdometer!=null && o.loadedKm==null){
         o.loadedKm=Math.max(0, endOdo-o.startOdometer); changed=true;
@@ -4214,9 +4244,17 @@ function healAllOrders(){
   if(healStuckClosing()) changed=true;
   if(healStuckOrderSteps()) changed=true;
   if(hydrateOrdersFromMessages()) changed=true;
-  (state.orders||[]).forEach(o=>{ if(healOrderCloseState(o)) changed=true; ensureOrderTimeStamps(o); });
+  (state.orders||[]).forEach(o=>{
+    if(healFalseClosedInboxOrder(o)) changed=true;
+    if(healOrderCloseState(o)) changed=true;
+    ensureOrderTimeStamps(o);
+  });
   (state.shifts||[]).forEach(s=>{
-    (s.orders||[]).forEach(o=>{ if(healOrderCloseState(o)) changed=true; ensureOrderTimeStamps(o); });
+    (s.orders||[]).forEach(o=>{
+      if(healFalseClosedInboxOrder(o)) changed=true;
+      if(healOrderCloseState(o)) changed=true;
+      ensureOrderTimeStamps(o);
+    });
   });
   if(compactSequentialNumbers()) changed=true;
   return changed;
@@ -4713,13 +4751,11 @@ async function openAdminLoginAsync(){
   if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
     refreshAdminListForLogin().then(synced=>{
       if(!synced&&pinErr&&!pinErr.textContent){
-        pinErr.classList.add('hint-warn');
         pinErr.textContent='Список с сервера не обновился — войдите по телефону или ИНН и PIN';
       }
     }).catch(err=>{
       console.warn('admin login list', err);
       if(pinErr&&!pinErr.textContent){
-        pinErr.classList.add('hint-warn');
         pinErr.textContent='Сервер не ответил — попробуйте войти по телефону или ИНН и PIN';
       }
     });
