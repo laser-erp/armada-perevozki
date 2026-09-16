@@ -2830,7 +2830,7 @@ function renderAdminExchangeBoard(orders){
           <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет авто в парке —</option>`}</select>
           ${platePack.okCount===0&&platePack.allCount?`<p class="hint">${esc(platePack.emptyHint)}</p>`:''}
           <div class="ex-actions">
-            <button type="button" class="primary ex-assign" data-id="${o.id}">Парк</button>
+            <button type="button" class="primary ex-assign" data-id="${o.id}">Назначить</button>
             <div class="row">
               <button type="button" class="secondary ex-unpub" data-id="${o.id}">Снять с биржи</button>
               <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>
@@ -3024,6 +3024,26 @@ function adminKanbanIncludeClosed(o){
   if(!at) return true;
   return (Date.now()-new Date(at).getTime())<=ADMIN_KANBAN_CLOSED_DAYS*86400000;
 }
+function adminKanbanAssignBlockHtml(o){
+  if(typeof isLogistInboxOrder!=='function'||!isLogistInboxOrder(o)) return '';
+  if(typeof companyHasOwnPark==='function'&&!companyHasOwnPark(currentOwnCompany())) return '';
+  const myCo=currentOwnCompany();
+  const firmId=o.ownCompanyId||(myCo&&myCo.id);
+  if(!firmId) return '';
+  const drvList=fleetDriversForCompany(firmId);
+  const vehList=(fleetVehiclesForCompany(firmId)||[]).filter(v=>vehicleFitsOrder(v,o));
+  if(!drvList.length||!vehList.length) return '';
+  const bookedPlate=String(o.bookedPlate||'').trim();
+  const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+  const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}</option>`).join('');
+  return `<div class="kanban-assign-box ex-assign-box">
+    <label for="ex-drv-${o.id}">Водитель</label>
+    <select id="ex-drv-${o.id}">${drvOpts}</select>
+    <label for="ex-plate-${o.id}">ТС</label>
+    <select id="ex-plate-${o.id}">${plateOpts}</select>
+    <button type="button" class="primary ex-assign" data-id="${esc(o.id)}">Назначить</button>
+  </div>`;
+}
 function adminKanbanCardHtml(o){
   const st=statusText(o);
   const stCls=orderStatusClass(o);
@@ -3063,6 +3083,7 @@ function adminKanbanCardHtml(o){
     <p class="kanban-card-meta">${esc(when)}${price?` · ${esc(price)}`:''}</p>
     ${drv}
     ${badges.length||etrn?`<div class="kanban-card-badges">${badges.join('')}${etrn||''}</div>`:''}
+    ${adminKanbanAssignBlockHtml(o)}
     <div class="kanban-card-actions">${quick.join('')}</div>
   </article>`;
 }
@@ -3092,7 +3113,7 @@ function renderAdminKanbanBoard(orders){
     </section>`;
   }).join('');
   return `<div class="orders-board-head">
-    <p class="cat-panel-hint">Канбан: перетаскивание статусов — позже. Нажмите карточку или «Карточка» для деталей. Бейдж «Партнёр» — забрали с биржи.</p>
+    <p class="cat-panel-hint">Канбан: во «Входящих» выберите водителя и ТС → «Назначить». Или фильтр «Входящие» в списке. «Карточка» — детали и ставки.</p>
   </div>
   <div class="kanban-board-wrap"><div class="kanban-board">${cols}</div></div>`;
 }
@@ -3169,6 +3190,7 @@ function renderAdmin(){
     $('admin-list').innerHTML=orders.length
       ?renderAdminKanbanBoard(orders)
       :`<div class="empty">${(state.adminFilter||'all')==='inbox'?'Входящих нет':'Нет заявок для канбана'}</div>`;
+    document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); assignExchangeToOwn(b.dataset.id); });
     wireAdminOrderListActions(orders);
     return;
   }
