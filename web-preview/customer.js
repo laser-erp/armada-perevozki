@@ -272,15 +272,24 @@ const CUSTOMER_NOTIFY_KEY='armada_customer_notify_v1';
 const CUSTOMER_ORDER_SEEN_KEY='armada_customer_order_seen_v1';
 
 function customerOrderDriverMeta(o){
-  if(!o||typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)) return '';
-  const name=typeof orderDocDriverName==='function'?orderDocDriverName(o):String(o.driverName||'').trim();
-  const plate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'').trim();
+  if(!o) return '';
+  const assigned=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o);
+  const effective=typeof orderHasEffectiveAssignment==='function'&&orderHasEffectiveAssignment(o);
+  if(!assigned&&!effective) return '';
+  let name=typeof orderDocDriverName==='function'?orderDocDriverName(o):String(o.driverName||'').trim();
+  let plate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'').trim();
+  if((!name||name==='Диспетчер'||name==='—')&&o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.text){
+    name=String(o.customerDriverDocsConfirm.text.driverName||'').trim()||name;
+    plate=String(o.customerDriverDocsConfirm.text.plate||'').trim()||plate;
+  }
   if(!name||name==='—') return '';
   return plate&&plate!=='—'?`Водитель: ${name} · ${plate}`:`Водитель: ${name}`;
 }
 function customerOrderStatusLabel(o){
   if(!o) return '—';
   if(o.cancelledAt) return 'Отменён';
+  if(typeof orderHasEffectiveAssignment==='function'&&orderHasEffectiveAssignment(o)
+    &&o.startOdometer==null&&o.departOdometer==null&&!o.onExchange) return 'Назначен';
   if(typeof isUnassignedPortalOrder==='function' && isUnassignedPortalOrder(o)) return 'У диспетчера';
   if(looksClosedOrder(o)) return 'Закрыт';
   if(o.bookStatus==='rejected' && (typeof waitingLogistDriver==='function'?waitingLogistDriver(o.driverName):true) && !o.onExchange)

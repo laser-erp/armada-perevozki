@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-order-detail-ui";
+const APP_BUILD="2026-09-16-order9-status-fix";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -3059,6 +3059,30 @@ async function persistCompanyImmediate(){
 async function persistOrderAssignmentImmediate(){
   return persistAdminPinImmediate();
 }
+/** После reconcile: если назначение восстановлено из docs/transportApp — сразу на сервер (только админ). */
+async function pushRepairedAssignmentsIfNeeded(beforeSnap){
+  if(typeof currentAdmin==='undefined'||!currentAdmin) return false;
+  if(!Array.isArray(beforeSnap)||!beforeSnap.length) return false;
+  const repaired=(state.orders||[]).some(o=>{
+    const b=beforeSnap.find(x=>x.id===o.id);
+    if(!b) return false;
+    const assignChanged=b.d!==o.driverName||b.p!==o.vehiclePlate||b.f!==o.ownFleetDriverId;
+    if(!assignChanged) return false;
+    return typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o);
+  });
+  if(!repaired) return false;
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('repair-assign-push');
+  persistLocalOnly();
+  if(typeof persistOrderAssignmentImmediate==='function'){
+    const r=await persistOrderAssignmentImmediate();
+    return !!(r&&r.ok);
+  }
+  persist();
+  return true;
+}
+function orderAssignmentRepairSnap(){
+  return (state.orders||[]).map(o=>({id:o.id,d:o.driverName,p:o.vehiclePlate,f:o.ownFleetDriverId}));
+}
 async function initCloudSync(){
   syncStatus='syncing';
   try{
@@ -3076,7 +3100,10 @@ async function initCloudSync(){
         applyPayload(remote, {keepShifts:localShifts, keepOrders:localOrders, remoteSeq:true, remoteWinsAuth:true});
         healOrphanOrdersIntoShifts();
         migrateEtoFromMessages();
+        const assignSnapBefore=typeof orderAssignmentRepairSnap==='function'?orderAssignmentRepairSnap():[];
+        if(typeof reconcileOrdersAfterSync==='function') reconcileOrdersAfterSync();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        if(typeof pushRepairedAssignmentsIfNeeded==='function') await pushRepairedAssignmentsIfNeeded(assignSnapBefore);
       } else {
         // Локальная эпоха выше — tombstone удалений с сервера всё равно применяем.
         unionDeletedOrderIds(remote.deletedOrderIds||[]);
@@ -3142,10 +3169,12 @@ async function pullRemoteUpdates(reason){
     mergeLocalOrders(localOrders);
     if(typeof mergeLocalInvoices==='function') mergeLocalInvoices(localInvoices);
     if(typeof mergeRemoteOrderAssignments==='function') mergeRemoteOrderAssignments(remote);
+    const assignSnapBefore=typeof orderAssignmentRepairSnap==='function'?orderAssignmentRepairSnap():[];
     if(typeof reconcileOrdersAfterSync==='function') reconcileOrdersAfterSync();
     else healOrphanOrdersIntoShifts();
     migrateEtoFromMessages();
     localStorage.setItem(KEY, JSON.stringify(snapshot()));
+    if(inAdmin&&typeof pushRepairedAssignmentsIfNeeded==='function') await pushRepairedAssignmentsIfNeeded(assignSnapBefore);
     if(inDriver){
       // не поднимаем currentAdmin поверх режима водителя
       const open=findOpenShift();

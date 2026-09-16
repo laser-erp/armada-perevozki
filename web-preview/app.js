@@ -2626,18 +2626,23 @@ function healOrderDriverAssignment(o){
     }
   }
   if(typeof orderHasDriverVehicleAssigned!=='function'||!orderHasDriverVehicleAssigned(o)){
-    const app=o.transportApp;
-    if(app){
-      const drv=String(app.driverName||'').trim();
-      const plate=String(app.vehiclePlate||'').trim();
-      if(drv&&!waitingLogistDriver(drv)&&plate&&plate!=='—'){
-        if(o.driverName!==drv){ o.driverName=drv; changed=true; }
-        if(o.vehiclePlate!==plate){ o.vehiclePlate=plate; changed=true; }
-        if(!o.ownFleetDriverId&&firmId){
-          const rec=findDriverRecord(drv, firmId);
-          if(rec&&rec.id){ o.ownFleetDriverId=rec.id; changed=true; }
-        }
+    const healFrom=(drv, plate)=>{
+      const d=String(drv||'').trim();
+      const p=String(plate||'').trim();
+      if(!d||!p||waitingLogistDriver(d)||p==='—'||p==='-') return false;
+      if(o.driverName!==d){ o.driverName=d; changed=true; }
+      if(o.vehiclePlate!==p){ o.vehiclePlate=p; changed=true; }
+      if(!o.ownFleetDriverId&&firmId){
+        const rec=findDriverRecord(d, firmId);
+        if(rec&&rec.id){ o.ownFleetDriverId=rec.id; changed=true; }
       }
+      return true;
+    };
+    const snap=o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.text;
+    if(snap&&healFrom(snap.driverName, snap.plate)){}
+    else{
+      const app=o.transportApp;
+      if(app) healFrom(app.driverName, app.vehiclePlate);
     }
   }
   if(!o.ownFleetDriverId&&typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)&&firmId){
@@ -2807,10 +2812,29 @@ function orderKeepsLogist(o){
   if(!o) return false;
   return o.executorType==='logist' || o.customerSubmitted || o.fulfillment==='logist' || o.fulfillment==='direct';
 }
+function orderHasEffectiveAssignment(o){
+  if(!o) return false;
+  if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)) return true;
+  const t=o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.text;
+  if(t){
+    const drv=String(t.driverName||'').trim();
+    const plate=String(t.plate||'').trim();
+    if(drv&&plate&&!waitingLogistDriver(drv)&&plate!=='—'&&plate!=='-') return true;
+  }
+  const app=o.transportApp;
+  if(app){
+    const drv=String(app.driverName||'').trim();
+    const plate=String(app.vehiclePlate||'').trim();
+    if(drv&&plate&&!waitingLogistDriver(drv)&&plate!=='—'&&plate!=='-') return true;
+  }
+  return false;
+}
 function isUnassignedPortalOrder(o){
   if(!o||o.cancelledAt) return false;
   if(!orderKeepsLogist(o)) return false;
-  return waitingLogistDriver(o.driverName) && o.startOdometer==null && o.departOdometer==null;
+  if(o.startOdometer!=null||o.departOdometer!=null) return false;
+  if(orderHasEffectiveAssignment(o)) return false;
+  return waitingLogistDriver(o.driverName);
 }
 function isLogistInboxOrder(o){
   if(!o || looksClosedOrder(o) || o.cancelledAt || o.onExchange || o.startOdometer!=null) return false;
