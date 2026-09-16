@@ -457,6 +457,38 @@
     .admin-cards{display:flex;flex-direction:column;gap:8px;padding:8px 10px 20px}
     .admin-cards .card button{margin-top:8px}
     .admin-cards .order-card button{margin-top:0}
+    .admin-orders-view-bar{display:flex;align-items:center;gap:8px;padding:6px 12px 0}
+    .admin-view-toggle{display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;background:var(--surface)}
+    .admin-view-toggle button{
+      border:0;background:transparent;padding:6px 14px;font-size:.78rem;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit
+    }
+    .admin-view-toggle button.on{background:var(--accent);color:#fff}
+    .kanban-board-wrap{padding:8px 10px 20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .kanban-board{display:flex;gap:10px;align-items:flex-start;min-height:240px;min-width:min(100%,920px)}
+    .kanban-col{flex:0 0 min(280px,78vw);max-width:320px;background:var(--bg1,#f8fafc);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 220px)}
+    .kanban-col-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+    .kanban-col-head b{font-size:.95rem;color:var(--text);letter-spacing:0;text-transform:none}
+    .kanban-col-body{display:flex;flex-direction:column;gap:8px;padding:8px;overflow-y:auto;flex:1}
+    .kanban-col-empty{margin:0;padding:12px 8px;text-align:center;color:var(--muted);font-size:.78rem}
+    .kanban-card{
+      background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 10px 8px;
+      cursor:pointer;box-shadow:0 1px 0 rgba(15,23,42,.04)
+    }
+    .kanban-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    .kanban-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:4px}
+    .kanban-card-head strong{font-size:.88rem;line-height:1.25}
+    .kanban-card-status{font-size:.62rem;padding:2px 6px;border-radius:999px;white-space:nowrap;max-width:48%}
+    .kanban-card-customer{margin:0;font-size:.82rem;font-weight:700;color:var(--text);line-height:1.3}
+    .kanban-card-route{margin:4px 0 0;font-size:.78rem;font-weight:600;color:var(--text);line-height:1.35}
+    .kanban-card-meta{margin:4px 0 0;font-size:.72rem;color:var(--muted);line-height:1.35}
+    .kanban-card-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;align-items:center}
+    .kanban-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:.64rem;font-weight:700;border:1px solid var(--border);background:var(--field);color:var(--text)}
+    .kanban-badge--partner{background:rgba(124,58,237,.1);border-color:rgba(124,58,237,.35);color:#6D28D9}
+    .kanban-badge--exchange{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.35);color:#DC2626}
+    .kanban-badge--warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .kanban-card-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .kanban-card-actions .primary,.kanban-card-actions .secondary{padding:6px 10px;font-size:.72rem;flex:1 1 auto;min-width:0}
+    .kanban-closed-more{width:100%;margin-top:4px}
     /* Документооборот v1 */
     .docs-list{display:flex;flex-direction:column;gap:8px}
     .doc-row{

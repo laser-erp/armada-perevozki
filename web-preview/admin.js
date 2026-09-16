@@ -2917,6 +2917,176 @@ function pilotSetupChecklistHtml(){
     ${portal?`<p class="hint">Портал заказчика: <a href="${esc(portal)}" target="_blank" rel="noopener">${esc(portal)}</a> (раздел «Ссылки»)</p>`:''}
   </div>`;
 }
+const ADMIN_ORDERS_VIEW_KEY='armada_admin_orders_view_v1';
+const ADMIN_KANBAN_COLUMNS=[
+  {id:'inbox', title:'Входящие'},
+  {id:'assigned', title:'Назначен'},
+  {id:'exchange', title:'На бирже'},
+  {id:'progress', title:'В работе'},
+  {id:'closed', title:'Закрыт'}
+];
+const ADMIN_KANBAN_CLOSED_DAYS=7;
+function adminOrdersView(){
+  if(state.adminOrdersView==='kanban'||state.adminOrdersView==='list') return state.adminOrdersView;
+  try{
+    const v=localStorage.getItem(ADMIN_ORDERS_VIEW_KEY);
+    if(v==='kanban'||v==='list'){ state.adminOrdersView=v; return v; }
+  }catch(_){}
+  state.adminOrdersView='list';
+  return 'list';
+}
+function setAdminOrdersView(view){
+  view=view==='kanban'?'kanban':'list';
+  state.adminOrdersView=view;
+  try{ localStorage.setItem(ADMIN_ORDERS_VIEW_KEY, view); }catch(_){}
+  syncAdminOrdersViewToggle();
+  renderAdmin();
+}
+function syncAdminOrdersViewToggle(){
+  const bar=document.querySelector('.admin-orders-view-bar');
+  const nav=(state.adminFilter||'all');
+  const show=nav!=='eto';
+  if(bar) bar.style.display=show?'':'none';
+  document.querySelectorAll('#admin-orders-view-toggle [data-orders-view]').forEach(btn=>{
+    btn.classList.toggle('on', btn.dataset.ordersView===adminOrdersView());
+  });
+  if(!state._adminOrdersViewWired){
+    state._adminOrdersViewWired=true;
+    document.querySelectorAll('#admin-orders-view-toggle [data-orders-view]').forEach(btn=>{
+      btn.onclick=()=>setAdminOrdersView(btn.dataset.ordersView);
+    });
+  }
+}
+function adminKanbanSortKey(o){
+  const t=o.vehicleAt||o.createdAt||'';
+  return new Date(t).getTime()||0;
+}
+function adminKanbanIncludeClosed(o){
+  if(!looksClosedOrder(o)) return false;
+  if(state.adminKanbanClosedExpanded) return true;
+  const at=o.closedAt||o.endAt||o.createdAt;
+  if(!at) return true;
+  return (Date.now()-new Date(at).getTime())<=ADMIN_KANBAN_CLOSED_DAYS*86400000;
+}
+function adminKanbanCardHtml(o){
+  const st=statusText(o);
+  const stCls=orderStatusClass(o);
+  const badges=[];
+  if(o.executorType==='partner'){
+    const pn=o.carrierCompanyName||(o.transportApp&&o.transportApp.carrierCompanyName)||'партнёр';
+    badges.push(`<span class="kanban-badge kanban-badge--partner">Партнёр · ${esc(pn)}</span>`);
+  }
+  if(typeof isBookingRequested==='function'&&isBookingRequested(o)){
+    badges.push('<span class="kanban-badge kanban-badge--warn">Бронь</span>');
+  }
+  if(o.fulfillment==='logist'&&typeof orderKeepsLogist==='function'&&orderKeepsLogist(o)&&!o.onExchange){
+    badges.push('<span class="kanban-badge">Срочно</span>');
+  }
+  const etrn=typeof orderEtrnBadgeHtml==='function'?orderEtrnBadgeHtml(o):'';
+  const price=o.priceForClient?`${fmt(o.priceForClient)} ₽`:o.pricePending?'цена уточняется':'';
+  const when=o.vehicleAt&&typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(o.vehicleAt):dateTime(o.createdAt);
+  const drv=(o.driverName&&o.driverName!=='Диспетчер'&&o.driverName!=='Биржа'&&o.driverName!=='—')
+    ?`<p class="kanban-card-meta">${esc(o.driverName)} · ${esc(o.vehiclePlate||'—')}</p>`:'';
+  const quick=[];
+  if(typeof isBookingRequested==='function'&&isBookingRequested(o)&&isMyFirmOrder(o)){
+    quick.push(`<button type="button" class="secondary in-book-ok" data-id="${esc(o.id)}">Подтвердить</button>`);
+    quick.push(`<button type="button" class="secondary in-book-no" data-id="${esc(o.id)}">Отклонить</button>`);
+  }
+  if(!o.onExchange&&!looksClosedOrder(o)&&!o.cancelledAt&&o.startOdometer==null&&isMyFirmOrder(o)
+    &&typeof isDispatcherCompany==='function'&&isDispatcherCompany(findCompanyById(o.ownCompanyId)||currentOwnCompany())){
+    quick.push(`<button type="button" class="secondary pub-exchange" data-id="${esc(o.id)}">Биржа</button>`);
+  }
+  quick.push(`<button type="button" class="primary open-rates" data-id="${esc(o.id)}">Карточка</button>`);
+  return `<article class="kanban-card" data-order-card="${esc(o.id)}" tabindex="0">
+    <div class="kanban-card-head">
+      <strong>№ ${esc(o.sequentialNumber||'—')}</strong>
+      <span class="order-status ${stCls} kanban-card-status">${esc(st)}</span>
+    </div>
+    <p class="kanban-card-customer">${esc(o.customer||'—')}</p>
+    <p class="kanban-card-route">${esc(routeText(o))}</p>
+    <p class="kanban-card-meta">${esc(when)}${price?` · ${esc(price)}`:''}</p>
+    ${drv}
+    ${badges.length||etrn?`<div class="kanban-card-badges">${badges.join('')}${etrn||''}</div>`:''}
+    <div class="kanban-card-actions">${quick.join('')}</div>
+  </article>`;
+}
+function renderAdminKanbanBoard(orders){
+  const buckets={inbox:[],assigned:[],exchange:[],progress:[],closed:[]};
+  (orders||[]).forEach(o=>{
+    const key=typeof adminKanbanColumnKey==='function'?adminKanbanColumnKey(o):null;
+    if(key==='closed'){
+      if(adminKanbanIncludeClosed(o)) buckets.closed.push(o);
+      return;
+    }
+    if(key&&buckets[key]) buckets[key].push(o);
+  });
+  Object.keys(buckets).forEach(k=>{
+    buckets[k].sort((a,b)=>adminKanbanSortKey(b)-adminKanbanSortKey(a));
+  });
+  const hiddenClosed=(orders||[]).filter(o=>looksClosedOrder(o)&&!adminKanbanIncludeClosed(o)).length;
+  const cols=ADMIN_KANBAN_COLUMNS.map(col=>{
+    const list=buckets[col.id]||[];
+    const cards=list.length?list.map(adminKanbanCardHtml).join(''):'<p class="kanban-col-empty">Пусто</p>';
+    const closedMore=col.id==='closed'&&hiddenClosed>0
+      ?`<button type="button" class="secondary kanban-closed-more">Ещё ${hiddenClosed} (старше ${ADMIN_KANBAN_CLOSED_DAYS} дн.)</button>`
+      :'';
+    return `<section class="kanban-col" data-kanban-col="${col.id}">
+      <header class="kanban-col-head"><span>${esc(col.title)}</span><b>${list.length}</b></header>
+      <div class="kanban-col-body">${cards}${closedMore}</div>
+    </section>`;
+  }).join('');
+  return `<div class="orders-board-head">
+    <p class="cat-panel-hint">Канбан: перетаскивание статусов — позже. Нажмите карточку или «Карточка» для деталей. Бейдж «Партнёр» — забрали с биржи.</p>
+  </div>
+  <div class="kanban-board-wrap"><div class="kanban-board">${cols}</div></div>`;
+}
+function wireAdminOrderListActions(orders){
+  document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
+  document.querySelectorAll('#admin-list .copy-order').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    openAdminCreateScreen({ fromOrderId:b.dataset.id });
+  });
+  document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    setAdminNav('exchange');
+  });
+  document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    publishToExchange(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .in-book-ok').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    confirmOrderBooking(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .in-book-no').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    rejectOrderBooking(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .ret-exchange').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    returnOrderToExchange(b.dataset.id);
+  });
+  document.querySelectorAll('#admin-list .cancel-order').forEach(b=>b.onclick=(e)=>{
+    e.stopPropagation();
+    if(!confirm('Отменить этот заказ? Он пропадёт из «Назначен» / «В работе».')) return;
+    if(cancelOrder(b.dataset.id, 'Отменён из списка')) renderAdmin();
+  });
+  document.querySelectorAll('#admin-list .kanban-card[data-order-card]').forEach(card=>{
+    card.onclick=e=>{
+      if(e.target.closest('button')) return;
+      openDetail(card.dataset.orderCard);
+    };
+  });
+  const closedMore=$('admin-list')&&$('admin-list').querySelector('.kanban-closed-more');
+  if(closedMore){
+    closedMore.onclick=e=>{
+      e.stopPropagation();
+      state.adminKanbanClosedExpanded=true;
+      renderAdmin();
+    };
+  }
+  wireAdminOrderDeleteUi(orders||[]);
+}
 function renderAdminDebounced(){
   clearTimeout(renderAdminDebounceTimer);
   renderAdminDebounceTimer=setTimeout(()=>renderAdmin(), 100);
@@ -2933,11 +3103,19 @@ function renderAdmin(){
     billBanner.style.display=txt?'block':'none';
   }
   updateAdminChrome();
+  syncAdminOrdersViewToggle();
   if(state.adminFilter==='eto'){
     $('admin-list').innerHTML=renderAdminEtoBoard();
     return;
   }
   const orders=filteredOrders();
+  if(adminOrdersView()==='kanban'){
+    $('admin-list').innerHTML=orders.length
+      ?renderAdminKanbanBoard(orders)
+      :`<div class="empty">${(state.adminFilter||'all')==='inbox'?'Входящих нет':'Нет заявок для канбана'}</div>`;
+    wireAdminOrderListActions(orders);
+    return;
+  }
   pruneAdminOrderSelection(orders.map(o=>o.id).filter(Boolean));
   alignAdminOrdersCalToData(orders);
   if(state.adminFilter==='exchange'){
@@ -3112,41 +3290,11 @@ function renderAdmin(){
       toggleGroup(card.dataset.groupCard);
     };
   });
-  document.querySelectorAll('#admin-list .open-rates').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); openDetail(b.dataset.id); });
-  document.querySelectorAll('#admin-list .copy-order').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    openAdminCreateScreen({ fromOrderId:b.dataset.id });
-  });
   document.querySelectorAll('#admin-list tr[data-id]').forEach(tr=>tr.onclick=e=>{
     if(e.target.closest('.order-pick,input')) return;
     openDetail(tr.dataset.id);
   });
-  document.querySelectorAll('#admin-list .go-exchange').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    setAdminNav('exchange');
-  });
-  document.querySelectorAll('#admin-list .pub-exchange').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    publishToExchange(b.dataset.id);
-  });
-  document.querySelectorAll('#admin-list .in-book-ok').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    confirmOrderBooking(b.dataset.id);
-  });
-  document.querySelectorAll('#admin-list .in-book-no').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    rejectOrderBooking(b.dataset.id);
-  });
-  document.querySelectorAll('#admin-list .ret-exchange').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    returnOrderToExchange(b.dataset.id);
-  });
-  document.querySelectorAll('#admin-list .cancel-order').forEach(b=>b.onclick=(e)=>{
-    e.stopPropagation();
-    if(!confirm('Отменить этот заказ? Он пропадёт из «Назначен» / «В работе».')) return;
-    if(cancelOrder(b.dataset.id, 'Отменён из списка')) renderAdmin();
-  });
-  wireAdminOrderDeleteUi(filtOrders);
+  wireAdminOrderListActions(filtOrders);
 }
 function fillCreateFleetSelects(){
   const coId=(($('create-own-company')||{}).value)||'';
