@@ -257,6 +257,7 @@ async function loginCustomer(){
   const seen=loadCustomerOrderSeen();
   customerOrders().forEach(o=>{ if(o&&o.id) seen[o.id]=customerOrderStatusTag(o); });
   saveCustomerOrderSeen(seen);
+  loadCustomerOrderDraftRaw();
   showCustomerPortal();
 }
 
@@ -1790,11 +1791,40 @@ function loadCustomerOrderDraftRaw(){
       localStorage.removeItem(key);
       return null;
     }
+    if(!customerOrderDraftHasContent(raw)){
+      localStorage.removeItem(key);
+      return null;
+    }
     return raw;
   }catch(_){ return null; }
 }
+function customerChatDraftIsSubmitted(chat){
+  return (chat&&chat.messages||[]).some(m=>m&&m.stepId==='submitted');
+}
+function customerDraftLikelySubmitted(draft){
+  if(!draft||!currentCustomer) return false;
+  const draftTs=Date.parse(draft.savedAt||0)||0;
+  const f=draft.fields||{};
+  const load=String(f['cust-load']||'').trim();
+  const unload=String(f['cust-unload']||'').trim();
+  const cargo=String(f['cust-cargo-text']||'').trim();
+  return customerOrders().some(o=>{
+    if(!o||o.cancelledAt) return false;
+    const created=Date.parse(o.createdAt||0)||0;
+    if(draftTs && created>0 && created+120000<draftTs) return false;
+    if(load && unload
+      && String(o.loadingAddress||'').trim()===load
+      && String(o.unloadingAddress||'').trim()===unload) return true;
+    if(cargo && load
+      && String(o.cargoDescription||'').trim()===cargo
+      && String(o.loadingAddress||'').trim()===load) return true;
+    return false;
+  });
+}
 function customerOrderDraftHasContent(d){
   if(!d) return false;
+  if(customerChatDraftIsSubmitted(d.chat)) return false;
+  if(customerDraftLikelySubmitted(d)) return false;
   const f=d.fields||{};
   const textKeys=['cust-cargo-text','cust-load','cust-unload','cust-weight-value','cust-load-note','cust-unload-note',
     'cust-loading-contact-name','cust-loading-contact-phone','cust-unloading-contact-name','cust-unloading-contact-phone',
@@ -1847,6 +1877,7 @@ function collectCustomerOrderDraft(){
 }
 function persistCustomerOrderDraft(){
   if(customerDraftApplying || !currentCustomer) return;
+  if(customerChatDraftIsSubmitted(customerChat)) return;
   const key=customerOrderDraftKey();
   if(!key) return;
   try{
@@ -2115,12 +2146,11 @@ function customerPortalFormIsEmpty(){
 function maybePromptCustomerOrderDraft(){
   if(!currentCustomer) return;
   const draft=loadCustomerOrderDraftRaw();
-  if(!draft || !customerOrderDraftHasContent(draft)) return;
-  if(customerDraftPromptLoaded && customerDraftPromptLoaded===draft.savedAt) return;
-  if(customerPortalFormIsEmpty()){
-    applyCustomerOrderDraft(draft);
+  if(!draft || !customerOrderDraftHasContent(draft)){
+    hideCustomerDraftBanner();
     return;
   }
+  if(customerDraftPromptLoaded && customerDraftPromptLoaded===draft.savedAt) return;
   showCustomerDraftBanner(draft);
 }
 
@@ -2131,13 +2161,17 @@ function saveCustomerChatState(){
       messages:customerChat.messages, stepIndex:customerChat.stepIndex,
       data:customerChat.data, summaryReady:customerChat.summaryReady
     }));
-    scheduleCustomerOrderDraftSave();
+    if(!customerChatDraftIsSubmitted(customerChat)) scheduleCustomerOrderDraftSave();
   }catch(_){}
 }
 function restoreCustomerChatState(){
   try{
     const raw=JSON.parse(sessionStorage.getItem(CUST_CHAT_STATE_KEY)||'null');
     if(!raw||!Array.isArray(raw.messages)||!raw.messages.length) return false;
+    if(customerChatDraftIsSubmitted(raw)){
+      clearCustomerChatState();
+      return false;
+    }
     customerChat={messages:raw.messages, stepIndex:+raw.stepIndex||0, data:customerChatMigrateData(raw.data||{}), summaryReady:!!raw.summaryReady};
     return true;
   }catch(_){ return false; }
