@@ -187,11 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-<<<<<<< HEAD
 const APP_BUILD="2026-09-16-release";
-=======
-const APP_BUILD="2026-09-16-logist-assign-ux";
->>>>>>> origin/cursor/logist-assign-ux-f6d2
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
