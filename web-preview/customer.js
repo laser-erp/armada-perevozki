@@ -1354,10 +1354,14 @@ function updateCustomerPricePreview(){
   const payLabel=typeof customerCarrierPriceLabel==='function'&&carrier?customerCarrierPriceLabel(carrier):'';
   const payHint=typeof customerCarrierPriceHint==='function'&&carrier?customerCarrierPriceHint(carrier):'';
   const feeNote=draft.fulfillment!=='direct'?' (ставка логиста в цене)':'';
+  const tariffLine=carrier
+    ?`Тариф «${esc(carrier.name)}»${s.summary?`: ${esc(s.summary)}`:''}`
+    :(s.summary?esc(s.summary):'');
   box.innerHTML=`
     <div class="calc-row"><span>Ориентир / минимум</span><span><b>${fmt(clientAmount)} ₽</b>${feeNote}</span></div>
     <div class="calc-row"><span>К оплате перевозчику</span><span><b>${fmt(carrierAmount)} ₽</b>${payLabel?` (${payLabel})`:''}</span></div>
-    <div class="hint">${esc(bits.concat([s.summary||'']).filter(Boolean).join(' · '))}</div>
+    ${tariffLine?`<div class="hint"><strong>Расчёт:</strong> ${tariffLine}</div>`:''}
+    <div class="hint">${esc(bits.filter(Boolean).join(' · '))}</div>
     <div class="hint">${esc(payHint||'Это ориентир. Через логиста в сумму входит его ставка за срочный подбор.')}</div>`;
   const priceEl=$('cust-price');
   if(priceEl && priceEl.dataset.auto!=='0'){
@@ -1447,6 +1451,7 @@ function renderCustomerPortal(){
         <p class="meta">${esc(routeText(o))}</p>
         <p class="meta">${esc(o.ownCompanyName||'Диспетчер')}${bookLine?` · ${esc(bookLine)}`:''}${o.fulfillment==='direct'?' · свой парк':''}</p>
         <p class="meta">${o.executorType==='partner'?'':(o.driverName&&o.driverName!=='Биржа'&&o.driverName!=='Диспетчер'?`Водитель: ${esc(o.driverName)} · `:'')}${o.pricePending?'Цена: уточнит диспетчер · ':o.priceForClient?`Цена: ${fmt(o.priceForClient)} ₽ · `:''}${esc(dateTime(o.createdAt))}</p>
+        ${o.priceQuoteSummary?`<p class="meta">Тариф ${esc(o.priceTariffCarrierName||o.ownCompanyName||'перевозчика')}: ${esc(o.priceQuoteSummary)}</p>`:''}
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
         ${typeof customerDriverDocsConfirmHtml==='function'?customerDriverDocsConfirmHtml(o):''}
         <p class="meta"><button type="button" class="hint cust-goto-docs" style="border:0;background:transparent;cursor:pointer;padding:0;font-size:inherit">Документы → «Бух доки»</button></p>
@@ -1477,7 +1482,7 @@ function renderCustomerInvoicesList(){
     return `<div class="card cust-invoice-row" style="margin-bottom:8px">
       <h3 style="margin:0 0 4px;font-size:.9rem">Счёт № ${esc(inv.number)} · заявка № ${esc(inv.orderSeq||'—')}</h3>
       <p class="meta">${esc(inv.route||'')} · ${amt}</p>
-      <button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Скачать счёт с QR</button>
+      <button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}" data-order-id="${esc(inv.orderId||'')}">Открыть счёт с QR</button>
     </div>`;
   }).join(''):'<div class="empty">Счета появятся после отправки заявки</div>';
   customerWireInvoiceLinks(list);
@@ -1489,7 +1494,7 @@ function renderCustomerDocsByOrder(){
   const orders=customerOrders().slice(0,20);
   list.innerHTML=orders.length?orders.map(o=>{
     const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(o.id):null;
-    const invLine=inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}">Счёт № ${esc(inv.number)} · скачать</button></p>`:'';
+    const invLine=inv?`<p class="meta cust-invoice-row"><button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}" data-order-id="${esc(o.id)}">Счёт № ${esc(inv.number)} · открыть</button></p>`:'';
     return `<div class="card" style="margin-bottom:8px">
       <h3 style="margin:0 0 4px;font-size:.9rem">Заявка № ${esc(o.sequentialNumber||'—')} · ${esc(routeText(o))}</h3>
       ${invLine}
@@ -1674,6 +1679,9 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     emptyKmBefore:0,
     pricePending:!!pricePending || offered==null,
     priceForClient:offered||null,
+    priceQuoteSummary:quote&&quote.summary||null,
+    priceTariffCarrierId:carrier&&carrier.id||null,
+    priceTariffCarrierName:carrier&&carrier.name||null,
     rateCash:offered||null,
     paymentForm:typeof customerCarrierPaymentForm==='function'?customerCarrierPaymentForm(carrier):'withoutVat',
     transportApp:null
@@ -1869,7 +1877,10 @@ function customerSubmitSuccessMessage(invoice, order){
   const who=name?`С вами, ${name}, `:''; 
   let html=`${who}приятно иметь дело. Документы по заявке:`;
   html+=`<ul class="cust-doc-submit-list">`;
-  html+=`<li><strong>Счёт</strong> — ${invoice?'готов, скачайте ниже':'сформируется автоматически'}</li>`;
+  html+=`<li><strong>Счёт</strong> — ${invoice?'сформирован, откройте ниже':'сформируется автоматически'}</li>`;
+  if(order&&order.priceQuoteSummary){
+    html+=`<li><strong>Тариф</strong> — ${esc(order.priceTariffCarrierName||order.ownCompanyName||'перевозчик')}: ${esc(order.priceQuoteSummary)}</li>`;
+  }
   const co=currentCustomer&&findCompanyById(currentCustomer.companyId);
   const fcSt=typeof customerFrameworkContractStatus==='function'?customerFrameworkContractStatus(co):'none';
   html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (вкладка «Бух доки»)':'будет подготовлен'}</li>`;
@@ -1878,7 +1889,7 @@ function customerSubmitSuccessMessage(invoice, order){
   html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке${order&&order.shipperSameAsCustomer===false?' (отдельная ссылка отправится грузоотправителю)':''}, QR у водителя в пути</li>`;
   html+=`</ul>`;
   if(invoice){
-    html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}">Скачать счёт №${esc(invoice.number)}</button>`;
+    html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}" data-order-id="${esc(order&&order.id||'')}">Открыть счёт №${esc(invoice.number)}</button>`;
   }
   if(order&&customerContactEmail(order)){
     html+=`<button type="button" class="secondary cust-doc-email-all" data-order-id="${esc(order.id)}" style="margin-top:6px">Отправить документы на email</button>`;
@@ -1890,10 +1901,13 @@ function customerSubmitSuccessMessage(invoice, order){
 }
 function customerWireInvoiceLinks(root){
   (root||document).querySelectorAll('[data-invoice-id]').forEach(btn=>{
+    if(btn.dataset.invoiceWired) return;
+    btn.dataset.invoiceWired='1';
     btn.onclick=e=>{
       e.preventDefault();
       const id=btn.getAttribute('data-invoice-id');
-      if(typeof openCustomerInvoice==='function') openCustomerInvoice(id);
+      const orderId=btn.getAttribute('data-order-id');
+      if(typeof openCustomerInvoice==='function') openCustomerInvoice(id, orderId);
       else if(typeof downloadCustomerInvoice==='function') downloadCustomerInvoice(id);
     };
   });
@@ -3000,6 +3014,9 @@ function customerChatSummaryHtml(){
   const d=customerChat.data;
   const km=customerRouteKm>0?`≈ ${customerRouteKm} км`:null;
   const price=customerChatPriceHint();
+  const draft=typeof buildCustomerDraftFromForm==='function'?buildCustomerDraftFromForm():null;
+  const carrier=typeof customerCarrierForForm==='function'?customerCarrierForForm():null;
+  const s=draft&&typeof suggestCustomerOrderPrice==='function'?suggestCustomerOrderPrice(draft):null;
   const rows=[
     {id:'cargo', label:'Груз', val:customerChatCargoSummaryVal(d), html:true},
     {id:'when', label:'Когда', val:customerChatWhenLabel()||'—', html:false},
@@ -3011,7 +3028,7 @@ function customerChatSummaryHtml(){
     {id:'body', label:'Кузов', val:d.bodyVtype?customerChatBodyLabel(d.bodyVtype):'—', html:false},
     {id:'loadMethod', label:'Погрузка', val:(d.loadMethods||[]).length?customerChatMethodsLabel(d.loadMethods):'—', html:false},
     {id:'unloadMethod', label:'Выгрузка', val:(d.unloadMethods||[]).length?customerChatMethodsLabel(d.unloadMethods):'—', html:false},
-    {id:'price', label:'Ориентир', val:price?`<strong>${fmt(price)} ₽</strong>`:'уточнит перевозчик', html:true}
+    {id:'price', label:'Ориентир', val:price?`<strong>${fmt(price)} ₽</strong>${carrier&&s&&s.summary?`<br><span class="hint">Тариф «${esc(carrier.name)}»: ${esc(s.summary)}</span>`:''}`:'уточнит перевозчик', html:true}
   ];
   return `<div class="chat-summary"><b>Сводка</b>${
     rows.map(r=>`<div class="chat-summary-row"><span>${esc(r.label)}</span><span>${r.html?r.val:esc(r.val)}${r.id!=='price'?`<button type="button" class="chat-summary-edit" data-chat-edit="${r.id}">Изменить</button>`:''}</span></div>`).join('')
@@ -3305,6 +3322,8 @@ function customerChatRenderAll(){
   customerChatRenderMessages();
   customerChatRenderWidgets();
   customerChatUpdateCompose();
+  if(typeof customerWireInvoiceLinks==='function') customerWireInvoiceLinks($('cust-chat-thread'));
+  if(typeof wireCustomerOrderDocuments==='function') wireCustomerOrderDocuments($('cust-chat-thread'));
 }
 function customerChatShowCompose(step){
   if(!step||customerChat.summaryReady) return false;

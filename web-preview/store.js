@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-15-kontur-signup-btn";
+const APP_BUILD="2026-09-16-customer-invoice-tariff";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2884,12 +2884,14 @@ async function mergeRemoteAheadOnPush(remote){
   if(remoteEpoch<=localEpoch) return {aborted:false};
   const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
   const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+  const localInvoices=(state.invoices||[]).map(i=>structuredClone(i));
   const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
   applyPayload(remote, {remoteSeq:true, remoteWinsAuth:true});
   let merged=false;
   if(mergeLocalShifts(localShifts)) merged=true;
   if(liveShift && mergeLocalShifts([liveShift])) merged=true;
   if(mergeLocalOrders(localOrders)) merged=true;
+  if(typeof mergeLocalInvoices==='function'&&mergeLocalInvoices(localInvoices)) merged=true;
   if(healOrphanOrdersIntoShifts()) merged=true;
   if(migrateEtoFromMessages()) merged=true;
   if(merged){
@@ -3043,6 +3045,7 @@ async function pullRemoteUpdates(reason){
     if(remoteEpoch<=localEpoch) return false;
     const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
     const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+    const localInvoices=(state.invoices||[]).map(i=>structuredClone(i));
     const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
     const inDriver=!!DRIVER && !!document.querySelector('#driver.show');
     const inAdmin=!!currentAdmin && !inDriver;
@@ -3057,6 +3060,7 @@ async function pullRemoteUpdates(reason){
     mergeLocalShifts(localShifts);
     if(liveShift) mergeLocalShifts([liveShift]);
     mergeLocalOrders(localOrders);
+    if(typeof mergeLocalInvoices==='function') mergeLocalInvoices(localInvoices);
     healOrphanOrdersIntoShifts();
     migrateEtoFromMessages();
     localStorage.setItem(KEY, JSON.stringify(snapshot()));
@@ -3144,6 +3148,7 @@ if(typeof document!=='undefined'){
         unionDeletedOrderIds(parsed.deletedOrderIds||[]);
         const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
         const localOrders=(state.orders||[]).map(o=>structuredClone(o));
+        const localInvoices=(state.invoices||[]).map(i=>structuredClone(i));
         const liveShift=state.shift && !state.shift.endedAt ? structuredClone(state.shift) : null;
         applyPayload(parsed, {remoteSeq:true});
         if(typeof mergeLocalShifts==='function'){
@@ -3151,6 +3156,7 @@ if(typeof document!=='undefined'){
           if(liveShift) mergeLocalShifts([liveShift]);
         }
         if(typeof mergeLocalOrders==='function') mergeLocalOrders(localOrders);
+        if(typeof mergeLocalInvoices==='function') mergeLocalInvoices(localInvoices);
         if(typeof healOrphanOrdersIntoShifts==='function') healOrphanOrdersIntoShifts();
         if(typeof migrateEtoFromMessages==='function') migrateEtoFromMessages();
         localStorage.setItem(KEY, JSON.stringify(snapshot()));

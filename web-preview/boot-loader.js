@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-15-kontur-signup-btn';
+  var APP_BUILD = '2026-09-16-customer-invoice-tariff';
 
   window.__armadaBootDone = false;
 
