@@ -24,11 +24,16 @@ function findAdminByInnAndPin(innRaw, pin){
   const spaceIds=spaceIdsForLoginInn(inn);
   if(!spaceIds.size) return null;
   const matches=(state.admins||[]).filter(a=>{
-    if(a.loginBy==='phone') return false;
+    // Супер-админ с loginBy=phone всё равно может войти по ИНН организации
+    if(a.loginBy==='phone' && !a.isSuper) return false;
     if(String(a.pin||'').trim()!==pinStr) return false;
     return !!(a.spaceId && spaceIds.has(a.spaceId));
   });
-  return matches.length===1 ? matches[0] : null;
+  if(matches.length===1) return matches[0];
+  // Супер без spaceId — вход по ИНН любой нашей фирмы (единственный супер с этим PIN)
+  const loose=(state.admins||[]).filter(a=>a.isSuper && String(a.pin||'').trim()===pinStr);
+  if(loose.length===1) return loose[0];
+  return null;
 }
 function adminLoginPhone(a){
   if(!a) return '';
@@ -60,13 +65,29 @@ function findAdminByPhoneAndPin(phoneRaw, pin){
 }
 function findAdminByLoginAndPin(loginRaw, pin){
   const raw=String(loginRaw||'').trim();
-  if(!raw) return null;
+  const pinStr=String(pin||'').trim();
+  if(!raw || !pinStr) return null;
   if(looksLikeAdminPhoneInput(raw)){
     const byPhone=findAdminByPhoneAndPin(raw, pin);
     if(byPhone) return byPhone;
+    const phone=typeof formatPhone==='function'?formatPhone(raw):String(raw||'').trim();
+    const superByPhone=(state.admins||[]).filter(a=>{
+      if(!a.isSuper || String(a.pin||'').trim()!==pinStr) return false;
+      return adminLoginPhone(a)===phone;
+    });
+    if(superByPhone.length===1) return superByPhone[0];
   }
   const inn=normalizeLoginInn(raw);
-  if(inn && (inn.length===10 || inn.length===12)) return findAdminByInnAndPin(inn, pin);
+  if(inn && (inn.length===10 || inn.length===12)){
+    const byInn=findAdminByInnAndPin(inn, pin);
+    if(byInn) return byInn;
+    const spaceIds=spaceIdsForLoginInn(inn);
+    const superByInn=(state.admins||[]).filter(a=>{
+      if(!a.isSuper || String(a.pin||'').trim()!==pinStr) return false;
+      return !!(a.spaceId && spaceIds.has(a.spaceId));
+    });
+    if(superByInn.length===1) return superByInn[0];
+  }
   return findAdminByPhoneAndPin(raw, pin);
 }
 function paintOwnerFiltersBox(box, onPick){
@@ -486,13 +507,9 @@ async function loginAdmin(){
     if(pinErr) pinErr.textContent='ИНН: 10 цифр для организации или 12 для ИП';
     return;
   }
-  const admPre=findAdminByLoginAndPin(loginRaw, pin);
   try{
     if(navigator.onLine!==false && typeof fetchServerState==='function'){
-      const rec=await fetchServerState(3500, {
-        pin,
-        meta: admPre ? {id: admPre.id, spaceId: admPre.spaceId, role:'admin'} : {role:'admin'}
-      });
+      const rec=await fetchServerState(8000, { pin, meta: { role:'admin' } });
       if(rec&&rec.payload){
         pbRecordId=rec.id;
         mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
@@ -507,7 +524,11 @@ async function loginAdmin(){
   if(!adm){
     if(pinErr){
       if(looksLikeAdminPhoneInput(loginRaw)){
-        pinErr.textContent='Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
+        const phone=typeof formatPhone==='function'?formatPhone(loginRaw):String(loginRaw||'').trim();
+        const phoneKnown=(state.admins||[]).some(a=>adminLoginPhone(a)===phone);
+        pinErr.textContent=phoneKnown
+          ? 'Неверный PIN для этого телефона'
+          : 'Телефон не найден или неверный PIN. Вход по телефону включает супер-админ в «Активность».';
       }else{
         pinErr.textContent=spaceIdsForLoginInn(inn).size
           ? 'Неверный PIN для этой организации'
@@ -532,7 +553,9 @@ async function loginAdmin(){
   startPresenceHeartbeat();
   armadaApiLogin(pin, currentAdmin).finally(()=>persist());
   updateAdminChrome();
-  show('admin');
+  if(typeof clearEntrySkin==='function') clearEntrySkin();
+  if(typeof finishSplashOnce==='function') finishSplashOnce('admin');
+  else show('admin');
   renderAdmin();
   seedAdminInboxNotifySnapshot();
   syncAdminNotifyToggle();
@@ -1786,6 +1809,11 @@ function canAdminSeeShift(s){
   const my=currentOwnCompany();
   if(my && s.ownCompanyId && s.ownCompanyId===my.id) return true;
   if(currentAdmin && s.ownerAdminId && s.ownerAdminId===currentAdmin.id) return true;
+  const sid=typeof shiftSpaceId==='function'?shiftSpaceId(s):s.spaceId;
+  if(currentAdmin && sid && sid===currentAdmin.spaceId) return true;
+  if(my && s.vehiclePlate && typeof fleetVehiclesForCompany==='function'){
+    if(fleetVehiclesForCompany(my.id).some(v=>v.plate===s.vehiclePlate)) return true;
+  }
   // смена водителя своей фирмы
   if(my && (state.drivers||[]).some(d=>samePersonName(d.name, s.driverName||'') && d.companyId===my.id)) return true;
   return false;
@@ -2418,10 +2446,16 @@ function renderAdminEtoBoard(){
     const openOrders=(s.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt).length
       || (state.orders||[]).filter(o=>!o.closedAt && !o.cancelledAt && o.driverName===s.driverName && o.vehiclePlate===s.vehiclePlate).length;
     return `<div class="eto-card ${ok?'done':'wait'}">
-      <h3>${esc(s.driverName||'Водитель')} · ${esc(s.vehiclePlate||'без авто')}</h3>
+      <div class="eto-card-head">
+        <div class="eto-badges">
+          <span class="eto-badge shift-open">Смена открыта</span>
+          <span class="eto-badge ${ok?'shift-eto-done':'shift-eto-wait'}">${ok?'ЕТО пройден ✓':`ЕТО: ${esc(step)}`}</span>
+        </div>
+        <h3>${esc(s.driverName||'Водитель')} · ${esc(s.vehiclePlate||'без авто')}</h3>
+      </div>
       <p>Смена с ${esc(dateTime(s.startedAt))}${s.ownerAdminName && isSuperAdmin()?` · ${esc(s.ownerAdminName)}`:''}</p>
       <p>Фирма: ${esc(firm)}${ph?` · <a href="tel:${esc(ph)}" style="color:var(--accent)">${esc(ph)}</a>`:''}</p>
-      <div class="eto-status ${ok?'ok':'wait'}">${ok?'ЕТО пройден':esc(step)}</div>
+      <div class="eto-status ${ok?'ok':'wait'}">${ok?'ЕТО пройден ✓':`В процессе: ${esc(step)}`}</div>
       <div class="eto-grid">
         <span>Авто ${etoMark(!!s.vehiclePlate)}</span>
         <span>Одометр ${etoMark(s.odometer!=null)} ${s.odometer!=null?`<b>${esc(s.odometer)}</b>`:''}</span>

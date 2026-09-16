@@ -202,7 +202,16 @@
     .eto-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:12px 14px;box-shadow:var(--shadow-sm)}
     .eto-card.wait{border-color:rgba(245,158,11,.45)}
     .eto-card.done{border-color:rgba(16,185,129,.35)}
-    .eto-card h3{margin:0 0 4px;font-size:.95rem;font-weight:700}
+    .eto-card-head{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
+    .eto-badges{display:flex;flex-wrap:wrap;gap:6px}
+    .eto-badge{
+      display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;
+      font-size:.72rem;font-weight:700;line-height:1.2;border:1px solid var(--border)
+    }
+    .eto-badge.shift-open{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.35);color:#2563EB}
+    .eto-badge.shift-eto-done{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.4);color:#059669}
+    .eto-badge.shift-eto-wait{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#D97706}
+    .eto-card h3{margin:0;font-size:.95rem;font-weight:700}
     .eto-card p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.4}
     .eto-status{
       display:inline-flex;align-items:center;margin-top:8px;padding:4px 8px;border-radius:var(--radius);
