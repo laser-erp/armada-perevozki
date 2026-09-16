@@ -578,6 +578,12 @@
           <button type="button" class="admin-top-notify" id="admin-notify-toggle" title="Уведомления о входящих заявках">🔔</button>
           <button type="button" class="admin-top-cta" id="admin-new">+ Заказ</button>
         </header>
+        <div class="admin-orders-view-bar">
+          <div class="admin-view-toggle" id="admin-orders-view-toggle" role="tablist" aria-label="Вид заказов">
+            <button type="button" data-orders-view="list" class="on">Список</button>
+            <button type="button" data-orders-view="kanban">Канбан</button>
+          </div>
+        </div>
         <div class="filters" id="admin-filters">
           <button data-filter="all" class="on">Все</button>
           <button data-filter="inbox" class="admin-filter-inbox">Входящие<span class="admin-filter-badge" id="admin-inbox-badge" hidden></span></button>

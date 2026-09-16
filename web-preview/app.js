@@ -2760,6 +2760,15 @@ function statusText(o){
   }
   return 'Назначен';
 }
+/** Колонка канбана логиста (одна на заказ). */
+function adminKanbanColumnKey(o){
+  if(!o||o.cancelledAt||(o.closedAt&&o.cancelReason)) return null;
+  if(looksClosedOrder(o)) return 'closed';
+  if(o.onExchange&&o.startOdometer==null) return 'exchange';
+  if(typeof isLogistInboxOrder==='function'&&isLogistInboxOrder(o)) return 'inbox';
+  if(o.startOdometer!=null||o.departOdometer!=null) return 'progress';
+  return 'assigned';
+}
 /** Снять все связи заказа перед удалением из state.orders. */
 function detachOrderReferences(deletedOrders){
   const list=(deletedOrders||[]).filter(o=>o&&o.id);
