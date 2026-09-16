@@ -4479,6 +4479,64 @@ function validateFleetTrailer(trailer){
   }
   return true;
 }
+function readFleetVehicleRowFromDom(i, prev){
+  const v=prev||((state.vehicles||[])[i]);
+  if(!v) return null;
+  let cons=+(String((($('veh-'+i)||{}).value||'')).replace(',','.'));
+  if(!(cons>0)) cons=(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20;
+  const trailer=readFleetTrailerFromDom(
+    document.getElementById('veh-trailer-'+i),
+    document.getElementById('veh-trailer-plate-'+i)
+  );
+  if(!validateFleetTrailer(trailer)) return null;
+  return normalizeFleetVehicle(Object.assign({}, v, {
+    consumptionPer100Km:cons,
+    bodyTypeId:(($('veh-body-'+i)||{}).value||'').trim()||null,
+    payloadTons:numOrNull(($('veh-pay-'+i)||{}).value),
+    hasTrailer:trailer.hasTrailer,
+    trailerPlate:trailer.trailerPlate,
+    bodyLengthM:numOrNull(($('veh-l-'+i)||{}).value),
+    bodyWidthM:numOrNull(($('veh-w-'+i)||{}).value),
+    bodyHeightM:numOrNull(($('veh-h-'+i)||{}).value)
+  }));
+}
+function saveFleetVehicleRow(i){
+  const updated=readFleetVehicleRowFromDom(i);
+  if(!updated) return false;
+  state.vehicles[i]=updated;
+  bumpDataEpoch('save-vehicle');
+  persist();
+  flashCatOk();
+  openCatalogs();
+  return true;
+}
+function syncFleetVehiclesFromEditor(companyId, edited, meta){
+  if(!companyId||!Array.isArray(edited)) return;
+  const companyName=meta&&meta.companyName||null;
+  const spaceId=meta&&meta.spaceId||null;
+  const savedIds=new Set();
+  edited.forEach(ev=>{
+    if(!ev||!ev.plate) return;
+    const prev=(state.vehicles||[]).find(x=>x.id===ev.id)
+      || fleetVehiclesForCompany(companyId).find(x=>x.plate===ev.plate);
+    const merged=normalizeFleetVehicle(Object.assign({}, prev||{}, ev, {
+      id:(prev&&prev.id)||ev.id||uuid(),
+      companyId,
+      companyName:companyName||(prev&&prev.companyName)||null,
+      spaceId:spaceId||(prev&&prev.spaceId)||null,
+      consumptionPer100Km:(prev&&+prev.consumptionPer100Km>0)?+prev.consumptionPer100Km:20
+    }));
+    if(!merged) return;
+    savedIds.add(merged.id);
+    const idx=(state.vehicles||[]).findIndex(x=>x.id===merged.id || (x.plate===merged.plate && x.companyId===companyId));
+    if(idx>=0) state.vehicles[idx]=merged;
+    else state.vehicles.push(merged);
+  });
+  state.vehicles=(state.vehicles||[]).filter(v=>{
+    if(v.companyId!==companyId) return true;
+    return savedIds.has(v.id);
+  });
+}
 function wireFleetTrailerToggles(root){
   (root||document).querySelectorAll('[data-veh-trailer-toggle]').forEach(cb=>{
     const key=cb.dataset.vehTrailerToggle;
@@ -4601,7 +4659,6 @@ function openCatalogs(){
       <div class="item-top">
         <div class="item-name" title="${esc(coName||v.plate)}">${esc(v.plate)}</div>
         <div class="item-actions" style="flex:0 0 auto;gap:4px">
-          <button type="button" class="icon-btn ok" data-save-veh="${i}" title="Сохранить">✓</button>
           <button type="button" class="icon-btn danger" data-del-veh="${i}" title="Удалить">×</button>
         </div>
       </div>
@@ -4616,10 +4673,11 @@ function openCatalogs(){
         <input id="veh-l-${i}" inputmode="decimal" placeholder="Д" title="Длина, м" value="${v.bodyLengthM??''}" />
         <input id="veh-w-${i}" inputmode="decimal" placeholder="Ш" title="Ширина, м" value="${v.bodyWidthM??''}" />
         <input id="veh-h-${i}" inputmode="decimal" placeholder="В" title="Высота, м" value="${v.bodyHeightM??''}" />
-        <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km}" />
+        <input id="veh-${i}" inputmode="decimal" placeholder="л" title="л/100" value="${v.consumptionPer100Km??''}" />
         <span class="hint" style="margin:0">л/100</span>
       </div>
-      <button type="button" class="primary cat-add-btn" data-open-veh="${esc(vid)}" style="margin-top:2px">Ремонт и ТО</button>
+      <button type="button" class="primary cat-add-btn" data-save-veh="${i}" style="margin-top:6px">Сохранить</button>
+      <button type="button" class="secondary cat-add-btn" data-open-veh="${esc(vid)}" style="margin-top:4px">Ремонт и ТО</button>
     </div>`;
   }).join('') || `<div class="hint">Нет авто — добавьте ниже</div>`;
 
@@ -4677,7 +4735,7 @@ function openCatalogs(){
           ? `<label class="svc-full">Компания<select id="veh-company-pick">${fleetList.map(c=>`<option value="${esc(c.id)}" ${active&&c.id===active.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select></label>`
           : '';
         const hint=active
-          ? `Авто «${esc(active.name)}»: тип кузова, тоннаж, прицеп — в карточке или ниже. «Ремонт и ТО» — сервис.`
+          ? `Авто «${esc(active.name)}»: тип кузова, тоннаж, прицеп — ниже. После изменений нажмите «Сохранить». «Ремонт и ТО» — сервис.`
           : (allCabinets?'Выберите компанию с парком':'Сначала нужна ваша фирма');
         return `${firmPick}<p class="cat-panel-hint">${hint}</p>`;
       })()}
@@ -4893,14 +4951,18 @@ function openCatalogs(){
     if(isOwn&&c.id){
       vehicles=fleetVehiclesForCompany(c.id).map(v=>({
         id:v.id, plate:v.plate, makeModel:v.makeModel||'',
-        payloadTons:v.payloadTons, bodyLengthM:v.bodyLengthM, bodyWidthM:v.bodyWidthM, bodyHeightM:v.bodyHeightM
+        bodyTypeId:v.bodyTypeId||null, payloadTons:v.payloadTons,
+        hasTrailer:!!v.hasTrailer, trailerPlate:v.trailerPlate||'',
+        bodyLengthM:v.bodyLengthM, bodyWidthM:v.bodyWidthM, bodyHeightM:v.bodyHeightM
       }));
     }
     if(isCarr&&c.id&&!isOwn){
       const fleet=fleetVehiclesForCompany(c.id);
       if(fleet.length) vehicles=fleet.map(v=>({
         id:v.id, plate:v.plate, makeModel:v.makeModel||'',
-        payloadTons:v.payloadTons, bodyLengthM:v.bodyLengthM, bodyWidthM:v.bodyWidthM, bodyHeightM:v.bodyHeightM
+        bodyTypeId:v.bodyTypeId||null, payloadTons:v.payloadTons,
+        hasTrailer:!!v.hasTrailer, trailerPlate:v.trailerPlate||'',
+        bodyLengthM:v.bodyLengthM, bodyWidthM:v.bodyWidthM, bodyHeightM:v.bodyHeightM
       }));
       const fleetDrv=fleetDriversForCompany(c.id);
       if(fleetDrv.length) drivers=fleetDrv.map(d=>({id:d.id, name:d.name, phone:d.phone||'', vehicleId:d.vehicleId||null}));
@@ -5099,6 +5161,7 @@ function openCatalogs(){
         if(!ph){ alert('Укажите телефон для входа в портал'); return; }
       }
       const savedId=c.id;
+      if(isCarr&&c.id) syncFleetVehiclesFromEditor(c.id, vehicles, {companyName:name, spaceId:c.spaceId||catalogSid||currentSpaceId()});
       upsertCompany({
         id:c.id, name, roles, note:($('co-note').value||'').trim(),
         inn:innRaw, ogrn:(($('co-ogrn')||{}).value||'').trim(),
@@ -5171,28 +5234,7 @@ function openCatalogs(){
     if(!v.id) v.id=uuid();
     openVehicleCard(v.id);
   });
-  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>{
-    const i=+b.dataset.saveVeh;
-    const v=state.vehicles[i]; if(!v) return;
-    const cons=+(($('veh-'+i).value||'').replace(',','.'));
-    if(!(cons>0)){ alert('Укажите расход л/100'); return; }
-    const trailer=readFleetTrailerFromDom(
-      document.getElementById('veh-trailer-'+i),
-      document.getElementById('veh-trailer-plate-'+i)
-    );
-    if(!validateFleetTrailer(trailer)) return;
-    v.consumptionPer100Km=cons;
-    v.bodyTypeId=(($('veh-body-'+i)||{}).value||'').trim()||null;
-    v.payloadTons=numOrNull(($('veh-pay-'+i)||{}).value);
-    v.hasTrailer=trailer.hasTrailer;
-    v.trailerPlate=trailer.trailerPlate;
-    v.bodyLengthM=numOrNull(($('veh-l-'+i)||{}).value);
-    v.bodyWidthM=numOrNull(($('veh-w-'+i)||{}).value);
-    v.bodyHeightM=numOrNull(($('veh-h-'+i)||{}).value);
-    state.vehicles[i]=normalizeFleetVehicle(Object.assign({}, v));
-    bumpDataEpoch('save-vehicle');
-    persist(); flashCatOk(); openCatalogs();
-  });
+  document.querySelectorAll('[data-save-veh]').forEach(b=>b.onclick=()=>saveFleetVehicleRow(+b.dataset.saveVeh));
   document.querySelectorAll('[data-del-veh]').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.delVeh;
     const v=state.vehicles[i];
