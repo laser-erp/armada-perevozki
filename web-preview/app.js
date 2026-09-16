@@ -2605,13 +2605,20 @@ function orderBelongsToDriver(o, name){
   if(!o || !who) return false;
   return samePersonName(o.driverName||'', who);
 }
+function orderNeverStartedTrip(o){
+  return !!(o && o.startOdometer==null && o.departOdometer==null);
+}
 /** Есть признаки закрытия, даже если closedAt снёс sync. */
 function looksClosedOrder(o){
   if(!o||o.cancelledAt) return false;
   if(typeof isUnassignedPortalOrder==='function' && isUnassignedPortalOrder(o)) return false;
+  // Заявка с портала без выезда — «закрыт» из чата/синка ложный (closedAt/km без startOdometer)
+  if(orderNeverStartedTrip(o) && typeof orderKeepsLogist==='function' && orderKeepsLogist(o)) return false;
   if(o.closedAt) return true;
-  // loadedKm/emptyKmAfter после выгрузки — заказ уже закрывали
-  if(o.endOdometer!=null && (o.loadedKm!=null || o.emptyKmAfter!=null)) return true;
+  if(o.endOdometer!=null && (o.loadedKm!=null || o.emptyKmAfter!=null)){
+    if(o.startOdometer==null) return false;
+    return true;
+  }
   if(o.loadedKm!=null && o.emptyKmAfter!=null && o.startOdometer!=null) return true;
   return false;
 }
@@ -2770,13 +2777,26 @@ function canHydrateCloseFromShiftMessage(o, shift, msgAt){
   if(!orderLinkedToShift(shift,o)&&o.startOdometer==null) return false;
   return true;
 }
-function healFalseClosedInboxOrder(o){
-  if(!isUnassignedPortalOrder(o)||!looksClosedOrder(o)) return false;
+function orderHasPhantomCloseMarkers(o){
+  if(!o) return false;
+  return !!(o.closedAt || o.endOdometer!=null || o.loadedKm!=null || o.emptyKmAfter!=null);
+}
+/** Снять ложное «закрытие» у портальных/логистских заявок без выезда (до и после назначения). */
+function healPhantomPortalClose(o){
+  if(!o||o.cancelledAt||!orderNeverStartedTrip(o)) return false;
+  if(!orderHasPhantomCloseMarkers(o)) return false;
+  const portal=typeof orderKeepsLogist==='function'&&orderKeepsLogist(o);
+  const unassigned=typeof isUnassignedPortalOrder==='function'&&isUnassignedPortalOrder(o);
+  const assigned=typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o);
+  if(!portal && !unassigned && !assigned) return false;
   let changed=false;
   ['closedAt','endAt','parkingAt','endOdometer','loadedKm','emptyKmAfter'].forEach(k=>{
     if(o[k]!=null&&o[k]!==''){ o[k]=null; changed=true; }
   });
   return changed;
+}
+function healFalseClosedInboxOrder(o){
+  return healPhantomPortalClose(o);
 }
 function logistMargin(o){
   const client=+o.priceForClient||0;
@@ -4111,6 +4131,7 @@ function orderTimesText(o){
 /** Восстановить закрытие/одометры, если sync стёр closedAt, но км остались. */
 function healOrderCloseState(o){
   if(!o||o.cancelledAt) return false;
+  if(healPhantomPortalClose(o)) return true;
   if(healFalseClosedInboxOrder(o)) return true;
   let changed=false;
   if(o.loadedKm!=null && o.startOdometer!=null && o.endOdometer==null){
@@ -4121,7 +4142,8 @@ function healOrderCloseState(o){
     o.loadedKm=Math.max(0, o.endOdometer-o.startOdometer);
     changed=true;
   }
-  if(looksClosedOrder(o) && !o.closedAt && !isUnassignedPortalOrder(o)){
+  if(looksClosedOrder(o) && !o.closedAt && !isUnassignedPortalOrder(o)
+    && !(orderNeverStartedTrip(o) && typeof orderKeepsLogist==='function' && orderKeepsLogist(o))){
     o.closedAt=o.parkingAt||o.endAt||o.arrivedAt||o.createdAt||new Date().toISOString();
     changed=true;
   }
@@ -4327,7 +4349,7 @@ function healAllOrders(){
   });
   if(hydrateOrdersFromMessages()) changed=true;
   (state.orders||[]).forEach(o=>{
-    if(healFalseClosedInboxOrder(o)) changed=true;
+    if(healPhantomPortalClose(o)) changed=true;
     if(typeof healTransportAppDriver==='function'&&healTransportAppDriver(o)) changed=true;
     if(healOrderCloseState(o)) changed=true;
     ensureOrderTimeStamps(o);

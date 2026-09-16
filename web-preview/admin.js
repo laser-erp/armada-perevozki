@@ -2067,6 +2067,7 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
       return {ok:false, message:'Назначение отменено'};
     }
   }
+  if(typeof healPhantomPortalClose==='function') healPhantomPortalClose(o);
   o.onExchange=false;
   o.executorType='own';
   o.driverName=driver;
@@ -2083,6 +2084,7 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
   if(typeof stampConfirmedBooking==='function') stampConfirmedBooking(o, plate);
   stampOrderDriverPhone(o);
   if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch('assign-fleet');
   return {ok:true};
 }
 function adminBulkAssignSelectedOrders(){

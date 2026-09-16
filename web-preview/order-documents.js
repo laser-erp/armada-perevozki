@@ -887,7 +887,8 @@ function publishCustomerDriverDocsConfirm(o){
   const text=buildCustomerDriverDocsTextSnapshot(o);
   const photos=orderDriverVehicleDocPhotos(o);
   const hasText=Object.values(text).some(v=>String(v||'').trim());
-  if(!hasText&&!photos.length) return false;
+  const hasCore=String(text.driverName||'').trim()&&String(text.plate||'').trim()&&text.plate!=='—';
+  if(!hasText&&!photos.length&&!hasCore) return false;
   const prevSnap=o.customerDriverDocsConfirm&&o.customerDriverDocsConfirm.text;
   const prevPhotosSig=String(o.customerDriverDocsConfirmPhotosSig||'');
   const photosSig=photos.map(p=>p.label).join('|');
