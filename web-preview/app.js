@@ -4904,6 +4904,7 @@ try{
     if(typeof showCustomerPortal==='function') showCustomerPortal();
     else if(typeof openCustomerLogin==='function') openCustomerLogin();
   } else if(urlEntry==='driver'){
+    try{ await initCloudSync(); }catch(_){}
     if(await tryDriver()){ /* ok */ }
     else openDedicatedEntryScreen();
   } else if(urlEntry==='admin'){

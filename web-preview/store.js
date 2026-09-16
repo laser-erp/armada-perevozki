@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-vehicle-assign-fix";
+const APP_BUILD="2026-09-16-driver-login-fix";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2766,11 +2766,40 @@ function armadaApiJsonHeaders(){
   if(t) h.Authorization='Bearer '+t;
   return h;
 }
-/** При входе: spaces/companies с сервера — иначе ИНН «не найден» на чистом браузере. */
+/** При входе: spaces/companies/drivers с сервера — иначе на чистом браузере нет каталога. */
+function mergeDriversFromRemoteForLogin(remoteDrivers){
+  if(!Array.isArray(remoteDrivers)||!remoteDrivers.length) return false;
+  const key=d=>`${String(d.name||'').trim().toLowerCase()}|${d.companyId||''}`;
+  const byKey=new Map();
+  (state.drivers||[]).forEach(d=>{
+    if(!d||!String(d.name||'').trim()) return;
+    byKey.set(key(d), {...d});
+  });
+  remoteDrivers.forEach(r=>{
+    if(!r||!String(r.name||'').trim()) return;
+    const k=key(r);
+    const prev=byKey.get(k)||{};
+    byKey.set(k, {...prev, ...r, name:String(r.name||prev.name||'').trim()});
+  });
+  state.drivers=[...byKey.values()];
+  if(typeof migrateDriverPins==='function') migrateDriverPins();
+  return true;
+}
 function mergeLoginCatalogFromRemote(p){
   if(!p||typeof p!=='object') return;
   if(Array.isArray(p.spaces)&&p.spaces.length) state.spaces=p.spaces;
   if(Array.isArray(p.companies)&&p.companies.length) state.companies=p.companies;
+  mergeDriversFromRemoteForLogin(p.drivers);
+}
+async function syncDriversCatalogForLogin(showProgress){
+  if(typeof showProgress==='function') showProgress('Загрузка данных…');
+  if(typeof initCloudSync==='function'){
+    try{ await initCloudSync(); return true; }catch(_){}
+  }
+  if(navigator.onLine!==false && typeof refreshAuthFromServer==='function'){
+    return await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+  }
+  return false;
 }
 async function refreshAdminListForLogin(){
   return refreshAuthFromServer({pin:'sync', meta:{role:'admin', purpose:'login-list'}});

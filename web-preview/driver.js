@@ -321,8 +321,8 @@ function continueDriverPhone(){
 }
 async function tryDriverPhoneLogin(phone, showErr){
   let byPhone=findDriversByPhone(phone);
-  if(!byPhone.length && typeof refreshAuthFromServer==='function'){
-    await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+  if(!byPhone.length && typeof syncDriversCatalogForLogin==='function'){
+    await syncDriversCatalogForLogin(showErr);
     byPhone=findDriversByPhone(phone);
   }
   if(!byPhone.length){
@@ -407,8 +407,8 @@ async function doLoginDriverPin(showErr){
     if(resolveDriverPin(rec)!==pin){ showErr('Неверный PIN'); return; }
   } else {
     let byPhone=findDriversByPhone(phone);
-    if(!byPhone.length && typeof refreshAuthFromServer==='function'){
-      await refreshAuthFromServer({pin:'sync', meta:{role:'driver'}});
+    if(!byPhone.length && typeof syncDriversCatalogForLogin==='function'){
+      await syncDriversCatalogForLogin(showErr);
       byPhone=findDriversByPhone(phone);
     }
     if(!byPhone.length){
