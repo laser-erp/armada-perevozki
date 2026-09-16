@@ -136,14 +136,30 @@ function syncOrderDriverVehicleDocs(o){
     if(plate && o.vehiclePlate!==plate){ o.vehiclePlate=plate; changed=true; }
   }
   if(o.transportApp){
+    o.transportApp.driverName=String(o.driverName||'').trim();
+    o.transportApp.driverPhone=typeof orderDriverPhone==='function'?orderDriverPhone(o)||'':'';
     o.transportApp.driverPassportSeries=o.driverPassportSeries||'';
     o.transportApp.driverPassportNumber=o.driverPassportNumber||'';
     o.transportApp.driverLicenseNo=o.driverLicenseNo||'';
     o.transportApp.vehicleStsSeries=o.vehicleStsSeries||'';
     o.transportApp.vehicleStsNumber=o.vehicleStsNumber||'';
     o.transportApp.vehiclePlate=o.vehiclePlate||'';
+    o.transportApp.route=typeof routeText==='function'?routeText(o)||'':'';
+    o.transportApp.orderSequentialNumber=o.sequentialNumber;
   }
   return changed;
+}
+function orderDocDriverName(o){
+  if(!o) return '—';
+  if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)) return String(o.driverName||'').trim()||'—';
+  const app=o.transportApp;
+  return (app&&app.driverName)||o.driverName||'—';
+}
+function orderDocVehiclePlate(o){
+  if(!o) return '—';
+  if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)) return orderVehiclePlate(o)||String(o.vehiclePlate||'').trim()||'—';
+  const app=o.transportApp;
+  return (app&&app.vehiclePlate)||o.vehiclePlate||'—';
 }
 function orderVehicleSpecLine(o){
   const plate=(o.transportApp&&o.transportApp.vehiclePlate)||o.vehiclePlate||'';
@@ -336,10 +352,9 @@ function orderVehicleReqPlain(o){
   return html.replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim()||'—';
 }
 function orderDriverDetailLines(o){
-  const app=o.transportApp||null;
-  const driver=app&&app.driverName?app.driverName:(o.driverName||'—');
-  const plate=app&&app.vehiclePlate?app.vehiclePlate:(o.vehiclePlate||'—');
-  const phone=orderDriverPhone(o)||(app&&app.driverPhone)||'';
+  const driver=orderDocDriverName(o);
+  const plate=orderDocVehiclePlate(o);
+  const phone=orderDriverPhone(o)||(o.transportApp&&o.transportApp.driverPhone)||'';
   const firmId=o.executorType==='partner'?(o.carrierCompanyId||o.ownCompanyId):o.ownCompanyId;
   const license=orderLicenseNo(o);
   const licenseIssued=String(o.driverLicenseIssuedAt||'').trim()
@@ -450,8 +465,8 @@ function buildOrderDocBody(kind, o){
       <p>${esc(orderPaymentDocLines(o))}</p>
       ${orderDocSignBlock(o, 'Заказчик', 'Перевозчик', o.contactName||left.name, o.ownerAdminName||right.name)}`;
   }
-  const driver=(app&&app.driverName)||o.driverName||'—';
-  const plate=(app&&app.vehiclePlate)||o.vehiclePlate||'—';
+  const driver=orderDocDriverName(o);
+  const plate=orderDocVehiclePlate(o);
   return `${commonHead}
     <p class="muted">${looksClosedOrder(o)?`Заказ закрыт ${esc(dateTime(o.closedAt))}`:'Заказ ещё не закрыт — акт по текущим данным'}</p>
     <h2>1. Заказчик</h2>
@@ -959,27 +974,50 @@ function orderHasDriverVehicleAssigned(o){
   return true;
 }
 function ensureOwnFleetTransportApp(o){
-  if(!o||o.transportApp||o.executorType==='partner') return;
+  if(!o||o.executorType==='partner') return;
   if(!orderHasDriverVehicleAssigned(o)) return;
   const customerCo=findCompanyById(o.customerId)||findCompanyByName(o.customer);
-  o.transportApp={
-    id:uuid(),
-    signedAt:null,
-    customerCompanyId:o.customerId||(customerCo&&customerCo.id)||null,
-    customerCompanyName:o.customer||(customerCo&&customerCo.name)||'',
-    carrierCompanyId:o.ownCompanyId||null,
-    carrierCompanyName:o.ownCompanyName||'',
-    driverName:o.driverName,
-    vehiclePlate:o.vehiclePlate,
-    driverPhone:orderDriverPhone(o)||'',
-    driverPassportSeries:o.driverPassportSeries||'',
-    driverPassportNumber:o.driverPassportNumber||'',
-    driverLicenseNo:o.driverLicenseNo||'',
-    vehicleStsSeries:o.vehicleStsSeries||'',
-    vehicleStsNumber:o.vehicleStsNumber||'',
-    route:routeText(o),
-    orderSequentialNumber:o.sequentialNumber
-  };
+  if(!o.transportApp){
+    o.transportApp={
+      id:uuid(),
+      signedAt:null,
+      customerCompanyId:o.customerId||(customerCo&&customerCo.id)||null,
+      customerCompanyName:o.customer||(customerCo&&customerCo.name)||'',
+      carrierCompanyId:o.ownCompanyId||null,
+      carrierCompanyName:o.ownCompanyName||'',
+      driverPassportSeries:'',
+      driverPassportNumber:'',
+      driverLicenseNo:'',
+      vehicleStsSeries:'',
+      vehicleStsNumber:''
+    };
+  }
+  const app=o.transportApp;
+  app.customerCompanyId=o.customerId||(customerCo&&customerCo.id)||app.customerCompanyId||null;
+  app.customerCompanyName=o.customer||(customerCo&&customerCo.name)||app.customerCompanyName||'';
+  app.carrierCompanyId=o.ownCompanyId||app.carrierCompanyId||null;
+  app.carrierCompanyName=o.ownCompanyName||app.carrierCompanyName||'';
+  app.driverName=o.driverName;
+  app.vehiclePlate=o.vehiclePlate;
+  app.driverPhone=orderDriverPhone(o)||'';
+  app.route=routeText(o);
+  app.orderSequentialNumber=o.sequentialNumber;
+}
+function healTransportAppDriver(o){
+  if(!o||!orderHasDriverVehicleAssigned(o)) return false;
+  let changed=false;
+  if(o.executorType!=='partner'){
+    const before=JSON.stringify(o.transportApp||null);
+    ensureOwnFleetTransportApp(o);
+    if(JSON.stringify(o.transportApp||null)!==before) changed=true;
+  }else if(o.transportApp){
+    const drv=String(o.driverName||'').trim();
+    const plate=String(o.vehiclePlate||'').trim();
+    if(o.transportApp.driverName!==drv){ o.transportApp.driverName=drv; changed=true; }
+    if(o.transportApp.vehiclePlate!==plate){ o.transportApp.vehiclePlate=plate; changed=true; }
+  }
+  if(syncOrderDriverVehicleDocs(o)) changed=true;
+  return changed;
 }
 function syncOrderDocsOnAssign(o){
   if(!o||!orderHasDriverVehicleAssigned(o)) return false;

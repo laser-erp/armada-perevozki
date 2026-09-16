@@ -4276,6 +4276,7 @@ function healAllOrders(){
   if(hydrateOrdersFromMessages()) changed=true;
   (state.orders||[]).forEach(o=>{
     if(healFalseClosedInboxOrder(o)) changed=true;
+    if(typeof healTransportAppDriver==='function'&&healTransportAppDriver(o)) changed=true;
     if(healOrderCloseState(o)) changed=true;
     ensureOrderTimeStamps(o);
   });

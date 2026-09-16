@@ -231,9 +231,8 @@ function buildDocTemplateContext(order, spaceId) {
     : { name: o.customer || '—', inn: '', address: '' };
   const rate = typeof clientRate === 'function' ? clientRate(o) : null;
   const amount = rate != null ? `${typeof fmt === 'function' ? fmt(rate) : rate} ₽` : '—';
-  const app = o.transportApp || {};
-  const driver = app.driverName || o.driverName || '—';
-  const plate = app.vehiclePlate || o.vehiclePlate || '—';
+  const driver = typeof orderDocDriverName === 'function' ? orderDocDriverName(o) : ((o.transportApp && o.transportApp.driverName) || o.driverName || '—');
+  const plate = typeof orderDocVehiclePlate === 'function' ? orderDocVehiclePlate(o) : ((o.transportApp && o.transportApp.vehiclePlate) || o.vehiclePlate || '—');
   const passport = orderPassportText(o);
   const license = orderLicenseNo(o);
   const sts = orderStsText(o);
