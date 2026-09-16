@@ -1025,8 +1025,10 @@ function migrateAdmins(){
       const ph=typeof formatPhone==='function'?formatPhone(drv.phone):String(drv.phone||'').trim();
       if(ph) a.phone=ph;
     }
+    if((a.id==='admin-super' || a.isSuper) && a.phone && a.loginBy!=='phone') a.loginBy='phone';
     if(!a.loginBy){
       if(samePersonName(a.name,'Нечаев А.С.') && (a.phone || (drv&&drv.phone))) a.loginBy='phone';
+      else if(a.isSuper && a.phone) a.loginBy='phone';
       else a.loginBy='inn';
     }
   });
@@ -3268,8 +3270,18 @@ function matchesShiftOwnerFilter(s){
   if(f==='_none') return !sid;
   return sid===f;
 }
+/** Подготовить смены перед вкладкой ЕТО: владелец, поля осмотра из чата. */
+function prepareAdminEtoShifts(){
+  if(typeof migrateShiftOwners==='function') migrateShiftOwners();
+  if(typeof migrateEtoFromMessages==='function') migrateEtoFromMessages();
+  (state.shifts||[]).forEach(s=>{
+    if(!s || s.endedAt || s.abandoned) return;
+    if(s.driverName || s.vehiclePlate) stampShiftOwner(s, s.driverName||null, s.vehiclePlate||null);
+  });
+}
 /** Открытые смены водителей фирмы админа (для вкладки ЕТО). */
 function adminOpenShifts(){
+  prepareAdminEtoShifts();
   return (state.shifts||[])
     .filter(s=>s && !s.endedAt && !s.abandoned && canAdminSeeShift(s) && matchesShiftOwnerFilter(s))
     .sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt));
@@ -4680,6 +4692,13 @@ function openAdminLogin(){
 }
 async function openAdminLoginAsync(){
   migrateAdmins();
+  if(currentAdmin && typeof isAdminPinOk==='function' && isAdminPinOk()){
+    clearEntrySkin();
+    show('admin');
+    renderAdmin();
+    if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
+    return;
+  }
   if(canAutoRestoreAdmin()){
     clearEntrySkin();
     show('admin');
@@ -4687,7 +4706,7 @@ async function openAdminLoginAsync(){
     if(window.ArmadaOnboarding) ArmadaOnboarding.maybeAdmin();
     return;
   }
-  if(adminEntryRequiresPin()) currentAdmin=null;
+  if(adminEntryRequiresPin() && !(typeof isAdminPinOk==='function' && isAdminPinOk())) currentAdmin=null;
   const innIn=$('admin-login-inn');
   const pinIn=$('pin-input');
   const hadInn=innIn&&innIn.value.trim();
@@ -4704,11 +4723,15 @@ async function openAdminLoginAsync(){
   if(navigator.onLine!==false && typeof refreshAdminListForLogin==='function'){
     refreshAdminListForLogin().then(synced=>{
       if(!synced&&pinErr&&!pinErr.textContent){
-        pinErr.textContent='Список с сервера не обновился — можно войти с локальными данными';
+        pinErr.classList.add('hint-warn');
+        pinErr.textContent='Список с сервера не обновился — войдите по телефону или ИНН и PIN';
       }
     }).catch(err=>{
       console.warn('admin login list', err);
-      if(pinErr&&!pinErr.textContent) pinErr.textContent='Ошибка загрузки с сервера — попробуйте войти';
+      if(pinErr&&!pinErr.textContent){
+        pinErr.classList.add('hint-warn');
+        pinErr.textContent='Сервер не ответил — попробуйте войти по телефону или ИНН и PIN';
+      }
     });
   }
 }
@@ -4861,7 +4884,8 @@ try{
   }finally{
     window.__armadaBootDone=true;
     if(typeof window.__armadaApplyEntryRoute==='function' && typeof isDedicatedEntryUrl==='function' && isDedicatedEntryUrl()){
-      if(!isArmadaEntryScreenVisible()) window.__armadaApplyEntryRoute();
+      const adminLive=!!(typeof currentAdmin!=='undefined'&&currentAdmin&&typeof isAdminPinOk==='function'&&isAdminPinOk());
+      if(!isArmadaEntryScreenVisible() && !adminLive) window.__armadaApplyEntryRoute();
     }
     if(document.querySelector('#splash.show') && !isArmadaEntryScreenVisible() && !window.__armadaSplashDone){
       if(typeof finishSplashOnce==='function') finishSplashOnce(typeof bootFallbackAfterSplash==='function'?bootFallbackAfterSplash:showRoleHub);
