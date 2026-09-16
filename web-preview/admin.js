@@ -517,6 +517,7 @@ async function loginAdmin(){
       const rec=await fetchServerState(8000, { pin, meta: { role:'admin' } });
       if(rec&&rec.payload){
         pbRecordId=rec.id;
+        if(typeof mergeLoginCatalogFromRemote==='function') mergeLoginCatalogFromRemote(rec.payload);
         mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
         migrateAdmins();
         migrateSpaces();

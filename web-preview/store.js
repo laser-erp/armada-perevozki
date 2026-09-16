@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-admin-eto-login-fix";
+const APP_BUILD="2026-09-16-admin-login-inn-sync";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2760,6 +2760,12 @@ function armadaApiJsonHeaders(){
   if(t) h.Authorization='Bearer '+t;
   return h;
 }
+/** При входе: spaces/companies с сервера — иначе ИНН «не найден» на чистом браузере. */
+function mergeLoginCatalogFromRemote(p){
+  if(!p||typeof p!=='object') return;
+  if(Array.isArray(p.spaces)&&p.spaces.length) state.spaces=p.spaces;
+  if(Array.isArray(p.companies)&&p.companies.length) state.companies=p.companies;
+}
 async function refreshAdminListForLogin(){
   return refreshAuthFromServer({pin:'sync', meta:{role:'admin', purpose:'login-list'}});
 }
@@ -2769,6 +2775,7 @@ async function refreshAuthFromServer(opts){
     const rec=await fetchServerState(3500, opts||{pin:'sync', meta:{role:'sync'}});
     if(!rec||!rec.payload) return false;
     pbRecordId=rec.id;
+    mergeLoginCatalogFromRemote(rec.payload);
     if(typeof mergeAdminAuthFromRemote==='function'){
       mergeAdminAuthFromRemote(rec.payload, {remoteWinsAuth:true});
     }
