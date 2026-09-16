@@ -1162,8 +1162,9 @@ function openCustomerOrderDocument(orderId, kind){
   const o=(state.orders||[]).find(x=>x.id===orderId);
   if(!o) return;
   if(kind==='invoice'){
-    const inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(orderId):null;
-    if(inv&&typeof openCustomerInvoice==='function') openCustomerInvoice(inv.id);
+    let inv=typeof findInvoiceByOrderId==='function'?findInvoiceByOrderId(orderId):null;
+    if(!inv&&typeof ensureCustomerInvoiceForOrder==='function') inv=ensureCustomerInvoiceForOrder(orderId);
+    if(inv&&typeof openCustomerInvoice==='function') openCustomerInvoice(inv.id, orderId);
     else alert('Счёт ещё не сформирован');
     return;
   }

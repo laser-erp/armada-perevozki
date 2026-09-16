@@ -178,20 +178,58 @@ function customerInvoiceHtml(invoice){
   <p class="noprint hint"><button onclick="window.print()">Печать / PDF</button></p>
 </body></html>`;
 }
-function downloadCustomerInvoice(invoiceId){
+function customerInvoiceBlobUrl(invoiceId){
   const inv=findInvoiceById(invoiceId);
-  if(!inv){ alert('Счёт не найден'); return; }
+  if(!inv) return null;
   const html=customerInvoiceHtml(inv);
   const blob=new Blob([html], {type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
+  return {url:URL.createObjectURL(blob), inv};
+}
+function downloadCustomerInvoice(invoiceId){
+  const pack=customerInvoiceBlobUrl(invoiceId);
+  if(!pack){ alert('Счёт не найден'); return; }
   const a=document.createElement('a');
-  a.href=url;
-  a.download=`schet-${inv.number||inv.id}.html`;
+  a.href=pack.url;
+  a.download=`schet-${pack.inv.number||pack.inv.id}.html`;
   a.rel='noopener';
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  setTimeout(()=>URL.revokeObjectURL(pack.url), 5000);
+}
+function ensureCustomerInvoiceForOrder(orderId){
+  if(!orderId) return null;
+  const existing=findInvoiceByOrderId(orderId);
+  if(existing) return existing;
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o) return null;
+  const co=typeof findCompanyById==='function'?findCompanyById(o.customerId):null;
+  const carrier=(typeof findCompanyById==='function'?findCompanyById(o.ownCompanyId):null)
+    ||(typeof carrierOwnCompanyForSpace==='function'?carrierOwnCompanyForSpace(o.spaceId):null);
+  const inv=createCustomerInvoiceForOrder(o, co, carrier);
+  if(inv&&typeof persist==='function') persist();
+  return inv;
+}
+function mergeLocalInvoices(localInvoices){
+  if(!Array.isArray(localInvoices)||!localInvoices.length) return false;
+  let changed=false;
+  const root=ensureInvoicesRoot();
+  const byId=new Map(root.map(x=>[x.id,x]));
+  const byOrder=new Map(root.filter(x=>x.orderId).map(x=>[x.orderId,x]));
+  localInvoices.forEach(li=>{
+    if(!li||!li.id) return;
+    const cur=byId.get(li.id)||(li.orderId?byOrder.get(li.orderId):null);
+    if(!cur){
+      root.push(li);
+      byId.set(li.id, li);
+      if(li.orderId) byOrder.set(li.orderId, li);
+      changed=true;
+      return;
+    }
+    if(!cur.amount&&li.amount){ cur.amount=li.amount; changed=true; }
+    if(!cur.route&&li.route){ cur.route=li.route; changed=true; }
+  });
+  return changed;
 }
 function customerInvoiceDocBody(invoice){
   const order=(state.orders||[]).find(o=>o.id===invoice.orderId)||{};
@@ -220,11 +258,20 @@ function customerInvoiceDocBody(invoice){
     <p><strong>К оплате: ${amtLine}</strong></p>
     ${bankLines?`<p>${bankLines}</p>`:''}`;
 }
-function openCustomerInvoice(invoiceId){
-  const inv=findInvoiceById(invoiceId);
-  if(!inv){ alert('Счёт не найден'); return; }
-  const w=window.open('', '_blank', 'noopener');
-  if(!w){ downloadCustomerInvoice(invoiceId); return; }
-  w.document.write(customerInvoiceHtml(inv));
-  w.document.close();
+function openCustomerInvoice(invoiceId, orderId){
+  let inv=invoiceId?findInvoiceById(invoiceId):null;
+  if(!inv&&orderId&&typeof ensureCustomerInvoiceForOrder==='function'){
+    inv=ensureCustomerInvoiceForOrder(orderId);
+    if(inv) invoiceId=inv.id;
+  }
+  if(!inv){ alert('Счёт не найден — обновите страницу или откройте из списка «Бух доки»'); return; }
+  const pack=customerInvoiceBlobUrl(invoiceId);
+  if(!pack){ alert('Не удалось сформировать счёт'); return; }
+  const w=window.open(pack.url, '_blank', 'noopener');
+  if(!w){
+    downloadCustomerInvoice(invoiceId);
+    URL.revokeObjectURL(pack.url);
+    return;
+  }
+  setTimeout(()=>URL.revokeObjectURL(pack.url), 60000);
 }
