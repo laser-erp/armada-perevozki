@@ -22,7 +22,12 @@ function findAdminByInnAndPin(innRaw, pin){
   const inn=normalizeLoginInn(innRaw);
   if(!inn) return null;
   const spaceIds=spaceIdsForLoginInn(inn);
-  if(!spaceIds.size) return null;
+  if(!spaceIds.size){
+    // Пустая база / sync не подтянул фирмы — единственный супер по recovery PIN
+    const supers=(state.admins||[]).filter(a=>a.isSuper && String(a.pin||'').trim()===pinStr);
+    if(supers.length===1) return supers[0];
+    return null;
+  }
   const matches=(state.admins||[]).filter(a=>{
     // Супер-админ с loginBy=phone всё равно может войти по ИНН организации
     if(a.loginBy==='phone' && !a.isSuper) return false;
