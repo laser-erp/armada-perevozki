@@ -1976,6 +1976,24 @@ function adminOrderPickHtml(o){
     <input type="checkbox" class="admin-order-pick" data-id="${esc(o.id)}"${on?' checked':''} />
   </label>`;
 }
+function adminFleetPlateOptionsForOrder(o, firmId, opts){
+  opts=opts||{};
+  const booked=String(opts.bookedPlate||'').trim();
+  const all=firmId?fleetVehiclesForCompany(firmId):[];
+  const ok=all.filter(v=>vehicleFitsOrder(v,o));
+  const list=ok.length?ok:all;
+  const html=list.length?list.map(v=>{
+    const fits=vehicleFitsOrder(v,o);
+    const warn=!fits?' · ⚠ не по требованиям':'';
+    const sel=booked&&v.plate===booked?' selected':'';
+    const bookTag=booked&&v.plate===booked?' · бронь':'';
+    return `<option value="${esc(v.plate)}"${sel}>${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}${bookTag}${warn}</option>`;
+  }).join(''):'';
+  const emptyHint=all.length
+    ?(ok.length?'':`В парке ${all.length} авто — по фильтру 0, показаны все. Заполните тоннаж/тип кузова в справочнике или назначьте вручную.`)
+    :'В парке нет авто — Справочники → Авто (госномер, тоннаж, тип кузова).';
+  return {allCount:all.length, okCount:ok.length, html, emptyHint};
+}
 function adminOrdersBulkBarHtml(){
   const n=adminOrderPickCount();
   const myCo=currentOwnCompany();
@@ -2023,7 +2041,17 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
   }
   const veh=fleetVehiclesForCompany(firmId).find(v=>v.plate===plate);
   if(!veh) return {ok:false, message:`Авто ${plate} не из парка фирмы`};
-  if(!vehicleFitsOrder(veh, o)) return {ok:false, message:`${plate} не подходит по т/габаритам для №${o.sequentialNumber}`};
+  if(!vehicleFitsOrder(veh, o)){
+    const soft=opts&&opts.allowMismatch;
+    if(!soft && typeof confirm==='function'){
+      const req=typeof orderReqText==='function'?orderReqText(o):'';
+      if(!confirm(`${plate} не полностью подходит под требования заявки №${o.sequentialNumber}${req?` (${req})`:''}.\n\nВсё равно назначить?`)){
+        return {ok:false, message:'Назначение отменено'};
+      }
+    }else if(!soft){
+      return {ok:false, message:`${plate} не подходит по т/габаритам для №${o.sequentialNumber}`};
+    }
+  }
   if(!skipDocsConfirm){
     const drvRec=findDriverRecord(driver, firmId);
     if(typeof confirmIfDriverDocsIncomplete==='function'&&!confirmIfDriverDocsIncomplete(drvRec, driver)){
@@ -2631,8 +2659,7 @@ function openClaimExchange(id){
   if(o.ownCompanyId && o.ownCompanyId===myCo.id){ alert('Нельзя забрать свой же заказ как перевозчик'); return; }
   claimOrderId=id;
   const drvList=fleetDriversForCompany(myCo.id);
-  const vehAll=fleetVehiclesForCompany(myCo.id);
-  const vehOk=vehAll.filter(v=>vehicleFitsOrder(v,o));
+  const platePack=adminFleetPlateOptionsForOrder(o, myCo.id);
   const req=orderReqText(o)||'не указаны';
   $('claim-error').textContent='';
   const claimTitle=$('claim-title');
@@ -2660,10 +2687,10 @@ function openClaimExchange(id){
           </div>
           <div>
             <label for="claim-plate">Авто (по т / габаритам)</label>
-            <select id="claim-plate">${vehOk.length?vehOk.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join(''):`<option value="">— нет подходящего авто —</option>`}</select>
+            <select id="claim-plate">${platePack.html||`<option value="">— нет авто в парке —</option>`}</select>
           </div>
         </div>
-        <div class="hint">${vehAll.length?`В парке ${vehAll.length}, подходит: ${vehOk.length}. Неподходящие скрыты.`:'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
+        <div class="hint">${platePack.allCount?(platePack.okCount?`В парке ${platePack.allCount}, подходит: ${platePack.okCount}.`:platePack.emptyHint):'В вашей фирме нет авто — добавьте в Справочниках с тоннажем и габаритами.'}</div>
         <div id="claim-drv-docs-warn" hidden></div>
       </div>
     </section>
@@ -2777,9 +2804,9 @@ function renderAdminExchangeBoard(orders){
     const req=orderReqText(o);
     const firmId=mine?(o.ownCompanyId||(myCo&&myCo.id)): (myCo&&myCo.id);
     const drvList=firmId?fleetDriversForCompany(firmId):[];
-    const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
+    const platePack=adminFleetPlateOptionsForOrder(o, firmId);
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
-    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}">${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}</option>`).join('');
+    const plateOpts=platePack.html;
     return `<div class="ex-card">
       <div class="order-card-head">
         ${adminOrderPickHtml(o)}
@@ -2796,7 +2823,8 @@ function renderAdminExchangeBoard(orders){
           <label for="ex-drv-${o.id}">Водитель</label>
           <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
           <label for="ex-plate-${o.id}">Авто под требования</label>
-          <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
+          <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет авто в парке —</option>`}</select>
+          ${platePack.okCount===0&&platePack.allCount?`<p class="hint">${esc(platePack.emptyHint)}</p>`:''}
           <div class="ex-actions">
             <button type="button" class="primary ex-assign" data-id="${o.id}">Парк</button>
             <div class="row">
@@ -2855,11 +2883,12 @@ function renderAdminInboxBoard(orders){
   const cards=orders.map(o=>{
     const firmId=o.ownCompanyId||(myCo&&myCo.id);
     const drvList=firmId?fleetDriversForCompany(firmId):[];
+    const bookedPlate=String(o.bookedPlate||'').trim();
+    const platePack=adminFleetPlateOptionsForOrder(o, firmId, {bookedPlate});
     const vehList=(firmId?fleetVehiclesForCompany(firmId):[]).filter(v=>vehicleFitsOrder(v,o));
     const freeList=typeof freeOwnFleetForOrder==='function'?freeOwnFleetForOrder(o):vehList;
-    const bookedPlate=String(o.bookedPlate||'').trim();
     const drvOpts=drvList.map(d=>`<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
-    const plateOpts=vehList.map(v=>`<option value="${esc(v.plate)}" ${bookedPlate&&v.plate===bookedPlate?'selected':''}>${esc(v.plate)}${vehicleSpecText(v)?' · '+esc(vehicleSpecText(v)):''}${bookedPlate&&v.plate===bookedPlate?' · бронь':''}</option>`).join('');
+    const plateOpts=platePack.html;
     const margin=typeof logistMarginLine==='function'?logistMarginLine(o):'';
     const reqBook=typeof isBookingRequested==='function' && isBookingRequested(o);
     const okB=typeof isBookingConfirmed==='function' && isBookingConfirmed(o);
@@ -2901,9 +2930,10 @@ function renderAdminInboxBoard(orders){
         <label for="ex-drv-${o.id}">Водитель своего парка</label>
         <select id="ex-drv-${o.id}">${drvOpts||`<option value="">— нет водителей —</option>`}</select>
         <label for="ex-plate-${o.id}">Авто</label>
-        <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет подходящего авто —</option>`}</select>
+        <select id="ex-plate-${o.id}">${plateOpts||`<option value="">— нет авто в парке —</option>`}</select>
+        ${platePack.okCount===0&&platePack.allCount?`<p class="hint">${esc(platePack.emptyHint)}</p>`:''}
         <div class="park-ex-cta">
-          <button type="button" class="${freeList.length||!dispatcher?'primary':'secondary'} ex-assign" data-id="${o.id}">Парк</button>
+          <button type="button" class="${freeList.length||!dispatcher?'primary':'secondary'} ex-assign" data-id="${o.id}">Назначить</button>
           ${dispatcher?`<button type="button" class="${freeList.length?'secondary':'primary'} pub-exchange" data-id="${o.id}">Биржа</button>`:''}
         </div>
         <button type="button" class="secondary open-rates" data-id="${o.id}">Карточка</button>

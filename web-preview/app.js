@@ -1438,7 +1438,8 @@ function vehicleFitsOrder(v, o){
     if(!(need>0)) continue;
     anyReq=true;
     const have=+v[field];
-    if(!(have>0) || have+1e-9<need) return false;
+    if(!(have>0)) continue;
+    if(have+1e-9<need) return false;
   }
   if(!anyReq) return true;
   return true;

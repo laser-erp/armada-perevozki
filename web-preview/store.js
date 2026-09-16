@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-16-customer-driver-docs";
+const APP_BUILD="2026-09-16-vehicle-assign-fix";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -770,20 +770,26 @@ function bodyTypeMatchMeta(id){
   if(coarse) return { id:coarse.id, group:coarse.id };
   return { id:x, group:mapVtypeToBodyType(x) };
 }
-/** ТС подходит по типу кузова: vehicleTypeIds (точно) или reqBodyType (группа/точный ATI). */
+function bodyTypeOrderMatch(a, b){
+  if(!a||!b) return false;
+  if(a===b) return true;
+  const ma=bodyTypeMatchMeta(a);
+  const mb=bodyTypeMatchMeta(b);
+  if(!ma||!mb) return false;
+  if(ma.id===mb.id) return true;
+  if(ma.group===mb.group) return true;
+  return false;
+}
+/** ТС подходит по типу кузова: vehicleTypeIds или reqBodyType (точный id или группа tent/board/reefer/dump). */
 function vehicleBodyTypeMatchesOrder(v, o){
   if(!v||!o) return true;
   const vtypes=Array.isArray(o.vehicleTypeIds)?o.vehicleTypeIds.filter(Boolean):[];
   const req=String(o.reqBodyType||'').trim();
   if(!vtypes.length && !req) return true;
   const vid=String(v.bodyTypeId||'').trim();
-  if(!vid) return false;
-  if(vtypes.length) return vtypes.includes(vid);
-  const reqMeta=bodyTypeMatchMeta(req);
-  const vehMeta=bodyTypeMatchMeta(vid);
-  if(!reqMeta||!vehMeta) return false;
-  if(BODY_TYPES.some(t=>t.id===req)) return vehMeta.group===reqMeta.group;
-  return vehMeta.id===reqMeta.id;
+  if(!vid) return !vtypes.length && !req;
+  if(vtypes.length) return vtypes.some(tid=>bodyTypeOrderMatch(tid, vid));
+  return bodyTypeOrderMatch(req, vid);
 }
 function cargoKindLabel(id){
   return (CARGO_KINDS.find(x=>x.id===id)||{}).label||'';
