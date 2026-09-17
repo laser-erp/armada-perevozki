@@ -122,18 +122,55 @@ function peekAdminSessionName(){
 }
 function setDriverNav(which){
   const active=which||'btn-home';
-  ['btn-home','btn-orders','btn-shifts','btn-cabinet'].forEach(id=>{
+  ['btn-home','btn-eto','btn-orders','btn-shifts','btn-cabinet'].forEach(id=>{
     const b=$(id); if(!b) return;
     const on=id===active;
     b.classList.toggle('on', on);
     if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
   });
 }
+function syncDriverMainVisibility(){
+  const onPanel=!!document.querySelector('#driver .driver-panel.show');
+  const homeEl=$('driver-home');
+  const chat=$('chat');
+  const bar=$('input-bar');
+  const banner=$('driver-banner');
+  if(homeEl) homeEl.style.display=onPanel?'none':(DRIVER?'flex':'none');
+  if(chat) chat.style.display=onPanel?'none':'';
+  if(bar) bar.style.display=onPanel?'none':'';
+  if(banner&&onPanel) banner.classList.remove('show');
+}
+function driverEtoFlowStep(){
+  if(state.orderStep==='closePrevShiftParking') return true;
+  return ['chooseVehicle','odometer','fuel','gur','coolant','lights','oil'].includes(state.step);
+}
+function driverEtoNeedsAttention(){
+  const s=state.shift||findOpenShift();
+  if(!s||s.endedAt) return !findOpenShift();
+  return !isEtoDone(s);
+}
+function updateDriverEtoBadge(){
+  const badge=$('drv-eto-badge');
+  if(!badge) return;
+  const need=driverEtoNeedsAttention();
+  badge.hidden=!need;
+  badge.textContent=driverEtoFlowStep()?'…':'!';
+}
 function showDriverHome(){
   hideDriverPanels();
   setDriverNav('btn-home');
+  syncDriverMainVisibility();
   updateDriverChrome();
   renderDriverHome();
+}
+function showEto(){
+  hideDriverPanels();
+  setDriverNav('btn-eto');
+  const panel=$('eto-panel');
+  if(panel) panel.classList.add('show');
+  syncDriverMainVisibility();
+  renderEtoPanel();
+  updateDriverEtoBadge();
 }
 function driverTodayLabel(){
   const d=new Date();
@@ -198,8 +235,12 @@ function renderDriverHome(){
     listEl.innerHTML='';
     return;
   }
-  listEl.innerHTML=st.active.map(o=>driverOrderCardHtml(o,{compact:true, home:true})).join('');
-  wireDriverOrderCards(listEl);
+  listEl.innerHTML=`<div class="driver-home-orders-hint">
+    <span>Активных заявок: <b>${st.active.length}</b> — карточки и маршрут во вкладке «Заявки».</span>
+    <button type="button" class="secondary" id="driver-home-goto-orders">Открыть заявки</button>
+  </div>`;
+  const go=$('driver-home-goto-orders');
+  if(go) go.onclick=()=>showOrders();
 }
 function updateDriverChrome(){
   const t=$('driver-title');
@@ -233,6 +274,7 @@ function updateDriverChrome(){
     }
   }
   renderDriverHome();
+  updateDriverEtoBadge();
   updateDriverNetHint();
 }
 function driverPickRows(preferName){
@@ -522,17 +564,104 @@ function lightsUI(){
     <button data-key="${k}" data-val="Да" class="${state.light[k]==='Да'?'primary':''}">Да</button>
     <button data-key="${k}" data-val="Нет" class="${state.light[k]==='Нет'?'primary':''}">Нет</button></div></div>`).join('')+`<button class="primary" id="lights-ok">Отправить</button>`;
 }
-function renderInput(){
+function renderEtoPanel(){
+  const body=$('eto-body');
+  if(!body) return;
   const err=state.error?`<div class="error">${esc(state.error)}</div>`:'';
-  let html=err; const os=state.orderStep;
-  if(os==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
-  else if(os==='closePrevShiftParking'){
+  let html=err;
+  const s=state.shift||findOpenShift();
+  if(!s||s.endedAt){
+    html+=`<p class="hint">Ежедневный технический осмотр перед выездом. Откройте смену — осмотр начнётся здесь.</p>`;
+    html+=`<button type="button" class="primary" id="open-shift-eto">Открыть смену</button>`;
+    body.innerHTML=html;
+    $('open-shift-eto')&&($('open-shift-eto').onclick=openShift);
+    return;
+  }
+  if(isEtoDone(s)&&!driverEtoFlowStep()){
+    html+=`<p class="hint">ЕТО на сегодня пройден · ${esc(s.vehiclePlate||'авто')} · одометр ${esc(String(s.odometer??'—'))}</p>`;
+    html+=`<button type="button" class="secondary" id="eto-restart-panel">Пройти ЕТО заново</button>`;
+    body.innerHTML=html;
+    $('eto-restart-panel')&&($('eto-restart-panel').onclick=restartEtoInspection);
+    return;
+  }
+  html+=renderEtoStepHtml();
+  body.innerHTML=html;
+  wireEtoPanelInput();
+}
+function renderEtoStepHtml(){
+  let html='';
+  const os=state.orderStep;
+  if(os==='closePrevShiftParking'){
     const min=state.draft&&state.draft.prevMinOdo;
     const ph=min!=null?String(min):'Например, 165658';
     html+=`<div class="hint warn-close">Вчерашняя смена открыта — укажите одометр стоянки (он же станет ЕТО сегодня).</div>`;
     html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${min!=null?`value="${esc(String(min))}"`:''} /><button id="num-ok">OK</button></div>`;
     if(min!=null) html+=`<button class="secondary" id="eto-odo-keep">Как вчерашний последний: ${esc(String(min))}</button>`;
-  } else if(os==='closeShiftParking'){
+    return html;
+  }
+  if(state.step==='chooseVehicle') return plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
+  if(state.step==='odometer'||state.step==='fuel'){
+    if(state.step==='odometer'){
+      const sug=state.shift&&state.shift.etoOdometerSuggest!=null?state.shift.etoOdometerSuggest:null;
+      const ph=sug!=null?String(sug):'Например, 125430';
+      html+=`<div class="hint">Показания одометра до выезда</div>`;
+      html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${sug!=null?`value="${esc(String(sug))}"`:''} /><button id="num-ok">OK</button></div>`;
+      if(sug!=null) html+=`<button class="secondary" id="eto-odo-keep">Как вчера: ${esc(String(sug))}</button>`;
+    } else {
+      html+=`<div class="hint">Остаток топлива, л</div>`;
+      html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="Например, 42" /><button id="num-ok">OK</button></div>`;
+    }
+    html+=`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+    return html;
+  }
+  if(state.step==='gur') html=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  else if(state.step==='coolant') html=`<div class="hint">Уровень ОЖ</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  else if(state.step==='lights') html=`<div class="hint">Проверка освещения</div>`+lightsUI()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  else if(state.step==='oil') html=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  return html;
+}
+function wireEtoPanelInput(){
+  $('open-shift-eto')&&($('open-shift-eto').onclick=openShift);
+  document.querySelectorAll('#eto-body .plate').forEach(b=>b.onclick=()=>selectVehicle(b.dataset.plate));
+  $('num-ok')&&($('num-ok').onclick=submitNumber);
+  $('eto-odo-keep')&&($('eto-odo-keep').onclick=()=>{
+    const sug=state.orderStep==='closePrevShiftParking'
+      ? (state.draft&&state.draft.prevMinOdo)
+      : (state.shift&&state.shift.etoOdometerSuggest);
+    if(sug==null) return;
+    const inp=$('num'); if(inp) inp.value=String(sug);
+    submitNumber();
+  });
+  document.querySelectorAll('#eto-body .fluid').forEach(b=>b.onclick=()=>selectFluid(b.dataset.level));
+  $('eto-restart')&&($('eto-restart').onclick=restartEtoInspection);
+  $('eto-restart-panel')&&($('eto-restart-panel').onclick=restartEtoInspection);
+  document.querySelectorAll('#eto-body .yesno button[data-key]').forEach(b=>b.onclick=()=>{state.light[b.dataset.key]=b.dataset.val;state.error='';renderEtoPanel();});
+  $('lights-ok')&&($('lights-ok').onclick=submitLights);
+}
+function maybeAutoOpenEtoTab(){
+  if(!DRIVER||!driverEtoFlowStep()) return;
+  if(document.querySelector('#eto-panel.show')){ renderEtoPanel(); return; }
+  if(!document.querySelector('#driver.show')) return;
+  if(document.querySelector('#orders-panel.show,#cabinet-panel.show,#shifts-panel.show')) return;
+  showEto();
+}
+function renderInput(){
+  const err=state.error?`<div class="error">${esc(state.error)}</div>`:'';
+  let html=err; const os=state.orderStep;
+  if(driverEtoFlowStep()){
+    renderEtoPanel();
+    updateDriverEtoBadge();
+    if(!document.querySelector('#eto-panel.show')){
+      html+=`<div class="hint">Сейчас нужно пройти ЕТО — отдельная вкладка ниже.</div>`;
+      html+=`<button type="button" class="primary" id="goto-eto-tab">Открыть ЕТО</button>`;
+    }
+    $('input-bar').innerHTML=html;
+    $('goto-eto-tab')&&($('goto-eto-tab').onclick=showEto);
+    renderDriverBanner();
+    updateDriverChrome();
+    return;
+  }
+  if(os==='closeShiftParking'){
     const sug=state.draft&&state.draft.closeShiftSuggestOdo!=null?state.draft.closeShiftSuggestOdo:null;
     const ph=sug!=null?String(sug):'Например, 277800';
     html+=`<div class="hint warn-close">Одометр на стоянке — смена закроется</div>`;
@@ -550,22 +679,10 @@ function renderInput(){
   } else if(os==='dayNumber') html+=`<div class="hint">Номер заказа за день</div><div class="nums">${[1,2,3,4,5].map(n=>`<button data-day="${n}">${n}</button>`).join('')}</div>`;
   else if(os==='loading'||os==='unloading') html+=`<div class="row"><textarea id="text" rows="2" placeholder="Город, улица, дом, строение"></textarea><button id="text-ok">OK</button></div>`;
   else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
-  else if(state.step==='idle') html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
-  else if(state.step==='chooseVehicle') html+=plates().map(p=>`<button class="secondary plate" data-plate="${esc(p)}">${esc(p)}</button>`).join('');
-  else if(state.step==='odometer'||state.step==='fuel'){
-    if(state.step==='odometer'){
-      const sug=state.shift&&state.shift.etoOdometerSuggest!=null?state.shift.etoOdometerSuggest:null;
-      const ph=sug!=null?String(sug):'Например, 125430';
-      html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${sug!=null?`value="${esc(String(sug))}"`:''} /><button id="num-ok">OK</button></div>`;
-      if(sug!=null) html+=`<button class="secondary" id="eto-odo-keep">Как вчера: ${esc(String(sug))}</button>`;
-    } else {
-      html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="Например, 42" /><button id="num-ok">OK</button></div>`;
-    }
+  else if(state.step==='idle'){
+    html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
+    html+=`<button type="button" class="secondary" id="goto-eto-idle">ЕТО</button>`;
   }
-  else if(state.step==='gur') html+=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
-  else if(state.step==='coolant') html+=`<div class="hint">Уровень ОЖ</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
-  else if(state.step==='lights') html+=lightsUI()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
-  else if(state.step==='oil') html+=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
   else if(state.step==='done'){
     const open=inProgressOrder();
     const enRoute=enRouteOrder();
@@ -581,18 +698,24 @@ function renderInput(){
       if(shiftAwaitingClose()){
         html+=`<div class="hint warn-close">Смена ещё открыта. Перед уходом нажмите «Закрыть смену» и введите одометр на стоянке.</div>`;
       }
-      assignedPending().forEach(o=>{ html+=`<button class="primary depart-assigned" data-id="${o.id}">Выехал · заказ №${o.sequentialNumber}</button>`; });
+      const bannerPending=$('driver-banner')&&$('driver-banner').classList.contains('show')&&assignedPending().length;
+      if(!bannerPending){
+        assignedPending().forEach(o=>{ html+=`<button class="primary depart-assigned" data-id="${o.id}">Выехал · заказ №${o.sequentialNumber}</button>`; });
+      }
       html+=`<button class="secondary" id="create-order">Создать заказ сам</button>`;
       html+=`<button class="primary" id="close-shift">Закрыть смену</button>`;
     }
     if(!findOpenShift()) html+=`<button class="secondary" id="new-shift">Новая смена</button>`;
   }
   $('input-bar').innerHTML=html; wireInput();
+  renderEtoPanel();
+  updateDriverEtoBadge();
   renderDriverBanner();
   updateDriverChrome();
 }
 function wireInput(){
   $('open-shift')&&($('open-shift').onclick=openShift);
+  $('goto-eto-idle')&&($('goto-eto-idle').onclick=showEto);
   document.querySelectorAll('.plate').forEach(b=>b.onclick=()=>selectVehicle(b.dataset.plate));
   $('num-ok')&&($('num-ok').onclick=submitNumber);
   $('eto-odo-keep')&&($('eto-odo-keep').onclick=()=>{
@@ -657,6 +780,7 @@ function restartEtoInspection(){
   }
   bumpDataEpoch('eto-restart');
   upsertShift(); persist(); renderInput();
+  maybeAutoOpenEtoTab();
 }
 /** Восстановить orderStep/draft из смены или хвоста чата (создание заказа / в пути). */
 function restoreOrderWorkflow(shift){
@@ -859,6 +983,7 @@ function resumeOpenShift(shift){
     }
   }
   upsertShift(); persist(); renderChat(); renderInput();
+  maybeAutoOpenEtoTab();
 }
 function openShift(){
   try{
@@ -897,6 +1022,7 @@ function openShift(){
     state.step='chooseVehicle'; state.orderStep='idle'; state.error='';
     bumpDataEpoch('open-shift');
     upsertShift(); renderInput();
+    maybeAutoOpenEtoTab();
     armExitGuard();
   }catch(err){
     console.error('openShift', err);
@@ -1037,6 +1163,7 @@ function selectFluid(level){
     clearTimeout(persistTimer);
     pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
     renderInput();
+    showDriverHome();
     return;
   }
   state.error=''; upsertShift(); syncOpenShiftRuntime(); persist(); renderInput();
@@ -1607,10 +1734,11 @@ function showCabinet(){
   if(helpTour) helpTour.onclick=()=>{ if(window.ArmadaOnboarding) ArmadaOnboarding.replay('driver'); };
 }
 function hideDriverPanels(){
-  ['cabinet-panel','orders-panel','shifts-panel'].forEach(id=>{
+  ['cabinet-panel','orders-panel','shifts-panel','eto-panel'].forEach(id=>{
     const el=$(id); if(el) el.classList.remove('show');
   });
   setDriverNav('btn-home');
+  syncDriverMainVisibility();
 }
 
 function driverOrderPointsHtml(o){

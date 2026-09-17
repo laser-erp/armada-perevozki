@@ -966,13 +966,18 @@
     <div id="input-bar"></div>
     <nav class="driver-tabbar driver-nav" aria-label="Разделы водителя">
       <button type="button" id="btn-home" class="on" aria-current="page"><span class="tab-ico" aria-hidden="true">●</span>Главная</button>
+      <button type="button" id="btn-eto"><span class="tab-ico" aria-hidden="true">✓</span>ЕТО<span class="drv-tab-badge" id="drv-eto-badge" hidden></span></button>
       <button type="button" id="btn-orders"><span class="tab-ico" aria-hidden="true">☰</span>Заявки</button>
       <button type="button" id="btn-shifts"><span class="tab-ico" aria-hidden="true">◷</span>История</button>
-      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль водителя</button>
+      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль</button>
     </nav>
     <div id="cabinet-panel" class="driver-panel">
       <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль водителя</h1></header>
       <div class="panel-body" id="cabinet-list"></div>
+    </div>
+    <div id="eto-panel" class="driver-panel">
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>ЕТО</h1></header>
+      <div class="panel-body driver-eto-body" id="eto-body"></div>
     </div>
     <div id="orders-panel" class="driver-panel">
       <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Заявки</h1></header>

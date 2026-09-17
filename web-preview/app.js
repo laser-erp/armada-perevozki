@@ -3642,6 +3642,7 @@ function beginClosePrevAndOpenNew(prevShift){
   }
   state.error='';
   renderChat(); renderInput();
+  if(typeof maybeAutoOpenEtoTab==='function') maybeAutoOpenEtoTab();
   return true;
 }
 function acceptClosePrevThenOpen(value){
@@ -3686,6 +3687,7 @@ function acceptClosePrevThenOpen(value){
   clearTimeout(persistTimer);
   pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close-prev', err); });
   renderChat(); renderInput();
+  if(typeof maybeAutoOpenEtoTab==='function') maybeAutoOpenEtoTab();
 }
 function healDuplicateOpenShifts(keep){
   if(!keep) return;
@@ -5220,6 +5222,7 @@ function wireShellHandlers(){
   });
   if(typeof loginDriver==='function') wireDriverLoginHandlers();
   $('btn-home')&&typeof showDriverHome==='function'&&($('btn-home').onclick=showDriverHome);
+  $('btn-eto')&&typeof showEto==='function'&&($('btn-eto').onclick=showEto);
   $('pin-back')&&typeof backFromEntryLogin==='function'&&($('pin-back').onclick=()=>backFromEntryLogin());
   if(typeof loginAdmin==='function'){
     $('pin-ok')&&($('pin-ok').onclick=loginAdmin);
