@@ -3294,15 +3294,25 @@ function maybeNudgeCloseShift(force){
 function renderDriverBanner(){
   const box=$('driver-banner'); if(!box) return;
   const enRoute=awaitingArrive();
-  const pending=assignedPending();
+  const pending=typeof driverPendingForBanner==='function'?driverPendingForBanner():assignedPending();
+  const awaitOdo=typeof driverAwaitingOdoOrder==='function'?driverAwaitingOdoOrder():null;
   const needClose=shiftAwaitingClose();
   const etrnHtml=typeof driverEtrnBannerHtml==='function'?driverEtrnBannerHtml():'';
-  if(!enRoute.length && !pending.length && !needClose && !etrnHtml){
+  if(!enRoute.length && !pending.length && !needClose && !etrnHtml && !awaitOdo){
     box.classList.remove('show','remind-close'); box.innerHTML='';
     updateDriverNetHint();
     return;
   }
   let html='';
+  if(awaitOdo){
+    if(state.orderStep==='departAssignedOdometer'){
+      html+=`<strong>Заказ №${awaitOdo.sequentialNumber} — введите одометр выезда</strong>
+        <p>${esc(routeText(awaitOdo))}<br>Поле ввода ниже → цифры одометра → <b>OK</b>. Повторное «Выехал» не нужно.</p>`;
+    } else {
+      html+=`<strong>Заказ №${awaitOdo.sequentialNumber} — одометр на загрузке</strong>
+        <p>${esc(routeText(awaitOdo))}<br>Введите одометр по прибытию в поле ниже и нажмите OK.</p>`;
+    }
+  }
   enRoute.forEach(o=>{
     html+=`<strong>Заказ №${o.sequentialNumber} — вы в пути</strong>
       <p>${esc(routeText(o))}<br>Не забудьте отметить прибытие на загрузку (одометр).</p>
