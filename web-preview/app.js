@@ -2688,6 +2688,12 @@ function orderAfterLoadingArrival(o){
   if(o.startOdometer==null||!o.arrivedAt) return false;
   return true;
 }
+/** Есть заказ, который не даёт закрыть смену (назначен / в пути / на выгрузке). */
+function driverOrdersBlockCloseShift(){
+  if(enRouteOrder()||inProgressOrder()) return true;
+  if(typeof assignedPending==='function'&&assignedPending().length) return true;
+  return false;
+}
 /** Можно закрывать перевозку (одометр на выгрузке) — только после погрузки. */
 function canCloseOrderMessage(order){
   if(!order) return 'Нет открытого заказа';
