@@ -1446,12 +1446,36 @@ function showCustomerPortal(){
     if(customerChatDraftIsSubmitted(chatRaw)) clearCustomerOrderDraft();
   }catch(_){}
   renderCustomerPortal();
+  wireCustomerPortalRefresh();
   maybePromptCustomerOrderDraft();
   syncCustomerOrderModeUi();
   custPortalTab=loadCustomerPortalTab();
   syncCustomerPortalTabUi();
   show('customer-portal');
+  if(typeof pullRemoteUpdates==='function'){
+    pullRemoteUpdates('customer-open').then(ok=>{
+      if(ok&&currentCustomer&&typeof renderCustomerPortal==='function') renderCustomerPortal();
+    }).catch(()=>{});
+  }
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeCustomer();
+}
+function wireCustomerPortalRefresh(){
+  const btn=$('cust-portal-refresh');
+  if(!btn||btn.dataset.wired) return;
+  btn.dataset.wired='1';
+  btn.onclick=async()=>{
+    btn.disabled=true;
+    const prev=btn.textContent;
+    btn.textContent='…';
+    try{
+      if(typeof initCloudSync==='function') await initCloudSync().catch(()=>{});
+      if(typeof pullRemoteUpdates==='function') await pullRemoteUpdates('customer-refresh');
+      if(currentCustomer&&typeof renderCustomerPortal==='function') renderCustomerPortal();
+    }finally{
+      btn.disabled=false;
+      btn.textContent=prev;
+    }
+  };
 }
 
 function renderCustomerPortal(){

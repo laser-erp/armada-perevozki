@@ -3816,6 +3816,7 @@ function mergeTwoOrderCopies(cur, lo){
   }
   if(mergeOrderAssignmentFields(cur, lo)) changed=true;
   if(restoreOrderAssignmentIfLost(cur, keepAssign)) changed=true;
+  if(mergeOrderEtrn(cur, lo)) changed=true;
   if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(cur)) changed=true;
   return changed;
 }
@@ -4028,6 +4029,29 @@ function orderProgressScore(o){
   if(o.closedAt || looksClosedOrder(o)) n+=6;
   return n;
 }
+function etrnTitulSignedScore(et){
+  if(!et||!et.tituls) return 0;
+  return ['t1','t2','t3','t4'].reduce((n,k)=>n+(et.tituls[k]==='signed'?1:0),0);
+}
+/** ЭТрН с сервера не терять при merge localStorage ↔ state (важно для портала заказчика). */
+function mergeOrderEtrn(cur, lo){
+  if(!cur||!lo||!lo.etrn) return false;
+  const a=cur.etrn, b=lo.etrn;
+  if(!a){ cur.etrn=structuredClone(b); return true; }
+  const sa=etrnTitulSignedScore(a), sb=etrnTitulSignedScore(b);
+  if(sb>sa){ cur.etrn=structuredClone(b); return true; }
+  let changed=false;
+  cur.etrn.tituls=cur.etrn.tituls||{};
+  const bt=b.tituls||{};
+  ['t1','t2','t3','t4'].forEach(k=>{
+    if(bt[k]==='signed'&&cur.etrn.tituls[k]!=='signed'){ cur.etrn.tituls[k]='signed'; changed=true; }
+    else if(!cur.etrn.tituls[k]&&bt[k]){ cur.etrn.tituls[k]=bt[k]; changed=true; }
+  });
+  if(!cur.etrn.shipperSignToken&&b.shipperSignToken){ cur.etrn.shipperSignToken=b.shipperSignToken; changed=true; }
+  if(!cur.etrn.externalId&&b.externalId){ cur.etrn.externalId=b.externalId; changed=true; }
+  if((!cur.etrn.status||cur.etrn.status==='draft')&&b.status&&b.status!=='draft'){ cur.etrn.status=b.status; changed=true; }
+  return changed;
+}
 /** Слить поля: не затирать заполненное пустым; время/закрытие — от более полной копии. */
 function mergeOrderFields(cur, lo){
   if(!cur||!lo) return false;
@@ -4062,6 +4086,7 @@ function mergeOrderFields(cur, lo){
     });
   }
   if(mergeOrderAssignmentFields(cur, lo)) changed=true;
+  if(mergeOrderEtrn(cur, lo)) changed=true;
   return changed;
 }
 /** Не потерять локальные открытые/в-пути заказы при remote_ahead. */
