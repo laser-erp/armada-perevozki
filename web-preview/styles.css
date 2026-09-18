@@ -727,8 +727,17 @@
       padding-bottom:calc(var(--driver-tab-clear) + env(safe-area-inset-bottom,0px));
       padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)
     }
-    #driver #chat{flex:1;min-height:0;padding-bottom:12px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    #driver #chat{display:none!important}
     #driver.driver-home-compact #driver-home{flex:1;min-height:0}
+    .driver-eto-panel{display:flex;flex-direction:column;gap:10px;min-height:0}
+    .eto-chat{
+      flex:0 1 auto;max-height:38vh;min-height:72px;overflow-y:auto;
+      display:flex;flex-direction:column;gap:8px;padding:8px 10px;
+      border:1px solid var(--border);border-radius:var(--radius);background:var(--bg0);
+      overscroll-behavior:contain;-webkit-overflow-scrolling:touch
+    }
+    .eto-chat:empty{display:none}
+    .eto-chat .bubble{max-width:92%}
     #driver.driver-home-compact #driver-banner{margin-bottom:4px}
     #driver #input-bar{
       flex-shrink:0;

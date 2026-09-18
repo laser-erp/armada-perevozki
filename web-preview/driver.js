@@ -129,23 +129,9 @@ function setDriverNav(which){
     if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
   });
 }
-/** Чат на Главной — только сценарий заказа/смены; ЕТО и «просто главная» без ленты сообщений. */
-function driverHomeShowChat(){
-  if(!DRIVER) return false;
-  if(document.querySelector('#driver .driver-panel.show')) return false;
-  if(driverEtoFlowStep()) return false;
-  const s=state.shift||findOpenShift();
-  if(s && !s.endedAt && !isEtoDone(s) && (state.orderStep||'idle')==='idle') return false;
-  const os=state.orderStep||'idle';
-  const orderChatSteps=new Set([
-    'arrivalOdometer','closingOdometer','fuelPrice','fuelAmount','departAssignedOdometer',
-    'arriveAssignedOdometer','startAssignedOdometer','closeShiftParking','postCloseWhere',
-    'dayNumber','loading','unloading','askRefuel','closeShiftStaysLoaded','closingEmptyAfter'
-  ]);
-  if(os==='chooseVehicle' && state.step!=='chooseVehicle') return true;
-  if(orderChatSteps.has(os)) return true;
-  if(state.step==='done' && inProgressOrder()) return true;
-  return false;
+function driverChatEl(){
+  if(DRIVER && document.querySelector('#driver.show')) return $('eto-chat')||$('chat');
+  return $('chat');
 }
 function syncDriverMainVisibility(){
   const onPanel=!!document.querySelector('#driver .driver-panel.show');
@@ -155,14 +141,14 @@ function syncDriverMainVisibility(){
   const banner=$('driver-banner');
   const driver=$('driver');
   if(homeEl) homeEl.style.display=onPanel?'none':(DRIVER?'flex':'none');
-  const showChat=!onPanel && driverHomeShowChat();
-  if(chat){
-    chat.style.display=showChat?'':'none';
-    chat.setAttribute('aria-hidden', showChat?'false':'true');
+  if(chat && DRIVER && document.querySelector('#driver.show')){
+    chat.innerHTML='';
+    chat.style.display='none';
+    chat.setAttribute('aria-hidden','true');
   }
   if(bar) bar.style.display=onPanel?'none':'';
   if(banner&&onPanel) banner.classList.remove('show');
-  if(driver) driver.classList.toggle('driver-home-compact', !onPanel && !showChat && !!DRIVER);
+  if(driver) driver.classList.toggle('driver-home-compact', !onPanel && !!DRIVER);
 }
 function driverEtoFlowStep(){
   if(state.orderStep==='closePrevShiftParking') return true;
@@ -193,6 +179,7 @@ function showEto(){
   const panel=$('eto-panel');
   if(panel) panel.classList.add('show');
   syncDriverMainVisibility();
+  renderChat();
   renderEtoPanel();
   updateDriverEtoBadge();
 }
@@ -586,8 +573,17 @@ function leaveDriverMode(){
 /** Восстановить вход после обновления страницы (без повторного PIN). */
 function renderChat(){
   const n=state.messages.length;
-  $('chat').innerHTML=state.messages.map((m,i)=>`<div class="bubble ${m.author}${i===n-1?' bubble-in':''}">${esc(m.text)}</div>`).join('');
-  $('chat').scrollTop=$('chat').scrollHeight; renderInput();
+  const html=state.messages.map((m,i)=>`<div class="bubble ${m.author}${i===n-1?' bubble-in':''}">${esc(m.text)}</div>`).join('');
+  const target=driverChatEl();
+  if(target){
+    target.innerHTML=html;
+    target.scrollTop=target.scrollHeight;
+  }
+  const legacy=$('chat');
+  if(DRIVER && document.querySelector('#driver.show') && legacy && legacy!==target){
+    legacy.innerHTML='';
+  }
+  renderInput();
 }
 function etoFluidOn(level){
   const s=state.shift;
