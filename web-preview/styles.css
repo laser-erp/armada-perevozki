@@ -704,6 +704,8 @@
       padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)
     }
     #driver #chat{flex:1;min-height:0;padding-bottom:12px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    #driver.driver-home-compact #driver-home{flex:1;min-height:0}
+    #driver.driver-home-compact #driver-banner{margin-bottom:4px}
     #driver #input-bar{
       flex-shrink:0;
       padding-bottom:10px; /* safe-area у нижнего меню, не у поля ввода */

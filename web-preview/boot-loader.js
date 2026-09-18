@@ -1,6 +1,6 @@
 /* АРМАДА — внешний загрузчик (CSP script-src 'self' без unsafe-inline) */
 (function () {
-  var APP_BUILD = '2026-09-17-driver-home-eto-tab';
+  var APP_BUILD = '2026-09-18-driver-home-no-eto-chat';
 
   window.__armadaBootDone = false;
 

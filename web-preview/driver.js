@@ -129,16 +129,40 @@ function setDriverNav(which){
     if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
   });
 }
+/** Чат на Главной — только сценарий заказа/смены; ЕТО и «просто главная» без ленты сообщений. */
+function driverHomeShowChat(){
+  if(!DRIVER) return false;
+  if(document.querySelector('#driver .driver-panel.show')) return false;
+  if(driverEtoFlowStep()) return false;
+  const s=state.shift||findOpenShift();
+  if(s && !s.endedAt && !isEtoDone(s) && (state.orderStep||'idle')==='idle') return false;
+  const os=state.orderStep||'idle';
+  const orderChatSteps=new Set([
+    'arrivalOdometer','closingOdometer','fuelPrice','fuelAmount','departAssignedOdometer',
+    'arriveAssignedOdometer','startAssignedOdometer','closeShiftParking','postCloseWhere',
+    'dayNumber','loading','unloading','askRefuel','closeShiftStaysLoaded','closingEmptyAfter'
+  ]);
+  if(os==='chooseVehicle' && state.step!=='chooseVehicle') return true;
+  if(orderChatSteps.has(os)) return true;
+  if(state.step==='done' && inProgressOrder()) return true;
+  return false;
+}
 function syncDriverMainVisibility(){
   const onPanel=!!document.querySelector('#driver .driver-panel.show');
   const homeEl=$('driver-home');
   const chat=$('chat');
   const bar=$('input-bar');
   const banner=$('driver-banner');
+  const driver=$('driver');
   if(homeEl) homeEl.style.display=onPanel?'none':(DRIVER?'flex':'none');
-  if(chat) chat.style.display=onPanel?'none':'';
+  const showChat=!onPanel && driverHomeShowChat();
+  if(chat){
+    chat.style.display=showChat?'':'none';
+    chat.setAttribute('aria-hidden', showChat?'false':'true');
+  }
   if(bar) bar.style.display=onPanel?'none':'';
   if(banner&&onPanel) banner.classList.remove('show');
+  if(driver) driver.classList.toggle('driver-home-compact', !onPanel && !showChat && !!DRIVER);
 }
 function driverEtoFlowStep(){
   if(state.orderStep==='closePrevShiftParking') return true;
@@ -659,6 +683,7 @@ function renderInput(){
     $('goto-eto-tab')&&($('goto-eto-tab').onclick=showEto);
     renderDriverBanner();
     updateDriverChrome();
+    syncDriverMainVisibility();
     return;
   }
   if(os==='closeShiftParking'){
@@ -712,6 +737,7 @@ function renderInput(){
   updateDriverEtoBadge();
   renderDriverBanner();
   updateDriverChrome();
+  syncDriverMainVisibility();
 }
 function wireInput(){
   $('open-shift')&&($('open-shift').onclick=openShift);
