@@ -296,9 +296,13 @@
     epdShellOpts={ mode:'sandbox', kind:'sandbox', onClose:opts.onClose, title:opts.title||'Подпись (тест)' };
     const shell=ensureEpdOperatorShell();
     const title=$('epd-operator-title');
+    const lead=$('epd-operator-lead');
     const frame=$('epd-operator-frame');
     const sandbox=$('epd-operator-sandbox');
+    const foot=$('epd-operator-foot');
     if(title) title.textContent=epdShellOpts.title;
+    if(lead) lead.textContent=opts.lead||'Тестовая подпись в АРМАДА (без окна оператора).';
+    if(foot) foot.hidden=true;
     epdShowOperatorFallback(false);
     if(frame){ frame.hidden=true; frame.removeAttribute('src'); }
     if(sandbox){ sandbox.hidden=false; sandbox.innerHTML=html; }
@@ -429,6 +433,7 @@
     if(!o){ alert('Заказ не найден'); return false; }
     if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, { silent:true });
     if(role==='customer'&&titul==='t1'){
+      if(typeof showCustomerEtrnT1SignDialog==='function') return showCustomerEtrnT1SignDialog(orderId);
       return openEpdTitulSignSandboxPanel(orderId, titul, role, o);
     }
     const titLabel=typeof etrnTitulLabel==='function'?etrnTitulLabel(titul):titul.toUpperCase();

@@ -439,20 +439,82 @@ function customerEtrnT1BannerHtml(opts){
   if(opts.compact) return parts.join('');
   return `<div class="cust-etrn-banner">${parts.join('')}</div>`;
 }
+function customerSignEtrnT1Direct(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o){ alert('Заказ не найден'); return false; }
+  if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+  if(o.etrn&&o.etrn.tituls&&o.etrn.tituls.t1==='signed'){
+    alert('T1 уже подписан по этой заявке.');
+    return true;
+  }
+  if(typeof customerEtrnT1Pending==='function'&&!customerEtrnT1Pending(o)){
+    if(typeof customerEtrnT1WaitingPhase==='function'&&customerEtrnT1WaitingPhase(o)){
+      alert('Подпись T1 откроется, когда водитель приедет на погрузку.');
+    }else{
+      alert('Сейчас подпись T1 недоступна. Нажмите «Обновить» в шапке портала.');
+    }
+    return false;
+  }
+  const ship=orderShipperInfo(o);
+  const by=ship.name||'грузоотправитель';
+  if(!signEtrnTitul(orderId,'t1',by)) return false;
+  if(typeof renderCustomerPortal==='function') renderCustomerPortal();
+  return true;
+}
+function showCustomerEtrnT1SignDialog(orderId){
+  const o=(state.orders||[]).find(x=>x.id===orderId);
+  if(!o){ alert('Заказ не найден'); return false; }
+  const overlay=$('cust-shipper-etrn-overlay');
+  const body=$('cust-shipper-etrn-body');
+  if(!overlay||!body) return customerSignEtrnT1Direct(orderId);
+  if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+  const ship=orderShipperInfo(o);
+  const t1Signed=o.etrn&&o.etrn.tituls&&o.etrn.tituls.t1==='signed';
+  const canSign=typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o);
+  const waitLoad=typeof customerEtrnT1WaitingPhase==='function'&&customerEtrnT1WaitingPhase(o);
+  let inner='';
+  if(t1Signed){
+    inner=`<p><strong>T1 подписан.</strong></p><button type="button" class="secondary" id="cust-etrn-t1-close">Закрыть</button>`;
+  }else if(!canSign&&waitLoad){
+    inner=`<p class="hint">Заявка № ${esc(o.sequentialNumber||'—')}</p>
+      <p>Подпись T1 появится, когда водитель на погрузке. Обновите страницу или нажмите «Обновить» в шапке.</p>
+      <button type="button" class="secondary" id="cust-etrn-t1-close">Понятно</button>`;
+  }else if(!canSign){
+    inner=`<p class="hint">Заявка № ${esc(o.sequentialNumber||'—')}</p>
+      <p>Подпись T1 пока недоступна. Нажмите «Обновить» в шапке портала.</p>
+      <button type="button" class="secondary" id="cust-etrn-t1-close">Закрыть</button>`;
+  }else{
+    inner=`<p class="hint">Заявка № ${esc(o.sequentialNumber||'—')} · ${esc(routeText(o)||'')}</p>
+      <p><strong>${esc(ship.name||'Грузоотправитель')}</strong>, подтвердите отгрузку — подпись T1 в ЭТrН (тестовый контур, без Контура).</p>
+      <div class="cust-etrn-t1-actions" style="margin-top:12px">
+        <button type="button" class="primary" id="cust-etrn-t1-confirm">Подписать T1</button>
+        <button type="button" class="secondary" id="cust-etrn-t1-close">Отмена</button>
+      </div>`;
+  }
+  body.innerHTML=inner;
+  overlay.hidden=false;
+  const close=()=>{ overlay.hidden=true; };
+  const closeBtn=$('cust-etrn-t1-close');
+  if(closeBtn) closeBtn.onclick=close;
+  overlay.onclick=e=>{ if(e.target===overlay) close(); };
+  const confirmBtn=$('cust-etrn-t1-confirm');
+  if(confirmBtn){
+    confirmBtn.onclick=()=>{
+      if(customerSignEtrnT1Direct(orderId)){
+        close();
+        alert('T1 подписан. Спасибо!');
+      }
+    };
+  }
+  return true;
+}
 function wireCustomerEtrnT1(root){
   (root||document).querySelectorAll('.cust-etrn-t1-sign').forEach(btn=>{
     if(btn.dataset.etrnWired) return;
     btn.dataset.etrnWired='1';
-    btn.onclick=async()=>{
+    btn.onclick=()=>{
       const oid=btn.dataset.orderId;
-      const o=(state.orders||[]).find(x=>x.id===oid);
-      if(o&&!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
-      if(typeof openEpdTitulSign==='function'){
-        try{ await openEpdTitulSign(oid,'t1','customer'); return; }catch(_){}
-      }
-      const ship=orderShipperInfo(o);
-      const by=ship.name||'грузоотправитель';
-      if(signEtrnTitul(oid,'t1',by)&&typeof renderCustomerPortal==='function') renderCustomerPortal();
+      showCustomerEtrnT1SignDialog(oid);
     };
   });
   (root||document).querySelectorAll('.cust-etrn-shipper-copy').forEach(btn=>{
@@ -499,14 +561,8 @@ function renderShipperEtrnT1Overlay(orderId, token){
   const signBtn=$('cust-shipper-etrn-sign');
   if(signBtn){
     signBtn.onclick=()=>{
-      if(typeof openEpdTitulSign==='function'){
-        openEpdTitulSign(orderId,'t1','customer');
-        return;
-      }
-      const by=ship.name||'грузоотправитель';
-      if(signEtrnTitul(orderId,'t1',by)){
+      if(customerSignEtrnT1Direct(orderId)){
         renderShipperEtrnT1Overlay(orderId, token);
-        if(typeof bumpDataEpoch==='function') bumpDataEpoch('etrn-t1-shipper');
       }
     };
   }
