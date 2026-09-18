@@ -2682,9 +2682,30 @@ function looksClosedOrder(o){
   if(o.loadedKm!=null && o.emptyKmAfter!=null && o.startOdometer!=null) return true;
   return false;
 }
+/** Погрузка принята: одометр на загрузке + метка прибытия. */
+function orderAfterLoadingArrival(o){
+  if(!o||looksClosedOrder(o)||o.cancelledAt) return false;
+  if(o.startOdometer==null||!o.arrivedAt) return false;
+  return true;
+}
+/** Можно закрывать перевозку (одометр на выгрузке) — только после погрузки. */
+function canCloseOrderMessage(order){
+  if(!order) return 'Нет открытого заказа';
+  const en=enRouteOrder();
+  if(en&&en.id===order.id){
+    return `Сначала «Прибыл на загрузку» по №${order.sequentialNumber} и одометр на погрузке.`;
+  }
+  if(orderEnRouteToLoading(order)){
+    return `Вы в пути — отметьте «Прибыл на загрузку» (№${order.sequentialNumber}).`;
+  }
+  if(!orderAfterLoadingArrival(order)){
+    return `Сначала «Выехал», затем «Прибыл на загрузку» с одометром (№${order.sequentialNumber||'—'}).`;
+  }
+  return null;
+}
 /** Заказ текущего водителя уже на загрузке / в работе (не чужие!). */
 function inProgressOrder(){
-  return (state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && orderBelongsToDriver(o)) || null;
+  return (state.orders||[]).find(o=>orderAfterLoadingArrival(o)&&orderBelongsToDriver(o))||null;
 }
 /** Выезд отмечен, прибытие на погрузку ещё нет (одометр и/или departAt). */
 function healOrderDepartFields(o){
@@ -2740,7 +2761,7 @@ function enRouteOrder(){
 function hasOpenOrder(){ return !!(inProgressOrder()||enRouteOrder()); }
 /** Назначен, ещё не выехал */
 function assignedPending(){
-  return (state.orders||[]).filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && o.departOdometer==null && !o.onExchange && orderBelongsToDriver(o));
+  return (state.orders||[]).filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && !orderEnRouteToLoading(o) && !o.onExchange && orderBelongsToDriver(o));
 }
 function awaitingArrive(){
   if(typeof syncDriverOrderCopiesFromShifts==='function') syncDriverOrderCopiesFromShifts();
@@ -2778,7 +2799,7 @@ function orderBeingClosed(){
   if(pinned && !pinned.cancelledAt && pinned.startOdometer!=null && !looksClosedOrder(pinned)) return pinned;
   // fallback: самый «свежий» открытый у водителя
   const open=(state.orders||[])
-    .filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && orderBelongsToDriver(o))
+    .filter(o=>orderAfterLoadingArrival(o)&&orderBelongsToDriver(o))
     .sort((a,b)=>new Date(b.arrivedAt||b.createdAt||0)-new Date(a.arrivedAt||a.createdAt||0));
   return open[0]||null;
 }

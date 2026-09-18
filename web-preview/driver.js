@@ -744,13 +744,14 @@ function renderInput(){
   else if(state.step==='done'){
     const open=inProgressOrder();
     const enRoute=enRouteOrder();
-    if(open){
-      if(open.staysLoadedOvernight) html+=`<div class="hint">Заказ №${open.sequentialNumber} перенесён (машина загружена) — закройте после выгрузки.</div>`;
-      html+=`<button class="primary" id="close-order">Закрыть заказ</button>`;
-      html+=`<button class="secondary" id="close-shift">Закрыть смену</button>`;
-    } else if(enRoute){
+    if(enRoute){
       html+=`<div class="hint">Заказ №${enRoute.sequentialNumber} — выехали. Отметьте прибытие на загрузку.</div>`;
       html+=`<button class="primary arrive-assigned" data-id="${enRoute.id}">Прибыл на загрузку №${enRoute.sequentialNumber}</button>`;
+      html+=`<button class="secondary" id="close-shift">Закрыть смену</button>`;
+    } else if(open){
+      if(open.staysLoadedOvernight) html+=`<div class="hint">Заказ №${open.sequentialNumber} перенесён (машина загружена) — закройте после выгрузки.</div>`;
+      html+=`<div class="hint">После выгрузки — «Закрыть заказ» (одометр на выгрузке), затем стоянка или следующая загрузка.</div>`;
+      html+=`<button class="primary" id="close-order">Закрыть заказ (выгрузка)</button>`;
       html+=`<button class="secondary" id="close-shift">Закрыть смену</button>`;
     } else {
       if(shiftAwaitingClose()){
@@ -1159,7 +1160,9 @@ function submitNumber(){
     const digits=raw.replace(/\D/g,''); if(!digits){state.error='Введите целое число километров';renderInput();return;}
     const value=+digits; const order=openOrder();
     if(!order){state.error='Нет открытого заказа';renderInput();return;}
-    if(value<order.startOdometer){state.error=`Одометр не может быть меньше начала заказа (${order.startOdometer})`;renderInput();return;}
+    const tripGate=typeof canCloseOrderMessage==='function'?canCloseOrderMessage(order):null;
+    if(tripGate){ state.error=tripGate; renderInput(); return; }
+    if(value<order.startOdometer){state.error=`Одометр на выгрузке не может быть меньше одометра на погрузке (${order.startOdometer})`;renderInput();return;}
     if(!state.draft.closingOrderId) state.draft.closingOrderId=order.id;
     state.draft.closeOdo=value; state.draft.endAt=new Date().toISOString();
     add('driver',String(value)); add('bot','Заправляли машину?');
@@ -1504,13 +1507,15 @@ function startCreateOrder(){
 function startCloseOrder(){
   syncOpenShiftRuntime();
   const order=orderBeingClosed(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  const tripGate=typeof canCloseOrderMessage==='function'?canCloseOrderMessage(order):null;
+  if(tripGate){ state.error=tripGate; renderInput(); return; }
   if(!findOpenShift() || (!isEtoDone(state.shift||{}) && state.step!=='done')){
     state.error='Сначала завершите ЕТО'; renderInput(); return;
   }
   // Чистый draft закрытия — без хвостов создания заказа
   state.draft={closingOrderId:order.id, plate:order.vehiclePlate||(state.shift&&state.shift.vehiclePlate)||''};
   add('driver','Закрыть заказ');
-  add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)}).\nУкажите показания одометра по окончании перевозки.`);
+  add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)}).\nУкажите одометр по прибытию на выгрузку (после погрузки).`);
   state.orderStep='closingOdometer'; state.error=''; upsertShift(); persist(); renderInput();
 }
 function startCloseShift(){
@@ -1621,8 +1626,10 @@ function askClosingEmptyAfter(refueled, price, liters){
 }
 function finalizeClose(refueled,price,liters){
   const order=orderBeingClosed(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
+  const tripGate=typeof canCloseOrderMessage==='function'?canCloseOrderMessage(order):null;
+  if(tripGate){ state.error=tripGate; renderInput(); return; }
   const end=state.draft.closeOdo;
-  if(end==null || order.startOdometer==null){state.error='Нет одометра окончания';renderInput();return;}
+  if(end==null || order.startOdometer==null){state.error='Нет одометра на выгрузке';renderInput();return;}
   if(end<order.startOdometer){state.error=`Одометр окончания меньше начала (${order.startOdometer})`;renderInput();return;}
   const loaded=end-order.startOdometer;
   const now=new Date().toISOString();
@@ -1966,7 +1973,7 @@ function driverOrderCardHtml(o, opts){
   const enRoute=typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(!closed&&o.departOdometer!=null&&o.startOdometer==null);
   const canDepart=!closed && o.startOdometer==null && !enRoute && o.departOdometer==null && !o.departAt && !o.onExchange;
   const canArrive=!closed && enRoute && o.startOdometer==null;
-  const inWork=!closed && o.startOdometer!=null;
+  const inWork=!closed && typeof orderAfterLoadingArrival==='function'?orderAfterLoadingArrival(o):(!closed&&o.startOdometer!=null);
   const stCls=closed?'closed':((o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait');
   const phone=formatPhone(o.contactPhone||'');
   const canContact=driverMaySeeContact(o)&&!!phone;
@@ -2020,7 +2027,7 @@ function driverOrdersActionHint(openOrders){
   list.forEach(o=>{
     if(o.onExchange) return;
     if(o.startOdometer!=null) inWork=true;
-    else if(o.departOdometer!=null) needArrive=true;
+    else if(typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(o.departOdometer!=null)) needArrive=true;
     else needDepart=true;
   });
   if(needDepart && needArrive) return 'В карточке: «Выехал» или «Прибыл на загрузку».';
