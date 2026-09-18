@@ -257,7 +257,11 @@ function signEtrnTitul(orderId, titulKey, signedBy){
   if(signedBy) o.etrn.titulsSignedBy=o.etrn.titulsSignedBy||{}, o.etrn.titulsSignedBy[titulKey]=signedBy;
   refreshEtrnOrderStatus(o);
   upsertOrder(o);
+  if(typeof bumpDataEpoch==='function') bumpDataEpoch(`etrn-${titulKey}-sign`);
   persist();
+  if(typeof currentCustomer!=='undefined'&&currentCustomer&&typeof persistAdminPinImmediate==='function'){
+    persistAdminPinImmediate().catch(()=>{});
+  }
   if(typeof logOpsEvent==='function') logOpsEvent('etrn',`Подписан ${titulKey} заказ ${o.sequentialNumber}`,{ orderId, titulKey });
   return true;
 }
@@ -437,19 +441,18 @@ function customerEtrnT1BannerHtml(opts){
 }
 function wireCustomerEtrnT1(root){
   (root||document).querySelectorAll('.cust-etrn-t1-sign').forEach(btn=>{
-    btn.onclick=()=>{
+    if(btn.dataset.etrnWired) return;
+    btn.dataset.etrnWired='1';
+    btn.onclick=async()=>{
       const oid=btn.dataset.orderId;
-      if(typeof openEpdTitulSign==='function'){
-        openEpdTitulSign(oid,'t1','customer');
-        return;
-      }
       const o=(state.orders||[]).find(x=>x.id===oid);
+      if(o&&!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
+      if(typeof openEpdTitulSign==='function'){
+        try{ await openEpdTitulSign(oid,'t1','customer'); return; }catch(_){}
+      }
       const ship=orderShipperInfo(o);
       const by=ship.name||'грузоотправитель';
-      if(signEtrnTitul(oid,'t1',by)){
-        if(typeof bumpDataEpoch==='function') bumpDataEpoch('etrn-t1-customer');
-        if(typeof renderCustomerPortal==='function') renderCustomerPortal();
-      }
+      if(signEtrnTitul(oid,'t1',by)&&typeof renderCustomerPortal==='function') renderCustomerPortal();
     };
   });
   (root||document).querySelectorAll('.cust-etrn-shipper-copy').forEach(btn=>{

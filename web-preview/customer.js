@@ -85,6 +85,7 @@ function syncCustomerPortalTabUi(){
     const panel=$('cust-tab-'+id);
     if(panel) panel.hidden=(id!==custPortalTab);
   });
+  if(typeof syncCustomerOrderModeUi==='function') syncCustomerOrderModeUi();
 }
 function customerDocsTabBadgeCount(){
   let n=0;
@@ -1568,7 +1569,13 @@ function renderCustomerPortal(){
 function renderCustomerInvoicesList(){
   const list=$('cust-invoices-list');
   if(!list||!currentCustomer) return;
+  if(typeof ensureCustomerInvoiceForOrder==='function'){
+    customerOrders().slice(0,30).forEach(o=>{
+      if(o&&o.id) ensureCustomerInvoiceForOrder(o.id);
+    });
+  }
   const invoices=typeof customerInvoicesForPortal==='function'?customerInvoicesForPortal(currentCustomer.companyId):[];
+  const orders=customerOrders();
   list.innerHTML=invoices.length?invoices.slice(0,15).map(inv=>{
     const amt=inv.amount>0?`${fmt(inv.amount)} ₽`:(inv.pricePending?'уточняется':'—');
     return `<div class="card cust-invoice-row" style="margin-bottom:8px">
@@ -1576,7 +1583,9 @@ function renderCustomerInvoicesList(){
       <p class="meta">${esc(inv.route||'')} · ${amt}</p>
       <button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}" data-order-id="${esc(inv.orderId||'')}">Открыть счёт с QR</button>
     </div>`;
-  }).join(''):'<div class="empty">Счета появятся после отправки заявки</div>';
+  }).join(''):(orders.length
+    ?'<div class="empty">Счёт формируется — нажмите «Обновить» в шапке или откройте счёт в блоке заявки ниже.</div>'
+    :'<div class="empty">Счета появятся после отправки заявки</div>');
   customerWireInvoiceLinks(list);
 }
 
@@ -2403,7 +2412,8 @@ function syncCustomerOrderModeUi(){
   const vtypeSearchWrap=$('cust-vtype-search-wrap');
   if(vtypeSearchWrap) vtypeSearchWrap.hidden=mode==='chat';
   const portal=$('customer-portal');
-  if(portal) portal.classList.toggle('cust-order-chat-mode', mode==='chat');
+  const onNewTab=typeof custPortalTab!=='undefined'?custPortalTab==='new':true;
+  if(portal) portal.classList.toggle('cust-order-chat-mode', mode==='chat'&&onNewTab);
   if(chatPanel){
     if(mode==='chat') chatPanel.removeAttribute('hidden');
     else chatPanel.hidden=true;
