@@ -700,6 +700,7 @@ function maybeAutoOpenEtoTab(){
   showEto();
 }
 function renderInput(){
+  if(DRIVER&&typeof syncDriverOrderCopiesFromShifts==='function') syncDriverOrderCopiesFromShifts();
   const err=state.error?`<div class="error">${esc(state.error)}</div>`:'';
   let html=err; const os=state.orderStep;
   if(driverEtoFlowStep()){
@@ -858,7 +859,7 @@ function restoreOrderWorkflow(shift){
   // Сначала снимем залипшие шаги (закрытый заказ после синка и т.п.)
   try{ healStuckOrderSteps(); }catch(_){}
   // Живой заказ «в пути» важнее сохранённого create-order
-  const enRoute=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null
+  const enRoute=(state.orders||[]).find(o=>(typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(!looksClosedOrder(o)&&!o.cancelledAt&&o.departOdometer!=null&&o.startOdometer==null))
     && samePersonName(o.driverName||'', shift.driverName||DRIVER));
   if(enRoute){
     state.orderStep='arriveAssignedOdometer';
@@ -928,7 +929,7 @@ function restoreOrderWorkflow(shift){
     return false;
   }
   if(/уже в пути|прибытию на загрузку|одометр.*прибыт.*загруз/i.test(t)){
-    const en=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && samePersonName(o.driverName||'', DRIVER));
+    const en=(state.orders||[]).find(o=>(typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(!looksClosedOrder(o)&&!o.cancelledAt&&o.departOdometer!=null&&o.startOdometer==null)) && samePersonName(o.driverName||'', DRIVER));
     if(en){
       state.orderStep='arriveAssignedOdometer';
       state.draft={assignedId:en.id, plate:shift.vehiclePlate||''};
@@ -1297,8 +1298,9 @@ function beginArrive(id, fromOrders){
     state.error=gate; renderInput(); return false;
   }
   const order=state.orders.find(o=>o.id===id);
-  if(!order||order.closedAt||order.startOdometer!=null||order.departOdometer==null){
-    const msg=order&&order.departOdometer==null?'Сначала отметьте выезд («Выехал»)':'Заказ недоступен';
+  if(typeof healOrderDepartFields==='function') healOrderDepartFields(order);
+  if(!order||order.closedAt||order.startOdometer!=null||!(order.departOdometer!=null||order.departAt)){
+    const msg=order&&order.departOdometer==null&&!order.departAt?'Сначала отметьте выезд («Выехал»)':'Заказ недоступен';
     if(fromOrders){ showOrdersError(msg); return false; }
     state.error=msg; renderInput(); return false;
   }
@@ -1443,6 +1445,7 @@ function acceptDepart(value){
   const etoNote=shift.odometer!=null&&+value===+shift.odometer?' (как при ЕТО на стоянке)':'';
   add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}${etoNote}\nВремя: ${dateTime(order.departAt)}\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
+  if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate().catch(()=>{});
   if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
 }
 function acceptArrive(value){
@@ -1472,6 +1475,7 @@ function acceptArrive(value){
   add('bot',`Заявка в работе🔔\n\n№${order.sequentialNumber} · ${orderDayLabel(order.dayNumber)}\n${routeText(order)}\nОдометр на загрузке: ${value}\nНулевой до заказа: ${order.emptyKmBefore} км${tTo}${linkNote}\n\nЭТрН: T2 (перевозчик) подписан. T1 — грузоотправитель в личном кабинете. T3 — водитель после подписи T1.`);
   add('bot','Когда перевозка закончится — нажмите «Закрыть заказ».');
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
+  if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate().catch(()=>{});
   if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
 }
 function startCreateOrder(){
@@ -1959,8 +1963,9 @@ function driverOrderPointsHtml(o){
 function driverOrderCardHtml(o, opts){
   opts=opts||{};
   const closed=looksClosedOrder(o)||!!o.cancelledAt;
-  const canDepart=!closed && o.startOdometer==null && o.departOdometer==null && !o.onExchange;
-  const canArrive=!closed && o.departOdometer!=null && o.startOdometer==null;
+  const enRoute=typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(!closed&&o.departOdometer!=null&&o.startOdometer==null);
+  const canDepart=!closed && o.startOdometer==null && !enRoute && o.departOdometer==null && !o.departAt && !o.onExchange;
+  const canArrive=!closed && enRoute && o.startOdometer==null;
   const inWork=!closed && o.startOdometer!=null;
   const stCls=closed?'closed':((o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait');
   const phone=formatPhone(o.contactPhone||'');
@@ -2025,6 +2030,7 @@ function driverOrdersActionHint(openOrders){
   return 'Действия по заказу — в карточке.';
 }
 function showOrders(){
+  if(typeof syncDriverOrderCopiesFromShifts==='function') syncDriverOrderCopiesFromShifts();
   openDriverPanel('orders-panel','btn-orders');
   const mine=allOrders().filter(o=>orderBelongsToDriver(o) && !o.onExchange);
   const board=driverExchangeEnabled(DRIVER)?exchangeOrders():[];

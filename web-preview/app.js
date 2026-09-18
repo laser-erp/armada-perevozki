@@ -2686,9 +2686,55 @@ function looksClosedOrder(o){
 function inProgressOrder(){
   return (state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && orderBelongsToDriver(o)) || null;
 }
+/** Выезд отмечен, прибытие на погрузку ещё нет (одометр и/или departAt). */
+function healOrderDepartFields(o){
+  if(!o||o.startOdometer!=null||o.departOdometer!=null) return false;
+  if(!o.departAt) return false;
+  const shift=state.shift||findOpenShift();
+  const guess=o.previousOdometer??(shift&&shift.lastOdometerPoint)??(shift&&shift.odometer);
+  if(guess==null) return false;
+  o.departOdometer=+guess;
+  if(o.previousOdometer==null) o.previousOdometer=+guess;
+  return true;
+}
+function orderEnRouteToLoading(o){
+  if(!o||looksClosedOrder(o)||o.cancelledAt||o.onExchange) return false;
+  if(o.startOdometer!=null) return false;
+  healOrderDepartFields(o);
+  return o.departOdometer!=null||!!o.departAt;
+}
+/** Слить заказы из смен — после sync «Выехал» часто только в shift.orders. */
+function syncDriverOrderCopiesFromShifts(){
+  if(typeof DRIVER==='undefined'||!DRIVER) return false;
+  let changed=false;
+  const touch=(so)=>{
+    if(!so||!so.id) return;
+    let cur=(state.orders||[]).find(x=>x.id===so.id);
+    if(!cur){
+      state.orders=state.orders||[];
+      state.orders.unshift(so);
+      cur=so;
+      changed=true;
+    }
+    if(mergeTwoOrderCopies(cur, so)) changed=true;
+  };
+  (state.shifts||[]).forEach(s=>{
+    if(s.driverName&&!samePersonName(s.driverName, DRIVER)) return;
+    (s.orders||[]).forEach(touch);
+  });
+  if(state.shift&&(state.shift.orders||[]).length){
+    (state.shift.orders||[]).forEach(touch);
+  }
+  (state.orders||[]).forEach(o=>{
+    if(orderBelongsToDriver(o)&&healOrderDepartFields(o)) changed=true;
+  });
+  if(typeof hydrateOrdersFromMessages==='function'&&hydrateOrdersFromMessages()) changed=true;
+  return changed;
+}
 /** Выехал, но ещё не отметил прибытие на загрузку */
 function enRouteOrder(){
-  return (state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && orderBelongsToDriver(o)) || null;
+  if(typeof syncDriverOrderCopiesFromShifts==='function') syncDriverOrderCopiesFromShifts();
+  return (state.orders||[]).find(o=>orderEnRouteToLoading(o)&&orderBelongsToDriver(o))||null;
 }
 /** Есть заказ, который блокирует новый старт (в пути или в работе) */
 function hasOpenOrder(){ return !!(inProgressOrder()||enRouteOrder()); }
@@ -2697,7 +2743,8 @@ function assignedPending(){
   return (state.orders||[]).filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer==null && o.departOdometer==null && !o.onExchange && orderBelongsToDriver(o));
 }
 function awaitingArrive(){
-  return (state.orders||[]).filter(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && !o.onExchange && orderBelongsToDriver(o));
+  if(typeof syncDriverOrderCopiesFromShifts==='function') syncDriverOrderCopiesFromShifts();
+  return (state.orders||[]).filter(o=>orderEnRouteToLoading(o)&&orderBelongsToDriver(o));
 }
 function upsertOrder(order){
   if(!order||!order.id) return;
@@ -3108,7 +3155,7 @@ function canArriveMessage(orderId){
   state.step='done';
   const target=orderId?(state.orders||[]).find(o=>o.id===orderId):null;
   // Свой заказ «в пути» — как раз то, на что жмём «Прибыл»
-  if(target && orderBelongsToDriver(target) && target.departOdometer!=null && target.startOdometer==null && !target.closedAt){
+  if(target && orderBelongsToDriver(target) && orderEnRouteToLoading(target) && !target.closedAt){
     return null;
   }
   const mineBusy=inProgressOrder();
@@ -4409,6 +4456,26 @@ function hydrateOrdersFromMessages(){
     const msgs=s.messages||[];
     for(let i=0;i<msgs.length;i++){
       const t=String(msgs[i].text||'');
+      const departBot=t.match(/Выезд зафиксирован[\s\S]*?№\s*(\d+)[\s\S]*?Одометр выезда:\s*(\d+)/i);
+      if(departBot){
+        const o=bySeq.get(+departBot[1]);
+        if(o&&o.startOdometer==null&&(o.departOdometer==null||o.departOdometer==='')){
+          o.departOdometer=+departBot[2];
+          if(!o.departAt) o.departAt=msgs[i].at||new Date().toISOString();
+          changed=true;
+        }
+      }
+      if(msgs[i].author==='driver'){
+        const departDrv=String(msgs[i].text||'').match(/Выехал\s*[·•]?\s*заказ\s*№\s*(\d+)\s*[·•]?\s*(\d+)\s*км/i);
+        if(departDrv){
+          const o=bySeq.get(+departDrv[1]);
+          if(o&&o.startOdometer==null&&(o.departOdometer==null||o.departOdometer==='')){
+            o.departOdometer=+departDrv[2];
+            if(!o.departAt) o.departAt=msgs[i].at||new Date().toISOString();
+            changed=true;
+          }
+        }
+      }
       const closed=t.match(/Заказ №\s*(\d+)\s*закрыт[\s\S]*?Одометр окончания:\s*(\d+)/i)
         || t.match(/Заказ №\s*(\d+)\s*закрыт/i);
       if(!closed) continue;
@@ -4482,7 +4549,7 @@ function healStuckOrderSteps(){
     if(step==='closingEmptyAfter' || step==='askRefuel' || /^postClose|^closeShift|^closePrev/.test(step)) return;
     const driver=s.driverName||'';
     const open=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && samePersonName(o.driverName||'', driver));
-    const enRoute=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.departOdometer!=null && o.startOdometer==null && samePersonName(o.driverName||'', driver));
+    const enRoute=(state.orders||[]).find(o=>orderEnRouteToLoading(o)&&samePersonName(o.driverName||'', driver));
     if(isAssignedFlowStep(step)){
       if(enRoute) return;
       if(step==='departAssignedOdometer'){
