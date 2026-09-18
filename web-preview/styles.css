@@ -749,6 +749,26 @@
       background:rgba(239,68,68,.08);color:var(--text);font-size:.86rem;line-height:1.35;margin-bottom:8px
     }
     .driver-step-hint strong{color:var(--accent)}
+    #driver #input-bar button.primary,#driver #input-bar button.secondary{width:auto;max-width:100%}
+    #driver #input-bar .row{display:flex;flex-wrap:nowrap;align-items:stretch;width:100%}
+    #driver #input-bar .row input{flex:1 1 0;min-width:0;width:auto;font-size:1.2rem;font-weight:700;text-align:center;letter-spacing:.03em}
+    #driver #input-bar .row button{flex:0 0 auto;min-width:88px;padding:0 16px;white-space:nowrap}
+    .driver-odo-row{display:flex;flex-direction:column;gap:10px;width:100%}
+    .driver-odo-label{font-size:.78rem;font-weight:700;color:var(--muted)}
+    .driver-odo-row input{
+      width:100%;box-sizing:border-box;font-size:1.35rem;font-weight:800;text-align:center;
+      letter-spacing:.06em;padding:14px 12px;min-height:52px;border:2px solid var(--border);border-radius:var(--radius);
+      background:#fff;color:var(--text);font-family:inherit
+    }
+    .driver-odo-row input:focus{border-color:var(--accent);outline:0;box-shadow:0 0 0 3px rgba(239,68,68,.15)}
+    .driver-odo-row .primary,.driver-odo-main{width:100%!important;min-height:52px;font-size:1rem;line-height:1.25;padding:12px 14px}
+    .driver-odo-main .sub{display:block;margin-top:4px;font-size:.78rem;font-weight:600;opacity:.92}
+    .eto-depart-block{margin:10px 0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+    .eto-depart-card{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+    .eto-depart-card:first-of-type{margin-top:8px;padding-top:0;border-top:0}
+    .eto-depart-title{font-weight:800;font-size:.92rem}
+    .eto-depart-route{margin:4px 0 8px;font-size:.8rem;color:var(--muted);line-height:1.35}
+    .eto-depart-card .primary{width:100%;min-height:48px}
     .driver-nav,.driver-tabbar{
       position:absolute;left:0;right:0;bottom:0;z-index:40;
       display:grid;grid-template-columns:repeat(5,1fr);gap:2px;

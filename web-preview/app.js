@@ -3306,8 +3306,10 @@ function renderDriverBanner(){
   let html='';
   if(awaitOdo){
     if(state.orderStep==='departAssignedOdometer'){
-      html+=`<strong>Заказ №${awaitOdo.sequentialNumber} — введите одометр выезда</strong>
-        <p>${esc(routeText(awaitOdo))}<br>Поле ввода ниже → цифры одометра → <b>OK</b>. Повторное «Выехал» не нужно.</p>`;
+      const shift=state.shift||findOpenShift();
+      const eto=typeof departOdometerSameAsEto==='function'&&shift?departOdometerSameAsEto(shift):null;
+      html+=`<strong>Заказ №${awaitOdo.sequentialNumber} — подтвердите выезд</strong>
+        <p>${esc(routeText(awaitOdo))}<br>${eto!=null?`Нажмите «${eto} км (как при ЕТО)» внизу.`:'Введите одометр в широком поле ниже.'}</p>`;
     } else {
       html+=`<strong>Заказ №${awaitOdo.sequentialNumber} — одометр на загрузке</strong>
         <p>${esc(routeText(awaitOdo))}<br>Введите одометр по прибытию в поле ниже и нажмите OK.</p>`;

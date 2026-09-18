@@ -631,9 +631,11 @@ function renderEtoPanel(){
   }
   if(isEtoDone(s)&&!driverEtoFlowStep()){
     html+=`<p class="hint">ЕТО на сегодня пройден · ${esc(s.vehiclePlate||'авто')} · одометр ${esc(String(s.odometer??'—'))}</p>`;
+    html+=renderEtoDepartQuickHtml(s);
     html+=`<button type="button" class="secondary" id="eto-restart-panel">Пройти ЕТО заново</button>`;
     body.innerHTML=html;
     $('eto-restart-panel')&&($('eto-restart-panel').onclick=restartEtoInspection);
+    wireEtoDepartQuick();
     return;
   }
   html+=renderEtoStepHtml();
@@ -792,6 +794,17 @@ function wireInput(){
   $('close-shift')&&($('close-shift').onclick=startCloseShift);
   document.querySelectorAll('.depart-assigned').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.arrive-assigned').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
+  $('depart-eto-confirm')&&($('depart-eto-confirm').onclick=()=>{
+    const shift=state.shift||findOpenShift();
+    const eto=shift&&departOdometerSameAsEto(shift);
+    if(eto==null){ state.draft=Object.assign({}, state.draft||{}, {manualDepartOdo:true}); renderInput(); return; }
+    acceptDepart(eto);
+  });
+  $('depart-manual-odo')&&($('depart-manual-odo').onclick=()=>{
+    state.draft=Object.assign({}, state.draft||{}, {manualDepartOdo:true});
+    renderInput();
+    focusDriverOdoInput();
+  });
   $('new-shift')&&($('new-shift').onclick=startNewShiftClick);
   document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>selectDayNumber(+b.dataset.day));
   $('text-ok')&&($('text-ok').onclick=submitText);
@@ -1253,9 +1266,17 @@ function beginDepart(id, fromOrders){
   }
   syncOpenShiftRuntime();
   hideDriverPanels();
-  state.draft.assignedId=id;
+  const shift=state.shift||findOpenShift();
+  state.draft=Object.assign({}, state.draft||{}, {assignedId:id, manualDepartOdo:false});
+  const etoOdo=shift?departOdometerSameAsEto(shift):null;
+  if(etoOdo!=null){
+    state.orderStep='departAssignedOdometer'; state.error=''; state.step='done';
+    upsertShift();
+    acceptDepart(etoOdo);
+    return true;
+  }
   add('driver',`Выехал · заказ №${order.sequentialNumber}`);
-  add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nУкажите одометр при выезде со стоянки.`);
+  add('bot',`Заказ №${order.sequentialNumber} (${orderDayLabel(order.dayNumber)})\nАвто: ${order.vehiclePlate}\nМаршрут: ${routeText(order)}\nВведите одометр при выезде (или отметьте на вкладке ЕТО).`);
   state.orderStep='departAssignedOdometer'; state.error=''; state.step='done';
   upsertShift(); renderChat(); renderDriverBanner(); renderInput();
   focusDriverOdoInput();
@@ -1335,19 +1356,70 @@ function driverPendingForBanner(){
   }
   return list;
 }
+/** Со стоянки после ЕТО км ещё не накручивали — выезд с тем же одометром, что при осмотре. */
+function departOdometerSameAsEto(shift){
+  if(!shift||shift.odometer==null) return null;
+  const floor=shift.lastOdometerPoint??shift.odometer;
+  if(floor==null||+floor!==+shift.odometer) return null;
+  return +floor;
+}
+function driverOdometerManualRow(ph, okLabel){
+  const val=ph!=null?String(ph):'';
+  return `<div class="driver-odo-row">
+    <label class="driver-odo-label" for="num">Показания одометра</label>
+    <input id="num" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="${esc(val||'Только цифры')}" ${val?`value="${esc(val)}"`:''} />
+    <button type="button" class="primary" id="num-ok">${esc(okLabel||'Подтвердить')}</button>
+  </div>`;
+}
 function driverOdometerStepHtml(os){
   const o=driverAwaitingOdoOrder()||(state.draft&&state.draft.assignedId?orderById(state.draft.assignedId):null);
   const shift=state.shift||findOpenShift();
   const floor=shift&&(shift.lastOdometerPoint??shift.odometer);
-  const ph=floor!=null?String(floor):'Например, 277690';
-  let hint='';
+  const ph=floor!=null?String(floor):'';
   if(os==='departAssignedOdometer'){
-    hint=`<div class="hint driver-step-hint">Заказ №${o?o.sequentialNumber:'?'}: введите <strong>одометр при выезде</strong> со стоянки и нажмите OK.${floor!=null?` Не меньше ${floor}.`:''}</div>`;
-  } else if(os==='arriveAssignedOdometer'){
-    const min=o&&o.departOdometer!=null?o.departOdometer:floor;
-    hint=`<div class="hint driver-step-hint">Заказ №${o?o.sequentialNumber:'?'}: одометр <strong>по прибытию на загрузку</strong>.${min!=null?` Не меньше ${min}.`:''}</div>`;
+    const eto=shift&&departOdometerSameAsEto(shift);
+    const manual=!!(state.draft&&state.draft.manualDepartOdo);
+    let hint=`<div class="hint driver-step-hint">Заказ №${o?o.sequentialNumber:'?'} · выезд со стоянки.</div>`;
+    if(eto!=null&&!manual){
+      return hint+`<button type="button" class="primary driver-odo-main" id="depart-eto-confirm">Выехал · ${eto} км<br><span class="sub">тот же одометр, что при ЕТО</span></button>
+        <button type="button" class="secondary" id="depart-manual-odo">Другой одометр (уже ездил)</button>`;
+    }
+    hint=`<div class="hint driver-step-hint">Заказ №${o?o.sequentialNumber:'?'}: введите одометр на момент выезда.${floor!=null?` Не меньше ${floor}.`:''}</div>`;
+    if(eto!=null&&manual){
+      hint+=`<button type="button" class="secondary" id="depart-eto-confirm">← Как при ЕТО: ${eto} км</button>`;
+    }
+    return hint+driverOdometerManualRow(ph,'Подтвердить выезд');
   }
-  return hint+`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" /><button type="button" class="primary" id="num-ok">OK</button></div>`;
+  if(os==='arriveAssignedOdometer'){
+    const min=o&&o.departOdometer!=null?o.departOdometer:floor;
+    const hint=`<div class="hint driver-step-hint">Заказ №${o?o.sequentialNumber:'?'}: одометр <strong>по прибытию на загрузку</strong>.${min!=null?` Не меньше ${min}.`:''}</div>`;
+    return hint+driverOdometerManualRow(min!=null?String(min):ph,'Прибыл · подтвердить');
+  }
+  return driverOdometerManualRow(ph,'OK');
+}
+function renderEtoDepartQuickHtml(shift){
+  const pending=assignedPending();
+  if(!pending.length||!shift||!isEtoDone(shift)) return '';
+  let html=`<div class="eto-depart-block"><div class="drv-section-label">Первый выезд</div>
+    <p class="hint">Одометр при ЕТО: <b>${esc(String(shift.odometer??'—'))}</b> — для выезда со стоянки на первый заказ можно тот же.</p>`;
+  pending.forEach(o=>{
+    const eto=departOdometerSameAsEto(shift);
+    html+=`<div class="eto-depart-card">
+      <div class="eto-depart-title">Заказ №${o.sequentialNumber}</div>
+      <div class="eto-depart-route">${esc(routeText(o))}</div>`;
+    if(eto!=null){
+      html+=`<button type="button" class="primary eto-depart-go" data-id="${esc(o.id)}">Выехал · ${eto} км (как ЕТО)</button>`;
+    } else {
+      html+=`<button type="button" class="primary eto-depart-go" data-id="${esc(o.id)}">Выехал · указать одометр</button>`;
+    }
+    html+=`</div>`;
+  });
+  return html+`</div>`;
+}
+function wireEtoDepartQuick(){
+  document.querySelectorAll('#eto-body .eto-depart-go').forEach(b=>{
+    b.onclick=()=>beginDepart(b.dataset.id, false);
+  });
 }
 function acceptDepart(value){
   syncOpenShiftRuntime();
@@ -1365,9 +1437,11 @@ function acceptDepart(value){
   shift.lastOdometerPoint=value;
   if(!shift.orders) shift.orders=[];
   if(!shift.orders.some(o=>o.id===order.id)) shift.orders.push(order);
-  upsertOrder(order); add('driver',String(value));
+  upsertOrder(order);
+  add('driver',`Выехал · заказ №${order.sequentialNumber} · ${value} км`);
   if(typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(order, {silent:true});
-  add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}\nВремя: ${dateTime(order.departAt)}\n\nЭТрН создан (черновик) — QR для инспектора в баннере. Подписи T1–T3 — на погрузке.\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
+  const etoNote=shift.odometer!=null&&+value===+shift.odometer?' (как при ЕТО на стоянке)':'';
+  add('bot',`Выезд зафиксирован🔔\n№${order.sequentialNumber}\nОдометр выезда: ${value}${etoNote}\nВремя: ${dateTime(order.departAt)}\n\nПо прибытии на загрузку нажмите «Прибыл на загрузку».`);
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
   if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
 }
