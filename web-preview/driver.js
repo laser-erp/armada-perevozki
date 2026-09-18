@@ -559,7 +559,15 @@ async function enterAsDriver(rec){
         renderDriverHome();
         if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
       }
-    }catch(err){ console.warn('enterAsDriver sync', err); }
+      if(typeof ensureArmadaApiToken==='function'){
+        await ensureArmadaApiToken({ pin:'sync', meta:{ role:'sync' } });
+      }
+      if(typeof flushDriverSyncWhenOnline==='function') flushDriverSyncWhenOnline();
+      else if(typeof updateDriverNetHint==='function') updateDriverNetHint();
+    }catch(err){
+      console.warn('enterAsDriver sync', err);
+      if(typeof updateDriverNetHint==='function') updateDriverNetHint();
+    }
   })();
 }
 function leaveDriverMode(){

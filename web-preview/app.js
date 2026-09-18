@@ -3229,7 +3229,13 @@ function updateDriverNetHint(){
   }
   if(syncStatus==='error'){
     el.hidden=false; el.className='driver-net show bad';
-    el.textContent='Нет связи с сервером — отправим при появлении сети';
+    el.textContent='Нет связи с сервером — данные на телефоне, отправим при появлении сети';
+    return;
+  }
+  if(typeof syncPullDegraded!=='undefined' && syncPullDegraded && syncStatus==='ok'){
+    el.hidden=true;
+    el.className='driver-net';
+    el.textContent='';
     return;
   }
   if(syncStatus==='syncing'){

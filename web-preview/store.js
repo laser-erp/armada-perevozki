@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-18-eto-yesno-visible";
+const APP_BUILD="2026-09-18-driver-sync-hint-fix";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1082,7 +1082,8 @@ let syncPushInFlight=null;
 let syncPushQueued=false;
 let pullBackoffUntil=0;
 let pullFailCount=0;
-let syncStatus='local'; // local | syncing | ok | error
+let syncStatus='local'; // local | syncing | ok | error (ошибка отправки на сервер)
+let syncPullDegraded=false; // фоновый pull не удался — не пугаем водителя, если push ok
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
 let catalogTab='companies'; // companies | drivers | vehicles | finance
@@ -2880,20 +2881,36 @@ async function fetchServerState(timeoutMs, opts){
   }
   return await fetchServerStateFromPb(timeoutMs);
 }
-async function patchServerStatePayload(payload){
+function parseApiStateConflict(data){
+  const remotePayload=(data&&(data.payload||(data.record&&data.record.payload)))||null;
+  const remoteEpoch=data&&data.remoteEpoch!=null?Number(data.remoteEpoch)
+    :(remotePayload?Number(remotePayload.dataEpoch)||0:null);
+  const recordId=data&&(data.recordId||(data.record&&data.record.id))||null;
+  return { remotePayload, remoteEpoch, recordId };
+}
+async function patchServerStatePayload(payload, _retry401){
   if(API_BASE){
     try{
+      await ensureArmadaApiToken({ pin:'sync', meta:{ role:'sync' } });
       const res=await fetchWithTimeout(`${API_BASE}/state`, {
         method:'PATCH',
         headers:armadaApiJsonHeaders(),
         body:JSON.stringify({ payload })
       });
       const data=await res.json().catch(()=>({}));
+      if(res.status===401 && !_retry401){
+        setArmadaApiToken('');
+        return patchServerStatePayload(payload, true);
+      }
       if(res.status===409){
-        return { ok:false, aborted:true, remotePayload:data.payload, remoteEpoch:data.remoteEpoch, viaApi:true };
+        const c=parseApiStateConflict(data);
+        if(c.recordId) pbRecordId=c.recordId;
+        return { ok:false, aborted:true, remotePayload:c.remotePayload, remoteEpoch:c.remoteEpoch, viaApi:true };
       }
       if(!res.ok) throw new Error(data.error||'API patch '+res.status);
       if(data.recordId) pbRecordId=data.recordId;
+      if(data.id) pbRecordId=data.id;
+      syncPullDegraded=false;
       return { ok:true, aborted:false, viaApi:true };
     }catch(err){ console.warn('API patch fallback PB', err); }
   }
@@ -3013,7 +3030,7 @@ function persist(){
     updateDriverNetHint();
     if(typeof updateSyncHint==='function') updateSyncHint();
     pushServerStateQueued()
-      .then(()=>{ syncStatus='ok'; pullFailCount=0; updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); })
+      .then(()=>{ syncStatus='ok'; syncPullDegraded=false; pullFailCount=0; updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); })
       .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); });
   }, PERSIST_DEBOUNCE_MS);
 }
@@ -3214,13 +3231,14 @@ async function pullRemoteUpdates(reason){
       if(typeof maybeNotifyCustomerOrderUpdates==='function') maybeNotifyCustomerOrderUpdates();
     }
     syncStatus='ok';
+    syncPullDegraded=false;
     pullFailCount=0;
     pullBackoffUntil=0;
     updateSyncHint();
     console.info('auto-sync', reason, 'epoch', remoteEpoch);
     return true;
   }catch(err){
-    syncStatus='error';
+    syncPullDegraded=true;
     pullFailCount=Math.min(pullFailCount+1, 12);
     pullBackoffUntil=Date.now()+Math.min(SYNC_BACKOFF_MAX_MS, 4000*pullFailCount);
     updateSyncHint();
