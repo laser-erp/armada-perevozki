@@ -162,6 +162,37 @@ function syncCustomerDocsTabBadge(){
   if(n>0){ badge.hidden=false; badge.textContent=n>9?'9+':String(n); }
   else badge.hidden=true;
 }
+function customerOrdersTabBadgeCount(){
+  if(!currentCustomer||typeof customerOrders!=='function') return 0;
+  return customerOrders().filter(o=>{
+    if(typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o)) return true;
+    if(typeof customerEtrnT1WaitingPhase==='function'&&customerEtrnT1WaitingPhase(o)) return true;
+    return false;
+  }).length;
+}
+function syncCustomerOrdersTabBadge(){
+  const badge=$('cust-orders-badge');
+  if(!badge) return;
+  const n=customerOrdersTabBadgeCount();
+  if(n>0){ badge.hidden=false; badge.textContent=n>9?'9+':String(n); }
+  else badge.hidden=true;
+}
+function renderCustomerGlobalAlerts(){
+  const host=$('cust-global-alerts');
+  if(!host||!currentCustomer){
+    if(host){ host.hidden=true; host.innerHTML=''; }
+    return;
+  }
+  const html=typeof customerEtrnT1BannerHtml==='function'?customerEtrnT1BannerHtml({ compact:true }):'';
+  if(html){
+    host.innerHTML=html;
+    host.hidden=false;
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(host);
+  }else{
+    host.hidden=true;
+    host.innerHTML='';
+  }
+}
 
 function findCustomerPortalCompany(phone, pin, scope){
   const ph=formatPhone(phone);
@@ -1497,6 +1528,7 @@ function renderCustomerPortal(){
     if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(list);
   }
   renderCustomerDocsAlerts(co, carrier);
+  renderCustomerGlobalAlerts();
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
   if(notifyBtn) notifyBtn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
@@ -1506,6 +1538,7 @@ function renderCustomerPortal(){
   renderCustomerDocsByOrder();
   syncCustomerPortalTabUi();
   syncCustomerDocsTabBadge();
+  syncCustomerOrdersTabBadge();
 }
 
 function renderCustomerInvoicesList(){

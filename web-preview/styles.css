@@ -590,6 +590,8 @@
     .cust-etrn-t1-block{margin-top:8px;padding:8px 10px;border:1px solid var(--accent);border-radius:var(--radius);background:color-mix(in srgb,var(--accent) 6%,var(--surface));font-size:.82rem}
     .cust-etrn-t1-block--wait{border-color:var(--border);background:var(--surface-2)}
     .cust-alert-row--muted .cust-alert-row-dot{opacity:.45}
+    .cust-global-alerts{margin:0 0 10px;display:flex;flex-direction:column;gap:6px}
+    .cust-global-alerts[hidden]{display:none!important}
     .cust-etrn-t1-block .hint{margin:4px 0 8px;font-size:.75rem}
     .cust-etrn-t1-block button{font-size:.82rem;padding:6px 12px;width:auto}
     .cust-etrn-t1-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
