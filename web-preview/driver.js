@@ -133,6 +133,7 @@ function driverChatEl(){
   if(DRIVER && document.querySelector('#driver.show')) return $('eto-chat')||$('chat');
   return $('chat');
 }
+const DRIVER_REFUEL_QUESTION='Заправка была?';
 function driverNeedsMainInputBar(){
   const os=state.orderStep||'';
   if(/^(closingOdometer|askRefuel|fuelPrice|fuelAmount|closingSignT4|postCloseWhere|departAssignedOdometer|arriveAssignedOdometer)/.test(os)) return true;
@@ -755,7 +756,7 @@ function renderInput(){
     html+=`<button type="button" class="primary" id="closing-sign-t4">Подписать T4 и закрыть заказ</button>`;
     html+=`<button type="button" class="secondary" id="closing-etrn-operator">Подписать через оператора</button>`;
   } else if(os==='askRefuel'||os==='closeShiftStaysLoaded'){
-    const q=os==='askRefuel'?'Заправляли машину после выгрузки?':'Машина осталась загружена до завтра?';
+    const q=os==='askRefuel'?DRIVER_REFUEL_QUESTION:'Машина осталась загружена до завтра?';
     html+=`<div class="hint driver-step-hint"><strong>${esc(q)}</strong></div>`;
     html+=`<div class="yesno driver-refuel-yesno"><button type="button" class="primary" id="refuel-yes">Да</button><button type="button" class="secondary" id="refuel-no">Нет</button></div>`;
   }
@@ -772,11 +773,11 @@ function renderInput(){
     } else if(open){
       const awaiting=typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(open);
       if(awaiting){
-        html+=`<div class="hint">Заказ №${open.sequentialNumber}: на выгрузке ${open.endOdometer} км — завершите закрытие (заправка / T4).</div>`;
+        html+=`<div class="hint">Заказ №${open.sequentialNumber}: на выгрузке ${open.endOdometer} км — нажмите ниже и пройдите шаги закрытия.</div>`;
         html+=`<button class="primary resume-close" data-id="${open.id}">Завершить заказ №${open.sequentialNumber}</button>`;
       } else {
         if(open.staysLoadedOvernight) html+=`<div class="hint">Заказ №${open.sequentialNumber} перенесён (машина загружена) — отметьте выгрузку.</div>`;
-        html+=`<div class="hint">На выгрузке — одометр, затем заправка и T4. Смену закрывают в конце дня.</div>`;
+        html+=`<div class="hint">На выгрузке — одометр, затем закрытие заказа. Смену — в конце дня.</div>`;
         html+=`<button class="primary arrive-unload" data-id="${open.id}">Прибыл на выгрузку №${open.sequentialNumber}</button>`;
       }
     } else {
@@ -1575,7 +1576,7 @@ function resumeCloseAfterUnloading(orderId){
   } else {
     state.orderStep='askRefuel';
     add('driver','Продолжить закрытие');
-    add('bot',`Заказ №${order.sequentialNumber}: одометр на выгрузке ${order.endOdometer} км.\nЗаправляли машину?`);
+    add('bot',`Заказ №${order.sequentialNumber}: одометр на выгрузке ${order.endOdometer} км.`);
   }
   state.error='';
   upsertShift();
@@ -1729,7 +1730,7 @@ function resolveFuelPriceWithoutRefuel(plate, exceptId){
 }
 function answerRefuel(yes){
   add('driver', yes?'Да':'Нет');
-  if(yes){ add('bot','Укажите стоимость литра.'); state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); return; }
+  if(yes){ state.orderStep='fuelPrice'; state.error=''; upsertShift(); renderInput(); return; }
   const order=openOrder();
   const prev=lastFuelPricePerLiter(order&&order.vehiclePlate, order&&order.id);
   const price=prev ?? DEFAULT_FUEL_PRICE_PER_LITER;
