@@ -736,7 +736,13 @@ function renderInput(){
     <button class="secondary" id="post-already-parked">Уже на стоянке (0 км после)</button>`;
   } else if(os==='dayNumber') html+=`<div class="hint">Номер заказа за день</div><div class="nums">${[1,2,3,4,5].map(n=>`<button data-day="${n}">${n}</button>`).join('')}</div>`;
   else if(os==='loading'||os==='unloading') html+=`<div class="row"><textarea id="text" rows="2" placeholder="Город, улица, дом, строение"></textarea><button id="text-ok">OK</button></div>`;
-  else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
+  else if(os==='closingSignT4'){
+    const co=orderBeingClosed();
+    const n=co&&co.sequentialNumber?co.sequentialNumber:'—';
+    html+=`<div class="hint">ЭТrН · T4 — выдача груза получателю на выгрузке. После подписи заказ №${esc(String(n))} закроется.</div>`;
+    html+=`<button type="button" class="primary" id="closing-sign-t4">Подписать T4 и закрыть заказ</button>`;
+    html+=`<button type="button" class="secondary" id="closing-etrn-operator">Подписать через оператора</button>`;
+  } else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
   else if(state.step==='idle'){
     html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
     html+=`<button type="button" class="secondary" id="goto-eto-idle">ЕТО</button>`;
@@ -810,6 +816,11 @@ function wireInput(){
   $('text-ok')&&($('text-ok').onclick=submitText);
   $('refuel-yes')&&($('refuel-yes').onclick=()=>answerYesNo(true));
   $('refuel-no')&&($('refuel-no').onclick=()=>answerYesNo(false));
+  $('closing-sign-t4')&&($('closing-sign-t4').onclick=()=>acceptClosingSignT4());
+  $('closing-etrn-operator')&&($('closing-etrn-operator').onclick=()=>{
+    const o=orderBeingClosed();
+    if(o&&typeof openDriverEtrnSign==='function') openDriverEtrnSign(o.id);
+  });
   $('post-next-order')&&($('post-next-order').onclick=()=>finishPostCloseWhere('next'));
   $('post-to-parking')&&($('post-to-parking').onclick=()=>finishPostCloseWhere('parking'));
   $('post-already-parked')&&($('post-already-parked').onclick=()=>finishPostCloseWhere('here'));
@@ -1637,12 +1648,68 @@ function askClosingEmptyAfter(refueled, price, liters){
   const end=state.draft.closeOdo;
   state.draft.parkingAfterOdo=(end!=null)?end:state.draft.parkingAfterOdo;
   state.draft.parkingAt=state.draft.endAt||new Date().toISOString();
+  proceedCloseAfterUnloading(refueled, price, liters);
+}
+function proceedCloseAfterUnloading(refueled, price, liters){
+  const order=orderBeingClosed();
+  if(!order){ state.error='Нет открытого заказа'; renderInput(); return; }
+  if(typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(order, {silent:true});
+  const etrnGate=typeof canCloseOrderEtrnMessage==='function'?canCloseOrderEtrnMessage(order):null;
+  if(etrnGate && typeof orderEtrnNeedsT4BeforeClose==='function' && orderEtrnNeedsT4BeforeClose(order)){
+    add('bot', etrnGate);
+    state.orderStep='closingSignT4';
+    state.error='';
+    upsertShift(); renderInput();
+    return;
+  }
+  if(etrnGate){ state.error=etrnGate; renderInput(); return; }
   finalizeClose(refueled, price, liters);
+}
+function acceptClosingSignT4(){
+  const order=orderBeingClosed();
+  if(!order){ state.error='Нет открытого заказа'; renderInput(); return; }
+  const pre=typeof canCloseOrderEtrnMessage==='function'?canCloseOrderEtrnMessage(order):null;
+  if(pre && !(typeof orderEtrnNeedsT4BeforeClose==='function' && orderEtrnNeedsT4BeforeClose(order))){
+    state.error=pre; renderInput(); return;
+  }
+  if(typeof orderEtrnNeedsT4BeforeClose==='function' && orderEtrnNeedsT4BeforeClose(order)){
+    const sandbox=order.etrn&&order.etrn.sandbox!==false;
+    if(!sandbox){
+      if(typeof openEpdTitulSign==='function'){
+        openEpdTitulSign(order.id,'t4', typeof epdRoleForTitul==='function'?epdRoleForTitul('t4'):'driver')
+          .then(()=>retryFinalizeAfterT4Sign())
+          .catch(()=>{ state.error='Не удалось открыть подпись T4'; renderInput(); });
+        return;
+      }
+      state.error='Подпишите T4 через оператора ЭПД (кнопка ниже).'; renderInput(); return;
+    }
+    const by=typeof DRIVER!=='undefined'&&DRIVER?DRIVER:'водитель';
+    if(typeof signEtrnTitulSandboxAuto==='function') signEtrnTitulSandboxAuto(order.id,'t4',by);
+    else if(typeof signEtrnTitul==='function') signEtrnTitul(order.id,'t4',by);
+    add('driver','T4 · выдача на выгрузке');
+  }
+  retryFinalizeAfterT4Sign();
+}
+function retryFinalizeAfterT4Sign(){
+  const order=orderBeingClosed();
+  if(!order){ state.error='Нет открытого заказа'; renderInput(); return; }
+  if(typeof orderEtrnNeedsT4BeforeClose==='function' && orderEtrnNeedsT4BeforeClose(order)){
+    state.error='T4 ещё не подписан — повторите подпись.'; renderInput(); return;
+  }
+  const ref=!!state.draft.closeRefueled;
+  finalizeClose(ref, state.draft.fuelPrice||null, state.draft.closeLiters||null);
 }
 function finalizeClose(refueled,price,liters){
   const order=orderBeingClosed(); if(!order){state.error='Нет открытого заказа';renderInput();return;}
   const tripGate=typeof canCloseOrderMessage==='function'?canCloseOrderMessage(order):null;
   if(tripGate){ state.error=tripGate; renderInput(); return; }
+  const etrnGate=typeof canCloseOrderEtrnMessage==='function'?canCloseOrderEtrnMessage(order):null;
+  if(etrnGate){
+    if(typeof orderEtrnNeedsT4BeforeClose==='function' && orderEtrnNeedsT4BeforeClose(order)){
+      state.orderStep='closingSignT4';
+    }
+    state.error=etrnGate; renderInput(); return;
+  }
   const end=state.draft.closeOdo;
   if(end==null || order.startOdometer==null){state.error='Нет одометра на выгрузке';renderInput();return;}
   if(end<order.startOdometer){state.error=`Одометр окончания меньше начала (${order.startOdometer})`;renderInput();return;}
@@ -1678,7 +1745,6 @@ function finalizeClose(refueled,price,liters){
   applyFuelRemainingOnClose(order, state.shift, refueled?liters:null);
   applyClientTariff(order);
   if(typeof onOrderClosedBilling==='function') onOrderClosedBilling(order);
-  if(typeof signEtrnTitulSandboxAuto==='function') signEtrnTitulSandboxAuto(order.id,'t4',DRIVER||'driver');
   bumpDataEpoch('finalize-close');
   upsertOrder(order);
   // Водителю не показываем км до стоянки, расход топлива и ₽/л — только админу.

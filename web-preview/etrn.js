@@ -88,6 +88,21 @@ function orderEtrnWaitingDriver(o){
   if(orderEtrnTitulPending(o,'t3')||orderEtrnTitulPending(o,'t4')) return true;
   return false;
 }
+/** Закрытие перевозки — только после T4 (выдача на выгрузке), если ЭТrН в заказе. */
+function orderEtrnNeedsT4BeforeClose(o){
+  if(!orderEtrnVisible(o) || !o.etrn || !o.etrn.tituls) return false;
+  return o.etrn.tituls.t4==='pending';
+}
+function canCloseOrderEtrnMessage(order){
+  if(!order || !orderEtrnVisible(order) || !order.etrn) return null;
+  if(orderEtrnTitulPending(order,'t3')){
+    return `Сначала подпишите T3 (приём груза на погрузке) · заказ №${order.sequentialNumber||'—'}.`;
+  }
+  if(orderEtrnNeedsT4BeforeClose(order)){
+    return `Подпишите T4 (выдача груза на выгрузке) — затем заказ закроется · №${order.sequentialNumber||'—'}.`;
+  }
+  return null;
+}
 function adminEtrnWaitCustomerCount(orders){
   return (orders||[]).filter(o=>orderEtrnWaitingCustomer(o)).length;
 }
