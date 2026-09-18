@@ -321,6 +321,44 @@ function customerEtrnT1Pending(o){
   if(o.etrn.tituls.t1!=='pending') return false;
   return orderEtrnLoadingPhase(o);
 }
+function customerEtrnT1WaitingPhase(o){
+  if(!o||!o.etrn||!o.etrn.tituls) return false;
+  if(o.cancelledAt||looksClosedOrder(o)) return false;
+  if(o.etrn.tituls.t1!=='pending') return false;
+  if(!orderHasDriverVehicleAssigned(o)) return false;
+  return !orderEtrnLoadingPhase(o);
+}
+function customerEtrnT1CardHtml(o){
+  if(typeof customerEtrnT1SignHtml==='function'){
+    const sign=customerEtrnT1SignHtml(o);
+    if(sign) return sign;
+  }
+  if(!o.etrn&&typeof orderEtrnEligible==='function'&&orderEtrnEligible(o)&&!looksClosedOrder(o)&&!o.cancelledAt){
+    if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)){
+      return `<div class="cust-etrn-t1-block cust-etrn-t1-block--wait">
+        <strong>ЭТрН</strong>
+        <p class="hint">Транспортная накладная оформится при выезде водителя. Подпись T1 — на погрузке (кнопка появится здесь).</p>
+      </div>`;
+    }
+  }
+  if(!customerEtrnT1WaitingPhase(o)) return '';
+  if(customerCanSignEtrnT1(o)){
+    return `<div class="cust-etrn-t1-block cust-etrn-t1-block--wait">
+      <strong>ЭТрН · T1</strong>
+      <p class="hint">Транспортная накладная: подпись появится, когда водитель приедет на погрузку. Обновите страницу или включите уведомления.</p>
+    </div>`;
+  }
+  const url=shipperEtrnT1SignUrl(o);
+  const ship=orderShipperInfo(o);
+  const shipLine=ship.name?`${esc(ship.name)}${ship.phone?` · ${esc(formatPhone(ship.phone))}`:''}`:'грузоотправитель';
+  return `<div class="cust-etrn-t1-block cust-etrn-t1-block--wait">
+    <strong>ЭТрН · T1 · ${shipLine}</strong>
+    <p class="hint">Грузоотправитель не вы — отправьте ссылку. Подпись откроется у грузоотправителя на погрузке.</p>
+    <div class="cust-etrn-t1-actions">
+      <button type="button" class="secondary cust-etrn-shipper-copy" data-order-id="${esc(o.id)}" data-url="${esc(url)}">Скопировать ссылку</button>
+    </div>
+  </div>`;
+}
 function customerEtrnT1SignHtml(o){
   if(!customerEtrnT1Pending(o)) return '';
   const ship=orderShipperInfo(o);
@@ -346,25 +384,56 @@ function customerEtrnT1SignHtml(o){
 function customerEtrnT1BannerHtml(opts){
   opts=opts||{};
   if(typeof customerOrders!=='function') return '';
-  const pending=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o));
-  if(!pending.length) return '';
-  const btns=pending.map(o=>
-    `<button type="button" class="secondary cust-alert-btn cust-etrn-t1-sign" data-order-id="${esc(o.id)}">№ ${esc(o.sequentialNumber||'—')}</button>`
-  ).join('');
-  if(opts.compact){
-    const sub=pending.length===1
-      ? `Заявка № ${esc(pending[0].sequentialNumber||'—')} · подпись на погрузке`
-      : `${pending.length} заявки · подпись T1 на погрузке`;
-    return `<div class="cust-alert-row cust-alert-row--etrn">
+  const canSign=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o));
+  const needLink=customerOrders().filter(o=>customerEtrnT1Pending(o)&&!customerCanSignEtrnT1(o));
+  const waiting=customerOrders().filter(o=>customerEtrnT1WaitingPhase(o));
+  const parts=[];
+  if(canSign.length){
+    const btns=canSign.map(o=>
+      `<button type="button" class="primary cust-alert-btn cust-etrn-t1-sign" data-order-id="${esc(o.id)}">Подписать № ${esc(o.sequentialNumber||'—')}</button>`
+    ).join('');
+    const sub=canSign.length===1
+      ? `Заявка № ${esc(canSign[0].sequentialNumber||'—')} · транспортная накладная (T1) на погрузке`
+      : `${canSign.length} заявки · подпись T1 на погрузке`;
+    parts.push(`<div class="cust-alert-row cust-alert-row--etrn">
       <span class="cust-alert-row-dot" aria-hidden="true"></span>
       <div class="cust-alert-row-main">
         <span class="cust-alert-row-label">ЭТрН · T1</span>
         <span class="cust-alert-row-sub">${sub}</span>
       </div>
       <div class="cust-alert-row-actions">${btns}</div>
-    </div>`;
+    </div>`);
   }
-  return `<div class="cust-etrn-banner"><strong>ЭТrН:</strong> подпишите T1 (вы — грузоотправитель) ${btns}</div>`;
+  if(needLink.length){
+    const o=needLink[0];
+    const url=shipperEtrnT1SignUrl(o);
+    const more=needLink.length>1?` (+${needLink.length-1})`:'';
+    parts.push(`<div class="cust-alert-row cust-alert-row--etrn">
+      <span class="cust-alert-row-dot" aria-hidden="true"></span>
+      <div class="cust-alert-row-main">
+        <span class="cust-alert-row-label">ЭТрН · T1</span>
+        <span class="cust-alert-row-sub">№ ${esc(o.sequentialNumber||'—')}${more} · отправьте ссылку грузоотправителю</span>
+      </div>
+      <div class="cust-alert-row-actions">
+        <button type="button" class="secondary cust-alert-btn cust-etrn-shipper-copy" data-order-id="${esc(o.id)}" data-url="${esc(url)}">Скопировать ссылку</button>
+      </div>
+    </div>`);
+  }else if(waiting.length&&!canSign.length){
+    const o=waiting[0];
+    const sub=waiting.length===1
+      ? `№ ${esc(o.sequentialNumber||'—')} · T1 после прибытия на погрузку`
+      : `${waiting.length} заявки · T1 после погрузки`;
+    parts.push(`<div class="cust-alert-row cust-alert-row--etrn cust-alert-row--muted">
+      <span class="cust-alert-row-dot" aria-hidden="true"></span>
+      <div class="cust-alert-row-main">
+        <span class="cust-alert-row-label">ЭТрН · T1</span>
+        <span class="cust-alert-row-sub">${sub}</span>
+      </div>
+    </div>`);
+  }
+  if(!parts.length) return '';
+  if(opts.compact) return parts.join('');
+  return `<div class="cust-etrn-banner">${parts.join('')}</div>`;
 }
 function wireCustomerEtrnT1(root){
   (root||document).querySelectorAll('.cust-etrn-t1-sign').forEach(btn=>{

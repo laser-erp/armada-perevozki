@@ -94,8 +94,11 @@ function customerDocsTabBadgeCount(){
     if(st==='pending') n++;
   }
   if(typeof epdSignNeedsAttention==='function'&&currentCustomer&&epdSignNeedsAttention('customer', currentCustomer.companyId)) n++;
-  if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'&&typeof customerCanSignEtrnT1==='function'){
-    n+=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o)).length;
+  if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'){
+    n+=customerOrders().filter(o=>customerEtrnT1Pending(o)).length;
+  }
+  if(typeof customerOrders==='function'&&typeof customerEtrnT1WaitingPhase==='function'&&typeof customerCanSignEtrnT1==='function'){
+    n+=customerOrders().filter(o=>customerEtrnT1WaitingPhase(o)&&customerCanSignEtrnT1(o)).length;
   }
   return n;
 }
@@ -295,6 +298,7 @@ function customerOrderStatusLabel(o){
   if(o.bookStatus==='rejected' && (typeof waitingLogistDriver==='function'?waitingLogistDriver(o.driverName):true) && !o.onExchange)
     return 'Бронь отклонена';
   if(o.onExchange) return 'Диспетчер ищет машину';
+  if(o.arrivedAt!=null && o.startOdometer==null && o.departOdometer==null) return 'На погрузке';
   if(o.startOdometer!=null || o.departOdometer!=null) return 'В работе';
   if(o.executorType==='partner') return 'Назначен';
   if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—' && o.driverName!=='Диспетчер') return 'Назначен';
@@ -306,7 +310,9 @@ function customerOrderStatusLabel(o){
 function customerOrderStatusTag(o){
   if(!o||!o.id) return '';
   const docsRev=+(o.customerDriverDocsConfirmRev||0);
-  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}|docs${docsRev}`;
+  const t1=(o.etrn&&o.etrn.tituls&&o.etrn.tituls.t1)||'';
+  const loadPhase=(o.arrivedAt!=null||o.startOdometer!=null)?'1':'0';
+  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}|docs${docsRev}|ld${loadPhase}|t1${t1}`;
 }
 function customerOrderNotifyLine(o, prevTag){
   const tag=customerOrderStatusTag(o);
@@ -1481,12 +1487,14 @@ function renderCustomerPortal(){
         ${o.priceQuoteSummary?`<p class="meta">Тариф ${esc(o.priceTariffCarrierName||o.ownCompanyName||'перевозчика')}: ${esc(o.priceQuoteSummary)}</p>`:''}
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
         ${typeof customerDriverDocsConfirmHtml==='function'?customerDriverDocsConfirmHtml(o):''}
+        ${typeof customerEtrnT1CardHtml==='function'?customerEtrnT1CardHtml(o):''}
         <p class="meta"><button type="button" class="hint cust-goto-docs" style="border:0;background:transparent;cursor:pointer;padding:0;font-size:inherit">Документы → «Бух доки»</button></p>
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
     list.querySelectorAll('.cust-goto-docs').forEach(btn=>{
       btn.onclick=()=>setCustomerPortalTab('docs');
     });
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(list);
   }
   renderCustomerDocsAlerts(co, carrier);
   updateCustomerPricePreview();
