@@ -133,22 +133,29 @@ function driverChatEl(){
   if(DRIVER && document.querySelector('#driver.show')) return $('eto-chat')||$('chat');
   return $('chat');
 }
+function driverNeedsMainInputBar(){
+  const os=state.orderStep||'';
+  if(/^(closingOdometer|askRefuel|fuelPrice|fuelAmount|closingSignT4|postCloseWhere|departAssignedOdometer|arriveAssignedOdometer)/.test(os)) return true;
+  if(os==='closeShiftStaysLoaded'||os==='closeShiftParking') return true;
+  return false;
+}
 function syncDriverMainVisibility(){
   const onPanel=!!document.querySelector('#driver .driver-panel.show');
+  const needBar=typeof driverNeedsMainInputBar==='function'&&driverNeedsMainInputBar();
   const homeEl=$('driver-home');
   const chat=$('chat');
   const bar=$('input-bar');
   const banner=$('driver-banner');
   const driver=$('driver');
-  if(homeEl) homeEl.style.display=onPanel?'none':(DRIVER?'flex':'none');
+  if(homeEl) homeEl.style.display=(onPanel&&!needBar)?'none':(DRIVER?'flex':'none');
   if(chat && DRIVER && document.querySelector('#driver.show')){
     chat.innerHTML='';
     chat.style.display='none';
     chat.setAttribute('aria-hidden','true');
   }
-  if(bar) bar.style.display=onPanel?'none':'';
-  if(banner&&onPanel) banner.classList.remove('show');
-  if(driver) driver.classList.toggle('driver-home-compact', !onPanel && !!DRIVER);
+  if(bar) bar.style.display=(onPanel&&!needBar)?'none':'';
+  if(banner&&onPanel&&!needBar) banner.classList.remove('show');
+  if(driver) driver.classList.toggle('driver-home-compact', (!onPanel||needBar) && !!DRIVER);
 }
 function driverEtoFlowStep(){
   if(state.orderStep==='closePrevShiftParking') return true;
@@ -724,8 +731,13 @@ function renderInput(){
     html+=`<div class="row"><input id="num" inputmode="numeric" placeholder="${esc(ph)}" ${sug!=null?`value="${esc(String(sug))}"`:''} /><button id="num-ok">OK</button></div>`;
   } else if(os==='departAssignedOdometer'||os==='arriveAssignedOdometer'||os==='closingOdometer'){
     html+=driverOdometerStepHtml(os);
-  } else if(os==='arrivalOdometer'||os==='fuelPrice'||os==='fuelAmount'||os==='startAssignedOdometer'){
-    const ph=os==='fuelPrice'?'Например, 56.5':os==='fuelAmount'?'Например, 40':os==='closingOdometer'?'Например, 277720':'Например, 277690';
+  } else if(os==='fuelPrice'||os==='fuelAmount'){
+    const hint=os==='fuelPrice'?'Укажите стоимость литра (₽/л).':'Укажите количество литров.';
+    html+=`<div class="hint driver-step-hint">${hint}</div>`;
+    const ph=os==='fuelPrice'?'Например, 56.5':'Например, 40';
+    html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
+  } else if(os==='arrivalOdometer'||os==='startAssignedOdometer'){
+    const ph='Например, 277690';
     html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="${ph}" /><button id="num-ok">OK</button></div>`;
   } else if(os==='postCloseWhere'){
     html+=`<div class="hint warn-close">Если едете на стоянку — после этого закройте смену</div>`;
@@ -742,7 +754,11 @@ function renderInput(){
     html+=`<div class="hint">ЭТrН · T4 — выдача груза получателю на выгрузке. После подписи заказ №${esc(String(n))} закроется.</div>`;
     html+=`<button type="button" class="primary" id="closing-sign-t4">Подписать T4 и закрыть заказ</button>`;
     html+=`<button type="button" class="secondary" id="closing-etrn-operator">Подписать через оператора</button>`;
-  } else if(os==='askRefuel'||os==='closeShiftStaysLoaded') html+=`<div class="yesno"><button id="refuel-yes">Да</button><button id="refuel-no">Нет</button></div>`;
+  } else if(os==='askRefuel'||os==='closeShiftStaysLoaded'){
+    const q=os==='askRefuel'?'Заправляли машину после выгрузки?':'Машина осталась загружена до завтра?';
+    html+=`<div class="hint driver-step-hint"><strong>${esc(q)}</strong></div>`;
+    html+=`<div class="yesno driver-refuel-yesno"><button type="button" class="primary" id="refuel-yes">Да</button><button type="button" class="secondary" id="refuel-no">Нет</button></div>`;
+  }
   else if(state.step==='idle'){
     html+=`<button class="primary" id="open-shift">Открыть смену</button>`;
     html+=`<button type="button" class="secondary" id="goto-eto-idle">ЕТО</button>`;
@@ -1520,15 +1536,18 @@ function acceptUnloadingOdometer(order, value){
   state.draft.endAt=now;
   upsertOrder(order);
   add('driver',String(value));
-  add('bot',`Одометр на выгрузке сохранён: ${value} км (с грузом: ${order.loadedKm} км).\nЗаправляли машину?`);
+  add('bot',`Одометр на выгрузке сохранён: ${value} км (с грузом: ${order.loadedKm} км).`);
   state.orderStep='askRefuel';
+  state.step='done';
   state.error='';
+  hideDriverPanels();
+  setDriverNav('btn-home');
   upsertShift();
   persist();
+  renderDriverHome();
   renderInput();
   renderDriverBanner();
   if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate().catch(()=>{});
-  if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
 }
 function resumeCloseAfterUnloading(orderId){
   syncOpenShiftRuntime();

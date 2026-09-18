@@ -789,6 +789,8 @@
     .driver-odo-row input:focus{border-color:var(--accent);outline:0;box-shadow:0 0 0 3px rgba(239,68,68,.15)}
     .driver-odo-row .primary,.driver-odo-main{width:100%!important;min-height:52px;font-size:1rem;line-height:1.25;padding:12px 14px}
     .driver-odo-main .sub{display:block;margin-top:4px;font-size:.78rem;font-weight:600;opacity:.92}
+    #driver #input-bar .driver-refuel-yesno{display:flex;gap:10px;width:100%}
+    #driver #input-bar .driver-refuel-yesno button{flex:1 1 50%;min-height:52px;font-size:1rem;font-weight:800}
     .eto-depart-block{margin:10px 0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
     .eto-depart-card{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
     .eto-depart-card:first-of-type{margin-top:8px;padding-top:0;border-top:0}
