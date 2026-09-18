@@ -259,8 +259,8 @@ function signEtrnTitul(orderId, titulKey, signedBy){
   upsertOrder(o);
   if(typeof bumpDataEpoch==='function') bumpDataEpoch(`etrn-${titulKey}-sign`);
   persist();
-  if(typeof currentCustomer!=='undefined'&&currentCustomer&&typeof persistAdminPinImmediate==='function'){
-    persistAdminPinImmediate().catch(()=>{});
+  if((typeof currentCustomer!=='undefined'&&currentCustomer)||(typeof DRIVER!=='undefined'&&DRIVER)){
+    if(typeof persistAdminPinImmediate==='function') persistAdminPinImmediate().catch(()=>{});
   }
   if(typeof logOpsEvent==='function') logOpsEvent('etrn',`Подписан ${titulKey} заказ ${o.sequentialNumber}`,{ orderId, titulKey });
   return true;
@@ -777,9 +777,32 @@ function driverEtrnSignUrl(order){
   if(et.driverSignUrl && !String(et.driverSignUrl).startsWith('sandbox://')) return et.driverSignUrl;
   return null;
 }
+function driverEtrnOrderCardHtml(o){
+  if(!o||!o.etrn||!o.etrn.tituls||typeof orderBelongsToDriver==='function'&&!orderBelongsToDriver(o)) return '';
+  const t=o.etrn.tituls;
+  const lbl=(k,v)=>{
+    if(v==='signed') return `${k} ✓`;
+    if(k==='T1'&&v==='pending') return 'T1 — ждёт заказчика';
+    if(k==='T2'&&v==='pending') return 'T2 — перевозчик';
+    if(k==='T3'&&v==='pending') return 'T3 — ваша подпись';
+    if(k==='T4'&&v==='pending') return 'T4 — на выгрузке';
+    return '';
+  };
+  const line=['T1','T2','T3','T4'].map((k,i)=>lbl(k,t['t'+(i+1)])).filter(Boolean).join(' · ');
+  let btn='';
+  if(t.t1==='signed'&&t.t2==='signed'&&t.t3==='pending'){
+    btn=`<button type="button" class="secondary drv-etrn-sign" data-id="${esc(o.id)}">Подписать T3</button>`;
+  }else if(t.t3==='signed'&&t.t4==='pending'){
+    btn=`<button type="button" class="secondary drv-etrn-sign" data-id="${esc(o.id)}">Подписать T4</button>`;
+  }else if(t.t1==='pending'&&typeof orderEtrnLoadingPhase==='function'&&orderEtrnLoadingPhase(o)){
+    btn=`<span class="hint">Сначала T1 у заказчика</span>`;
+  }
+  return `<div class="drv-etrn-row" style="margin-top:6px;font-size:.82rem"><strong>ЭТrН:</strong> ${esc(line)} ${btn}</div>`;
+}
 async function openDriverEtrnSign(orderId){
   const o=(state.orders||[]).find(x=>x.id===orderId);
   if(!o) return;
+  if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
   if(API_BASE){
     const remote=await fetchEtrnFromApi(orderId);
     if(remote){
@@ -791,7 +814,35 @@ async function openDriverEtrnSign(orderId){
   const t=o.etrn&&o.etrn.tituls||{};
   if(t.t1==='pending'){
     renderDriverBanner();
-    alert(`ЭТрН: ждём подпись T1 от грузоотправителя · заказ №${o.sequentialNumber}\n\n${orderShipperSameAsCustomer(o)?'Попросите заказчика подписать в личном кабинете.':'Отправьте ссылку грузоотправителю (заказчик получил её в кабинете).'}`);
+    alert(`ЭТрН: ждём подпись T1 от грузоотправителя · заказ №${o.sequentialNumber}\n\n${orderShipperSameAsCustomer(o)?'Попросите заказчика подписать в личном кабинете (/z).':'Заказчик отправит ссылку грузоотправителю.'}`);
+    return;
+  }
+  const sandbox=o.etrn&&(o.etrn.sandbox!==false);
+  if(sandbox){
+    if(t.t3==='pending'){
+      if(t.t2!=='signed'){
+        alert(`ЭТrН · заказ №${o.sequentialNumber}\n\nЖдём подпись T2 (перевозчик). Обычно её ставит логист на погрузке.`);
+        return;
+      }
+      if(confirm(`Подписать T3 (приём груза на погрузке) · заказ №${o.sequentialNumber}?`)){
+        signEtrnTitul(orderId,'t3',typeof DRIVER!=='undefined'&&DRIVER?DRIVER:'водитель');
+        renderDriverBanner();
+        if(typeof showOrders==='function'&&document.querySelector('#orders-panel.show')) showOrders();
+        alert('T3 подписан.');
+      }
+      return;
+    }
+    if(t.t4==='pending'){
+      if(confirm(`Подписать T4 (выдача на выгрузке) · заказ №${o.sequentialNumber}?`)){
+        if(typeof signEtrnTitulSandboxAuto==='function') signEtrnTitulSandboxAuto(orderId,'t4',typeof DRIVER!=='undefined'&&DRIVER?DRIVER:'водитель');
+        else signEtrnTitul(orderId,'t4',typeof DRIVER!=='undefined'&&DRIVER?DRIVER:'водитель');
+        renderDriverBanner();
+        if(typeof showOrders==='function'&&document.querySelector('#orders-panel.show')) showOrders();
+        alert('T4 подписан.');
+      }
+      return;
+    }
+    alert(`ЭТrН · заказ №${o.sequentialNumber}\nВсе ваши шаги подписаны или ждут предыдущие титулы.\nQR — кнопка «Показать QR ЭТrН» на Главной.`);
     return;
   }
   const pendingTitul=t.t4==='pending'?'t4':(t.t3==='pending'?'t3':(t.t2==='pending'?'t2':null));
@@ -809,31 +860,7 @@ async function openDriverEtrnSign(orderId){
     try{ window.open(url, '_blank', 'noopener'); return; }catch(_){}
   }
   const pending=driverEtrnTitulsPending(o);
-  if(o.etrn.sandbox){
-    const t=o.etrn.tituls||{};
-    if(t.t4==='pending'&&t.t1==='signed'&&t.t2==='signed'&&t.t3==='signed'){
-      signEtrnTitulSandboxAuto(o.id,'t4',DRIVER||'driver');
-      renderDriverBanner();
-      alert(`ЭТрН: подписан T4 (выдача) · заказ №${o.sequentialNumber}`);
-      return;
-    }
-    if(t.t3==='pending'||t.t2==='pending'||t.t1==='pending'){
-      if(t.t1==='pending'){
-        renderDriverBanner();
-        alert(`ЭТрН: ждём подпись T1 от грузоотправителя · заказ №${o.sequentialNumber}\n\n${orderShipperSameAsCustomer(o)?'Попросите заказчика подписать в личном кабинете.':'Отправьте ссылку грузоотправителю (заказчик получил её в кабинете).'}`);
-        return;
-      }
-      if(t.t2==='pending') signEtrnTitul(o.id,'t2','перевозчик');
-      if(t.t3==='pending'){
-        signEtrnTitul(o.id,'t3',typeof DRIVER!=='undefined'&&DRIVER?DRIVER:'водитель');
-        renderDriverBanner();
-        alert(`ЭТрН: подписан T3 (приём) · заказ №${o.sequentialNumber}`);
-        return;
-      }
-    }
-  }
-  const et=o.etrn||{};
-  alert(`ЭТрН (sandbox): заказ №${o.sequentialNumber||'—'}\nОператор: ${et.operatorId||'stub'}\nID: ${et.externalId||'—'}\nПодпись: ${pending||'все подписаны'}\n\nQR для инспектора — кнопка «Показать QR ЭТрН».`);
+  alert(`ЭТrН · заказ №${o.sequentialNumber||'—'}\n${pending||'Подписи в порядке'}\n\nQR — «Показать QR ЭТrН» на Главной.`);
 }
 function driverEtrnBannerHtml(){
   let html='';

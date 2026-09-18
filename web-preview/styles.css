@@ -34,7 +34,11 @@
     }
     .driver-panel.show{display:flex;animation:panelIn .2s ease}
     .driver-panel .form-topbar{flex-shrink:0}
-    .driver-panel .panel-body{background:transparent;flex:1;min-height:0;padding:12px 14px 28px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    .driver-panel .panel-body{
+      background:transparent;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+      padding:12px 14px calc(28px + env(safe-area-inset-bottom,0));
+      overscroll-behavior:contain;-webkit-overflow-scrolling:touch
+    }
     .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px 16px;text-align:center}
     .logo{width:88px;height:auto}
     .brand{font-size:1.55rem;font-weight:700;letter-spacing:.08em;color:var(--text)}
@@ -657,6 +661,8 @@
     }
     .driver-home-orders-hint b{color:var(--text)}
     .driver-home-orders-hint button{align-self:flex-start;min-height:40px}
+    .eto-restart-details{margin-top:10px;font-size:.82rem}
+    .eto-restart-details summary{cursor:pointer;color:var(--muted);font-weight:600}
     .driver-eto-body .hint{margin-bottom:8px}
     .driver-eto-body .row,.driver-eto-body .yesno,.driver-eto-body .plate,.driver-eto-body .fluid{margin-bottom:8px}
     .eto-light-row{

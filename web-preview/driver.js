@@ -632,7 +632,9 @@ function renderEtoPanel(){
   if(isEtoDone(s)&&!driverEtoFlowStep()){
     html+=`<p class="hint">ЕТО на сегодня пройден · ${esc(s.vehiclePlate||'авто')} · одометр ${esc(String(s.odometer??'—'))}</p>`;
     html+=renderEtoDepartQuickHtml(s);
-    html+=`<button type="button" class="secondary" id="eto-restart-panel">Пройти ЕТО заново</button>`;
+    html+=`<details class="eto-restart-details"><summary class="hint">Повторить осмотр?</summary>
+      <p class="hint" style="margin:6px 0">Обычно ЕТО один раз в день. Повтор — только если ошиблись или сменили машину.</p>
+      <button type="button" class="secondary" id="eto-restart-panel">Повторить ЕТО</button></details>`;
     body.innerHTML=html;
     $('eto-restart-panel')&&($('eto-restart-panel').onclick=restartEtoInspection);
     wireEtoDepartQuick();
@@ -665,13 +667,13 @@ function renderEtoStepHtml(){
       html+=`<div class="hint">Остаток топлива, л</div>`;
       html+=`<div class="row"><input id="num" inputmode="decimal" placeholder="Например, 42" /><button id="num-ok">OK</button></div>`;
     }
-    html+=`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+    html+=`<button class="secondary" id="eto-restart">Сбросить шаги осмотра</button>`;
     return html;
   }
-  if(state.step==='gur') html=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
-  else if(state.step==='coolant') html=`<div class="hint">Уровень ОЖ</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
-  else if(state.step==='lights') html=`<div class="hint">Проверка освещения</div>`+lightsUI()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
-  else if(state.step==='oil') html=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Начать ЕТО заново</button>`;
+  if(state.step==='gur') html=`<div class="hint">Уровень жидкости ГУР</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Сбросить шаги осмотра</button>`;
+  else if(state.step==='coolant') html=`<div class="hint">Уровень ОЖ</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Сбросить шаги осмотра</button>`;
+  else if(state.step==='lights') html=`<div class="hint">Проверка освещения</div>`+lightsUI()+`<button class="secondary" id="eto-restart">Сбросить шаги осмотра</button>`;
+  else if(state.step==='oil') html=`<div class="hint">Уровень масла в ДВС</div>`+fluidButtons()+`<button class="secondary" id="eto-restart">Сбросить шаги осмотра</button>`;
   return html;
 }
 function wireEtoPanelInput(){
@@ -1975,6 +1977,7 @@ function driverOrderCardHtml(o, opts){
     ${driverMaySeeContact(o)&&o.loadingContactName?`<div class="contact">Загрузка: ${esc(o.loadingContactName)}${o.loadingContactPhone?` · ${esc(formatPhone(o.loadingContactPhone))}`:''}</div>`:''}
     ${driverMaySeeContact(o)&&o.unloadingContactName?`<div class="contact">Выгрузка: ${esc(o.unloadingContactName)}${o.unloadingContactPhone?` · ${esc(formatPhone(o.unloadingContactPhone))}`:''}</div>`:''}
     ${canArrive?`<div class="meta" style="color:var(--accent);font-weight:600">Выезд отмечен — подтвердите прибытие</div>`:''}
+    ${typeof driverEtrnOrderCardHtml==='function'?driverEtrnOrderCardHtml(o):''}
     ${closed?`<div class="meta">${esc(driverPayText(o))}</div>`:''}
     ${acts.length?`<div class="acts">${acts.join('')}</div>`:''}
   </div>`;
@@ -1989,6 +1992,11 @@ function wireDriverOrderCards(root){
   });
   root.querySelectorAll('.drv-act-home').forEach(b=>{
     b.onclick=()=>showDriverHome();
+  });
+  root.querySelectorAll('.drv-etrn-sign').forEach(b=>{
+    b.onclick=()=>{
+      if(typeof openDriverEtrnSign==='function') openDriverEtrnSign(b.dataset.id);
+    };
   });
 }
 /** Подсказка в Заявках — по состоянию открытых заказов. */
