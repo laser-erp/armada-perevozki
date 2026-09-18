@@ -63,7 +63,15 @@ function orderEtrnSummary(o){
   }
   if(!o.etrn) return { label:'ЭТрН: не создан', cls:'muted', urgent:false };
   const t=o.etrn.tituls||{};
-  if(['t1','t2','t3','t4'].every(k=>t[k]==='signed')) return { label:'ЭТрН: закрыт ✓', cls:'ok', urgent:false };
+  const allSigned=['t1','t2','t3','t4'].every(k=>t[k]==='signed');
+  const tripClosed=typeof looksClosedOrder==='function'&&looksClosedOrder(o);
+  if(allSigned && tripClosed) return { label:'ЭТрН: закрыт ✓', cls:'ok', urgent:false };
+  if(allSigned && !tripClosed){
+    if(typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(o)){
+      return { label:'ЭТрН: T4 · закройте перевозку', cls:'warn', urgent:false };
+    }
+    return { label:'ЭТрН: подписи ✓ · перевозка открыта', cls:'warn', urgent:false };
+  }
   if(orderEtrnNeedsMySignature(o)) return { label:'T2 — ваша подпись', cls:'warn urgent', urgent:true };
   if(t.t1==='pending') return { label:'T1 · ждёт заказчика', cls:'pending', urgent:false };
   if(t.t3==='pending'||t.t4==='pending') return { label:'T3/T4 · водитель', cls:'pending', urgent:false };
@@ -290,7 +298,9 @@ function etrnAllTitulsSigned(et){
 }
 function refreshEtrnOrderStatus(o){
   if(!o||!o.etrn) return;
-  o.etrn.status=etrnAllTitulsSigned(o.etrn)?'signed':'draft';
+  const all=etrnAllTitulsSigned(o.etrn);
+  const tripClosed=typeof looksClosedOrder==='function'&&looksClosedOrder(o);
+  o.etrn.status=(all&&tripClosed)?'signed':'draft';
 }
 function signEtrnTitul(orderId, titulKey, signedBy){
   const o=(state.orders||[]).find(x=>x.id===orderId);

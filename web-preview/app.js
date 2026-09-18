@@ -2675,12 +2675,16 @@ function looksClosedOrder(o){
   // Заявка с портала без выезда — «закрыт» из чата/синка ложный (closedAt/km без startOdometer)
   if(orderNeverStartedTrip(o) && typeof orderKeepsLogist==='function' && orderKeepsLogist(o)) return false;
   if(o.closedAt) return true;
-  if(o.endOdometer!=null && (o.loadedKm!=null || o.emptyKmAfter!=null)){
-    if(o.startOdometer==null) return false;
-    return true;
-  }
-  if(o.loadedKm!=null && o.emptyKmAfter!=null && o.startOdometer!=null) return true;
+  // Одометр на выгрузке без closedAt — заказ ещё открыт (заправка / T4 / стоянка).
+  if(o.endOdometer!=null && o.startOdometer!=null && o.loadedKm!=null && !o.closedAt) return false;
+  if(o.endOdometer!=null && o.emptyKmAfter!=null && o.startOdometer!=null && o.loadedKm!=null) return true;
+  if(o.loadedKm!=null && o.emptyKmAfter!=null && o.startOdometer!=null && o.endOdometer!=null) return true;
   return false;
+}
+/** Одометр на выгрузке введён, финальное закрытие ещё не завершено. */
+function orderAwaitingFinalize(o){
+  if(!o||o.cancelledAt||o.closedAt||looksClosedOrder(o)) return false;
+  return o.startOdometer!=null && o.endOdometer!=null;
 }
 /** Погрузка принята: одометр на загрузке + метка прибытия. */
 function orderAfterLoadingArrival(o){
@@ -2978,8 +2982,9 @@ function statusText(o){
   }
   if(o.onExchange && o.startOdometer==null) return 'На бирже (ищем партнёра)';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
+  if(typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(o)) return 'На выгрузке · ждём закрытие';
   if(o.startOdometer!=null) return 'В работе';
-  if(o.departOdometer!=null) return 'В пути';
+  if(o.departOdometer!=null) return 'В пути · ждём загрузку';
   if(o.executorType==='partner' && o.transportApp) return 'Партнёр везёт';
   if(!o.onExchange && o.startOdometer==null && o.departOdometer==null && waitingLogistDriver(o.driverName)){
     return 'Черновик';
@@ -3395,14 +3400,12 @@ function renderDriverBanner(){
     }
   }
   enRoute.forEach(o=>{
-    html+=`<strong>Заказ №${o.sequentialNumber} — вы в пути</strong>
-      <p>${esc(routeText(o))}<br>Не забудьте отметить прибытие на загрузку (одометр).</p>
-      <div class="banner-actions"><button type="button" class="primary banner-arrive" data-id="${o.id}">Прибыл на загрузку</button></div>`;
+    html+=`<strong>Заказ №${o.sequentialNumber} — в пути на загрузку</strong>
+      <p>${esc(routeText(o))}<br>На «Главной» внизу: «Прибыл на загрузку» и одометр.</p>`;
   });
   pending.forEach(o=>{
     html+=`<strong>Заказ №${o.sequentialNumber} назначен</strong>
-      <p>${esc(routeText(o))}<br>Перед выездом со стоянки нажмите «Выехал» и введите одометр.</p>
-      <div class="banner-actions"><button type="button" class="primary banner-depart" data-id="${o.id}">Выехал</button></div>`;
+      <p>${esc(routeText(o))}<br>На «Главной»: «Выехал» и одометр со стоянки.</p>`;
   });
   if(needClose){
     const s=state.shift||findOpenShift();
@@ -4450,7 +4453,8 @@ function healOrderCloseState(o){
     changed=true;
   }
   if(looksClosedOrder(o) && !o.closedAt && !isUnassignedPortalOrder(o)
-    && !(orderNeverStartedTrip(o) && typeof orderKeepsLogist==='function' && orderKeepsLogist(o))){
+    && !(orderNeverStartedTrip(o) && typeof orderKeepsLogist==='function' && orderKeepsLogist(o))
+    && !(typeof orderAwaitingFinalize==='function' && orderAwaitingFinalize(o))){
     o.closedAt=o.parkingAt||o.endAt||o.arrivedAt||o.createdAt||new Date().toISOString();
     changed=true;
   }
@@ -4573,7 +4577,8 @@ function healStuckOrderSteps(){
     if(!s || s.endedAt) return;
     const step=s.orderStep||'idle';
     if(!step || step==='idle') return;
-    if(step==='closingEmptyAfter' || step==='askRefuel' || /^postClose|^closeShift|^closePrev/.test(step)) return;
+    if(step==='closingEmptyAfter' || step==='askRefuel' || step==='closingOdometer' || step==='closingSignT4'
+      || step==='fuelPrice' || step==='fuelAmount' || /^postClose|^closeShift|^closePrev/.test(step)) return;
     const driver=s.driverName||'';
     const open=(state.orders||[]).find(o=>!looksClosedOrder(o) && !o.cancelledAt && o.startOdometer!=null && samePersonName(o.driverName||'', driver));
     const enRoute=(state.orders||[]).find(o=>orderEnRouteToLoading(o)&&samePersonName(o.driverName||'', driver));

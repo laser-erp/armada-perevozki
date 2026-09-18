@@ -736,6 +736,7 @@
       color:var(--text);font-weight:700;font-size:.85rem
     }
     .drv-order-card .acts .primary{flex:1 1 100%}
+    .drv-order-card .acts .secondary.drv-act-continue{flex:1 1 100%;min-height:40px;font-size:.82rem}
     @media (max-width:380px){
       .driver-home-summary{grid-template-columns:repeat(2,1fr)}
     }

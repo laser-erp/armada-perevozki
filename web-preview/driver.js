@@ -754,9 +754,15 @@ function renderInput(){
       html+=`<div class="hint">Заказ №${enRoute.sequentialNumber} — выехали. Смену закроете после выгрузки и стоянки.</div>`;
       html+=`<button class="primary arrive-assigned" data-id="${enRoute.id}">Прибыл на загрузку №${enRoute.sequentialNumber}</button>`;
     } else if(open){
-      if(open.staysLoadedOvernight) html+=`<div class="hint">Заказ №${open.sequentialNumber} перенесён (машина загружена) — отметьте выгрузку.</div>`;
-      html+=`<div class="hint">После выгрузки укажите одометр, затем — стоянка или следующая загрузка. Смену закрывают в конце.</div>`;
-      html+=`<button class="primary arrive-unload" data-id="${open.id}">Прибыл на выгрузку №${open.sequentialNumber}</button>`;
+      const awaiting=typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(open);
+      if(awaiting){
+        html+=`<div class="hint">Заказ №${open.sequentialNumber}: на выгрузке ${open.endOdometer} км — завершите закрытие (заправка / T4).</div>`;
+        html+=`<button class="primary resume-close" data-id="${open.id}">Завершить заказ №${open.sequentialNumber}</button>`;
+      } else {
+        if(open.staysLoadedOvernight) html+=`<div class="hint">Заказ №${open.sequentialNumber} перенесён (машина загружена) — отметьте выгрузку.</div>`;
+        html+=`<div class="hint">На выгрузке — одометр, затем заправка и T4. Смену закрывают в конце дня.</div>`;
+        html+=`<button class="primary arrive-unload" data-id="${open.id}">Прибыл на выгрузку №${open.sequentialNumber}</button>`;
+      }
     } else {
       if(shiftAwaitingClose()){
         html+=`<div class="hint warn-close">Смена ещё открыта. Перед уходом нажмите «Закрыть смену» и введите одометр на стоянке.</div>`;
@@ -797,6 +803,7 @@ function wireInput(){
   $('lights-ok')&&($('lights-ok').onclick=submitLights);
   $('create-order')&&($('create-order').onclick=startCreateOrder);
   document.querySelectorAll('.arrive-unload').forEach(b=>b.onclick=()=>startArriveUnloading(b.dataset.id));
+  document.querySelectorAll('.resume-close').forEach(b=>b.onclick=()=>resumeCloseAfterUnloading(b.dataset.id));
   $('close-shift')&&($('close-shift').onclick=startCloseShift);
   document.querySelectorAll('.depart-assigned').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.arrive-assigned').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
@@ -1172,10 +1179,7 @@ function submitNumber(){
     const tripGate=typeof canCloseOrderMessage==='function'?canCloseOrderMessage(order):null;
     if(tripGate){ state.error=tripGate; renderInput(); return; }
     if(value<order.startOdometer){state.error=`Одометр на выгрузке не может быть меньше одометра на погрузке (${order.startOdometer})`;renderInput();return;}
-    if(!state.draft.closingOrderId) state.draft.closingOrderId=order.id;
-    state.draft.closeOdo=value; state.draft.endAt=new Date().toISOString();
-    add('driver',String(value)); add('bot','Заправляли машину?');
-    state.orderStep='askRefuel'; state.error=''; upsertShift(); renderInput(); return;
+    acceptUnloadingOdometer(order, value); return;
   }
   if(state.orderStep==='fuelPrice'){
     const price=+raw; if(!(price>0)){state.error='Введите стоимость литра, например 56.5';renderInput();return;}
@@ -1407,13 +1411,13 @@ function driverOdometerStepHtml(os){
   if(os==='arriveAssignedOdometer'){
     const min=o&&o.departOdometer!=null?o.departOdometer:floor;
     const hint=`<div class="hint driver-step-hint">Заказ №${o?o.sequentialNumber:'?'}: одометр по прибытию на загрузку.${min!=null?` Не меньше ${min}.`:''}</div>`;
-    return hint+driverOdometerManualRow(min!=null?String(min):ph,'Прибыл на загрузку');
+    return hint+driverOdometerManualRow(min!=null?String(min):ph,'Подтвердить');
   }
   if(os==='closingOdometer'){
     const order=orderBeingClosed()||openOrder();
     const min=order&&order.startOdometer!=null?order.startOdometer:floor;
     const hint=`<div class="hint driver-step-hint">Заказ №${order?order.sequentialNumber:'?'}: одометр по прибытию на выгрузку.${min!=null?` Не меньше ${min}.`:''}</div>`;
-    return hint+driverOdometerManualRow(min!=null?String(min):ph,'Прибыл на выгрузку');
+    return hint+driverOdometerManualRow(min!=null?String(min):ph,'Подтвердить');
   }
   return driverOdometerManualRow(ph,'OK');
 }
@@ -1495,6 +1499,83 @@ function acceptArrive(value){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift(); persist(); renderInput(); renderDriverBanner();
   if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate().catch(()=>{});
   if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
+}
+/** Одометр на выгрузке — сразу в заказ (не только draft), как на погрузке. */
+function acceptUnloadingOdometer(order, value){
+  syncOpenShiftRuntime();
+  const shift=state.shift||findOpenShift();
+  if(!shift||shift.endedAt){ state.error='Сначала откройте смену'; renderInput(); return; }
+  state.shift=shift;
+  if(!order||order.startOdometer==null){ state.error='Нет одометра на погрузке'; renderInput(); return; }
+  if(value<order.startOdometer){ state.error=`Одометр на выгрузке не может быть меньше одометра на погрузке (${order.startOdometer})`; renderInput(); return; }
+  const now=new Date().toISOString();
+  order.endOdometer=value;
+  order.loadedKm=value-order.startOdometer;
+  order.endAt=now;
+  shift.lastOdometerPoint=value;
+  if(!shift.orders) shift.orders=[];
+  if(!shift.orders.some(o=>o.id===order.id)) shift.orders.push(order);
+  if(!state.draft.closingOrderId) state.draft.closingOrderId=order.id;
+  state.draft.closeOdo=value;
+  state.draft.endAt=now;
+  upsertOrder(order);
+  add('driver',String(value));
+  add('bot',`Одометр на выгрузке сохранён: ${value} км (с грузом: ${order.loadedKm} км).\nЗаправляли машину?`);
+  state.orderStep='askRefuel';
+  state.error='';
+  upsertShift();
+  persist();
+  renderInput();
+  renderDriverBanner();
+  if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate().catch(()=>{});
+  if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
+}
+function resumeCloseAfterUnloading(orderId){
+  syncOpenShiftRuntime();
+  const order=orderById(orderId)||orderBeingClosed();
+  if(!order||order.startOdometer==null){ state.error='Нет открытого заказа'; renderInput(); return; }
+  if(order.endOdometer==null){
+    startArriveUnloading(order.id);
+    return;
+  }
+  hideDriverPanels();
+  state.draft=Object.assign({}, state.draft||{}, {
+    closingOrderId:order.id,
+    closeOdo:order.endOdometer,
+    endAt:order.endAt||new Date().toISOString(),
+    plate:order.vehiclePlate||(state.shift&&state.shift.vehiclePlate)||''
+  });
+  state.step='done';
+  if(typeof orderEtrnNeedsT4BeforeClose==='function' && orderEtrnNeedsT4BeforeClose(order)){
+    state.orderStep='closingSignT4';
+    add('driver','Продолжить закрытие');
+    add('bot',`Заказ №${order.sequentialNumber}: одометр на выгрузке ${order.endOdometer} км.\nПодпишите T4 — затем заказ закроется.`);
+  } else if(order.refueled===true||order.refueled===false){
+    proceedCloseAfterUnloading(!!order.refueled, order.fuelPricePerLiter||null, order.fuelLiters||null);
+    return;
+  } else {
+    state.orderStep='askRefuel';
+    add('driver','Продолжить закрытие');
+    add('bot',`Заказ №${order.sequentialNumber}: одометр на выгрузке ${order.endOdometer} км.\nЗаправляли машину?`);
+  }
+  state.error='';
+  upsertShift();
+  renderChat();
+  renderInput();
+}
+function continueDriverOrder(orderId, fromOrders){
+  const order=orderById(orderId);
+  if(!order) return;
+  if(fromOrders){
+    showDriverHome();
+    renderChat();
+    renderInput();
+  }
+  if(typeof orderEnRouteToLoading==='function'&&orderEnRouteToLoading(order)) return beginArrive(order.id, fromOrders);
+  if(order.startOdometer==null && !order.departOdometer && !order.departAt) return beginDepart(order.id, fromOrders);
+  if(typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(order)) return resumeCloseAfterUnloading(order.id);
+  if(typeof orderAfterLoadingArrival==='function'&&orderAfterLoadingArrival(order)) return startArriveUnloading(order.id);
+  if(fromOrders) showOrdersError('Действие недоступно — откройте «Главная».');
 }
 function startCreateOrder(){
   const gate=canDepartMessage();
@@ -1710,8 +1791,9 @@ function finalizeClose(refueled,price,liters){
     }
     state.error=etrnGate; renderInput(); return;
   }
-  const end=state.draft.closeOdo;
+  const end=state.draft.closeOdo!=null?state.draft.closeOdo:order.endOdometer;
   if(end==null || order.startOdometer==null){state.error='Нет одометра на выгрузке';renderInput();return;}
+  state.draft.closeOdo=end;
   if(end<order.startOdometer){state.error=`Одометр окончания меньше начала (${order.startOdometer})`;renderInput();return;}
   const loaded=end-order.startOdometer;
   const now=new Date().toISOString();
@@ -2052,17 +2134,17 @@ function driverOrderCardHtml(o, opts){
   opts=opts||{};
   const closed=looksClosedOrder(o)||!!o.cancelledAt;
   const enRoute=typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(!closed&&o.departOdometer!=null&&o.startOdometer==null);
+  const awaiting=typeof orderAwaitingFinalize==='function'?orderAwaitingFinalize(o):false;
   const canDepart=!closed && o.startOdometer==null && !enRoute && o.departOdometer==null && !o.departAt && !o.onExchange;
   const canArrive=!closed && enRoute && o.startOdometer==null;
-  const inWork=!closed && typeof orderAfterLoadingArrival==='function'?orderAfterLoadingArrival(o):(!closed&&o.startOdometer!=null);
-  const stCls=closed?'closed':((o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait');
+  const inWork=!closed && !awaiting && typeof orderAfterLoadingArrival==='function'?orderAfterLoadingArrival(o):(!closed&&!awaiting&&o.startOdometer!=null);
+  const stCls=closed?'closed':(awaiting?'progress':((o.startOdometer!=null||o.departOdometer!=null)?'progress':'wait'));
   const phone=formatPhone(o.contactPhone||'');
   const canContact=driverMaySeeContact(o)&&!!phone;
   const contact=driverContactLine(o);
   const acts=[];
-  if(canDepart) acts.push(`<button type="button" class="primary drv-act-depart" data-id="${esc(o.id)}">Выехал</button>`);
-  if(canArrive) acts.push(`<button type="button" class="primary drv-act-arrive" data-id="${esc(o.id)}">Прибыл на загрузку</button>`);
-  if(inWork) acts.push(`<button type="button" class="primary drv-act-unload" data-id="${esc(o.id)}">Прибыл на выгрузку</button>`);
+  const needContinue=!closed && (canDepart||canArrive||inWork||awaiting);
+  if(needContinue) acts.push(`<button type="button" class="secondary drv-act-continue" data-id="${esc(o.id)}">Продолжить на главной</button>`);
   if(canContact){
     acts.push(`<a class="drv-link" href="tel:${esc(phone)}">Позвонить</a>`);
     acts.push(`<a class="drv-link" href="sms:${esc(phone)}">SMS</a>`);
@@ -2076,7 +2158,8 @@ function driverOrderCardHtml(o, opts){
     ${contact?`<div class="contact">${esc(contact)}</div>`:''}
     ${driverMaySeeContact(o)&&o.loadingContactName?`<div class="contact">Загрузка: ${esc(o.loadingContactName)}${o.loadingContactPhone?` · ${esc(formatPhone(o.loadingContactPhone))}`:''}</div>`:''}
     ${driverMaySeeContact(o)&&o.unloadingContactName?`<div class="contact">Выгрузка: ${esc(o.unloadingContactName)}${o.unloadingContactPhone?` · ${esc(formatPhone(o.unloadingContactPhone))}`:''}</div>`:''}
-    ${canArrive?`<div class="meta" style="color:var(--accent);font-weight:600">Выезд отмечен — подтвердите прибытие</div>`:''}
+    ${o.departOdometer!=null&&o.startOdometer==null?`<div class="meta">Выезд ${esc(String(o.departOdometer))} км — нужен одометр на загрузке (на «Главной»).</div>`:''}
+    ${o.startOdometer!=null?`<div class="meta">Погрузка ${esc(String(o.startOdometer))} км${o.endOdometer!=null?` · выгрузка ${esc(String(o.endOdometer))} км`:''}</div>`:''}
     ${typeof driverEtrnOrderCardHtml==='function'?driverEtrnOrderCardHtml(o):''}
     ${closed?`<div class="meta">${esc(driverPayText(o))}</div>`:''}
     ${acts.length?`<div class="acts">${acts.join('')}</div>`:''}
@@ -2084,14 +2167,8 @@ function driverOrderCardHtml(o, opts){
 }
 function wireDriverOrderCards(root){
   if(!root) return;
-  root.querySelectorAll('.drv-act-depart').forEach(b=>{
-    b.onclick=()=>beginDepart(b.dataset.id, true);
-  });
-  root.querySelectorAll('.drv-act-arrive').forEach(b=>{
-    b.onclick=()=>beginArrive(b.dataset.id, true);
-  });
-  root.querySelectorAll('.drv-act-unload').forEach(b=>{
-    b.onclick=()=>{ if(typeof startArriveUnloading==='function') startArriveUnloading(b.dataset.id); };
+  root.querySelectorAll('.drv-act-continue').forEach(b=>{
+    b.onclick=()=>continueDriverOrder(b.dataset.id, true);
   });
   root.querySelectorAll('.drv-etrn-sign').forEach(b=>{
     b.onclick=()=>{
@@ -2110,11 +2187,8 @@ function driverOrdersActionHint(openOrders){
     else if(typeof orderEnRouteToLoading==='function'?orderEnRouteToLoading(o):(o.departOdometer!=null)) needArrive=true;
     else needDepart=true;
   });
-  if(needDepart && needArrive) return 'В карточке: «Выехал» или «Прибыл на загрузку».';
-  if(needDepart) return 'В карточке нажмите «Выехал» и введите одометр.';
-  if(needArrive) return 'В карточке нажмите «Прибыл на загрузку» и введите одометр.';
-  if(inWork) return 'Заказ в работе — на Главной «Прибыл на выгрузку».';
-  return 'Действия по заказу — в карточке.';
+  if(needDepart || needArrive || inWork) return 'Статус и одометры — в карточках. Кнопки «Выехал / загрузка / выгрузка» только на вкладке «Главная».';
+  return 'Закрытые заявки ниже.';
 }
 function showOrders(){
   if(typeof syncDriverOrderCopiesFromShifts==='function') syncDriverOrderCopiesFromShifts();
