@@ -198,23 +198,53 @@ function drawEtrnQrCanvas(text, size){
   }
   return canvas;
 }
+function ensureDriverEtrnQrOverlay(){
+  let el=$('driver-etrn-qr-overlay');
+  if(el) return el;
+  el=document.createElement('div');
+  el.id='driver-etrn-qr-overlay';
+  el.className='driver-etrn-qr-overlay';
+  el.hidden=true;
+  el.innerHTML=`<div class="driver-etrn-qr-panel" role="dialog" aria-modal="true" aria-labelledby="driver-etrn-qr-title">
+    <header class="form-topbar"><button type="button" class="form-back" id="driver-etrn-qr-close">← Назад</button><h1 id="driver-etrn-qr-title">ЭТrН</h1></header>
+    <div class="panel-body" id="driver-etrn-qr-body"></div>
+  </div>`;
+  document.body.appendChild(el);
+  const close=()=>{ el.hidden=true; const b=$('driver-etrn-qr-body'); if(b) b.innerHTML=''; };
+  $('driver-etrn-qr-close').onclick=close;
+  el.addEventListener('click',e=>{ if(e.target===el) close(); });
+  return el;
+}
 function driverEtrnShowQr(orderId){
   const o=(state.orders||[]).find(x=>x.id===orderId);
   if(!o) return;
   if(!o.etrn && typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, {silent:true});
   const canvas=drawEtrnQrCanvas(etrnQrPayload(o), 200);
   if(!canvas){ alert('QR недоступен — обновите приложение'); return; }
-  const w=window.open('', '_blank', 'noopener,width=360,height=420');
-  if(!w){ alert('Разрешите всплывающие окна для QR ЭТрН'); return; }
-  w.document.write(`<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>ЭТрН №${o.sequentialNumber||''}</title>
-<style>body{font-family:system-ui,sans-serif;text-align:center;padding:16px;margin:0}h1{font-size:1rem;margin:0 0 8px}p{font-size:.85rem;color:#555;margin:6px 0}</style></head><body>
-<h1>ЭТрН · заказ №${o.sequentialNumber||'—'}</h1>
-<p>${esc(routeText(o))}</p>
-<p>${esc(o.vehiclePlate||'')} · ${esc(o.driverName||'')}</p>
-<p><strong>Покажите инспектору</strong></p>
-</body></html>`);
-  w.document.body.appendChild(canvas);
-  w.document.close();
+  const overlay=ensureDriverEtrnQrOverlay();
+  const body=$('driver-etrn-qr-body');
+  const title=$('driver-etrn-qr-title');
+  if(title) title.textContent=`ЭТrН · №${o.sequentialNumber||'—'}`;
+  if(body){
+    body.innerHTML=`<p class="hint" style="text-align:center;margin:0 0 10px">${esc(routeText(o)||'—')}<br>${esc(o.vehiclePlate||'')} · ${esc(o.driverName||'')}</p>
+      <p style="text-align:center;font-weight:700;margin:0 0 12px">Покажите инспектору</p>
+      <div class="driver-etrn-qr-canvas-wrap"></div>`;
+    const wrap=body.querySelector('.driver-etrn-qr-canvas-wrap');
+    if(wrap) wrap.appendChild(canvas);
+  }
+  overlay.hidden=false;
+}
+function wireDriverEtrnBannerButtons(root){
+  (root||document).querySelectorAll('.banner-etrn-sign').forEach(b=>{
+    if(b.dataset.etrnBtnWired) return;
+    b.dataset.etrnBtnWired='1';
+    b.onclick=()=>{ if(typeof openDriverEtrnSign==='function') openDriverEtrnSign(b.dataset.etrnSign); };
+  });
+  (root||document).querySelectorAll('.banner-etrn-qr').forEach(b=>{
+    if(b.dataset.etrnBtnWired) return;
+    b.dataset.etrnBtnWired='1';
+    b.onclick=()=>{ if(typeof driverEtrnShowQr==='function') driverEtrnShowQr(b.dataset.etrnQr); };
+  });
 }
 function driverActiveEtrnOrders(){
   if(typeof DRIVER==='undefined' || !DRIVER) return [];

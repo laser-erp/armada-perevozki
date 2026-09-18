@@ -3347,12 +3347,7 @@ function renderDriverBanner(){
   document.querySelectorAll('.banner-depart').forEach(b=>b.onclick=()=>beginDepart(b.dataset.id));
   document.querySelectorAll('.banner-arrive').forEach(b=>b.onclick=()=>beginArrive(b.dataset.id));
   document.querySelectorAll('.banner-close-shift').forEach(b=>b.onclick=()=>startCloseShift());
-  document.querySelectorAll('.banner-etrn-sign').forEach(b=>b.onclick=()=>{
-    if(typeof openDriverEtrnSign==='function') openDriverEtrnSign(b.dataset.etrnSign);
-  });
-  document.querySelectorAll('.banner-etrn-qr').forEach(b=>b.onclick=()=>{
-    if(typeof driverEtrnShowQr==='function') driverEtrnShowQr(b.dataset.etrnQr);
-  });
+  if(typeof wireDriverEtrnBannerButtons==='function') wireDriverEtrnBannerButtons(box);
   if(typeof refreshDriverEtrnFromApi==='function') refreshDriverEtrnFromApi().then(changed=>{
     if(changed && typeof renderDriverBanner==='function') renderDriverBanner();
   });

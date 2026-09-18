@@ -174,11 +174,7 @@ function showDriverHome(){
   renderDriverHome();
 }
 function showEto(){
-  hideDriverPanels();
-  setDriverNav('btn-eto');
-  const panel=$('eto-panel');
-  if(panel) panel.classList.add('show');
-  syncDriverMainVisibility();
+  openDriverPanel('eto-panel','btn-eto');
   renderChat();
   renderEtoPanel();
   updateDriverEtoBadge();
@@ -1839,9 +1835,7 @@ function driverProfilePlate(){
   return (last&&last.vehiclePlate)||'—';
 }
 function showCabinet(){
-  hideDriverPanels();
-  setDriverNav('btn-cabinet');
-  $('cabinet-panel').classList.add('show');
+  openDriverPanel('cabinet-panel','btn-cabinet');
   const mine=allOrders().filter(o=>orderBelongsToDriver(o));
   const paid=mine.filter(o=>effectivePay(o)!=null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
   const pending=mine.filter(o=>looksClosedOrder(o) && effectivePay(o)==null).sort((a,b)=>new Date(payDate(b))-new Date(payDate(a)));
@@ -1860,6 +1854,10 @@ function showCabinet(){
   let html='';
   if(typeof epdSignCardHtml==='function'){
     html+=epdSignCardHtml('driver');
+  }
+  const etrnBlock=typeof driverEtrnBannerHtml==='function'?driverEtrnBannerHtml():'';
+  if(etrnBlock){
+    html+=`<div class="drv-section-label">ЭТrН</div><div class="driver-etrn-profile-block">${etrnBlock}</div>`;
   }
   html+=`<div class="drv-earn">
     <span class="lbl">Профиль водителя</span>
@@ -1926,6 +1924,7 @@ function showCabinet(){
     <div class="hint" style="margin-top:4px">АРМАДА · учёт перевозок<br>Сборка ${esc(APP_BUILD)}</div>`;
   $('cabinet-list').innerHTML=html;
   if(typeof wireEpdSignCard==='function') wireEpdSignCard($('cabinet-list'));
+  if(typeof wireDriverEtrnBannerButtons==='function') wireDriverEtrnBannerButtons($('cabinet-list'));
   const ex=$('profile-exit');
   if(ex) ex.onclick=()=>leaveDriverMode();
   const nOn=$('profile-notify-on');
@@ -1940,6 +1939,13 @@ function hideDriverPanels(){
     const el=$(id); if(el) el.classList.remove('show');
   });
   setDriverNav('btn-home');
+  syncDriverMainVisibility();
+}
+function openDriverPanel(panelId, navId){
+  hideDriverPanels();
+  const el=$(panelId);
+  if(el) el.classList.add('show');
+  if(navId) setDriverNav(navId);
   syncDriverMainVisibility();
 }
 
@@ -2019,9 +2025,7 @@ function driverOrdersActionHint(openOrders){
   return 'Действия по заказу — в карточке.';
 }
 function showOrders(){
-  hideDriverPanels();
-  setDriverNav('btn-orders');
-  $('orders-panel').classList.add('show');
+  openDriverPanel('orders-panel','btn-orders');
   const mine=allOrders().filter(o=>orderBelongsToDriver(o) && !o.onExchange);
   const board=driverExchangeEnabled(DRIVER)?exchangeOrders():[];
   let html='';
@@ -2040,6 +2044,7 @@ function showOrders(){
   }
   if(!mine.length && !board.length){
     $('orders-list').innerHTML=`<div class="empty">Пока нет заявок</div>`;
+    syncDriverMainVisibility();
     return;
   }
   if(mine.length){
@@ -2059,6 +2064,9 @@ function showOrders(){
   document.querySelectorAll('.take-exchange').forEach(b=>b.onclick=()=>takeExchangeOrder(b.dataset.id));
   wireDriverOrderCards($('orders-list'));
   renderDriverBanner();
+  syncDriverMainVisibility();
+  const scrollEl=document.querySelector('#orders-panel .orders-panel-scroll');
+  if(scrollEl) scrollEl.scrollTop=0;
 }
 function takeExchangeOrder(id){
   const o=state.orders.find(x=>x.id===id);
@@ -2280,9 +2288,7 @@ function driverHistCalHtml(days){
   </div>`;
 }
 function showShifts(){
-  hideDriverPanels();
-  setDriverNav('btn-shifts');
-  $('shifts-panel').classList.add('show');
+  openDriverPanel('shifts-panel','btn-shifts');
   const allDays=driverHistoryDayBundles();
   const cal=ensureDriverHistCal();
   const days=driverHistFilterDays(allDays, cal);
