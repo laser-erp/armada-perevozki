@@ -655,6 +655,30 @@
     .driver-home-orders-hint button{align-self:flex-start;min-height:40px}
     .driver-eto-body .hint{margin-bottom:8px}
     .driver-eto-body .row,.driver-eto-body .yesno,.driver-eto-body .plate,.driver-eto-body .fluid{margin-bottom:8px}
+    .eto-light-row{
+      padding:10px 12px;margin-bottom:8px;border:1px solid var(--border);border-radius:var(--radius);
+      background:var(--surface);box-shadow:var(--shadow-sm)
+    }
+    .eto-light-row.answered{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.06)}
+    .eto-light-row.answered:has(.eto-picked.bad){border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.05)}
+    .eto-light-label{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px;font-size:.88rem;font-weight:700;color:var(--text)}
+    .eto-picked{font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid var(--border);background:var(--field);color:var(--muted)}
+    .eto-picked.ok{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.4);color:#059669}
+    .eto-picked.bad{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.35);color:var(--accent)}
+    .eto-picked.wait{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:#D97706}
+    .driver-eto-body .yesno button{
+      flex:1;border:2px solid var(--border);border-radius:var(--pill);padding:10px 0;min-height:var(--touch);
+      background:#fff;color:var(--text);font-weight:800;font-size:.92rem;cursor:pointer;transition:background .12s,border-color .12s,box-shadow .12s,transform .08s
+    }
+    .driver-eto-body .yesno button.on{
+      background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;
+      box-shadow:0 0 0 3px rgba(239,68,68,.28);transform:scale(1.02)
+    }
+    .eto-light-row.answered .yesno button:not(.on){opacity:.45}
+    .driver-eto-body .fluid.on,.driver-eto-body .plate.on{
+      background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;
+      box-shadow:0 0 0 3px rgba(239,68,68,.22)
+    }
     .drv-tab-badge{
       display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;padding:0 4px;
       margin-left:2px;border-radius:999px;background:var(--accent);color:#fff;font-size:.58rem;font-weight:800;line-height:1

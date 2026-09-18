@@ -581,12 +581,36 @@ function renderChat(){
   $('chat').innerHTML=state.messages.map((m,i)=>`<div class="bubble ${m.author}${i===n-1?' bubble-in':''}">${esc(m.text)}</div>`).join('');
   $('chat').scrollTop=$('chat').scrollHeight; renderInput();
 }
-function fluidButtons(){ return FLUIDS.map(l=>`<button class="secondary fluid" data-level="${l}">${l}</button>`).join(''); }
+function etoFluidOn(level){
+  const s=state.shift;
+  if(!s) return '';
+  const step=state.step;
+  let cur=null;
+  if(step==='gur') cur=s.gur||s.powerSteeringLevel;
+  else if(step==='coolant') cur=s.coolant||s.coolantLevel;
+  else if(step==='oil') cur=s.oil||s.engineOilLevel;
+  return cur===level?' on':'';
+}
+function fluidButtons(){
+  return FLUIDS.map(l=>`<button type="button" class="secondary fluid${etoFluidOn(l)}" data-level="${esc(l)}">${esc(l)}</button>`).join('');
+}
+function etoToggleOn(key, val){
+  return state.light[key]===val?' on':'';
+}
 function lightsUI(){
   const rows=[["lowBeam","Ближний свет"],["brake","Стоп-сигналы"],["turn","Указатели поворотов"]];
-  return rows.map(([k,t])=>`<div><div class="hint">${t}</div><div class="yesno">
-    <button data-key="${k}" data-val="Да" class="${state.light[k]==='Да'?'primary':''}">Да</button>
-    <button data-key="${k}" data-val="Нет" class="${state.light[k]==='Нет'?'primary':''}">Нет</button></div></div>`).join('')+`<button class="primary" id="lights-ok">Отправить</button>`;
+  return rows.map(([k,t])=>{
+    const picked=state.light[k];
+    const status=picked
+      ? `<span class="eto-picked ${picked==='Да'?'ok':'bad'}">${picked==='Да'?'✓ исправно':'✗ не исправно'}</span>`
+      : `<span class="eto-picked wait">не отмечено</span>`;
+    return `<div class="eto-light-row${picked?' answered':''}">
+      <div class="eto-light-label"><span>${esc(t)}</span>${status}</div>
+      <div class="yesno" role="group" aria-label="${esc(t)}">
+        <button type="button" data-key="${k}" data-val="Да" class="${etoToggleOn(k,'Да')}" aria-pressed="${picked==='Да'?'true':'false'}">Да</button>
+        <button type="button" data-key="${k}" data-val="Нет" class="${etoToggleOn(k,'Нет')}" aria-pressed="${picked==='Нет'?'true':'false'}">Нет</button>
+      </div></div>`;
+  }).join('')+`<button type="button" class="primary" id="lights-ok">Далее</button>`;
 }
 function renderEtoPanel(){
   const body=$('eto-body');
