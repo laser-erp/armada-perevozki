@@ -94,7 +94,9 @@ function customerDocsTabBadgeCount(){
     const st=customerFrameworkContractStatus(co);
     if(st==='pending') n++;
   }
-  if(typeof epdSignNeedsAttention==='function'&&currentCustomer&&epdSignNeedsAttention('customer', currentCustomer.companyId)) n++;
+  const t1Pending=typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'
+    &&customerOrders().some(o=>customerEtrnT1Pending(o));
+  if(!t1Pending&&typeof epdSignNeedsAttention==='function'&&currentCustomer&&epdSignNeedsAttention('customer', currentCustomer.companyId)) n++;
   if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'){
     n+=customerOrders().filter(o=>customerEtrnT1Pending(o)).length;
   }
