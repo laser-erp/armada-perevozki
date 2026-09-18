@@ -3232,6 +3232,11 @@ function updateDriverNetHint(){
     el.textContent='Нет связи с сервером — данные на телефоне, отправим при появлении сети';
     return;
   }
+  if(typeof syncPushDegraded!=='undefined' && syncPushDegraded && syncStatus==='ok'){
+    el.hidden=false; el.className='driver-net show';
+    el.textContent='Отправка на сервер — повторим автоматически';
+    return;
+  }
   if(typeof syncPullDegraded!=='undefined' && syncPullDegraded && syncStatus==='ok'){
     el.hidden=true;
     el.className='driver-net';
@@ -3251,8 +3256,8 @@ function flushDriverSyncWhenOnline(){
   syncStatus='syncing';
   updateDriverNetHint();
   pushServerStateQueued()
-    .then(()=>{ syncStatus='ok'; updateDriverNetHint(); })
-    .catch(err=>{ syncStatus='error'; console.warn('PB online flush', err); updateDriverNetHint(); });
+    .then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else { syncStatus='ok'; updateDriverNetHint(); } })
+    .catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB online flush'); else { syncStatus='error'; console.warn('PB online flush', err); updateDriverNetHint(); } });
   try{ pullRemoteUpdates('online'); }catch(_){}
 }
 /** Включить напоминание закрыть смену (после закрытия заказа / «на стоянку»). */
@@ -3703,7 +3708,7 @@ function acceptClosePrevThenOpen(value){
   bumpDataEpoch('close-prev-open-new');
   upsertShift(); persist();
   clearTimeout(persistTimer);
-  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close-prev', err); });
+  pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB close-prev'); else { syncStatus='error'; console.warn('PB close-prev', err); } });
   renderChat(); renderInput();
   if(typeof maybeAutoOpenEtoTab==='function') maybeAutoOpenEtoTab();
 }
@@ -5337,7 +5342,7 @@ wireShellHandlers();
   }, true);
 })();
 window.addEventListener('online',()=>flushDriverSyncWhenOnline());
-window.addEventListener('offline',()=>{ syncStatus='error'; updateDriverNetHint(); });
+window.addEventListener('offline',()=>{ syncStatus='local'; updateDriverNetHint(); });
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){
     maybeDriverActionNotify(true);

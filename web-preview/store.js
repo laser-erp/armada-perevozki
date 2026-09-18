@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-18-driver-scroll-etrn";
+const APP_BUILD="2026-09-18-driver-sync-net";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -999,6 +999,7 @@ const PRESENCE_TICK_MS=25*1000;
 const AUTO_SYNC_MS=55*1000;
 const AUTO_SYNC_SLOW_MS=70*1000;
 const FETCH_TIMEOUT_MS=8000;
+const PATCH_TIMEOUT_MS=25000;
 const FETCH_PREFLIGHT_MS=4000;
 const INIT_FETCH_MS=3500;
 const PERSIST_DEBOUNCE_MS=2200;
@@ -1084,6 +1085,49 @@ let pullBackoffUntil=0;
 let pullFailCount=0;
 let syncStatus='local'; // local | syncing | ok | error (ошибка отправки на сервер)
 let syncPullDegraded=false; // фоновый pull не удался — не пугаем водителя, если push ok
+let syncPushDegraded=false; // push не удался, но сервер недавно отвечал — не красим баннер
+let syncLastServerOkAt=0;
+let syncPushRetryTimer=null;
+const SYNC_SERVER_OK_GRACE_MS=120000;
+function touchSyncServerOk(){
+  syncLastServerOkAt=Date.now();
+  syncPushDegraded=false;
+}
+function syncServerRecentlyOk(){
+  return syncLastServerOkAt>0 && (Date.now()-syncLastServerOkAt)<SYNC_SERVER_OK_GRACE_MS;
+}
+function scheduleSyncPushRetry(){
+  if(syncPushRetryTimer) return;
+  syncPushRetryTimer=setTimeout(()=>{
+    syncPushRetryTimer=null;
+    if(navigator.onLine===false) return;
+    pushServerStateQueued()
+      .then(()=>applySyncPushSuccess())
+      .catch(err=>applySyncPushFailure(err, 'sync push retry'));
+  }, 8000);
+}
+function applySyncPushSuccess(){
+  touchSyncServerOk();
+  syncStatus='ok';
+  syncPullDegraded=false;
+  pullFailCount=0;
+  if(typeof updateDriverNetHint==='function') updateDriverNetHint();
+  if(typeof updateSyncHint==='function') updateSyncHint();
+}
+function applySyncPushFailure(err, ctx){
+  console.warn(ctx||'sync push', err);
+  syncPushDegraded=true;
+  if(navigator.onLine===false){
+    syncStatus='local';
+  } else if(syncServerRecentlyOk()){
+    syncStatus='ok';
+  } else {
+    syncStatus='error';
+  }
+  scheduleSyncPushRetry();
+  if(typeof updateDriverNetHint==='function') updateDriverNetHint();
+  if(typeof updateSyncHint==='function') updateSyncHint();
+}
 let currentAdmin=null; // {id,name,isSuper,spaceId} — только в этой вкладке
 let presenceTimer=null;
 let catalogTab='companies'; // companies | drivers | vehicles | finance
@@ -2861,6 +2905,7 @@ async function fetchServerStateFromApi(timeoutMs){
   const payload=(rec&&rec.payload!=null)?rec.payload:data.payload;
   const id=(rec&&rec.id!=null)?rec.id:(data.recordId||null);
   if(!payload) return null;
+  touchSyncServerOk();
   return { id, payload, viaApi:true };
 }
 async function fetchServerStateFromPb(timeoutMs){
@@ -2896,7 +2941,7 @@ async function patchServerStatePayload(payload, _retry401){
         method:'PATCH',
         headers:armadaApiJsonHeaders(),
         body:JSON.stringify({ payload })
-      });
+      }, PATCH_TIMEOUT_MS);
       const data=await res.json().catch(()=>({}));
       if(res.status===401 && !_retry401){
         setArmadaApiToken('');
@@ -2911,8 +2956,12 @@ async function patchServerStatePayload(payload, _retry401){
       if(data.recordId) pbRecordId=data.recordId;
       if(data.id) pbRecordId=data.id;
       syncPullDegraded=false;
+      touchSyncServerOk();
       return { ok:true, aborted:false, viaApi:true };
-    }catch(err){ console.warn('API patch fallback PB', err); }
+    }catch(err){
+      console.warn('API patch', err);
+      throw err;
+    }
   }
   const body={ key:'main', payload };
   if(pbRecordId){
@@ -2965,6 +3014,7 @@ async function mergeRemoteAheadOnPush(remote){
     localStorage.setItem(KEY, JSON.stringify(snapshot()));
     try{
       await patchServerStatePayload(snapshot());
+      touchSyncServerOk();
       console.warn('push merged local into remote epoch', remoteEpoch);
       return {aborted:false, merged:true};
     }catch(e){ console.warn('merge push', e); }
@@ -3019,7 +3069,7 @@ async function pushServerState(){
 function persist(){
   persistLocalOnly();
   if(navigator.onLine===false){
-    syncStatus='error';
+    syncStatus='local';
     updateDriverNetHint();
     if(typeof updateSyncHint==='function') updateSyncHint();
     return;
@@ -3030,15 +3080,15 @@ function persist(){
     updateDriverNetHint();
     if(typeof updateSyncHint==='function') updateSyncHint();
     pushServerStateQueued()
-      .then(()=>{ syncStatus='ok'; syncPullDegraded=false; pullFailCount=0; updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); })
-      .catch(err=>{ syncStatus='error'; console.warn('PB sync', err); updateDriverNetHint(); if(typeof updateSyncHint==='function') updateSyncHint(); });
+      .then(()=>applySyncPushSuccess())
+      .catch(err=>applySyncPushFailure(err, 'PB sync'));
   }, PERSIST_DEBOUNCE_MS);
 }
 /** Сохранить PIN админа локально и сразу отправить на сервер (без debounce). */
 async function persistAdminPinImmediate(){
   persistLocalOnly();
   if(navigator.onLine===false){
-    syncStatus='error';
+    syncStatus='local';
     updateDriverNetHint();
     if(typeof updateSyncHint==='function') updateSyncHint();
     return { ok:false, offline:true };
@@ -3053,19 +3103,14 @@ async function persistAdminPinImmediate(){
     if(attempt>0) await new Promise(r=>setTimeout(r, 800*attempt));
     try{
       await pushServerStateQueued();
-      syncStatus='ok';
-      pullFailCount=0;
-      updateDriverNetHint();
-      if(typeof updateSyncHint==='function') updateSyncHint();
+      applySyncPushSuccess();
       return { ok:true };
     }catch(err){
       lastErr=err;
       console.warn('admin pin push attempt', attempt+1, err);
     }
   }
-  syncStatus='error';
-  updateDriverNetHint();
-  if(typeof updateSyncHint==='function') updateSyncHint();
+  applySyncPushFailure(lastErr, 'admin pin push');
   return { ok:false, offline:false, err:lastErr };
 }
 /** Сохранить справочник компаний на сервер сразу (без debounce). */
@@ -3141,9 +3186,9 @@ async function initCloudSync(){
       await pushServerState();
     }
     syncStatus='ok';
+    touchSyncServerOk();
   }catch(err){
-    syncStatus='error';
-    console.warn('PB init', err);
+    applySyncPushFailure(err, 'PB init');
   }
 }
 function scheduleAdminRerender(){
@@ -3234,6 +3279,7 @@ async function pullRemoteUpdates(reason){
     syncPullDegraded=false;
     pullFailCount=0;
     pullBackoffUntil=0;
+    touchSyncServerOk();
     updateSyncHint();
     console.info('auto-sync', reason, 'epoch', remoteEpoch);
     return true;

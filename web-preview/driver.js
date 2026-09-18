@@ -529,6 +529,7 @@ async function enterAsDriver(rec){
       const recState=await fetchServerState(FETCH_PREFLIGHT_MS);
       if(recState){
         pbRecordId=recState.id;
+        if(typeof touchSyncServerOk==='function') touchSyncServerOk();
         applyPayload(recState.payload||{}, {keepOrders:localOrders, remoteSeq:true});
         if(typeof mergeRemoteOrderAssignments==='function') mergeRemoteOrderAssignments(recState.payload||{});
         if(typeof reconcileOrdersAfterSync==='function') reconcileOrdersAfterSync();
@@ -547,7 +548,8 @@ async function enterAsDriver(rec){
         if(document.querySelector('#orders-panel.show')&&typeof showOrders==='function') showOrders();
       }
       if(typeof ensureArmadaApiToken==='function'){
-        await ensureArmadaApiToken({ pin:'sync', meta:{ role:'sync' } });
+        const ok=await ensureArmadaApiToken({ pin:'sync', meta:{ role:'sync' } });
+        if(ok && typeof touchSyncServerOk==='function') touchSyncServerOk();
       }
       if(typeof flushDriverSyncWhenOnline==='function') flushDriverSyncWhenOnline();
       else if(typeof updateDriverNetHint==='function') updateDriverNetHint();
@@ -1233,7 +1235,7 @@ function selectFluid(level){
     persist();
     // Сразу на сервер — иначе remote_ahead с другой вкладки может затереть ЕТО
     clearTimeout(persistTimer);
-    pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB eto push', err); });
+    pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB eto push'); else { syncStatus='error'; console.warn('PB eto push', err); } });
     renderInput();
     showDriverHome();
     return;
@@ -1671,7 +1673,7 @@ function finalizeClose(refueled,price,liters){
   upsertShift();
   persist();
   clearTimeout(persistTimer);
-  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB close push', err); });
+  pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB close push'); else { syncStatus='error'; console.warn('PB close push', err); } });
   renderInput();
 }
 /** После закрытия: следующий заказ / стоянка / уже на стоянке — без повторного одометра. */
@@ -1721,7 +1723,7 @@ function finishPostCloseWhere(where){
       state.draft={};
       upsertShift(); persist();
       clearTimeout(persistTimer);
-      pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+      pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB post-where push'); else { syncStatus='error'; console.warn('PB post-where push', err); } });
       acceptCloseShiftParking(+end);
       return;
     }
@@ -1732,7 +1734,7 @@ function finishPostCloseWhere(where){
       : 'Укажите одометр на стоянке — смена закроется.');
     upsertShift(); persist();
     clearTimeout(persistTimer);
-    pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+    pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB post-where push'); else { syncStatus='error'; console.warn('PB post-where push', err); } });
     renderInput();
     return;
   }
@@ -1741,7 +1743,7 @@ function finishPostCloseWhere(where){
   state.orderStep='idle'; state.draft={}; state.error='';
   upsertShift(); persist();
   clearTimeout(persistTimer);
-  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB post-where push', err); });
+  pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB post-where push'); else { syncStatus='error'; console.warn('PB post-where push', err); } });
   renderInput();
 }
 function selectDayNumber(n){ state.draft.dayNumber=n; add('driver',`Заказ ${orderDayLabel(n)}`); add('bot','Укажите адрес загрузки в виде: Город, адрес, номер дома, строение.'); state.orderStep='loading'; state.error=''; upsertShift(); renderInput(); }
@@ -1800,7 +1802,7 @@ function finishOrder(unloading){
   state.draft={}; state.orderStep='idle'; state.error=''; upsertShift();
   persist();
   clearTimeout(persistTimer);
-  pushServerStateQueued().then(()=>{ syncStatus='ok'; }).catch(err=>{ syncStatus='error'; console.warn('PB order push', err); });
+  pushServerStateQueued().then(()=>{ if(typeof applySyncPushSuccess==='function') applySyncPushSuccess(); else syncStatus='ok'; }).catch(err=>{ if(typeof applySyncPushFailure==='function') applySyncPushFailure(err, 'PB order push'); else { syncStatus='error'; console.warn('PB order push', err); } });
   renderInput();
   renderDriverHome();
 }
