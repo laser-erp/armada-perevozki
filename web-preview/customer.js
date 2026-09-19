@@ -1730,15 +1730,21 @@ function submitCustomerOrder(){
     paintCustomerFleetOptions();
     return;
   }
-  const spaceId=co.spaceId||carrier.spaceId||null;
+  const portalSpaceId=typeof carrierSpaceIdForPortalOrder==='function'
+    ?carrierSpaceIdForPortalOrder(carrier, co)
+    :(carrier.spaceId||co.spaceId||null);
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
-  Promise.resolve(guardFn(spaceId,'create_order')).then(g=>{
+  Promise.resolve(guardFn(portalSpaceId,'create_order')).then(g=>{
     if(!g.ok){ showCustomerSubmitError(g.message); return; }
-    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
+    submitCustomerOrderAfterGuard(co, carrier, portalSpaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
   });
 }
 function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
-  const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
+  const portalSpaceId=typeof carrierSpaceIdForPortalOrder==='function'
+    ?carrierSpaceIdForPortalOrder(carrier, co)
+    :spaceId;
+  const spaceAdm=typeof ownerAdminForSpaceId==='function'?ownerAdminForSpaceId(portalSpaceId)
+    :(state.admins||[]).find(a=>a.spaceId===portalSpaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
   const loadingNote=(($('cust-load-note')||{}).value||'').trim();
@@ -1748,7 +1754,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     createdAt:now, source:'customer_portal', customerSubmitted:true,
     ownerAdminId:spaceAdm&&spaceAdm.id||null,
     ownerAdminName:spaceAdm&&spaceAdm.name||'',
-    spaceId,
+    spaceId:portalSpaceId,
     customer:co.name, customerId:co.id, customerInn:co.inn||'',
     ownCompanyId:carrier.id, ownCompanyName:carrier.name,
     contactName:contactName||contactPhone||'',
@@ -1825,7 +1831,19 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   if(typeof ensureCustomerFrameworkContract==='function') ensureCustomerFrameworkContract(co, carrier);
   bumpDataEpoch('customer-portal-order');
   upsertOrder(order);
-  persist();
+  const pushFn=typeof persistCustomerPortalOrderImmediate==='function'?persistCustomerPortalOrderImmediate:null;
+  if(pushFn){
+    pushFn().then(r=>{
+      if(r&&r.ok) return;
+      if(r&&r.offline){
+        showCustomerSubmitError('Заявка сохранена здесь. Подключите интернет — она появится у диспетчера.');
+      }else{
+        showCustomerSubmitError('Заявка сохранена; не удалось сразу отправить диспетчеру. Обновите страницу при наличии сети.');
+      }
+    }).catch(()=>{
+      showCustomerSubmitError('Заявка сохранена; отправка диспетчеру не удалась. Обновите страницу.');
+    });
+  }else persist();
   if(err) showCustomerSubmitError('');
   const chatErr=$('cust-chat-error'); if(chatErr) chatErr.textContent='';
   const invoice=typeof createCustomerInvoiceForOrder==='function'?createCustomerInvoiceForOrder(order, co, carrier):null;

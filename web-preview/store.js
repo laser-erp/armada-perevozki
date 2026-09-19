@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-19-customer-time-fix";
+const APP_BUILD="2026-09-19-logist-inbox-portal";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -3119,6 +3119,10 @@ async function persistCompanyImmediate(){
 }
 /** Назначение водителя/ТС — сразу на сервер (без debounce 2.2 с). */
 async function persistOrderAssignmentImmediate(){
+  return persistAdminPinImmediate();
+}
+/** Заявка с портала заказчика — сразу на сервер (иначе диспетчер не видит до debounce/ухода со страницы). */
+async function persistCustomerPortalOrderImmediate(){
   return persistAdminPinImmediate();
 }
 /** После reconcile: если назначение восстановлено из docs/transportApp — сразу на сервер (только админ). */

@@ -487,6 +487,22 @@ function carrierOwnCompanyForSpace(spaceId){
   }
   return ownCompaniesList()[0]||null;
 }
+/** Кабинет перевозчика для заявки с портала (не spaceId карточки заказчика). */
+function carrierSpaceIdForPortalOrder(carrier, customerCo){
+  if(carrier){
+    const sp=spaceForCanonicalOwnCompany(carrier);
+    if(sp&&sp.id) return sp.id;
+    if(carrier.spaceId) return carrier.spaceId;
+  }
+  return (customerCo&&customerCo.spaceId)||null;
+}
+function ownerAdminForSpaceId(spaceId){
+  if(!spaceId) return null;
+  const sp=(state.spaces||[]).find(s=>s.id===spaceId);
+  return (state.admins||[]).find(a=>a.spaceId===spaceId&&!a.isSuper)
+    || (sp&&sp.adminId?(state.admins||[]).find(a=>a.id===sp.adminId):null)
+    || null;
+}
 function isCanonicalOwnCompany(co){
   if(!co||!co.id) return false;
   return (state.spaces||[]).some(sp=>sp.ownCompanyId===co.id);
@@ -1206,6 +1222,7 @@ function orderBelongsToAdmin(o, adminId){
   if(o.ownerAdminId===adminId) return true;
   const adm=(state.admins||[]).find(a=>a.id===adminId);
   const co=ownCompanyForAdminId(adminId);
+  if(o.customerSubmitted && co && o.ownCompanyId && o.ownCompanyId===co.id) return true;
   // Водитель из парка этой фирмы + заказ на фирму — виден админу фирмы
   // (даже если ownerAdminId ошибочно чужой из‑за старого бага входа)
   if(co && o.ownCompanyId===co.id && o.driverName){
@@ -1364,10 +1381,14 @@ function migrateDriverOrderOwners(){
 function migrateRepairOrderOwnersBySpace(){
   let changed=false;
   (state.orders||[]).forEach(o=>{
-    if(!o||!o.spaceId) return;
-    const sp=(state.spaces||[]).find(s=>s.id===o.spaceId);
-    const admForSpace=(state.admins||[]).find(a=>a.spaceId===o.spaceId&&!a.isSuper)
-      || (sp&&sp.adminId?(state.admins||[]).find(a=>a.id===sp.adminId):null);
+    if(!o) return;
+    if(o.customerSubmitted||o.source==='customer_portal'){
+      const carrier=o.ownCompanyId?findCompanyById(o.ownCompanyId):null;
+      const portalSid=carrier?carrierSpaceIdForPortalOrder(carrier, null):null;
+      if(portalSid&&o.spaceId!==portalSid){ o.spaceId=portalSid; changed=true; }
+    }
+    if(!o.spaceId) return;
+    const admForSpace=ownerAdminForSpaceId(o.spaceId);
     if(!admForSpace) return;
     const ownerOk=o.ownerAdminId&&(state.admins||[]).some(a=>a.id===o.ownerAdminId);
     if(ownerOk) return;
@@ -4197,8 +4218,9 @@ function mergeLocalOrders(localOrders){
     if(dead.has(lo.id)) return; // удалённый заказ не воскрешаем из localStorage
     const cur=byId.get(lo.id);
     if(!cur){
-      // Подтягиваем только живые/недавно закрытые локальные заказы
-      if(!lo.closedAt || orderProgressScore(lo)>=3){
+      const portal=lo.customerSubmitted||lo.source==='customer_portal';
+      // Подтягиваем только живые/недавно закрытые локальные заказы (+ заявки портала)
+      if(portal||!lo.closedAt || orderProgressScore(lo)>=3){
         state.orders=(state.orders||[]);
         state.orders.unshift(lo);
         byId.set(lo.id, lo);
@@ -4253,6 +4275,7 @@ function mergeRemoteOrderAssignments(remote){
 /** После sync: канон state.orders, назначение и снятие ложного «закрыт». */
 function reconcileOrdersAfterSync(){
   let changed=false;
+  if(typeof migrateRepairOrderOwnersBySpace==='function'&&migrateRepairOrderOwnersBySpace()) changed=true;
   (state.orders||[]).forEach(o=>{
     if(healOrderDriverAssignment(o)) changed=true;
     if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(o)) changed=true;
