@@ -1918,6 +1918,20 @@ function formatTimeHmInput(v){
   if(h<0||h>23||mi<0||mi>59) return t;
   return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
 }
+/** «9», «930», «09:30» → ЧЧ:ММ для подачи ТС. Пусто → ''. */
+function normalizeTimeHmInput(v){
+  const t=String(v||'').trim();
+  if(!t) return '';
+  const viaColon=formatTimeHmInput(t);
+  if(/^(\d{2}):(\d{2})$/.test(viaColon)) return viaColon;
+  const digits=t.replace(/\D/g,'').slice(0,4);
+  if(!digits) return viaColon||'';
+  if(digits.length===4) return formatTimeHmInput(`${digits.slice(0,2)}:${digits.slice(2)}`);
+  if(digits.length===3) return formatTimeHmInput(`${digits.slice(0,1)}:${digits.slice(1)}`);
+  if(digits.length===2) return formatTimeHmInput(`${digits}:00`);
+  if(digits.length===1) return formatTimeHmInput(`0${digits}:00`);
+  return viaColon||'';
+}
 function maskTimeHmInput(raw){
   const v=String(raw||'').replace(/\D/g,'').slice(0,4);
   if(v.length<=2) return v;
@@ -1926,9 +1940,12 @@ function maskTimeHmInput(raw){
 function fromRuDateTimeParts(dateStr, timeStr){
   const d=parseRuDate(dateStr);
   if(!d) return null;
-  const tm=String(timeStr||'').trim().match(/^(\d{1,2}):(\d{2})$/);
-  if(!tm) return null;
-  const h=+tm[1], mi=+tm[2];
+  let tm=String(timeStr||'').trim();
+  if(!tm) tm='09:00';
+  tm=normalizeTimeHmInput(tm);
+  const m=String(tm||'').match(/^(\d{2}):(\d{2})$/);
+  if(!m) return null;
+  const h=+m[1], mi=+m[2];
   if(h<0||h>23||mi<0||mi>59) return null;
   d.setHours(h, mi, 0, 0);
   return d.toISOString();
@@ -1937,7 +1954,10 @@ function readVehicleAtFromDom(prefix){
   const dateEl=$(`${prefix}-vehicle-date`);
   const timeEl=$(`${prefix}-vehicle-time`);
   if(dateEl||timeEl){
-    return fromRuDateTimeParts((dateEl||{}).value, (timeEl||{}).value);
+    const tRaw=(timeEl||{}).value;
+    const tNorm=normalizeTimeHmInput(tRaw);
+    if(timeEl && tNorm && tNorm!==tRaw) timeEl.value=tNorm;
+    return fromRuDateTimeParts((dateEl||{}).value, tNorm||tRaw);
   }
   const legacy=$(`${prefix}-vehicle-at`);
   if(legacy) return fromDatetimeLocalValue(legacy.value);
@@ -1962,7 +1982,7 @@ function wireVehicleAtHint(prefix, onChange){
     timeEl.setAttribute('lang','ru');
     if(timeEl.type==='time') timeEl.type='text';
     timeEl.oninput=()=>{ timeEl.value=maskTimeHmInput(timeEl.value); upd(); };
-    timeEl.onblur=()=>{ const f=formatTimeHmInput(timeEl.value); if(f) timeEl.value=f; upd(); };
+    timeEl.onblur=()=>{ const f=normalizeTimeHmInput(timeEl.value); if(f) timeEl.value=f; upd(); };
   }
 }
 /** Освобождение = подача + max(мин. часы работы, ориентир/факт часов). Час подачи в сумму не входит. */

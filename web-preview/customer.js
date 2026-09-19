@@ -439,6 +439,20 @@ function syncCustomerVehicleDateCalVisibility(){
   if(wrap) wrap.classList.toggle('cal-open', on);
   if(on) paintCustomerVehicleDateCal();
 }
+function wireCustomerTimePresets(){
+  document.querySelectorAll('.cust-time-preset').forEach(btn=>{
+    if(btn.dataset.wired) return;
+    btn.dataset.wired='1';
+    btn.onclick=()=>{
+      const hm=btn.getAttribute('data-hm')||'';
+      const timeEl=$('cust-vehicle-time');
+      if(timeEl) timeEl.value=hm;
+      paintCustomerFleetOptions();
+      scheduleCustomerOrderDraftSave();
+      customerChatSyncFromForm();
+    };
+  });
+}
 function setCustomerVehicleDateFromKey(key, closeCal){
   if(!key) return;
   const parts=key.split('-').map(Number);
@@ -451,6 +465,8 @@ function setCustomerVehicleDateFromKey(key, closeCal){
     dateEl.dispatchEvent(new Event('input',{bubbles:true}));
     dateEl.dispatchEvent(new Event('change',{bubbles:true}));
   }
+  const timeEl=$('cust-vehicle-time');
+  if(timeEl && !String(timeEl.value||'').trim()) timeEl.value='09:00';
   customerVehicleDateCal.from=key;
   customerVehicleDateCal.year=y;
   customerVehicleDateCal.month=m-1;
@@ -1506,6 +1522,7 @@ function renderCustomerPortal(){
     if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
     paintCustomerFleetOptions();
   });
+  wireCustomerTimePresets();
   if((loadEl&&loadEl.value) && (unloadEl&&unloadEl.value)) refreshCustomerRouteKm();
   else updateCustomerTripModeDisplay(carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance));
   paintCustomerFleetOptions();
@@ -3549,6 +3566,7 @@ function customerChatParseWhenInput(raw){
   if(!dm) return null;
   date=typeof formatRuDateInput==='function'?formatRuDateInput(dm[1]):dm[1];
   if(!date||typeof parseRuDate==='function'&&!parseRuDate(date)) return null;
+  if(typeof normalizeTimeHmInput==='function') time=normalizeTimeHmInput(time)||'09:00';
   return {date, time};
 }
 function customerChatHandleWhenCompose(raw){
@@ -3874,6 +3892,7 @@ function wireCustomerPortal(){
     if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
     paintCustomerFleetOptions();
   });
+  wireCustomerTimePresets();
   const calToggle=$('cust-vehicle-date-cal-toggle');
   if(calToggle) calToggle.onchange=()=>syncCustomerVehicleDateCalVisibility();
   wireCustomerVehicleTypes();

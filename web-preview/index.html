@@ -253,7 +253,13 @@
                   </div>
                   <div class="cust-time-field">
                     <label for="cust-vehicle-time">Время</label>
-                    <input id="cust-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+                    <input id="cust-vehicle-time" lang="ru" placeholder="09:00" inputmode="numeric" maxlength="5" autocomplete="off" value="09:00" />
+                    <div class="cust-time-presets" role="group" aria-label="Быстрый выбор времени">
+                      <button type="button" class="secondary cust-time-preset" data-hm="08:00">08:00</button>
+                      <button type="button" class="secondary cust-time-preset" data-hm="09:00">09:00</button>
+                      <button type="button" class="secondary cust-time-preset" data-hm="12:00">12:00</button>
+                      <button type="button" class="secondary cust-time-preset" data-hm="14:00">14:00</button>
+                    </div>
                   </div>
                 </div>
               </div>

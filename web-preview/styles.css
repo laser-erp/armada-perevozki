@@ -448,7 +448,11 @@
     .form-fields{display:flex;flex-direction:column;gap:8px}
     .form-pair{display:grid;grid-template-columns:1fr;gap:8px}
     .form-pair > div{display:flex;flex-direction:column;gap:5px;min-width:0}
-    .form-pair.cust-datetime-pair > .cust-time-field input{max-width:9.5rem}
+    .form-pair.cust-datetime-pair > .cust-time-field input{max-width:100%;min-width:5.5rem}
+    .cust-time-presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+    .cust-time-presets .cust-time-preset{
+      flex:1 1 calc(25% - 6px);min-height:36px;padding:4px 6px;font-size:.78rem;font-weight:700
+    }
     .cust-date-field-wrap{position:relative}
     .cust-date-input-row{display:flex;align-items:center;gap:8px;min-width:0}
     .cust-date-input-row > input{
@@ -1085,7 +1089,7 @@
       .phone.wide{max-width:min(1100px,100%)}
       .admin-form-shell{max-width:720px}
       .form-pair{grid-template-columns:1fr 1fr}
-      .form-pair.cust-datetime-pair{grid-template-columns:minmax(0,1.65fr) minmax(72px,0.85fr)}
+      .form-pair.cust-datetime-pair{grid-template-columns:minmax(0,1.35fr) minmax(108px,1fr)}
       .form-triple{grid-template-columns:1fr 1fr 1fr}
       #cust-order-form .cust-cargo-meta-row{grid-template-columns:auto auto minmax(0,1fr)}
     }
