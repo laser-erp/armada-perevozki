@@ -274,15 +274,15 @@
         }
       },
       {
-        title:'Фильтры списка',
-        body:'<p>Отфильтруйте парк: все, входящие от заказчика, назначенные, в работе, закрытые. Ниже — фильтр по фирме (если несколько парков).</p>',
-        target:'admin-filters',
+        title:'Канбан заказов',
+        body:'<p>По умолчанию — <strong>канбан</strong>: входящие, назначен, в работе, закрыт. Во «Входящих» назначьте водителя и ТС.</p><p>Режим <strong>список</strong> — фильтры по статусу и таблица.</p>',
+        target:'admin-orders-view-toggle',
         placement:'bottom'
       },
       {
-        title:'ЭТrН в заказах',
-        body:'<p>Если подключён модуль ЭТrН — смотрите бейджи на строках и фильтры <strong>«моя подпись»</strong>, <strong>T1</strong>, <strong>водитель</strong>.</p><p>Подробнее — <a href="help.html?role=admin#etrn" target="_blank" rel="noopener">раздел помощи про ЭТrН</a>.</p>',
-        target:()=>document.querySelector('#admin-filters button[data-filter="etrn-sign"]')||document.getElementById('admin-filters'),
+        title:'ЭТrН на карточке',
+        body:'<p>После T1 грузоотправителя на карточке загорается <strong>«Подписать T2»</strong> — подпись перевозчика на погрузке.</p><p>Подробнее — <a href="help.html?role=admin#etrn" target="_blank" rel="noopener">раздел помощи про ЭТrН</a>.</p>',
+        target:'admin-orders-view-toggle',
         placement:'bottom'
       },
       {

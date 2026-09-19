@@ -120,8 +120,48 @@ function paintOwnerFiltersBox(box, onPick){
     };
   });
 }
+function adminOwnerFilterLabel(){
+  const cur=state.adminOwnerFilter||'all';
+  if(cur==='all') return 'Все кабинеты';
+  if(cur==='_none') return 'Без кабинета';
+  const sp=(state.spaces||[]).find(s=>s.id===cur);
+  return sp&&sp.name?sp.name:'Кабинет';
+}
+function paintAdminSidebarCabinet(){
+  const box=$('admin-sidebar-cabinet');
+  if(!box) return;
+  if(!isSuperAdmin()){
+    box.hidden=true;
+    box.innerHTML='';
+    return;
+  }
+  box.hidden=false;
+  const spaces=(state.spaces||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  const cur=state.adminOwnerFilter||'all';
+  const opts=[
+    `<option value="all"${cur==='all'?' selected':''}>Все кабинеты</option>`,
+    ...spaces.map(s=>`<option value="${esc(s.id)}"${cur===s.id?' selected':''}>${esc(s.name)}</option>`),
+    `<option value="_none"${cur==='_none'?' selected':''}>Без кабинета</option>`
+  ];
+  box.innerHTML=`<label class="admin-sidebar-cabinet-label">Кабинет перевозчика<select id="admin-sidebar-cabinet-select" aria-label="Кабинет перевозчика">${opts.join('')}</select></label>
+    <p class="hint admin-sidebar-cabinet-hint">Справочник и заказы выбранного кабинета.</p>`;
+  const sel=$('admin-sidebar-cabinet-select');
+  if(!sel) return;
+  sel.value=cur;
+  if(!sel.dataset.wired){
+    sel.dataset.wired='1';
+    sel.onchange=()=>{
+      state.adminOwnerFilter=sel.value||'all';
+      paintCatalogOwnerFilters();
+      updateAdminChrome();
+      renderAdmin();
+    };
+  }
+}
 function paintAdminOwnerFilters(){
-  paintOwnerFiltersBox($('admin-owner-filters'), ()=>{ renderAdmin(); });
+  const main=$('admin-owner-filters');
+  if(main){ main.innerHTML=''; main.hidden=true; }
+  paintAdminSidebarCabinet();
 }
 function paintCatalogOwnerFilters(){
   const onPick=()=>{
@@ -392,7 +432,8 @@ function syncAdminNav(){
     b.classList.toggle('on', b.dataset.nav===nav);
   });
   const filters=$('admin-filters');
-  if(filters) filters.style.display=(nav==='orders')?'flex':'none';
+  const kanban=typeof adminOrdersView==='function'&&adminOrdersView()==='kanban';
+  if(filters) filters.style.display=(nav==='orders'&&!kanban)?'flex':'none';
   const cta=$('admin-new');
   if(cta) cta.style.display=(nav==='orders'||nav==='exchange')?'':'none';
   const exNav=document.querySelector('.admin-nav-item[data-nav="exchange"]');
@@ -450,7 +491,11 @@ function updateAdminChrome(){
     const section=state.adminFilter==='eto'?'ЕТО'
       : state.adminFilter==='exchange'?'Биржа'
       : 'Парк';
-    if(title) title.textContent=section;
+    if(title){
+      let t=section;
+      if(isSuperAdmin()&&(section==='Парк'||section==='Биржа')) t=`${section} · ${adminOwnerFilterLabel()}`;
+      title.textContent=t;
+    }
     const kind=typeof currentLogistKind==='function'?currentLogistKind():'';
     const kindLabel=kind==='broker'?'диспетчер':'';
     if(userEl) userEl.textContent=`${currentAdmin.name}${firm&&firm!==currentAdmin.name?' · '+firm:''}${kindLabel?' · '+kindLabel:''}`;
@@ -2231,6 +2276,7 @@ function adminOrderCardHtml(o){
       ?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''
   ].filter(Boolean).join('');
   const etrnBadge=typeof orderEtrnBadgeHtml==='function'?orderEtrnBadgeHtml(o):'';
+  const etrnAct=typeof adminOrderEtrnActionHtml==='function'?adminOrderEtrnActionHtml(o):'';
   return `<div class="order-card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
     <div class="order-card-head">
       ${adminOrderPickHtml(o)}
@@ -2257,6 +2303,7 @@ function adminOrderCardHtml(o){
       ? `<p class="order-money">Нал (ЗП): ${fmt(selectedRate(o))} ₽ · клиенту: ${fmt(clientRate(o))} ₽ · ЗП: ${fmt(pay)} ₽</p>`
       : `<p class="rate-missing">Ставка не заполнена — нажмите кнопку ниже</p>`}
     <div class="order-actions">
+      ${etrnAct}
       <button type="button" class="primary open-rates" data-id="${o.id}">${hasRate?'Изменить ставки / финансы':'Заполнить ставки'}</button>
       <button type="button" class="secondary copy-order" data-id="${o.id}">Повторить</button>
       ${sideBtns?`<div class="row">${sideBtns}</div>`:''}
@@ -3013,8 +3060,15 @@ function adminOrdersView(){
     const v=localStorage.getItem(ADMIN_ORDERS_VIEW_KEY);
     if(v==='kanban'||v==='list'){ state.adminOrdersView=v; return v; }
   }catch(_){}
-  state.adminOrdersView='list';
-  return 'list';
+  state.adminOrdersView='kanban';
+  return 'kanban';
+}
+function adminKanbanOrdersPool(){
+  return allOrders().filter(o=>{
+    if(o.cancelledAt||(o.closedAt&&o.cancelReason)) return false;
+    if(!canAdminSeeOrder(o)||!matchesOwnerFilter(o)) return false;
+    return true;
+  });
 }
 function setAdminOrdersView(view){
   view=view==='kanban'?'kanban':'list';
@@ -3031,6 +3085,9 @@ function syncAdminOrdersViewToggle(){
   document.querySelectorAll('#admin-orders-view-toggle [data-orders-view]').forEach(btn=>{
     btn.classList.toggle('on', btn.dataset.ordersView===adminOrdersView());
   });
+  const filters=$('admin-filters');
+  const kanban=adminOrdersView()==='kanban';
+  if(filters) filters.style.display=(nav!=='eto'&&nav!=='exchange'&&!kanban)?'flex':'none';
   if(!state._adminOrdersViewWired){
     state._adminOrdersViewWired=true;
     document.querySelectorAll('#admin-orders-view-toggle [data-orders-view]').forEach(btn=>{
@@ -3118,6 +3175,8 @@ function adminKanbanCardHtml(o){
     &&typeof isDispatcherCompany==='function'&&isDispatcherCompany(findCompanyById(o.ownCompanyId)||currentOwnCompany())){
     quick.push(`<button type="button" class="secondary pub-exchange" data-id="${esc(o.id)}">Биржа</button>`);
   }
+  const etrnAct=typeof adminOrderEtrnActionHtml==='function'?adminOrderEtrnActionHtml(o):'';
+  if(etrnAct) quick.unshift(etrnAct);
   quick.push(`<button type="button" class="primary open-rates" data-id="${esc(o.id)}">Карточка</button>`);
   return `<article class="kanban-card" data-order-card="${esc(o.id)}" tabindex="0">
     <div class="kanban-card-head">
@@ -3160,7 +3219,7 @@ function renderAdminKanbanBoard(orders){
     </section>`;
   }).join('');
   return `<div class="orders-board-head">
-    <p class="cat-panel-hint">Канбан: во «Входящих» выберите водителя и ТС → «Назначить». Или фильтр «Входящие» в списке. «Карточка» — детали и ставки.</p>
+    <p class="cat-panel-hint">Канбан: «Входящие» — назначьте водителя и ТС. «Подписать T2» загорается после T1 грузоотправителя. «Карточка» — детали и ставки.</p>
   </div>
   <div class="kanban-board-wrap"><div class="kanban-board">${cols}</div></div>`;
 }
@@ -3210,6 +3269,7 @@ function wireAdminOrderListActions(orders){
     };
   }
   wireAdminOrderDeleteUi(orders||[]);
+  if(typeof wireAdminOrderEtrnCardButtons==='function') wireAdminOrderEtrnCardButtons($('admin-list'));
 }
 function renderAdminDebounced(){
   clearTimeout(renderAdminDebounceTimer);
@@ -3232,15 +3292,16 @@ function renderAdmin(){
     $('admin-list').innerHTML=renderAdminEtoBoard();
     return;
   }
-  const orders=filteredOrders();
   if(adminOrdersView()==='kanban'){
+    const orders=adminKanbanOrdersPool();
     $('admin-list').innerHTML=orders.length
       ?renderAdminKanbanBoard(orders)
-      :`<div class="empty">${(state.adminFilter||'all')==='inbox'?'Входящих нет':'Нет заявок для канбана'}</div>`;
+      :'<div class="empty">Нет заявок для канбана</div>';
     document.querySelectorAll('#admin-list .ex-assign').forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); assignExchangeToOwn(b.dataset.id); });
     wireAdminOrderListActions(orders);
     return;
   }
+  const orders=filteredOrders();
   pruneAdminOrderSelection(orders.map(o=>o.id).filter(Boolean));
   alignAdminOrdersCalToData(orders);
   if(state.adminFilter==='exchange'){
