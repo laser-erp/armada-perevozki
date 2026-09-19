@@ -12,7 +12,7 @@
 
 ### TLS
 
-DNS **A** `staging.app.armada.sx` → VPS. Caddy выдаёт **Let's Encrypt** (см. `scripts/CLOUD_AGENT_STAGING_TLS.md`).  
+DNS **A** `staging.app.armada.sx` → `176.12.67.35`. Caddy выдаёт **Let's Encrypt** (см. `scripts/CLOUD_AGENT_STAGING_TLS.md`).  
 Строка в `hosts` на ПК **не нужна**, если DNS резолвится.
 
 ## Если с ПК SSH таймаут (WinError 10060)

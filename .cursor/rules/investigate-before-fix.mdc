@@ -1,6 +1,7 @@
 ---
-description: Сначала данные и prod — потом код; не чинить баги «по догадке» (урок МБН/Нечаев в справочниках)
-alwaysApply: true
+description: Сначала данные prod/state — потом код (справочники, sync, сохранение)
+alwaysApply: false
+globs: web-preview/store.js,web-preview/admin.js,web-preview/app.js
 ---
 
 # Расследовать до правки — не чинить по догадке

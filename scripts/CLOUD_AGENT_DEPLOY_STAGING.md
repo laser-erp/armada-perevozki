@@ -1,17 +1,23 @@
-# Задание облачному агенту: включить staging на VPS
+# Задание облачному агенту: staging на VPS (DNS готово)
 
 **От Евгения.** Прочитай этот файл и **выполни по шагам**. Не спрашивай «продолжать?» — сделай и отчитайся фактами.
 
 ## Жёстко
 
-- **Только staging.** Прод **не** деплоить (`deploy-fvds.sh` с `/var/www/armada` — **запрещён**).
-- **Не** мержить PR и **не** пушить в `main` без отдельной просьбы.
-- Пароль VPS: `FVDS_SSH_PASSWORD` или секрет **`root`** в Cloud Agent (как для прошлых деплоев на прод).
+- **Только staging.** Прод **не** деплоить (`deploy-fvds.sh`, каталог `/var/www/armada` — **запрещён**).
+- **Не** мержить PR и **не** пушить в `main` без отдельной просьбы Евгения.
+- Пароль VPS: переменная **`FVDS_SSH_PASSWORD`** или секрет **`root`** в Cloud Agent (как на прошлых деплоях).
+
+## Контекст
+
+- **DNS:** A `staging.app.armada.sx` → `176.12.67.35` (тот же IP, что `app.armada.sx`).
+- В Caddy для staging **нет** `tls internal` — нужен **Let's Encrypt** через обычный блок `staging.app.armada.sx { import armada_staging }` в `scripts/build-caddyfile-fvds.sh`.
+- Если в `main` ещё есть `tls internal` у staging — убери, пересобери `caddyfile.fvds.prod`, закоммить на русском **только если Евгений просил пуш**; иначе деплой с текущей ветки после правки локально на runner.
 
 ## Цель
 
-1. Caddy отдаёт **https://staging.app.armada.sx** из `/var/www/armada-staging`.
-2. В каталоге лежит свежий `web-preview` с **ветки `main`** + оранжевая полоса STAGING.
+1. Caddy отдаёт **https://staging.app.armada.sx** из `/var/www/armada-staging` с **валидным HTTPS** (не self-signed).
+2. В `/var/www/armada-staging` — свежий `web-preview` с **ветки `main`** + оранжевая полоса STAGING.
 
 Подробности: `scripts/STAGING.md`.
 
@@ -29,29 +35,20 @@ chmod +x scripts/*.sh scripts/build-caddyfile-fvds.sh
 ./scripts/deploy-staging-fvds.sh main
 ```
 
-Если `deploy-caddy-fvds.sh` падает на Python — установи `paramiko` или `sshpass` и повтори.
-
-## DNS
-
-Запись **A** для `staging.app.armada.sx` может **ещё не быть**. Caddy настроен с **`tls internal`** — для проверки без DNS пользователь добавит в `hosts` на ПК:
-
-`176.12.67.35 staging.app.armada.sx`
-
-Это не блокер для деплоя на сервер.
+Если `deploy-caddy-fvds.sh` падает на Python — установи `paramiko` и повтори.
 
 ## Отчёт пользователю (обязательно)
 
-Напиши по пунктам:
-
 1. SSH на `176.12.67.35` — ок / ошибка (текст).
 2. `Caddy reloaded OK` — да / нет.
-3. `grep APP_BUILD /var/www/armada-staging/store.js` на сервере — **точная строка**.
-4. Прод `/var/www/armada/store.js` **не менялся** (тот же APP_BUILD, что до задачи, или сравнение с https://app.armada.sx/store.js).
-5. Что проверено вторым способом (повтор SSH, `curl -kI https://staging.app.armada.sx/` с сервера или с runner).
+3. `curl -sI https://staging.app.armada.sx/` — код ответа; сертификат не self-signed (issuer Let's Encrypt или аналог).
+4. `grep APP_BUILD /var/www/armada-staging/store.js` на сервере — **точная строка**.
+5. Прод **не трогали:** `grep APP_BUILD /var/www/armada/store.js` совпадает с https://app.armada.sx/store.js?v=… (или тот же build, что до задачи).
+6. Вторая проверка: повтор `curl` или `caddy validate` на сервере.
 
-Не писать «готово» без пунктов 1–3.
+Не писать «готово» без пунктов 1–4.
 
 ## Если SSH не работает
 
-- Не трогать прод.
-- Предложить пользователю: GitHub Actions **Deploy staging (VPS)** после добавления секрета `FVDS_SSH_PASSWORD` в репозиторий.
+- Прод не трогать.
+- Сообщить Евгению: добавить секрет **`FVDS_SSH_PASSWORD`** в GitHub → Actions → **Deploy staging (VPS)** → Run workflow (ветка `main`).

@@ -1,6 +1,7 @@
 ---
-description: Чат заказчика — без формы в UI; форма заполняется из ответов или отдельно в режиме «Форма»
-alwaysApply: true
+description: Чат заказчика vs форма — без полей в thread/tray
+alwaysApply: false
+globs: web-preview/customer.js,web-preview/app.js,web-preview/styles.css,web-preview/index.html
 ---
 
 # Чат vs Форма — архитектура (обязательно)

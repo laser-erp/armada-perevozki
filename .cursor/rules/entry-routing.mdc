@@ -1,6 +1,7 @@
 ---
-description: Маршрутизация входа app.armada.sx — корень vs /a/ /v/ /z/
-alwaysApply: true
+description: Маршрутизация входа — корень vs /a/ /v/ /z/
+alwaysApply: false
+globs: web-preview/boot-loader.js,web-preview/entry-route.js,web-preview/index.html,web-preview/store.js
 ---
 
 # Entry routing (АРМАДА)

@@ -1,15 +1,8 @@
 ---
-description: Staging перед продом — проверка на staging.app.armada.sx
+description: Staging перед продом
 alwaysApply: true
 ---
 
 # Staging перед продом
 
-**От Евгения, 2026-09-19.**
-
-1. **Прод** (`deploy-fvds.sh`) — только по явной просьбе пользователя после проверки.
-2. **Проверка UI:** `./scripts/deploy-staging-fvds.sh <ветка>` → https://staging.app.armada.sx
-3. **Merge в `main`** — только после «ок» от пользователя (после staging).
-4. Staging использует **тот же armada-api и данные**, что прод — на staging не ломать данные «для теста».
-
-Подробно: `scripts/STAGING.md`
+Прод `deploy-fvds.sh` и merge в `main` — **только после «ок»** Евгения после проверки на https://staging.app.armada.sx/ (`deploy-staging-fvds.sh`). Те же API/данные — не ломать данные «для теста». См. `scripts/STAGING.md`.
