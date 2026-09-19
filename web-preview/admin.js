@@ -2468,7 +2468,11 @@ function filteredOrders(){
     if(!canAdminSeeOrder(o) || !matchesOwnerFilter(o)) return false;
     if(state.adminFilter==='exchange') return !looksClosedOrder(o) && !!o.onExchange && o.startOdometer==null;
     if(state.adminFilter==='inbox') return typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o);
-    if(state.adminFilter==='assigned') return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange && !waitingLogistDriver(o.driverName);
+    if(state.adminFilter==='assigned'){
+      if(typeof isLogistInboxOrder==='function'&&isLogistInboxOrder(o)) return false;
+      return !looksClosedOrder(o) && o.startOdometer==null && !o.onExchange
+        && typeof orderHasDriverVehicleAssigned==='function' && orderHasDriverVehicleAssigned(o);
+    }
     if(state.adminFilter==='progress') return !looksClosedOrder(o) && o.startOdometer!=null;
     if(state.adminFilter==='closed') return looksClosedOrder(o);
     if(state.adminFilter==='etrn-sign') return typeof orderEtrnNeedsMySignature==='function' && orderEtrnNeedsMySignature(o);

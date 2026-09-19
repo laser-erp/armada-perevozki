@@ -2657,6 +2657,7 @@ function orderEffectiveDriverName(o){
 /** Починить driverName / ownFleetDriverId из transportApp и справочника. */
 function healOrderDriverAssignment(o){
   if(!o) return false;
+  if(typeof healPortalInboxDriverStub==='function'&&healPortalInboxDriverStub(o)) return true;
   let changed=false;
   const firmId=o.ownCompanyId||null;
   if(o.ownFleetDriverId){
@@ -2948,17 +2949,34 @@ function orderHasEffectiveAssignment(o){
   }
   return false;
 }
-function isUnassignedPortalOrder(o){
-  if(!o||o.cancelledAt) return false;
+/** Заявка логисту/с портала: выезд не начат, водитель+ТС ещё не назначены по факту. */
+function portalOrderNeedsLogistAssign(o){
+  if(!o||o.cancelledAt||o.onExchange) return false;
   if(!orderKeepsLogist(o)) return false;
   if(o.startOdometer!=null||o.departOdometer!=null) return false;
   if(orderHasEffectiveAssignment(o)) return false;
-  return waitingLogistDriver(o.driverName);
+  if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)) return false;
+  return true;
+}
+/** Сбросить ложное «назначение» (имя водителя без ТС) — во «Входящие». */
+function healPortalInboxDriverStub(o){
+  if(!portalOrderNeedsLogistAssign(o)) return false;
+  let changed=false;
+  if(o.ownFleetDriverId){ o.ownFleetDriverId=null; changed=true; }
+  const drv=String(o.driverName||'').trim();
+  if(drv&&!waitingLogistDriver(drv)){ o.driverName='Диспетчер'; changed=true; }
+  const plate=String(o.vehiclePlate||'').trim();
+  if(plate&&plate!=='—'&&plate!=='-'&&!String(o.bookedPlate||'').trim()){
+    o.vehiclePlate='—'; changed=true;
+  }
+  return changed;
+}
+function isUnassignedPortalOrder(o){
+  return portalOrderNeedsLogistAssign(o);
 }
 function isLogistInboxOrder(o){
   if(!o || looksClosedOrder(o) || o.cancelledAt || o.onExchange || o.startOdometer!=null) return false;
-  if(!waitingLogistDriver(o.driverName)) return false;
-  return orderKeepsLogist(o);
+  return portalOrderNeedsLogistAssign(o);
 }
 function orderLinkedToShift(shift, o){
   return !!(shift&&o&&o.id&&(shift.orders||[]).some(x=>x&&x.id===o.id));
@@ -4277,6 +4295,7 @@ function reconcileOrdersAfterSync(){
   let changed=false;
   if(typeof migrateRepairOrderOwnersBySpace==='function'&&migrateRepairOrderOwnersBySpace()) changed=true;
   (state.orders||[]).forEach(o=>{
+    if(typeof healPortalInboxDriverStub==='function'&&healPortalInboxDriverStub(o)) changed=true;
     if(healOrderDriverAssignment(o)) changed=true;
     if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(o)) changed=true;
     if(typeof syncOrderDocsOnAssign==='function') syncOrderDocsOnAssign(o);
