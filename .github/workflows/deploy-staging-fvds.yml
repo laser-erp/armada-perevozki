@@ -1,0 +1,36 @@
+name: Deploy staging (VPS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Ветка или ref (например main)"
+        required: true
+        default: main
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Deploy Caddy + staging web
+        env:
+          FVDS_SSH_PASSWORD: ${{ secrets.FVDS_SSH_PASSWORD }}
+          FVDS_HOST: ${{ secrets.FVDS_HOST }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FVDS_SSH_PASSWORD}" ]; then
+            echo "Добавьте секрет FVDS_SSH_PASSWORD в Settings → Secrets → Actions"
+            exit 1
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass rsync
+          python3 -m pip install --quiet paramiko
+          export root="${FVDS_SSH_PASSWORD}"
+          chmod +x scripts/*.sh scripts/build-caddyfile-fvds.sh
+          ./scripts/build-caddyfile-fvds.sh
+          ./scripts/deploy-caddy-fvds.sh
+          ./scripts/deploy-staging-fvds.sh

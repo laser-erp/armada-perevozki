@@ -5,20 +5,41 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${FVDS_HOST:-176.12.67.35}"
 USER="${FVDS_USER:-root}"
 PASS="${FVDS_SSH_PASSWORD:-${root:-}}"
+if [ -z "$PASS" ] && [ -n "${FVDS_SSH_PASSWORD_FILE:-}" ] && [ -f "$FVDS_SSH_PASSWORD_FILE" ]; then
+  PASS="$(cat "$FVDS_SSH_PASSWORD_FILE")"
+fi
+if [ -z "$PASS" ] && [ -f "$ROOT/.fvds-ssh-password" ]; then
+  PASS="$(cat "$ROOT/.fvds-ssh-password")"
+fi
+armada_python() {
+  if command -v py >/dev/null 2>&1 && py -3 -c 'import sys' >/dev/null 2>&1; then py -3 "$@"
+  elif command -v python3 >/dev/null 2>&1 && python3 -c 'import sys' >/dev/null 2>&1; then python3 "$@"
+  elif command -v python >/dev/null 2>&1 && python -c 'import sys' >/dev/null 2>&1; then python "$@"
+  else echo "Нужен Python 3 (paramiko)"; exit 1; fi
+}
 SRC="$ROOT/scripts/caddyfile.fvds.prod"
 REMOTE="/etc/caddy/Caddyfile"
 
+BUILD="$ROOT/scripts/build-caddyfile-fvds.sh"
+if [ -x "$BUILD" ]; then
+  bash "$BUILD"
+fi
 if [ ! -f "$SRC" ]; then
   echo "Нет $SRC"
   exit 1
 fi
 
-python3 - "$USER" "$HOST" "$PASS" "$SRC" "$REMOTE" <<'PY'
+if [ -z "$PASS" ]; then
+  echo "Нужен пароль: FVDS_SSH_PASSWORD, FVDS_SSH_PASSWORD_FILE или файл .fvds-ssh-password в корне репо"
+  exit 1
+fi
+
+armada_python - "$USER" "$HOST" "$PASS" "$SRC" "$REMOTE" <<'PY'
 import sys, paramiko, datetime
 user, host, pw, local, remote = sys.argv[1:6]
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect(host, username=user, password=pw, timeout=30)
+c.connect(host, username=user, password=pw, timeout=60, banner_timeout=60, auth_timeout=60)
 sftp = c.open_sftp()
 bak = remote + ".bak." + datetime.datetime.utcnow().strftime("%Y%m%d%H%M")
 try:

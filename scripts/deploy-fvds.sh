@@ -7,7 +7,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${FVDS_HOST:-176.12.67.35}"
 USER="${FVDS_USER:-root}"
 DEST="${FVDS_PATH:-/var/www/armada}"
-SRC="$ROOT/web-preview"
+SRC="${ARMADA_DEPLOY_SRC:-$ROOT/web-preview}"
+DEPLOY_URL="${ARMADA_DEPLOY_URL:-https://app.armada.sx}"
 
 if [ ! -d "$SRC" ]; then
   echo "Нет $SRC — запустите из репозитория armada-perevozki"
@@ -19,17 +20,27 @@ PASS="${FVDS_SSH_PASSWORD:-${root:-}}"
 if [ -z "$PASS" ] && [ -n "${FVDS_SSH_PASSWORD_FILE:-}" ] && [ -f "$FVDS_SSH_PASSWORD_FILE" ]; then
   PASS="$(cat "$FVDS_SSH_PASSWORD_FILE")"
 fi
+if [ -z "$PASS" ] && [ -f "$ROOT/.fvds-ssh-password" ]; then
+  PASS="$(cat "$ROOT/.fvds-ssh-password")"
+fi
+
+armada_python() {
+  if command -v py >/dev/null 2>&1 && py -3 -c 'import sys' >/dev/null 2>&1; then py -3 "$@"
+  elif command -v python3 >/dev/null 2>&1 && python3 -c 'import sys' >/dev/null 2>&1; then python3 "$@"
+  elif command -v python >/dev/null 2>&1 && python -c 'import sys' >/dev/null 2>&1; then python "$@"
+  else echo "Нужен Python 3 (paramiko)"; exit 1; fi
+}
 
 run_ssh() {
   if [ -n "$PASS" ] && command -v sshpass >/dev/null 2>&1; then
     sshpass -p "$PASS" ssh "${SSH_OPTS[@]}" "$USER@$HOST" "$@"
   elif [ -n "$PASS" ]; then
-    python3 - "$USER" "$HOST" "$PASS" "$@" <<'PY'
+    armada_python - "$USER" "$HOST" "$PASS" "$@" <<'PY'
 import sys, paramiko
 user, host, pw, cmd = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect(host, username=user, password=pw, timeout=30)
+c.connect(host, username=user, password=pw, timeout=60, banner_timeout=60, auth_timeout=60)
 _, out, err = c.exec_command(cmd)
 sys.stdout.write(out.read().decode())
 sys.stderr.write(err.read().decode())
@@ -47,13 +58,13 @@ deploy_tar() {
   elif [ -n "$PASS" ]; then
     TMP_TAR="$(mktemp)"
     tar czf "$TMP_TAR" -C "$SRC" .
-    python3 - "$USER" "$HOST" "$PASS" "$TMP_TAR" "$DEST" <<'PY'
+    armada_python - "$USER" "$HOST" "$PASS" "$TMP_TAR" "$DEST" <<'PY'
 import sys, paramiko
 user, host, pw, tar_path, dest = sys.argv[1:6]
 remote_tar = "/tmp/armada-deploy.tar.gz"
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect(host, username=user, password=pw, timeout=60)
+c.connect(host, username=user, password=pw, timeout=120, banner_timeout=120, auth_timeout=120)
 sftp = c.open_sftp()
 sftp.put(tar_path, remote_tar)
 sftp.close()
@@ -75,6 +86,7 @@ PY
 }
 
 echo "→ $USER@$HOST:$DEST"
+run_ssh "mkdir -p $DEST"
 deploy_tar
 
 # Скрипт бэкапа на сервер (cron — install-backup-cron.sh)
@@ -87,9 +99,9 @@ fi
 BUILD="$(grep -m1 'APP_BUILD=' "$SRC/store.js" | sed 's/.*"\(.*\)".*/\1/')"
 echo "Готово. Проверка APP_BUILD на сервере:"
 run_ssh "grep -m1 APP_BUILD $DEST/store.js || true"
-echo "Live: https://app.armada.sx/ (ожидаемая сборка: $BUILD)"
+echo "Live: $DEPLOY_URL/ (ожидаемая сборка: $BUILD)"
 SMOKE="$ROOT/scripts/smoke-strategic-plan.sh"
-if [ -x "$SMOKE" ]; then
+if [ -x "$SMOKE" ] && [ "$DEPLOY_URL" = "https://app.armada.sx" ]; then
   echo "Smoke S0–S3…"
-  BASE_URL="https://app.armada.sx" "$SMOKE" || echo "Smoke: есть ошибки (см. выше)"
+  BASE_URL="$DEPLOY_URL" "$SMOKE" || echo "Smoke: есть ошибки (см. выше)"
 fi

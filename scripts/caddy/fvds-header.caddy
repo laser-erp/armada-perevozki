@@ -1,0 +1,14 @@
+{
+	email hello@armada.sx
+}
+
+# IP → канонический домен
+http://176.12.67.35 {
+	redir https://app.armada.sx{uri} permanent
+}
+
+# Старый хост → новый (закладки aptown1 продолжат работать)
+aptown1.fvds.ru {
+	tls /etc/caddy/ssl/aptown1.crt /etc/caddy/ssl/aptown1.key
+	redir https://app.armada.sx{uri} permanent
+}

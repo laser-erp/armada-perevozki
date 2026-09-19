@@ -22,7 +22,7 @@
 - ✅ PocketBase sync, ETRN webhook
 - ✅ Деплой web-preview через `deploy-fvds.sh`
 - 🟡 GitHub push (репо публичный — закрыть)
-- ⬜ Staging-контур отдельно от prod
+- ✅ Staging: `staging.app.armada.sx`, `deploy-staging-fvds.sh` (см. `scripts/STAGING.md`)
 
 ## Юридическое SaaS
 

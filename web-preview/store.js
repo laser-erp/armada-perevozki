@@ -546,7 +546,7 @@ function backFromEntryLogin(opts){
 /** Прод-хосты: VPS и основной домен приложения. */
 function isArmadaProdHost(hostname){
   const h=(hostname||'').toLowerCase();
-  return h==='app.armada.sx'||h==='aptown1.fvds.ru'||h==='176.12.67.35';
+  return h==='app.armada.sx'||h==='staging.app.armada.sx'||h==='aptown1.fvds.ru'||h==='176.12.67.35';
 }
 const ARMADA_LIVE_ORIGIN='https://app.armada.sx';
 /** Backend API (S0). Локально → armada-api; на проде → Caddy prefix. */

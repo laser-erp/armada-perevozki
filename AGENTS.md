@@ -31,6 +31,7 @@
 - Репо `laser-erp/armada-perevozki` · live **https://app.armada.sx/** (редирект с aptown1.fvds.ru)
 - Рабочая ветка: `cursor/perf-speed-4317` (или та, что в задаче)
 - **Деплой на прод:** `./scripts/deploy-fvds.sh` — **только по просьбе** пользователя
+- **Staging (проверка до прода):** `./scripts/deploy-staging-fvds.sh [ветка]` → https://staging.app.armada.sx — см. `scripts/STAGING.md`
 - **GitHub push** — **только по «пуш»**; репозиторий держать **Private**. Прод не зависит от GitHub
 - Модули: `styles.css` · `store.js` · `driver.js` · `admin.js` · `app.js` · `index.html`
 - Grep → символ → Read **кусок**. В TASK: файл + функция + строки

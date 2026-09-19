@@ -27,6 +27,7 @@ __pycache__/
 *.pyc
 .env
 .env.*
+.fvds-ssh-password
 !.env.example
 *.apk
 *.aab
