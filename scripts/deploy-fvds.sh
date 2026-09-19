@@ -88,6 +88,8 @@ PY
 echo "→ $USER@$HOST:$DEST"
 run_ssh "mkdir -p $DEST"
 deploy_tar
+# git archive / tar часто кладёт каталоги 0700 — Caddy (user caddy) не читает → 403
+run_ssh "find $DEST -type d -exec chmod 755 {} + ; find $DEST -type f -exec chmod a+r {} +"
 
 # Скрипт бэкапа на сервер (cron — install-backup-cron.sh)
 if [ -f "$ROOT/scripts/backup-armada.sh" ]; then
