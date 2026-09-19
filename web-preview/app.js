@@ -2949,13 +2949,18 @@ function orderHasEffectiveAssignment(o){
   }
   return false;
 }
-/** Заявка логисту/с портала: выезд не начат, водитель+ТС ещё не назначены по факту. */
-function portalOrderNeedsLogistAssign(o){
+/** Портал/логист: водитель и ТС ещё не назначены (одометр не учитываем — бывает ложный sync). */
+function portalOrderAwaitingAssignment(o){
   if(!o||o.cancelledAt||o.onExchange) return false;
   if(!orderKeepsLogist(o)) return false;
-  if(o.startOdometer!=null||o.departOdometer!=null) return false;
   if(orderHasEffectiveAssignment(o)) return false;
   if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)) return false;
+  return true;
+}
+/** Заявка логисту/с портала: выезд не начат, водитель+ТС ещё не назначены по факту. */
+function portalOrderNeedsLogistAssign(o){
+  if(!portalOrderAwaitingAssignment(o)) return false;
+  if(o.startOdometer!=null||o.departOdometer!=null) return false;
   return true;
 }
 /** Сбросить ложное «назначение» (имя водителя без ТС) — во «Входящие». */

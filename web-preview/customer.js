@@ -327,7 +327,7 @@ function customerOrderStatusLabel(o){
   if(o.cancelledAt) return 'Отменён';
   if(typeof orderHasEffectiveAssignment==='function'&&orderHasEffectiveAssignment(o)
     &&o.startOdometer==null&&o.departOdometer==null&&!o.onExchange) return 'Назначен';
-  if(typeof isUnassignedPortalOrder==='function' && isUnassignedPortalOrder(o)) return 'У диспетчера';
+  if(typeof portalOrderAwaitingAssignment==='function' && portalOrderAwaitingAssignment(o)) return 'У диспетчера';
   if(looksClosedOrder(o)) return 'Закрыт';
   if(o.bookStatus==='rejected' && (typeof waitingLogistDriver==='function'?waitingLogistDriver(o.driverName):true) && !o.onExchange)
     return 'Бронь отклонена';
@@ -1545,7 +1545,8 @@ function renderCustomerPortal(){
     }
     list.innerHTML=shown.length?shown.map(o=>{
       const st=customerOrderStatusLabel(o);
-      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.bookStatus==='confirmed'?'closed':o.bookStatus==='requested'?'inbox':o.onExchange?'exchange':(o.startOdometer!=null?'progress':(typeof waitingLogistDriver==='function'&&waitingLogistDriver(o.driverName)?'inbox':''));
+      const awaitAssign=typeof portalOrderAwaitingAssignment==='function'&&portalOrderAwaitingAssignment(o);
+      const stCls=o.cancelledAt?'closed':looksClosedOrder(o)?'closed':o.bookStatus==='confirmed'?'closed':o.bookStatus==='requested'?'inbox':o.onExchange?'exchange':awaitAssign?'inbox':(o.startOdometer!=null?'progress':(typeof waitingLogistDriver==='function'&&waitingLogistDriver(o.driverName)?'inbox':''));
       const bookLine=o.bookedPlate
         ?(o.bookStatus==='confirmed'
           ?`бронь ${o.bookedPlate} подтверждена`
