@@ -83,6 +83,38 @@ function orderEtrnBadgeHtml(o){
   if(!s) return '';
   return `<span class="order-etrn-badge ${esc(s.cls)}${s.urgent?' order-etrn-badge--urgent':''}">${esc(s.label)}</span>`;
 }
+/** Кнопка T2 на карточке заказа (канбан / список). */
+function adminOrderEtrnActionHtml(o){
+  if(!orderEtrnVisible(o)||!o.etrn||!orderEtrnWeAreCarrier(o)) return '';
+  const t=o.etrn.tituls||{};
+  if(orderEtrnNeedsMySignature(o)){
+    return `<button type="button" class="secondary admin-etrn-card-sign admin-etrn-card-sign--ready" data-etrn-sign-order="${esc(o.id)}" data-etrn-titul="t2" title="T1 подписан — подпись перевозчика на погрузке">Подписать T2</button>`;
+  }
+  if(t.t1==='pending'&&typeof orderEtrnLoadingPhase==='function'&&orderEtrnLoadingPhase(o)){
+    return `<button type="button" class="secondary admin-etrn-card-sign admin-etrn-card-sign--wait" disabled title="Ждём подпись грузоотправителя (T1)">T1 · ждём ГО</button>`;
+  }
+  return '';
+}
+function wireAdminOrderEtrnCardButtons(root){
+  (root||document).querySelectorAll('.admin-etrn-card-sign--ready').forEach(b=>{
+    if(b.dataset.etrnCardWired) return;
+    b.dataset.etrnCardWired='1';
+    b.onclick=e=>{
+      e.stopPropagation();
+      const oid=b.dataset.etrnSignOrder;
+      const titul=b.dataset.etrnTitul||'t2';
+      const done=()=>{
+        if(typeof renderAdminDebounced==='function') renderAdminDebounced();
+        else if(typeof renderAdmin==='function') renderAdmin();
+      };
+      if(typeof openEpdTitulSign==='function'){
+        Promise.resolve(openEpdTitulSign(oid, titul, typeof epdRoleForTitul==='function'?epdRoleForTitul(titul):'carrier')).then(done).catch(()=>{});
+        return;
+      }
+      if(typeof signEtrnTitul==='function'&&signEtrnTitul(oid, titul, 'admin')) done();
+    };
+  });
+}
 function adminEtrnSignPendingCount(orders){
   return (orders||[]).filter(o=>orderEtrnNeedsMySignature(o)).length;
 }

@@ -556,6 +556,7 @@
           <span>АРМАДА</span>
         </div>
         <div class="admin-sidebar-user" id="admin-sidebar-user"></div>
+        <div class="admin-sidebar-cabinet" id="admin-sidebar-cabinet" hidden></div>
         <nav class="admin-sidebar-nav">
           <button type="button" class="admin-nav-item on" data-nav="orders">Парк</button>
           <button type="button" class="admin-nav-item" data-nav="eto">ЕТО</button>
@@ -588,8 +589,8 @@
         </header>
         <div class="admin-orders-view-bar">
           <div class="admin-view-toggle" id="admin-orders-view-toggle" role="tablist" aria-label="Вид заказов">
-            <button type="button" data-orders-view="list" class="on">Список</button>
-            <button type="button" data-orders-view="kanban">Канбан</button>
+            <button type="button" data-orders-view="list">Список</button>
+            <button type="button" data-orders-view="kanban" class="on">Канбан</button>
           </div>
         </div>
         <div class="filters" id="admin-filters">
@@ -602,7 +603,7 @@
           <button data-filter="etrn-wait-driver" class="admin-filter-etrn">ЭТrН · водитель<span class="admin-filter-badge" id="admin-etrn-driver-badge" hidden></span></button>
           <button data-filter="closed">Закрыт</button>
         </div>
-        <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме"></div>
+        <div class="filters" id="admin-owner-filters" aria-label="Фильтр по фирме" hidden></div>
         <div class="hint" id="admin-billing-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);font-size:.78rem"></div>
         <div class="hint admin-inbox-banner" id="admin-inbox-banner" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.28);font-size:.78rem"></div>
         <div class="table-wrap admin-content" id="admin-list"></div>
