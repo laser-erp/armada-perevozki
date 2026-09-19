@@ -22,8 +22,6 @@ render_snippet() {
   render_snippet armada_staging /var/www/armada-staging
   echo ""
   echo "staging.app.armada.sx {"
-  echo "	# До появления DNS A: проверка через hosts + предупреждение о сертификате"
-  echo "	tls internal"
   echo "	import armada_staging"
   echo "}"
 } > "$OUT"
