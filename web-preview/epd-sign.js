@@ -189,8 +189,8 @@
         <div class="epd-operator-sandbox" id="epd-operator-sandbox" hidden></div>
       </div>
       <div class="epd-operator-fallback" id="epd-operator-fallback" hidden>
-        <p class="hint">Сайт оператора не открывается во фрейме — это их политика безопасности.</p>
-        <button type="button" class="primary" id="epd-operator-fallback-open">Открыть оператора</button>
+        <p class="hint">Контур и другие операторы не открываются во встроенном окне (ERR_BLOCKED_BY_RESPONSE). Откройте ссылку в браузере. Для ЭТrН T1 на заявке используйте «Подписать T1» — тест без Контура.</p>
+        <button type="button" class="primary" id="epd-operator-fallback-open">Открыть в браузере</button>
         <button type="button" class="secondary" id="epd-operator-fallback-done">Подпись выпущена</button>
       </div>
       <footer class="epd-operator-foot" id="epd-operator-foot" hidden>
@@ -221,6 +221,17 @@
     if(frame) frame.hidden=!!show;
   }
 
+  function epdUrlMustOpenExternally(url){
+    const s=String(url||'').trim();
+    if(!s||s.startsWith('sandbox://')) return false;
+    try{
+      const u=new URL(s, location.origin);
+      if(u.origin!==location.origin) return true;
+      if(/kontur\.|diadoc|sbis\.|astral\./i.test(u.hostname)) return true;
+    }catch(_){ return true; }
+    return false;
+  }
+
   function openEpdOperatorShell(url, opts){
     opts=opts||{};
     epdShellOpts=Object.assign({
@@ -240,25 +251,35 @@
     const sandbox=$('epd-operator-sandbox');
     const foot=$('epd-operator-foot');
     if(title) title.textContent=epdShellOpts.title;
-    if(lead) lead.textContent=opts.lead||'Ключ и юридическая сила — у оператора ЭПД. Окно открыто внутри АРМАДА.';
+    const external=epdUrlMustOpenExternally(url);
+    if(lead){
+      lead.textContent=external
+        ?(opts.leadExternal||'Контур и другие операторы не открываются во встроенном окне (политика безопасности). Нажмите «Открыть оператора» — откроется браузер. Для ЭТrН T1 на погрузке можно подписать тестовой кнопкой на заявке без Контура.')
+        :(opts.lead||'Ключ и юридическая сила — у оператора ЭПД. Окно открыто внутри АРМАДА.');
+    }
     if(foot) foot.hidden=(epdShellOpts.kind!=='signup');
-    epdShowOperatorFallback(false);
     if(sandbox) sandbox.hidden=true;
-    if(frame){
-      frame.hidden=false;
-      frame.removeAttribute('srcdoc');
-      frame.onload=()=>{ epdShowOperatorFallback(false); };
-      frame.onerror=()=>{ epdShowOperatorFallback(true); };
-      clearTimeout(openEpdOperatorShell._frameTimer);
-      openEpdOperatorShell._frameTimer=setTimeout(()=>{
-        try{
-          const doc=frame.contentDocument;
-          if(doc&&doc.body&&doc.body.childElementCount===0) epdShowOperatorFallback(true);
-        }catch(_){
-          /* cross-origin — iframe likely loaded */
-        }
-      }, 4500);
-      frame.src=url;
+    if(external){
+      epdShowOperatorFallback(true);
+      if(frame){ frame.hidden=true; frame.removeAttribute('src'); }
+    }else{
+      epdShowOperatorFallback(false);
+      if(frame){
+        frame.hidden=false;
+        frame.removeAttribute('srcdoc');
+        frame.onload=()=>{ epdShowOperatorFallback(false); };
+        frame.onerror=()=>{ epdShowOperatorFallback(true); };
+        clearTimeout(openEpdOperatorShell._frameTimer);
+        openEpdOperatorShell._frameTimer=setTimeout(()=>{
+          try{
+            const doc=frame.contentDocument;
+            if(doc&&doc.body&&doc.body.childElementCount===0) epdShowOperatorFallback(true);
+          }catch(_){
+            /* cross-origin — iframe likely loaded */
+          }
+        }, 4500);
+        frame.src=url;
+      }
     }
     shell.hidden=false;
     document.body.classList.add('epd-operator-open');
@@ -275,9 +296,13 @@
     epdShellOpts={ mode:'sandbox', kind:'sandbox', onClose:opts.onClose, title:opts.title||'Подпись (тест)' };
     const shell=ensureEpdOperatorShell();
     const title=$('epd-operator-title');
+    const lead=$('epd-operator-lead');
     const frame=$('epd-operator-frame');
     const sandbox=$('epd-operator-sandbox');
+    const foot=$('epd-operator-foot');
     if(title) title.textContent=epdShellOpts.title;
+    if(lead) lead.textContent=opts.lead||'Тестовая подпись в АРМАДА (без окна оператора).';
+    if(foot) foot.hidden=true;
     epdShowOperatorFallback(false);
     if(frame){ frame.hidden=true; frame.removeAttribute('src'); }
     if(sandbox){ sandbox.hidden=false; sandbox.innerHTML=html; }
@@ -363,36 +388,25 @@
     });
   }
 
-  async function openEpdTitulSign(orderId, titul, role){
+  function openEpdTitulSignSandboxPanel(orderId, titul, role, o, opts){
+    opts=opts||{};
     titul=String(titul||'').toLowerCase();
     role=role||epdRoleForTitul(titul);
-    const o=(state&&state.orders||[]).find(x=>x.id===orderId);
-    if(!o){ alert('Заказ не найден'); return false; }
-    if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, { silent:true });
     const titLabel=typeof etrnTitulLabel==='function'?etrnTitulLabel(titul):titul.toUpperCase();
     const ctx=epdSignContextForRole(role);
-    let url=await fetchEpdTitulSignUrl(orderId, titul, role);
-    if(url&&!String(url).startsWith('sandbox://')){
-      return openEpdOperatorShell(url, {
-        title:`ЭТrН · ${titLabel}`,
-        lead:`Подпись титула через оператора. Документ остаётся в АРМАДА, подпись — у оператора ЭПД.`,
-        pollRole:role, pollEntityId:ctx.entityId,
-        onClose:async()=>{
-          if(typeof fetchEtrnFromApi==='function'){
-            const remote=await fetchEtrnFromApi(orderId);
-            if(remote){ applyEtrnToOrder(o, remote); upsertOrder(o); persist(); }
-          }
-        }
-      });
-    }
     const op=epdOperatorInfo();
+    const customerT1=role==='customer'&&titul==='t1';
     const prof=getEpdSignProfile(role, ctx.entityId);
-    const needIssue=!prof||prof.status!=='active';
+    const needIssue=!customerT1&&(!prof||prof.status!=='active');
+    const hint=customerT1
+      ?'Подпись T1 сохранится в заявке (тестовый контур). КЭП через Контур — отдельно, в браузере, когда понадобится для продакшена.'
+      :(`${needIssue?`Сначала оформите ${EPD_SIGN_ROLES[role].kind==='pep'?'ПЭП':'КЭП'} — кнопка ниже. `:''}Сейчас тестовый контур: подпись имитируется до подключения ${esc(op.name)} на сервере.`);
+    const confirmLbl=customerT1?'Подписать T1':`Подписать ${esc(titul.toUpperCase())} (sandbox)`;
     const sandboxHtml=`<div class="epd-sandbox-card">
       <p><strong>${esc(titLabel)}</strong> · заказ № ${esc(o.sequentialNumber||'—')}</p>
-      <p class="hint">${needIssue?`Сначала оформите ${EPD_SIGN_ROLES[role].kind==='pep'?'ПЭП':'КЭП'} — кнопка ниже.`:''} Сейчас тестовый контур: подпись имитируется до подключения ${esc(op.name)} на сервере.</p>
-      ${needIssue?`<button type="button" class="secondary" id="epd-sandbox-issue">Оформить подпись через оператора</button>`:''}
-      <button type="button" class="primary" id="epd-sandbox-confirm">Подписать ${esc(titul.toUpperCase())} (sandbox)</button>
+      <p class="hint">${hint}</p>
+      <button type="button" class="primary" id="epd-sandbox-confirm">${confirmLbl}</button>
+      ${needIssue?`<button type="button" class="secondary" id="epd-sandbox-issue">КЭП через ${esc(op.name)} (браузер)</button>`:''}
     </div>`;
     openEpdSandboxPanel(sandboxHtml, {
       title:`ЭТrН · ${titLabel}`,
@@ -410,6 +424,35 @@
       closeEpdOperatorShell({ refresh:true });
     };
     return true;
+  }
+
+  async function openEpdTitulSign(orderId, titul, role){
+    titul=String(titul||'').toLowerCase();
+    role=role||epdRoleForTitul(titul);
+    const o=(state&&state.orders||[]).find(x=>x.id===orderId);
+    if(!o){ alert('Заказ не найден'); return false; }
+    if(!o.etrn&&typeof ensureEtrnForOrder==='function') ensureEtrnForOrder(o, { silent:true });
+    if(role==='customer'&&titul==='t1'){
+      if(typeof showCustomerEtrnT1SignDialog==='function') return showCustomerEtrnT1SignDialog(orderId);
+      return openEpdTitulSignSandboxPanel(orderId, titul, role, o);
+    }
+    const titLabel=typeof etrnTitulLabel==='function'?etrnTitulLabel(titul):titul.toUpperCase();
+    const ctx=epdSignContextForRole(role);
+    let url=await fetchEpdTitulSignUrl(orderId, titul, role);
+    if(url&&!String(url).startsWith('sandbox://')&&!epdUrlMustOpenExternally(url)){
+      return openEpdOperatorShell(url, {
+        title:`ЭТrН · ${titLabel}`,
+        lead:`Подпись титула через оператора. Документ остаётся в АРМАДА, подпись — у оператора ЭПД.`,
+        pollRole:role, pollEntityId:ctx.entityId,
+        onClose:async()=>{
+          if(typeof fetchEtrnFromApi==='function'){
+            const remote=await fetchEtrnFromApi(orderId);
+            if(remote){ applyEtrnToOrder(o, remote); upsertOrder(o); persist(); }
+          }
+        }
+      });
+    }
+    return openEpdTitulSignSandboxPanel(orderId, titul, role, o);
   }
 
   function applyEpdSignReturnFromUrl(){
@@ -493,6 +536,9 @@
 
   function epdSignCustomerStripHtml(){
     if(typeof currentCustomer==='undefined'||!currentCustomer) return '';
+    if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'){
+      if(customerOrders().some(o=>customerEtrnT1Pending(o))) return '';
+    }
     const role='customer';
     const meta=EPD_SIGN_ROLES[role];
     const ctx=epdSignContextForRole(role);

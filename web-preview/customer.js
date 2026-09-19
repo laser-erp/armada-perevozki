@@ -85,6 +85,7 @@ function syncCustomerPortalTabUi(){
     const panel=$('cust-tab-'+id);
     if(panel) panel.hidden=(id!==custPortalTab);
   });
+  if(typeof syncCustomerOrderModeUi==='function') syncCustomerOrderModeUi();
 }
 function customerDocsTabBadgeCount(){
   let n=0;
@@ -93,9 +94,14 @@ function customerDocsTabBadgeCount(){
     const st=customerFrameworkContractStatus(co);
     if(st==='pending') n++;
   }
-  if(typeof epdSignNeedsAttention==='function'&&currentCustomer&&epdSignNeedsAttention('customer', currentCustomer.companyId)) n++;
-  if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'&&typeof customerCanSignEtrnT1==='function'){
-    n+=customerOrders().filter(o=>customerEtrnT1Pending(o)&&customerCanSignEtrnT1(o)).length;
+  const t1Pending=typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'
+    &&customerOrders().some(o=>customerEtrnT1Pending(o));
+  if(!t1Pending&&typeof epdSignNeedsAttention==='function'&&currentCustomer&&epdSignNeedsAttention('customer', currentCustomer.companyId)) n++;
+  if(typeof customerOrders==='function'&&typeof customerEtrnT1Pending==='function'){
+    n+=customerOrders().filter(o=>customerEtrnT1Pending(o)).length;
+  }
+  if(typeof customerOrders==='function'&&typeof customerEtrnT1WaitingPhase==='function'&&typeof customerCanSignEtrnT1==='function'){
+    n+=customerOrders().filter(o=>customerEtrnT1WaitingPhase(o)&&customerCanSignEtrnT1(o)).length;
   }
   return n;
 }
@@ -158,6 +164,37 @@ function syncCustomerDocsTabBadge(){
   const n=customerDocsTabBadgeCount();
   if(n>0){ badge.hidden=false; badge.textContent=n>9?'9+':String(n); }
   else badge.hidden=true;
+}
+function customerOrdersTabBadgeCount(){
+  if(!currentCustomer||typeof customerOrders!=='function') return 0;
+  return customerOrders().filter(o=>{
+    if(typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o)) return true;
+    if(typeof customerEtrnT1WaitingPhase==='function'&&customerEtrnT1WaitingPhase(o)) return true;
+    return false;
+  }).length;
+}
+function syncCustomerOrdersTabBadge(){
+  const badge=$('cust-orders-badge');
+  if(!badge) return;
+  const n=customerOrdersTabBadgeCount();
+  if(n>0){ badge.hidden=false; badge.textContent=n>9?'9+':String(n); }
+  else badge.hidden=true;
+}
+function renderCustomerGlobalAlerts(){
+  const host=$('cust-global-alerts');
+  if(!host||!currentCustomer){
+    if(host){ host.hidden=true; host.innerHTML=''; }
+    return;
+  }
+  const html=typeof customerEtrnT1BannerHtml==='function'?customerEtrnT1BannerHtml({ compact:true }):'';
+  if(html){
+    host.innerHTML=html;
+    host.hidden=false;
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(host);
+  }else{
+    host.hidden=true;
+    host.innerHTML='';
+  }
 }
 
 function findCustomerPortalCompany(phone, pin, scope){
@@ -295,6 +332,7 @@ function customerOrderStatusLabel(o){
   if(o.bookStatus==='rejected' && (typeof waitingLogistDriver==='function'?waitingLogistDriver(o.driverName):true) && !o.onExchange)
     return 'Бронь отклонена';
   if(o.onExchange) return 'Диспетчер ищет машину';
+  if(o.arrivedAt!=null && o.startOdometer==null && o.departOdometer==null) return 'На погрузке';
   if(o.startOdometer!=null || o.departOdometer!=null) return 'В работе';
   if(o.executorType==='partner') return 'Назначен';
   if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—' && o.driverName!=='Диспетчер') return 'Назначен';
@@ -306,7 +344,9 @@ function customerOrderStatusLabel(o){
 function customerOrderStatusTag(o){
   if(!o||!o.id) return '';
   const docsRev=+(o.customerDriverDocsConfirmRev||0);
-  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}|docs${docsRev}`;
+  const t1=(o.etrn&&o.etrn.tituls&&o.etrn.tituls.t1)||'';
+  const loadPhase=(o.arrivedAt!=null||o.startOdometer!=null)?'1':'0';
+  return `${customerOrderStatusLabel(o)}|${o.driverName||''}|${o.onExchange?'1':'0'}|${o.bookStatus||''}|${o.closedAt||''}|${o.cancelledAt||''}|docs${docsRev}|ld${loadPhase}|t1${t1}`;
 }
 function customerOrderNotifyLine(o, prevTag){
   const tag=customerOrderStatusTag(o);
@@ -399,6 +439,20 @@ function syncCustomerVehicleDateCalVisibility(){
   if(wrap) wrap.classList.toggle('cal-open', on);
   if(on) paintCustomerVehicleDateCal();
 }
+function wireCustomerTimePresets(){
+  document.querySelectorAll('.cust-time-preset').forEach(btn=>{
+    if(btn.dataset.wired) return;
+    btn.dataset.wired='1';
+    btn.onclick=()=>{
+      const hm=btn.getAttribute('data-hm')||'';
+      const timeEl=$('cust-vehicle-time');
+      if(timeEl) timeEl.value=hm;
+      paintCustomerFleetOptions();
+      scheduleCustomerOrderDraftSave();
+      customerChatSyncFromForm();
+    };
+  });
+}
 function setCustomerVehicleDateFromKey(key, closeCal){
   if(!key) return;
   const parts=key.split('-').map(Number);
@@ -411,6 +465,8 @@ function setCustomerVehicleDateFromKey(key, closeCal){
     dateEl.dispatchEvent(new Event('input',{bubbles:true}));
     dateEl.dispatchEvent(new Event('change',{bubbles:true}));
   }
+  const timeEl=$('cust-vehicle-time');
+  if(timeEl && !String(timeEl.value||'').trim()) timeEl.value='09:00';
   customerVehicleDateCal.from=key;
   customerVehicleDateCal.year=y;
   customerVehicleDateCal.month=m-1;
@@ -1409,12 +1465,36 @@ function showCustomerPortal(){
     if(customerChatDraftIsSubmitted(chatRaw)) clearCustomerOrderDraft();
   }catch(_){}
   renderCustomerPortal();
+  wireCustomerPortalRefresh();
   maybePromptCustomerOrderDraft();
   syncCustomerOrderModeUi();
   custPortalTab=loadCustomerPortalTab();
   syncCustomerPortalTabUi();
   show('customer-portal');
+  if(typeof pullRemoteUpdates==='function'){
+    pullRemoteUpdates('customer-open').then(ok=>{
+      if(ok&&currentCustomer&&typeof renderCustomerPortal==='function') renderCustomerPortal();
+    }).catch(()=>{});
+  }
   if(window.ArmadaOnboarding) ArmadaOnboarding.maybeCustomer();
+}
+function wireCustomerPortalRefresh(){
+  const btn=$('cust-portal-refresh');
+  if(!btn||btn.dataset.wired) return;
+  btn.dataset.wired='1';
+  btn.onclick=async()=>{
+    btn.disabled=true;
+    const prev=btn.textContent;
+    btn.textContent='…';
+    try{
+      if(typeof initCloudSync==='function') await initCloudSync().catch(()=>{});
+      if(typeof pullRemoteUpdates==='function') await pullRemoteUpdates('customer-refresh');
+      if(currentCustomer&&typeof renderCustomerPortal==='function') renderCustomerPortal();
+    }finally{
+      btn.disabled=false;
+      btn.textContent=prev;
+    }
+  };
 }
 
 function renderCustomerPortal(){
@@ -1442,6 +1522,7 @@ function renderCustomerPortal(){
     if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
     paintCustomerFleetOptions();
   });
+  wireCustomerTimePresets();
   if((loadEl&&loadEl.value) && (unloadEl&&unloadEl.value)) refreshCustomerRouteKm();
   else updateCustomerTripModeDisplay(carrier?financeForCompanyId(carrier.id):normalizeFinance(state.finance));
   paintCustomerFleetOptions();
@@ -1481,14 +1562,17 @@ function renderCustomerPortal(){
         ${o.priceQuoteSummary?`<p class="meta">Тариф ${esc(o.priceTariffCarrierName||o.ownCompanyName||'перевозчика')}: ${esc(o.priceQuoteSummary)}</p>`:''}
         ${orderReqText(o)?`<p class="meta">${esc(orderReqText(o))}</p>`:''}
         ${typeof customerDriverDocsConfirmHtml==='function'?customerDriverDocsConfirmHtml(o):''}
+        ${typeof customerEtrnT1CardHtml==='function'?customerEtrnT1CardHtml(o):''}
         <p class="meta"><button type="button" class="hint cust-goto-docs" style="border:0;background:transparent;cursor:pointer;padding:0;font-size:inherit">Документы → «Бух доки»</button></p>
       </div>`;
     }).join(''):(day?'<div class="empty">На эту дату заявок нет</div>':'<div class="empty">Заявок ещё нет</div>');
     list.querySelectorAll('.cust-goto-docs').forEach(btn=>{
       btn.onclick=()=>setCustomerPortalTab('docs');
     });
+    if(typeof wireCustomerEtrnT1==='function') wireCustomerEtrnT1(list);
   }
   renderCustomerDocsAlerts(co, carrier);
+  renderCustomerGlobalAlerts();
   updateCustomerPricePreview();
   const notifyBtn=$('cust-notify-toggle');
   if(notifyBtn) notifyBtn.textContent=customerNotifyActive()?'Уведомления: вкл':'Уведомления: выкл';
@@ -1498,12 +1582,19 @@ function renderCustomerPortal(){
   renderCustomerDocsByOrder();
   syncCustomerPortalTabUi();
   syncCustomerDocsTabBadge();
+  syncCustomerOrdersTabBadge();
 }
 
 function renderCustomerInvoicesList(){
   const list=$('cust-invoices-list');
   if(!list||!currentCustomer) return;
+  if(typeof ensureCustomerInvoiceForOrder==='function'){
+    customerOrders().slice(0,30).forEach(o=>{
+      if(o&&o.id) ensureCustomerInvoiceForOrder(o.id);
+    });
+  }
   const invoices=typeof customerInvoicesForPortal==='function'?customerInvoicesForPortal(currentCustomer.companyId):[];
+  const orders=customerOrders();
   list.innerHTML=invoices.length?invoices.slice(0,15).map(inv=>{
     const amt=inv.amount>0?`${fmt(inv.amount)} ₽`:(inv.pricePending?'уточняется':'—');
     return `<div class="card cust-invoice-row" style="margin-bottom:8px">
@@ -1511,7 +1602,9 @@ function renderCustomerInvoicesList(){
       <p class="meta">${esc(inv.route||'')} · ${amt}</p>
       <button type="button" class="cust-invoice-link" data-invoice-id="${esc(inv.id)}" data-order-id="${esc(inv.orderId||'')}">Открыть счёт с QR</button>
     </div>`;
-  }).join(''):'<div class="empty">Счета появятся после отправки заявки</div>';
+  }).join(''):(orders.length
+    ?'<div class="empty">Счёт формируется — нажмите «Обновить» в шапке или откройте счёт в блоке заявки ниже.</div>'
+    :'<div class="empty">Счета появятся после отправки заявки</div>');
   customerWireInvoiceLinks(list);
 }
 
@@ -1637,15 +1730,21 @@ function submitCustomerOrder(){
     paintCustomerFleetOptions();
     return;
   }
-  const spaceId=co.spaceId||carrier.spaceId||null;
+  const portalSpaceId=typeof carrierSpaceIdForPortalOrder==='function'
+    ?carrierSpaceIdForPortalOrder(carrier, co)
+    :(carrier.spaceId||co.spaceId||null);
   const guardFn=typeof billingGuardWithServer==='function'?billingGuardWithServer:billingGuard;
-  Promise.resolve(guardFn(spaceId,'create_order')).then(g=>{
+  Promise.resolve(guardFn(portalSpaceId,'create_order')).then(g=>{
     if(!g.ok){ showCustomerSubmitError(g.message); return; }
-    submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
+    submitCustomerOrderAfterGuard(co, carrier, portalSpaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, !quote, bookedPlate, quote);
   });
 }
 function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, contactName, contactPhone, loadingContactName, loadingContactPhone, unloadingContactName, unloadingContactPhone, shipper, cargoText, payloadTons, vehicleAt, draft, offered, min, err, pricePending, bookedPlate, quote){
-  const spaceAdm=(state.admins||[]).find(a=>a.spaceId===spaceId);
+  const portalSpaceId=typeof carrierSpaceIdForPortalOrder==='function'
+    ?carrierSpaceIdForPortalOrder(carrier, co)
+    :spaceId;
+  const spaceAdm=typeof ownerAdminForSpaceId==='function'?ownerAdminForSpaceId(portalSpaceId)
+    :(state.admins||[]).find(a=>a.spaceId===portalSpaceId);
   const seqNo=nextSequentialNumber();
   const now=new Date().toISOString();
   const loadingNote=(($('cust-load-note')||{}).value||'').trim();
@@ -1655,7 +1754,7 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
     createdAt:now, source:'customer_portal', customerSubmitted:true,
     ownerAdminId:spaceAdm&&spaceAdm.id||null,
     ownerAdminName:spaceAdm&&spaceAdm.name||'',
-    spaceId,
+    spaceId:portalSpaceId,
     customer:co.name, customerId:co.id, customerInn:co.inn||'',
     ownCompanyId:carrier.id, ownCompanyName:carrier.name,
     contactName:contactName||contactPhone||'',
@@ -1732,7 +1831,19 @@ function submitCustomerOrderAfterGuard(co, carrier, spaceId, load, unload, conta
   if(typeof ensureCustomerFrameworkContract==='function') ensureCustomerFrameworkContract(co, carrier);
   bumpDataEpoch('customer-portal-order');
   upsertOrder(order);
-  persist();
+  const pushFn=typeof persistCustomerPortalOrderImmediate==='function'?persistCustomerPortalOrderImmediate:null;
+  if(pushFn){
+    pushFn().then(r=>{
+      if(r&&r.ok) return;
+      if(r&&r.offline){
+        showCustomerSubmitError('Заявка сохранена здесь. Подключите интернет — она появится у диспетчера.');
+      }else{
+        showCustomerSubmitError('Заявка сохранена; не удалось сразу отправить диспетчеру. Обновите страницу при наличии сети.');
+      }
+    }).catch(()=>{
+      showCustomerSubmitError('Заявка сохранена; отправка диспетчеру не удалась. Обновите страницу.');
+    });
+  }else persist();
   if(err) showCustomerSubmitError('');
   const chatErr=$('cust-chat-error'); if(chatErr) chatErr.textContent='';
   const invoice=typeof createCustomerInvoiceForOrder==='function'?createCustomerInvoiceForOrder(order, co, carrier):null;
@@ -2338,7 +2449,8 @@ function syncCustomerOrderModeUi(){
   const vtypeSearchWrap=$('cust-vtype-search-wrap');
   if(vtypeSearchWrap) vtypeSearchWrap.hidden=mode==='chat';
   const portal=$('customer-portal');
-  if(portal) portal.classList.toggle('cust-order-chat-mode', mode==='chat');
+  const onNewTab=typeof custPortalTab!=='undefined'?custPortalTab==='new':true;
+  if(portal) portal.classList.toggle('cust-order-chat-mode', mode==='chat'&&onNewTab);
   if(chatPanel){
     if(mode==='chat') chatPanel.removeAttribute('hidden');
     else chatPanel.hidden=true;
@@ -3472,6 +3584,7 @@ function customerChatParseWhenInput(raw){
   if(!dm) return null;
   date=typeof formatRuDateInput==='function'?formatRuDateInput(dm[1]):dm[1];
   if(!date||typeof parseRuDate==='function'&&!parseRuDate(date)) return null;
+  if(typeof normalizeTimeHmInput==='function') time=normalizeTimeHmInput(time)||'09:00';
   return {date, time};
 }
 function customerChatHandleWhenCompose(raw){
@@ -3797,6 +3910,7 @@ function wireCustomerPortal(){
     if(customerDateCalEnabled()) paintCustomerVehicleDateCal();
     paintCustomerFleetOptions();
   });
+  wireCustomerTimePresets();
   const calToggle=$('cust-vehicle-date-cal-toggle');
   if(calToggle) calToggle.onchange=()=>syncCustomerVehicleDateCalVisibility();
   wireCustomerVehicleTypes();

@@ -1098,17 +1098,25 @@ function customerOrderDocumentsHtml(o){
     const openBtn=st.available
       ?`<button type="button" class="secondary cust-doc-open" data-order-id="${esc(o.id)}" data-doc-kind="${esc(it.id)}">Открыть</button>`
       :`<span class="hint">—</span>`;
+    let etrnSignBtn='';
+    if(it.id==='etrn'&&typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o)
+      &&typeof customerCanSignEtrnT1==='function'&&customerCanSignEtrnT1(o)){
+      etrnSignBtn=`<button type="button" class="primary cust-etrn-t1-sign" data-order-id="${esc(o.id)}">Подписать T1</button>`;
+    }
     const mailBtn=email&&documentEmailCanSend(it.id, o)
       ?`<button type="button" class="secondary cust-doc-email" data-order-id="${esc(o.id)}" data-doc-kind="${esc(it.id)}">На email</button>`
       :'';
     return `<div class="cust-doc-row">
       <div><span class="cust-doc-name">${esc(it.title)}</span>
       <span class="doc-status ${esc(st.cls)}">${esc(st.label)}</span></div>
-      <div class="cust-doc-actions">${openBtn}${mailBtn}</div>
+      <div class="cust-doc-actions">${etrnSignBtn}${openBtn}${mailBtn}</div>
     </div>`;
   }).join('');
+  const etrnHint=(typeof customerEtrnT1Pending==='function'&&customerEtrnT1Pending(o))
+    ?'<p class="hint">ЭТрН — электронная транспортная накладная. T1 подписывает грузоотправитель здесь кнопкой «Подписать T1», не путать с «Договор‑заявкой».</p>'
+    :'';
   const emailHint=email?`<p class="hint cust-doc-email-hint">Документы можно отправить на ${esc(email)}</p>`:'';
-  return `<div class="cust-order-docs">${emailHint}${rows}</div>`;
+  return `<div class="cust-order-docs">${etrnHint}${emailHint}${rows}</div>`;
 }
 function customerContactEmail(o){
   const co=o&&findCompanyById(o.customerId);

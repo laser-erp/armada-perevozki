@@ -92,10 +92,14 @@ function customerInvoicesForPortal(customerId){
   const liveOrderIds=new Set((state.orders||[]).filter(o=>o&&o.customerId===customerId).map(o=>o.id));
   return ensureInvoicesRoot()
     .filter(x=>{
-      if(x.customerId!==customerId) return false;
       if(x.orderId&&dead.has(x.orderId)) return false;
       if(x.orderId&&!liveOrderIds.has(x.orderId)) return false;
-      return true;
+      if(x.customerId===customerId) return true;
+      if(x.orderId){
+        const o=(state.orders||[]).find(or=>or&&or.id===x.orderId);
+        if(o&&o.customerId===customerId) return true;
+      }
+      return false;
     })
     .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 }

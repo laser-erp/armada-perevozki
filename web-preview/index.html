@@ -142,17 +142,19 @@
       <header class="form-topbar">
         <button type="button" class="form-back" id="cust-portal-back">← Выход</button>
         <h1 id="cust-portal-head">Заказчик</h1>
-        <button type="button" class="hint" id="cust-notify-toggle" style="margin-left:auto;font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer">Уведомления</button>
+        <button type="button" class="hint" id="cust-portal-refresh" style="margin-left:auto;font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer" title="Подтянуть статус и ЭТрН с сервера">Обновить</button>
+        <button type="button" class="hint" id="cust-notify-toggle" style="font-size:.78rem;font-weight:600;border:0;background:transparent;cursor:pointer">Уведомления</button>
         <a href="help.html?role=customer" class="hint" style="font-size:.78rem;font-weight:600" target="_blank" rel="noopener">Помощь</a>
       </header>
       <nav class="cust-portal-tabs filters" id="cust-portal-tabs" role="tablist" aria-label="Разделы портала">
         <button type="button" class="on" data-cust-tab="new" role="tab" aria-selected="true">Новая заявка</button>
         <button type="button" data-cust-tab="calendar" role="tab" aria-selected="false">Календарь броней</button>
         <button type="button" data-cust-tab="docs" role="tab" aria-selected="false">Бух доки<span class="cust-tab-badge" id="cust-docs-badge" hidden></span></button>
-        <button type="button" data-cust-tab="orders" role="tab" aria-selected="false">Мои заявки</button>
+        <button type="button" data-cust-tab="orders" role="tab" aria-selected="false">Мои заявки<span class="cust-tab-badge" id="cust-orders-badge" hidden></span></button>
       </nav>
       <div class="admin-form-scroll" id="cust-portal-scroll">
         <p class="cat-panel-hint" id="cust-portal-sub"></p>
+        <div class="cust-global-alerts" id="cust-global-alerts" hidden aria-live="polite"></div>
         <p class="cat-panel-hint" id="cust-armada-source-banner" hidden style="color:var(--brand,#0f766e);font-weight:600"></p>
         <div id="cust-tab-new" class="cust-portal-tab-panel" role="tabpanel">
         <div id="cust-draft-banner" class="cust-draft-banner" hidden>
@@ -251,7 +253,13 @@
                   </div>
                   <div class="cust-time-field">
                     <label for="cust-vehicle-time">Время</label>
-                    <input id="cust-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" autocomplete="off" />
+                    <input id="cust-vehicle-time" lang="ru" placeholder="09:00" inputmode="numeric" maxlength="5" autocomplete="off" value="09:00" />
+                    <div class="cust-time-presets" role="group" aria-label="Быстрый выбор времени">
+                      <button type="button" class="secondary cust-time-preset" data-hm="08:00">08:00</button>
+                      <button type="button" class="secondary cust-time-preset" data-hm="09:00">09:00</button>
+                      <button type="button" class="secondary cust-time-preset" data-hm="12:00">12:00</button>
+                      <button type="button" class="secondary cust-time-preset" data-hm="14:00">14:00</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -966,17 +974,25 @@
     <div id="input-bar"></div>
     <nav class="driver-tabbar driver-nav" aria-label="Разделы водителя">
       <button type="button" id="btn-home" class="on" aria-current="page"><span class="tab-ico" aria-hidden="true">●</span>Главная</button>
+      <button type="button" id="btn-eto"><span class="tab-ico" aria-hidden="true">✓</span>ЕТО<span class="drv-tab-badge" id="drv-eto-badge" hidden></span></button>
       <button type="button" id="btn-orders"><span class="tab-ico" aria-hidden="true">☰</span>Заявки</button>
       <button type="button" id="btn-shifts"><span class="tab-ico" aria-hidden="true">◷</span>История</button>
-      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль водителя</button>
+      <button type="button" id="btn-cabinet"><span class="tab-ico" aria-hidden="true">○</span>Профиль</button>
     </nav>
     <div id="cabinet-panel" class="driver-panel">
       <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Профиль водителя</h1></header>
       <div class="panel-body" id="cabinet-list"></div>
     </div>
+    <div id="eto-panel" class="driver-panel">
+      <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>ЕТО</h1></header>
+      <div class="panel-body driver-eto-panel">
+        <div id="eto-chat" class="eto-chat" aria-live="polite"></div>
+        <div class="driver-eto-body" id="eto-body"></div>
+      </div>
+    </div>
     <div id="orders-panel" class="driver-panel">
       <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>Заявки</h1></header>
-      <div class="panel-body" id="orders-list"></div>
+      <div class="panel-body orders-panel-scroll"><div id="orders-list"></div></div>
     </div>
     <div id="shifts-panel" class="driver-panel">
       <header class="form-topbar"><button type="button" class="form-back back-driver">← Назад</button><h1>История</h1></header>
