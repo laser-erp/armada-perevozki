@@ -241,7 +241,5 @@ app.armada.sx {
 }
 
 staging.app.armada.sx {
-	# До появления DNS A: проверка через hosts + предупреждение о сертификате
-	tls internal
 	import armada_staging
 }

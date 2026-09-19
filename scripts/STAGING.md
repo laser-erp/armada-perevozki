@@ -10,19 +10,10 @@
 2. **Caddy:** `./scripts/build-caddyfile-fvds.sh` → `./scripts/deploy-caddy-fvds.sh`
 3. **Файлы:** `./scripts/deploy-staging-fvds.sh main`
 
-### Без DNS (пока)
+### TLS
 
-Caddy для staging использует **`tls internal`** (самоподписанный сертификат).
-
-На **своём ПК** в `C:\Windows\System32\drivers\etc\hosts` (от администратора):
-
-```
-176.12.67.35 staging.app.armada.sx
-```
-
-Открыть https://staging.app.armada.sx/ — браузер предупредит о сертификате, для проверки это нормально.
-
-Когда будет готова запись **A** в DNS — убрать `tls internal` из `build-caddyfile-fvds.sh` (или попросить агента), снова `deploy-caddy-fvds.sh`, строку из `hosts` можно удалить.
+DNS **A** `staging.app.armada.sx` → VPS. Caddy выдаёт **Let's Encrypt** (см. `scripts/CLOUD_AGENT_STAGING_TLS.md`).  
+Строка в `hosts` на ПК **не нужна**, если DNS резолвится.
 
 ## Если с ПК SSH таймаут (WinError 10060)
 
