@@ -457,6 +457,7 @@ function setAdminNav(nav){
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='settings'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
   if(nav==='connect-leads'){ openAdminConnectLeads(); return; }
+  if(nav==='max-channel'){ openAdminMaxChannel(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
   if(nav==='plans'){ openAdminPlans(); return; }
@@ -477,10 +478,12 @@ function setAdminNav(nav){
 function updateAdminChrome(){
   const act=$('admin-activity');
   const conn=$('admin-connect-leads');
+  const maxCh=$('admin-max-channel');
   const bill=$('admin-billing');
   const plans=$('admin-plans');
   if(act) act.style.display=isSuperAdmin()?'':'none';
   if(conn) conn.style.display=isSuperAdmin()?'':'none';
+  if(maxCh) maxCh.style.display=isSuperAdmin()?'':'none';
   if(bill) bill.style.display=isSuperAdmin()?'':'none';
   if(plans) plans.style.display=isSuperAdmin()?'':'none';
   if(typeof updateAdminConnectLeadsBadge==='function') updateAdminConnectLeadsBadge();
@@ -962,28 +965,18 @@ function paintEpdServerStatus(){
     el.textContent='armada-api: ошибка проверки';
   });
 }
-function renderAdminActivity(){
-  migrateAdmins();
-  migrateCustomerPortalLeads();
+function marketingMaxPanelHtml(){
   if(typeof migrateMarketingMax==='function') migrateMarketingMax();
   const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
   const maxTok=mm.bot&&mm.bot.token?String(mm.bot.token):'';
   const maxTokMask=maxTok?('••••'+maxTok.slice(-4)):'не задан';
-  if(typeof syncAllEpdSpacesFromServer==='function'){
-    syncAllEpdSpacesFromServer().catch(()=>{});
-  }
-  const online=onlineAdmins();
-  const log=(state.adminLogins||[]).slice(0,40);
-  const ops=(state.opsLog||[]).slice(0,25);
-  const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
-  const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
-  const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
-  const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
-  $('activity-form').innerHTML=`
-    <p class="cat-panel-hint">Супер-админ: онлайн, ключи API, MAX, администраторы. Заявки на подключение — вкладка «Заявки на подключение». Онлайн = активность за 1–2 мин.</p>
+  const q=Array.isArray(mm.queue)?mm.queue:[];
+  const pending=q.filter(p=>p&&p.status!=='published'&&p.status!=='failed').length;
+  return `
+    <p class="cat-panel-hint">Промо-канал MAX (не заявки на перевозку). Токен и chat_id хранятся в облаке; посты идут через <code>armada-api</code>.</p>
     <section class="form-section" id="marketing-max-section">
-      <h2 class="form-section-title">Маркетинг · канал MAX</h2>
-      <p class="cat-panel-hint">Публикация через <code>armada-api</code> (токен бота и chat_id канала — в облаке, не в коде). Инструкция: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
+      <h2 class="form-section-title">Бот и канал</h2>
+      <p class="cat-panel-hint">Пошагово: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a> · план: <a href="/plans/MARKETING_PLAN.md" target="_blank" rel="noopener">MARKETING_PLAN.md</a></p>
       <label>Токен бота MAX</label>
       <input id="max-bot-token" type="password" placeholder="${esc(maxTok?'Оставьте пустым, чтобы не менять':'Вставьте токен с dev.max.ru')}" autocomplete="off" style="width:100%" />
       <p class="hint">Сейчас: ${esc(maxTokMask)}</p>
@@ -996,7 +989,74 @@ function renderAdminActivity(){
         <button type="button" class="secondary" id="max-bot-tick" style="width:auto">Опубликовать due-посты</button>
       </div>
       <p class="hint" id="max-bot-status"></p>
-    </section>
+      ${q.length?`<p class="hint" style="margin-top:8px">Очередь постов: ${esc(String(q.length))}${pending?` · к публикации: ${pending}`:''}</p>`:''}
+    </section>`;
+}
+function wireMarketingMaxControls(rerender){
+  const setMaxStatus=(msg,isErr)=>{ const el=$('max-bot-status'); if(el){ el.textContent=msg||''; el.className=isErr?'hint err-hint':'hint ok'; } };
+  $('max-bot-save')&&($('max-bot-save').onclick=async()=>{
+    if(!isSuperAdmin()) return;
+    if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+    const tok=(($('max-bot-token')||{}).value||'').trim();
+    const chatId=(($('max-bot-chat-id')||{}).value||'').trim();
+    if(tok) state.marketingMax.bot.token=tok;
+    state.marketingMax.bot.chatId=chatId;
+    state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);
+    if(!Array.isArray(state.marketingMax.queue)) state.marketingMax.queue=[];
+    setMaxStatus('Сохранение…');
+    try{
+      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
+      else persist();
+      setMaxStatus('Сохранено. Можно нажать «Тестовый пост».');
+      if($('max-bot-token')) $('max-bot-token').value='';
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+  });
+  $('max-bot-test')&&($('max-bot-test').onclick=async()=>{
+    if(typeof marketingMaxTestPost!=='function'){ setMaxStatus('API недоступен', true); return; }
+    setMaxStatus('Отправка…');
+    try{
+      const r=await marketingMaxTestPost();
+      setMaxStatus(r.messageId?('Опубликовано · messageId '+r.messageId):'Тест отправлен');
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+  });
+  $('max-bot-tick')&&($('max-bot-tick').onclick=async()=>{
+    if(typeof marketingMaxPublishScheduled!=='function'){ setMaxStatus('API недоступен', true); return; }
+    setMaxStatus('Проверка очереди…');
+    try{
+      const r=await marketingMaxPublishScheduled();
+      setMaxStatus(`Готово · опубликовано: ${r.published||0}, ошибок: ${r.failed||0}${r.skipped?(' · '+r.skipped):''}`);
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+  });
+}
+function openAdminMaxChannel(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  renderAdminMaxChannel();
+  show('admin-max-channel-screen');
+}
+function renderAdminMaxChannel(){
+  const form=$('max-channel-form');
+  if(!form) return;
+  form.innerHTML=marketingMaxPanelHtml();
+  $('max-channel-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireMarketingMaxControls(renderAdminMaxChannel);
+}
+function renderAdminActivity(){
+  migrateAdmins();
+  migrateCustomerPortalLeads();
+  if(typeof syncAllEpdSpacesFromServer==='function'){
+    syncAllEpdSpacesFromServer().catch(()=>{});
+  }
+  const online=onlineAdmins();
+  const log=(state.adminLogins||[]).slice(0,40);
+  const ops=(state.opsLog||[]).slice(0,25);
+  const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
+  const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
+  const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
+  const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
+  $('activity-form').innerHTML=`
+    <p class="cat-panel-hint">Супер-админ: онлайн, ключи API, администраторы. <strong>Канал MAX</strong> — отдельная вкладка. Заявки kp/pilot — «Заявки на подключение». Онлайн = активность за 1–2 мин.</p>
     ${transportLeadFailures.length?`<section class="form-section">
       <h2 class="form-section-title">Transport · не создался заказ</h2>
       <p class="cat-panel-hint">Обычно заявки с <a href="/order.html" target="_blank" rel="noopener">order.html</a> сразу во <strong>Заказы → канбан → Входящие</strong>. Здесь только ошибка (нет ООО «Армада» в справочнике и т.п.).</p>
@@ -1237,41 +1297,6 @@ function renderAdminActivity(){
       flashAdmPinOk(boxId?`boxId сохранён · ${findSpaceById(sid)?.name||sid}`:'boxId очищен');
       renderAdminActivity();
     };
-  });
-  const setMaxStatus=(msg,isErr)=>{ const el=$('max-bot-status'); if(el){ el.textContent=msg||''; el.className=isErr?'hint err-hint':'hint ok'; } };
-  $('max-bot-save')&&($('max-bot-save').onclick=async()=>{
-    if(!isSuperAdmin()) return;
-    if(typeof migrateMarketingMax==='function') migrateMarketingMax();
-    const tok=(($('max-bot-token')||{}).value||'').trim();
-    const chatId=(($('max-bot-chat-id')||{}).value||'').trim();
-    if(tok) state.marketingMax.bot.token=tok;
-    state.marketingMax.bot.chatId=chatId;
-    state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);
-    if(!Array.isArray(state.marketingMax.queue)) state.marketingMax.queue=[];
-    setMaxStatus('Сохранение…');
-    try{
-      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
-      else persist();
-      setMaxStatus('Сохранено. Можно нажать «Тестовый пост».');
-      if($('max-bot-token')) $('max-bot-token').value='';
-    }catch(e){ setMaxStatus(String(e.message||e), true); }
-  });
-  $('max-bot-test')&&($('max-bot-test').onclick=async()=>{
-    if(typeof marketingMaxTestPost!=='function'){ setMaxStatus('API недоступен', true); return; }
-    setMaxStatus('Отправка…');
-    try{
-      const r=await marketingMaxTestPost();
-      setMaxStatus(r.messageId?('Опубликовано · messageId '+r.messageId):'Тест отправлен');
-    }catch(e){ setMaxStatus(String(e.message||e), true); }
-  });
-  $('max-bot-tick')&&($('max-bot-tick').onclick=async()=>{
-    if(typeof marketingMaxPublishScheduled!=='function'){ setMaxStatus('API недоступен', true); return; }
-    setMaxStatus('Проверка очереди…');
-    try{
-      const r=await marketingMaxPublishScheduled();
-      setMaxStatus(`Готово · опубликовано: ${r.published||0}, ошибок: ${r.failed||0}${r.skipped?(' · '+r.skipped):''}`);
-      renderAdminActivity();
-    }catch(e){ setMaxStatus(String(e.message||e), true); }
   });
   paintEpdServerStatus();
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{

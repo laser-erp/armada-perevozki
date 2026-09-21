@@ -377,7 +377,7 @@
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
-    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen,#admin-connect-leads-screen,#admin-vehicle-card{overflow:hidden;min-height:0}
+    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen,#admin-connect-leads-screen,#admin-max-channel-screen,#admin-vehicle-card{overflow:hidden;min-height:0}
     .svc-badge{display:inline-block;border-radius:var(--radius);padding:2px 8px;font-size:.68rem;font-weight:700}
     .svc-ok{background:rgba(16,185,129,.12);color:#059669}
     .svc-soon{background:rgba(245,158,11,.14);color:#D97706}
@@ -968,7 +968,7 @@
       background:var(--surface);border:1px solid var(--border)
     }
     .cat-panel-hint{margin:0;color:var(--muted);font-size:var(--fs-sm);line-height:1.35}
-    #admin-catalogs-screen,#admin-activity-screen,#admin-connect-leads-screen,#admin-vehicle-card{
+    #admin-catalogs-screen,#admin-activity-screen,#admin-connect-leads-screen,#admin-max-channel-screen,#admin-vehicle-card{
       background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 42%)
     }
     .cat-quick .row,.cat-compact .row{gap:4px;align-items:center}
