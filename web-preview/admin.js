@@ -875,6 +875,7 @@ function renderAdminActivity(){
   const ops=(state.opsLog||[]).slice(0,25);
   const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
   const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
+  const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
   const pilotLeads=typeof pendingPilotLeads==='function'?pendingPilotLeads():leads.filter(l=>l.kind==='pilot');
   const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind==='portal');
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
@@ -896,11 +897,11 @@ function renderAdminActivity(){
       </div>
       <p class="hint" id="max-bot-status"></p>
     </section>
-    ${transportLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки на транспорт · armada.sx</h2>
-      <p class="cat-panel-hint">С armada.sx → <a href="/order.html" target="_blank" rel="noopener">order.html</a>. Логист — <strong>ООО «Армада»</strong>, заказчик автоматически закрепляется в её справочнике, заявка попадает в общий список.</p>
+    ${transportLeadFailures.length?`<section class="form-section">
+      <h2 class="form-section-title">Transport · не создался заказ</h2>
+      <p class="cat-panel-hint">Обычно заявки с <a href="/order.html" target="_blank" rel="noopener">order.html</a> сразу во <strong>Заказы → канбан → Входящие</strong>. Здесь только ошибка (нет ООО «Армада» в справочнике и т.п.).</p>
       <div class="cat-list">
-        ${transportLeads.map(l=>{
+        ${transportLeadFailures.map(l=>{
           const vLabel=l.vehicleTypeId&&typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(l.vehicleTypeId):(l.vehicleTypeId||'—');
           const ord=l.orderId?(state.orders||[]).find(o=>o.id===l.orderId):null;
           const ordNum=ord&&ord.sequentialNumber?`№${ord.sequentialNumber}`:'';

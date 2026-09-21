@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-21-max-channel-ui";
+const APP_BUILD="2026-09-21-transport-inbox-only";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1368,6 +1368,19 @@ function normalizeCustomerPortalLead(raw){
 }
 function migrateCustomerPortalLeads(){
   state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
+  migrateTransportLeadsInboxOnly();
+}
+/** Заявка на transport → заказ во «Входящие» канбана; в Активности только pilot/portal и сбой без заказа. */
+function migrateTransportLeadsInboxOnly(){
+  let changed=false;
+  (state.customerPortalLeads||[]).forEach(l=>{
+    if(l.kind!=='transport'||l.status!=='pending'||!l.orderId) return;
+    l.status='done';
+    l.doneAt=l.doneAt||new Date().toISOString();
+    changed=true;
+  });
+  if(changed) bumpDataEpoch('transport-lead-inbox');
+  return changed;
 }
 /** Канал MAX (бот + chat_id) — хранится в облаке, посты через armada-api /marketing/max/* */
 function migrateMarketingMax(){
@@ -1568,7 +1581,11 @@ async function appendCustomerPortalLead(raw){
   let order=null;
   if(rec.kind==='transport'){
     order=attachArmadaTransportLead(rec);
-    if(order) bumpDataEpoch('armada-sx-order');
+    if(order){
+      bumpDataEpoch('armada-sx-order');
+      rec.status='done';
+      rec.doneAt=new Date().toISOString();
+    }
   }
   bumpDataEpoch('customer-portal-lead');
   persistLocalOnly();
