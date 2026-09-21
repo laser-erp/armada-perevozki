@@ -2,6 +2,12 @@
 
 **Версия:** 1.0 · **Дата:** 2026-09-21  
 **Объекты:** [armada.sx](https://armada.sx) (услуги + бренд) · [app.armada.sx](https://app.armada.sx) (продукт + заявки)  
+
+**Операционные планы (актуальная структура):**  
+→ **[docs/marketing/MASTER_PLAN.md](./marketing/MASTER_PLAN.md)** — общий маркeting  
+→ **[docs/marketing/README.md](./marketing/README.md)** — Telegram, VK, YouTube/Rutube, Дзен (отдельный файл на сеть)  
+→ **[docs/marketing/marketing-index.html](./marketing/marketing-index.html)** — оглавление для просмотра  
+
 **Связанные планы в репо:** `web-preview/plans/LANDING_PLAN.md`, `web-preview/plans/ARMADA_SX_ORDER_LINKS.md`
 
 ---
