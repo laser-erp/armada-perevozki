@@ -863,6 +863,10 @@ function paintEpdServerStatus(){
 function renderAdminActivity(){
   migrateAdmins();
   migrateCustomerPortalLeads();
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  const maxTok=mm.bot&&mm.bot.token?String(mm.bot.token):'';
+  const maxTokMask=maxTok?('••••'+maxTok.slice(-4)):'не задан';
   if(typeof syncAllEpdSpacesFromServer==='function'){
     syncAllEpdSpacesFromServer().catch(()=>{});
   }
@@ -871,16 +875,33 @@ function renderAdminActivity(){
   const ops=(state.opsLog||[]).slice(0,25);
   const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
   const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
+  const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
   const pilotLeads=typeof pendingPilotLeads==='function'?pendingPilotLeads():leads.filter(l=>l.kind==='pilot');
   const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind==='portal');
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
     <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
-    ${transportLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки на транспорт · armada.sx</h2>
-      <p class="cat-panel-hint">С armada.sx → <a href="/order.html" target="_blank" rel="noopener">order.html</a>. Логист — <strong>ООО «Армада»</strong>, заказчик автоматически закрепляется в её справочнике, заявка попадает в общий список.</p>
+    <section class="form-section" id="marketing-max-section">
+      <h2 class="form-section-title">Маркетинг · канал MAX</h2>
+      <p class="cat-panel-hint">Публикация через <code>armada-api</code> (токен бота и chat_id канала — в облаке, не в коде). Инструкция: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
+      <label>Токен бота MAX</label>
+      <input id="max-bot-token" type="password" placeholder="${esc(maxTok?'Оставьте пустым, чтобы не менять':'Вставьте токен с dev.max.ru')}" autocomplete="off" style="width:100%" />
+      <p class="hint">Сейчас: ${esc(maxTokMask)}</p>
+      <label>chat_id канала</label>
+      <input id="max-bot-chat-id" inputmode="numeric" placeholder="ID канала" value="${esc((mm.bot&&mm.bot.chatId)||'')}" style="width:100%" />
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="max-bot-enabled" ${mm.bot&&mm.bot.enabled?'checked':''}/> Автопубликация отложенных постов (tick)</label>
+      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="primary" id="max-bot-save" style="width:auto">Сохранить MAX</button>
+        <button type="button" class="secondary" id="max-bot-test" style="width:auto">Тестовый пост в канал</button>
+        <button type="button" class="secondary" id="max-bot-tick" style="width:auto">Опубликовать due-посты</button>
+      </div>
+      <p class="hint" id="max-bot-status"></p>
+    </section>
+    ${transportLeadFailures.length?`<section class="form-section">
+      <h2 class="form-section-title">Transport · не создался заказ</h2>
+      <p class="cat-panel-hint">Обычно заявки с <a href="/order.html" target="_blank" rel="noopener">order.html</a> сразу во <strong>Заказы → канбан → Входящие</strong>. Здесь только ошибка (нет ООО «Армада» в справочнике и т.п.).</p>
       <div class="cat-list">
-        ${transportLeads.map(l=>{
+        ${transportLeadFailures.map(l=>{
           const vLabel=l.vehicleTypeId&&typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(l.vehicleTypeId):(l.vehicleTypeId||'—');
           const ord=l.orderId?(state.orders||[]).find(o=>o.id===l.orderId):null;
           const ordNum=ord&&ord.sequentialNumber?`№${ord.sequentialNumber}`:'';
@@ -1156,6 +1177,41 @@ function renderAdminActivity(){
       flashAdmPinOk(boxId?`boxId сохранён · ${findSpaceById(sid)?.name||sid}`:'boxId очищен');
       renderAdminActivity();
     };
+  });
+  const setMaxStatus=(msg,isErr)=>{ const el=$('max-bot-status'); if(el){ el.textContent=msg||''; el.className=isErr?'hint err-hint':'hint ok'; } };
+  $('max-bot-save')&&($('max-bot-save').onclick=async()=>{
+    if(!isSuperAdmin()) return;
+    if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+    const tok=(($('max-bot-token')||{}).value||'').trim();
+    const chatId=(($('max-bot-chat-id')||{}).value||'').trim();
+    if(tok) state.marketingMax.bot.token=tok;
+    state.marketingMax.bot.chatId=chatId;
+    state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);
+    if(!Array.isArray(state.marketingMax.queue)) state.marketingMax.queue=[];
+    setMaxStatus('Сохранение…');
+    try{
+      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
+      else persist();
+      setMaxStatus('Сохранено. Можно нажать «Тестовый пост».');
+      if($('max-bot-token')) $('max-bot-token').value='';
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+  });
+  $('max-bot-test')&&($('max-bot-test').onclick=async()=>{
+    if(typeof marketingMaxTestPost!=='function'){ setMaxStatus('API недоступен', true); return; }
+    setMaxStatus('Отправка…');
+    try{
+      const r=await marketingMaxTestPost();
+      setMaxStatus(r.messageId?('Опубликовано · messageId '+r.messageId):'Тест отправлен');
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+  });
+  $('max-bot-tick')&&($('max-bot-tick').onclick=async()=>{
+    if(typeof marketingMaxPublishScheduled!=='function'){ setMaxStatus('API недоступен', true); return; }
+    setMaxStatus('Проверка очереди…');
+    try{
+      const r=await marketingMaxPublishScheduled();
+      setMaxStatus(`Готово · опубликовано: ${r.published||0}, ошибок: ${r.failed||0}${r.skipped?(' · '+r.skipped):''}`);
+      renderAdminActivity();
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
   });
   paintEpdServerStatus();
   $('new-firm-inn-lookup')&&($('new-firm-inn-lookup').onclick=async()=>{

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Маркетинг АРМАДА — все планы</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { --accent: #0f766e; --bg: #f1f5f9; --card: #fff; --text: #0f172a; --muted: #64748b; --border: #e2e8f0; }
+    body { font-family: Inter, sans-serif; background: var(--bg); color: var(--text); margin: 0; line-height: 1.5; }
+    header { background: linear-gradient(120deg, #0f766e, #134e4a); color: #fff; padding: 2rem 1.5rem; }
+    header h1 { margin: 0 0 .35rem; font-size: 1.5rem; }
+    header p { margin: 0; opacity: .9; max-width: 40em; font-size: .95rem; }
+    main { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    a.card {
+      display: block; background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.15rem 1.25rem; text-decoration: none; color: inherit;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: border-color .15s, box-shadow .15s;
+    }
+    a.card:hover { border-color: var(--accent); box-shadow: 0 4px 12px rgba(15,118,110,.12); }
+    a.card h2 { margin: 0 0 .4rem; font-size: 1.05rem; color: var(--accent); }
+    a.card p { margin: 0; font-size: .88rem; color: var(--muted); }
+    .tag { display: inline-block; font-size: .7rem; font-weight: 600; background: #ccfbf1; color: #115e59; padding: .15rem .45rem; border-radius: 4px; margin-bottom: .5rem; }
+    section { margin-bottom: 2rem; }
+    section > h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 .75rem; }
+    footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 2rem; }
+    .master { grid-column: 1 / -1; }
+    .master a.card { border-width: 2px; border-color: #99f6e4; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Маркетинг и соцсети АРМАДА</h1>
+    <p>Общий план + отдельный документ на каждую площадку. armada.sx · app.armada.sx · v1.1 · 21.09.2026</p>
+  </header>
+  <main>
+    <section>
+      <h2>Общий план</h2>
+      <div class="grid">
+        <a class="card master" href="./PLAN_DLYA_VLADELCA.md">
+          <span class="tag">Сначала это</span>
+          <h2>PLAN_DLYA_VLADELCA.md</h2>
+          <p>Для владельца: два бизнеса в одном бренде, что делать в первый месяц, без жаргона.</p>
+        </a>
+        <a class="card" href="./MASTER_PLAN.md">
+          <h2>MASTER_PLAN.md</h2>
+          <p>Для маркетолога / подрядчика: KPI, UTM, дорожная карта 12 мес.</p>
+        </a>
+        <a class="card" href="../MARKETING_GROWTH_STRATEGY.md">
+          <h2>Стратегия (расширенная)</h2>
+          <p>MARKETING_GROWTH_STRATEGY.md — контекст и обоснование решений.</p>
+        </a>
+        <a class="card" href="./README.md">
+          <h2>README — оглавление</h2>
+          <p>Список файлов и ссылки на лендинги в репо.</p>
+        </a>
+      </div>
+    </section>
+    <section>
+      <h2>Планы по соцсетям</h2>
+      <div class="grid">
+        <a class="card" href="./SOCIAL_TELEGRAM.md">
+          <span class="tag">Старт: нед. 2</span>
+          <h2>Telegram</h2>
+          <p>Канал, 3 поста/нед, продукт и ЭТрН, шаблон закрепа, метрики.</p>
+        </a>
+        <a class="card" href="./SOCIAL_VK.md">
+          <span class="tag">Старт: мес. 2</span>
+          <h2>ВКонтакте</h2>
+          <p>Услуги 60% + B2B, меню, VK Ads, SLA сообщений.</p>
+        </a>
+        <a class="card" href="./SOCIAL_YOUTUBE_RUTUBE.md">
+          <span class="tag">Старт: мес. 3</span>
+          <h2>YouTube + Rutube</h2>
+          <p>12 роликов год 1, скринкасты, SEO, 2 видео/мес.</p>
+        </a>
+        <a class="card" href="./SOCIAL_DZEN.md">
+          <span class="tag">Старт: мес. 4</span>
+          <h2>Яндекс Дзен</h2>
+          <p>2 статьи/мес, SEO, репост из TG/YouTube.</p>
+        </a>
+      </div>
+    </section>
+  </main>
+  <footer>Открыть .md удобно в GitHub / Cursor · HTML для обзора структуры</footer>
+</body>
+</html>
