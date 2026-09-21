@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-21-transport-inbox-only";
+const APP_BUILD="2026-09-21-connect-leads-tab";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1210,12 +1210,12 @@ function routeText(o){
 }
 const $ = id => document.getElementById(id);
 function show(id){
-  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
+  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
     if(typeof clearEntrySkin==='function') clearEntrySkin();
   }
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
@@ -1370,7 +1370,7 @@ function migrateCustomerPortalLeads(){
   state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
   migrateTransportLeadsInboxOnly();
 }
-/** Заявка на transport → заказ во «Входящие» канбана; в Активности только pilot/portal и сбой без заказа. */
+/** Заявка transport → заказ во «Входящие»; pilot/portal — вкладка «Заявки на подключение»; сбой без orderId — Активность. */
 function migrateTransportLeadsInboxOnly(){
   let changed=false;
   (state.customerPortalLeads||[]).forEach(l=>{
@@ -1632,6 +1632,23 @@ function pendingPortalAccessLeads(){
 }
 function pendingPilotLeads(){
   return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot');
+}
+function pilotRoleNorm(role){
+  const r=String(role||'').trim().toLowerCase();
+  if(r==='carrier'||r==='перевозчик') return 'carrier';
+  if(r==='logist'||r==='логист') return 'logist';
+  return r||'';
+}
+/** Заявки на подключение: перевозчик (pilot). */
+function pendingCarrierConnectLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot'&&pilotRoleNorm(l.pilotRole)==='carrier');
+}
+/** Заявки на подключение: логист / кабинет (pilot). */
+function pendingLogistConnectLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot'&&pilotRoleNorm(l.pilotRole)==='logist');
+}
+function pendingConnectLeadsCount(){
+  return pendingPortalAccessLeads().length+pendingCarrierConnectLeads().length+pendingLogistConnectLeads().length;
 }
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;

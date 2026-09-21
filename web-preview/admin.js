@@ -456,6 +456,7 @@ function setAdminNav(nav){
   closeAdminSidebar();
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='settings'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
+  if(nav==='connect-leads'){ openAdminConnectLeads(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
   if(nav==='plans'){ openAdminPlans(); return; }
@@ -475,11 +476,14 @@ function setAdminNav(nav){
 }
 function updateAdminChrome(){
   const act=$('admin-activity');
+  const conn=$('admin-connect-leads');
   const bill=$('admin-billing');
   const plans=$('admin-plans');
   if(act) act.style.display=isSuperAdmin()?'':'none';
+  if(conn) conn.style.display=isSuperAdmin()?'':'none';
   if(bill) bill.style.display=isSuperAdmin()?'':'none';
   if(plans) plans.style.display=isSuperAdmin()?'':'none';
+  if(typeof updateAdminConnectLeadsBadge==='function') updateAdminConnectLeadsBadge();
   const title=$('admin-title');
   const userEl=$('admin-sidebar-user');
   if(!currentAdmin){
@@ -634,6 +638,104 @@ function logoutAdmin(){
   updateAdminChrome();
   if(getEntryMode()==='admin') goEntryLanding('admin');
   else show('roles');
+}
+function updateAdminConnectLeadsBadge(){
+  const badge=$('admin-connect-leads-badge');
+  if(!badge) return;
+  const n=typeof pendingConnectLeadsCount==='function'?pendingConnectLeadsCount():0;
+  if(n>0){ badge.hidden=false; badge.textContent=String(n); }
+  else { badge.hidden=true; badge.textContent=''; }
+}
+function wireCustomerPortalLeadButtons(root, rerender){
+  if(!root) return;
+  root.querySelectorAll('.lead-open-order-btn').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.orderId;
+    if(!id) return;
+    if(typeof openDetail==='function') openDetail(id);
+  });
+  root.querySelectorAll('.lead-done-btn').forEach(b=>b.onclick=()=>{
+    if(!isSuperAdmin()) return;
+    const id=b.dataset.leadId;
+    if(!id||typeof markCustomerPortalLeadDone!=='function') return;
+    markCustomerPortalLeadDone(id);
+    if(typeof rerender==='function') rerender();
+    updateAdminConnectLeadsBadge();
+  });
+}
+function openAdminConnectLeads(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  renderAdminConnectLeads();
+  show('admin-connect-leads-screen');
+}
+function renderAdminConnectLeads(){
+  migrateCustomerPortalLeads();
+  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():[];
+  const carrierLeads=typeof pendingCarrierConnectLeads==='function'?pendingCarrierConnectLeads():[];
+  const logistLeads=typeof pendingLogistConnectLeads==='function'?pendingLogistConnectLeads():[];
+  const form=$('connect-leads-form');
+  if(!form) return;
+  const emptyAll=!portalLeads.length&&!carrierLeads.length&&!logistLeads.length;
+  form.innerHTML=`
+    <p class="cat-panel-hint">Очередь с лендингов: подключить <strong>заказчика</strong> (портал /z), <strong>перевозчика</strong> или <strong>логиста</strong> (пилот). Заявки на перевозку с <a href="/order.html" target="_blank" rel="noopener">order.html</a> — в канбан «Входящие».</p>
+    ${emptyAll?`<div class="empty" style="margin:12px 0">Нет необработанных заявок на подключение</div>`:''}
+    <section class="form-section">
+      <h2 class="form-section-title">Новый заказчик · портал</h2>
+      <p class="cat-panel-hint">С <a href="/kp-zakaz.html" target="_blank" rel="noopener">kp-zakaz.html</a> — «Хочу отправлять грузы». В справочнике включите портал и выдайте PIN.</p>
+      <div class="cat-list">
+        ${portalLeads.length?portalLeads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)}</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.inn?` · ИНН ${esc(l.inn)}`:''}${l.contactName?` · ${esc(l.contactName)}`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            ${l.carrierHint?`<div class="hint">Перевозчик: ${esc(l.carrierHint)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join(''):`<div class="empty">Пока пусто</div>`}
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Новый перевозчик</h2>
+      <p class="cat-panel-hint"><a href="/pilot.html?role=carrier" target="_blank" rel="noopener">pilot.html</a> · роль перевозчик. Создайте space, админа, кабинет /a и /v.</p>
+      <div class="cat-list">
+        ${carrierLeads.length?carrierLeads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)} · перевозчик</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join(''):`<div class="empty">Пока пусто</div>`}
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Новый логист · кабинет</h2>
+      <p class="cat-panel-hint"><a href="/pilot.html?role=logist" target="_blank" rel="noopener">pilot.html</a> · роль логист. Пилот 30 дней — space, админ, справочники.</p>
+      <div class="cat-list">
+        ${logistLeads.length?logistLeads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)} · логист</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join(''):`<div class="empty">Пока пусто</div>`}
+      </div>
+    </section>`;
+  $('connect-leads-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireCustomerPortalLeadButtons(form, renderAdminConnectLeads);
+  updateAdminConnectLeadsBadge();
 }
 function openAdminActivity(){
   if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
@@ -876,11 +978,9 @@ function renderAdminActivity(){
   const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
   const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
   const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
-  const pilotLeads=typeof pendingPilotLeads==='function'?pendingPilotLeads():leads.filter(l=>l.kind==='pilot');
-  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind==='portal');
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
-    <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
+    <p class="cat-panel-hint">Супер-админ: онлайн, ключи API, MAX, администраторы. Заявки на подключение — вкладка «Заявки на подключение». Онлайн = активность за 1–2 мин.</p>
     <section class="form-section" id="marketing-max-section">
       <h2 class="form-section-title">Маркетинг · канал MAX</h2>
       <p class="cat-panel-hint">Публикация через <code>armada-api</code> (токен бота и chat_id канала — в облаке, не в коде). Инструкция: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
@@ -924,46 +1024,6 @@ function renderAdminActivity(){
             </div>
           </div>`;
         }).join('')}
-      </div>
-    </section>`:''}
-    ${pilotLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки на пилот 30 дней</h2>
-      <p class="cat-panel-hint">С <a href="/pilot.html" target="_blank" rel="noopener">pilot.html</a> — логист или перевозчик. Подключите кабинет и отметьте «Обработано».</p>
-      <div class="cat-list">
-        ${pilotLeads.map(l=>{
-          const roleLbl=l.pilotRole==='carrier'?'перевозчик':l.pilotRole==='logist'?'логист':(l.pilotRole||'—');
-          return `
-          <div class="item-card" data-lead-id="${esc(l.id)}">
-            <div class="item-top">
-              <div class="item-name">${esc(l.company)} · пилот · ${esc(roleLbl)}</div>
-              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
-            </div>
-            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
-            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
-            <div class="row" style="margin-top:8px">
-              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </section>`:''}
-    ${portalLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки заказчиков · портал</h2>
-      <p class="cat-panel-hint">С kp-zakaz.html — «Хочу отправлять грузы». Включите портал в карточке компании и выдайте PIN.</p>
-      <div class="cat-list">
-        ${portalLeads.map(l=>`
-          <div class="item-card" data-lead-id="${esc(l.id)}">
-            <div class="item-top">
-              <div class="item-name">${esc(l.company)}</div>
-              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
-            </div>
-            <div class="hint">${esc(l.phone)}${l.inn?` · ИНН ${esc(l.inn)}`:''}${l.contactName?` · ${esc(l.contactName)}`:''}</div>
-            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
-            ${l.carrierHint?`<div class="hint">Перевозчик: ${esc(l.carrierHint)}</div>`:''}
-            <div class="row" style="margin-top:8px">
-              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
-            </div>
-          </div>`).join('')}
       </div>
     </section>`:''}
     ${ops.length?`<section class="form-section">
@@ -1352,18 +1412,8 @@ function renderAdminActivity(){
     state.admins=state.admins.filter(a=>a.id!==id);
     persist(); renderAdminActivity();
   });
-  document.querySelectorAll('.lead-open-order-btn').forEach(b=>b.onclick=()=>{
-    const id=b.dataset.orderId;
-    if(!id) return;
-    if(typeof openDetail==='function') openDetail(id);
-  });
-  document.querySelectorAll('.lead-done-btn').forEach(b=>b.onclick=()=>{
-    if(!isSuperAdmin()) return;
-    const id=b.dataset.leadId;
-    if(!id||typeof markCustomerPortalLeadDone!=='function') return;
-    markCustomerPortalLeadDone(id);
-    renderAdminActivity();
-  });
+  wireCustomerPortalLeadButtons($('activity-form'), renderAdminActivity);
+  updateAdminConnectLeadsBadge();
 }
 
 function openVehicleCard(vehicleId){
