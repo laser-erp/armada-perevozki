@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-21-max-channel-tab";
+const APP_BUILD="2026-09-21-social-tab";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1210,12 +1210,12 @@ function routeText(o){
 }
 const $ = id => document.getElementById(id);
 function show(id){
-  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-max-channel-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
+  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-social-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
     if(typeof clearEntrySkin==='function') clearEntrySkin();
   }
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-max-channel-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-social-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
@@ -1381,6 +1381,17 @@ function migrateTransportLeadsInboxOnly(){
   });
   if(changed) bumpDataEpoch('transport-lead-inbox');
   return changed;
+}
+/** Ссылки TG/VK для супер-админа (автопост TG/VK — позже на armada-api). */
+function migrateMarketingSocial(){
+  const ms=state.marketingSocial;
+  if(!ms||typeof ms!=='object'){
+    state.marketingSocial={ telegramChannelUrl:'', vkGroupUrl:'' };
+    return;
+  }
+  ms.telegramChannelUrl=String(ms.telegramChannelUrl||'').trim();
+  ms.vkGroupUrl=String(ms.vkGroupUrl||'').trim();
+  state.marketingSocial=ms;
 }
 /** Канал MAX (бот + chat_id) — хранится в облаке, посты через armada-api /marketing/max/* */
 function migrateMarketingMax(){

@@ -457,7 +457,7 @@ function setAdminNav(nav){
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='settings'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
   if(nav==='connect-leads'){ openAdminConnectLeads(); return; }
-  if(nav==='max-channel'){ openAdminMaxChannel(); return; }
+  if(nav==='social'){ openAdminSocial(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
   if(nav==='plans'){ openAdminPlans(); return; }
@@ -478,12 +478,12 @@ function setAdminNav(nav){
 function updateAdminChrome(){
   const act=$('admin-activity');
   const conn=$('admin-connect-leads');
-  const maxCh=$('admin-max-channel');
+  const social=$('admin-social');
   const bill=$('admin-billing');
   const plans=$('admin-plans');
   if(act) act.style.display=isSuperAdmin()?'':'none';
   if(conn) conn.style.display=isSuperAdmin()?'':'none';
-  if(maxCh) maxCh.style.display=isSuperAdmin()?'':'none';
+  if(social) social.style.display=isSuperAdmin()?'':'none';
   if(bill) bill.style.display=isSuperAdmin()?'':'none';
   if(plans) plans.style.display=isSuperAdmin()?'':'none';
   if(typeof updateAdminConnectLeadsBadge==='function') updateAdminConnectLeadsBadge();
@@ -965,6 +965,34 @@ function paintEpdServerStatus(){
     el.textContent='armada-api: ошибка проверки';
   });
 }
+function marketingSocialTelegramVkHtml(){
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+  const ms=state.marketingSocial||{ telegramChannelUrl:'', vkGroupUrl:'' };
+  return `
+    <section class="form-section" id="marketing-telegram-section">
+      <h2 class="form-section-title">Telegram</h2>
+      <p class="cat-panel-hint">Промо-канал (не заявки на перевозку — они на <a href="/order.html" target="_blank" rel="noopener">order.html</a>). Сейчас: посты вручную или «отложенные» в Telegram. План автопоста: <a href="/plans/marketing/MARKETING_RAZDEL_APP.md" target="_blank" rel="noopener">MARKETING_RAZDEL_APP.md</a>.</p>
+      <p class="cat-panel-hint">Чеклист: <a href="/plans/marketing/SOCIAL_TELEGRAM.md" target="_blank" rel="noopener">SOCIAL_TELEGRAM.md</a></p>
+      <label>Ссылка на канал (для себя)</label>
+      <input id="social-tg-url" type="url" placeholder="https://t.me/…" value="${esc(ms.telegramChannelUrl||'')}" style="width:100%" />
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="primary" id="social-tg-save" style="width:auto">Сохранить TG</button>
+        ${ms.telegramChannelUrl?`<a class="secondary" href="${esc(ms.telegramChannelUrl)}" target="_blank" rel="noopener" style="width:auto;padding:8px 12px">Открыть канал</a>`:''}
+      </div>
+      <p class="hint" id="social-tg-status"></p>
+    </section>
+    <section class="form-section" id="marketing-vk-section">
+      <h2 class="form-section-title">ВКонтакте</h2>
+      <p class="cat-panel-hint">Сообщество — услуги и регион. Сейчас: вручную или «отложенные записи» VK. Чеклист: <a href="/plans/marketing/SOCIAL_VK.md" target="_blank" rel="noopener">SOCIAL_VK.md</a></p>
+      <label>Ссылка на группу (для себя)</label>
+      <input id="social-vk-url" type="url" placeholder="https://vk.com/…" value="${esc(ms.vkGroupUrl||'')}" style="width:100%" />
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="primary" id="social-vk-save" style="width:auto">Сохранить VK</button>
+        ${ms.vkGroupUrl?`<a class="secondary" href="${esc(ms.vkGroupUrl)}" target="_blank" rel="noopener" style="width:auto;padding:8px 12px">Открыть группу</a>`:''}
+      </div>
+      <p class="hint" id="social-vk-status"></p>
+    </section>`;
+}
 function marketingMaxPanelHtml(){
   if(typeof migrateMarketingMax==='function') migrateMarketingMax();
   const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
@@ -973,10 +1001,9 @@ function marketingMaxPanelHtml(){
   const q=Array.isArray(mm.queue)?mm.queue:[];
   const pending=q.filter(p=>p&&p.status!=='published'&&p.status!=='failed').length;
   return `
-    <p class="cat-panel-hint">Промо-канал MAX (не заявки на перевозку). Токен и chat_id хранятся в облаке; посты идут через <code>armada-api</code>.</p>
     <section class="form-section" id="marketing-max-section">
-      <h2 class="form-section-title">Бот и канал</h2>
-      <p class="cat-panel-hint">Пошагово: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a> · план: <a href="/plans/MARKETING_PLAN.md" target="_blank" rel="noopener">MARKETING_PLAN.md</a></p>
+      <h2 class="form-section-title">MAX</h2>
+      <p class="cat-panel-hint">Бот и канал — автопост через <code>armada-api</code>. Пошагово: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
       <label>Токен бота MAX</label>
       <input id="max-bot-token" type="password" placeholder="${esc(maxTok?'Оставьте пустым, чтобы не менять':'Вставьте токен с dev.max.ru')}" autocomplete="off" style="width:100%" />
       <p class="hint">Сейчас: ${esc(maxTokMask)}</p>
@@ -1030,17 +1057,49 @@ function wireMarketingMaxControls(rerender){
     }catch(e){ setMaxStatus(String(e.message||e), true); }
   });
 }
-function openAdminMaxChannel(){
-  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
-  renderAdminMaxChannel();
-  show('admin-max-channel-screen');
+function wireMarketingSocialRefs(rerender){
+  const setTg=(msg,err)=>{ const el=$('social-tg-status'); if(el){ el.textContent=msg||''; el.className=err?'hint err-hint':'hint ok'; } };
+  const setVk=(msg,err)=>{ const el=$('social-vk-status'); if(el){ el.textContent=msg||''; el.className=err?'hint err-hint':'hint ok'; } };
+  $('social-tg-save')&&($('social-tg-save').onclick=async()=>{
+    if(!isSuperAdmin()) return;
+    if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+    state.marketingSocial.telegramChannelUrl=(($('social-tg-url')||{}).value||'').trim();
+    setTg('Сохранение…');
+    try{
+      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
+      else persist();
+      setTg('Сохранено');
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setTg(String(e.message||e), true); }
+  });
+  $('social-vk-save')&&($('social-vk-save').onclick=async()=>{
+    if(!isSuperAdmin()) return;
+    if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+    state.marketingSocial.vkGroupUrl=(($('social-vk-url')||{}).value||'').trim();
+    setVk('Сохранение…');
+    try{
+      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
+      else persist();
+      setVk('Сохранено');
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setVk(String(e.message||e), true); }
+  });
 }
-function renderAdminMaxChannel(){
-  const form=$('max-channel-form');
+function openAdminSocial(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  renderAdminSocial();
+  show('admin-social-screen');
+}
+function renderAdminSocial(){
+  const form=$('social-form');
   if(!form) return;
-  form.innerHTML=marketingMaxPanelHtml();
-  $('max-channel-back').onclick=()=>{ show('admin'); renderAdmin(); };
-  wireMarketingMaxControls(renderAdminMaxChannel);
+  form.innerHTML=`
+    <p class="cat-panel-hint">Исходящий промо-контент: <strong>MAX · Telegram · VK</strong>. Входящие лиды — «Заявки на подключение»; заявки на перевозку — канбан «Входящие». Общий план: <a href="/plans/MARKETING_PLAN.md" target="_blank" rel="noopener">MARKETING_PLAN.md</a></p>
+    ${marketingMaxPanelHtml()}
+    ${marketingSocialTelegramVkHtml()}`;
+  $('social-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireMarketingMaxControls(renderAdminSocial);
+  wireMarketingSocialRefs(renderAdminSocial);
 }
 function renderAdminActivity(){
   migrateAdmins();
@@ -1056,7 +1115,7 @@ function renderAdminActivity(){
   const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
-    <p class="cat-panel-hint">Супер-админ: онлайн, ключи API, администраторы. <strong>Канал MAX</strong> — отдельная вкладка. Заявки kp/pilot — «Заявки на подключение». Онлайн = активность за 1–2 мин.</p>
+    <p class="cat-panel-hint">Супер-админ: онлайн, ключи API, администраторы. <strong>Соцсети</strong> (MAX, TG, VK) и заявки на подключение — отдельные вкладки. Онлайн = активность за 1–2 мин.</p>
     ${transportLeadFailures.length?`<section class="form-section">
       <h2 class="form-section-title">Transport · не создался заказ</h2>
       <p class="cat-panel-hint">Обычно заявки с <a href="/order.html" target="_blank" rel="noopener">order.html</a> сразу во <strong>Заказы → канбан → Входящие</strong>. Здесь только ошибка (нет ООО «Армада» в справочнике и т.п.).</p>
