@@ -33,3 +33,5 @@ __pycache__/
 *.aab
 local.properties
 armada-compliance-4317.bundle
+# Локальные факты для генерации контента (шаблон в docs/marketing/templates/)
+docs/marketing/my/ARMADA_FACTS.md

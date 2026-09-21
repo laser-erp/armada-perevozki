@@ -107,4 +107,10 @@
 
 ---
 
+## Если вы один и времени нет
+
+См. **[CONTENT_AUTOMATION_SOLO.md](./CONTENT_AUTOMATION_SOLO.md)** — **45 минут в неделю**: Cursor генерирует черновики, вы только проверяете и ставите **отложенные посты** в Telegram/VK.
+
+---
+
 *Вопросы по ссылкам и формам — в `web-preview/plans/ARMADA_SX_ORDER_LINKS.md`. По доработке лендингов — `LANDING_PLAN.md`.*
