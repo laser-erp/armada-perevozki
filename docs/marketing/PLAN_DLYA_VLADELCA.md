@@ -109,7 +109,7 @@
 
 ## Если вы один и времени нет
 
-См. **[CONTENT_AUTOMATION_SOLO.md](./CONTENT_AUTOMATION_SOLO.md)** — **45 минут в неделю**: Cursor генерирует черновики, вы только проверяете и ставите **отложенные postы** в Telegram/VK.
+См. **[CONTENT_AUTOMATION_SOLO.md](./CONTENT_AUTOMATION_SOLO.md)** — **45 минут в неделю**: Cursor генерирует черновики, вы только проверяете и ставите **отложенные посты** в Telegram/VK.
 
 ## Воронка (куда ведут посты и что делать дальше)
 

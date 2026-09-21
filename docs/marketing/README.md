@@ -6,7 +6,9 @@
 |----------|------------|
 | **[PLAN_DLYA_VLADELCA.md](./PLAN_DLYA_VLADELCA.md)** | **Начните здесь** — план простым языком для владельца |
 | **[CONTENT_AUTOMATION_SOLO.md](./CONTENT_AUTOMATION_SOLO.md)** | **Один человек** — Cursor + отложенные посты, ~45 мин/нед |
-| **[VORONKA_SOLO.md](./VORONKA_SOLO.md)** | **Воронка** — услуги vs пилот, шаги, где дыры, таблица на месяц |
+| **[VORONKA_SOLO.md](./VORONKA_SOLO.md)** | **Воронка** — услуги vs пilot, шаги, где дыры, таблица на месяц |
+| **[MARKETING_RAZDEL_APP.md](./MARKETING_RAZDEL_APP.md)** | **Раздел в app** — TG + VK + MAX, этапы 0→2 |
+| **[KARTINKI_K_POSTAM.md](./KARTINKI_K_POSTAM.md)** | PNG-карточки 01–08 к постам |
 | **[MASTER_PLAN.md](./MASTER_PLAN.md)** | Общий план для маркетолога / SMM (KPI, UTM, 12 мес.) |
 | [SOCIAL_TELEGRAM.md](./SOCIAL_TELEGRAM.md) | Telegram: канал, контент, запуск |
 | [SOCIAL_VK.md](./SOCIAL_VK.md) | ВКонтакте: сообщество, услуги + B2B |
