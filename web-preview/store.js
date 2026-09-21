@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-21-marketing-plan-staging";
+const APP_BUILD="2026-09-21-max-channel-ui";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1368,6 +1368,38 @@ function normalizeCustomerPortalLead(raw){
 }
 function migrateCustomerPortalLeads(){
   state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
+}
+/** Канал MAX (бот + chat_id) — хранится в облаке, посты через armada-api /marketing/max/* */
+function migrateMarketingMax(){
+  const mm=state.marketingMax;
+  if(!mm||typeof mm!=='object'){
+    state.marketingMax={ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+    return;
+  }
+  if(!mm.bot||typeof mm.bot!=='object') mm.bot={ token:'', chatId:'', enabled:false };
+  mm.bot.token=String(mm.bot.token||'');
+  mm.bot.chatId=String(mm.bot.chatId||'');
+  mm.bot.enabled=!!mm.bot.enabled;
+  if(!Array.isArray(mm.queue)) mm.queue=[];
+  state.marketingMax=mm;
+}
+async function postMarketingMaxApi(action, body){
+  if(!API_BASE) throw new Error('API недоступен');
+  await ensureArmadaApiToken({});
+  const res=await fetchWithTimeout(`${API_BASE}/marketing/max/${action}`, {
+    method:'POST',
+    headers:armadaApiJsonHeaders(),
+    body:JSON.stringify(body||{})
+  }, 20000);
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error||data.message||('HTTP '+res.status));
+  return data;
+}
+async function marketingMaxTestPost(){
+  return postMarketingMaxApi('test', {});
+}
+async function marketingMaxPublishScheduled(){
+  return postMarketingMaxApi('tick', {});
 }
 function companyOwnRole(c){
   return !!(c&&Array.isArray(c.roles)&&c.roles.includes('own'));
