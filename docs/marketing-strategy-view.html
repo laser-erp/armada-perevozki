@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Стратегия АРМАДА — развитие и продвижение</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #fff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #0f766e;
+      --border: #e2e8f0;
+      --warn: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+    .top {
+      background: linear-gradient(135deg, #0f766e 0%, #134e4a 100%);
+      color: #fff;
+      padding: 2rem 1.25rem 2.5rem;
+    }
+    .top-inner { max-width: 820px; margin: 0 auto; }
+    .top h1 { margin: 0 0 0.5rem; font-size: 1.65rem; font-weight: 700; }
+    .top p { margin: 0; opacity: 0.92; max-width: 36em; }
+    .meta { margin-top: 1rem; font-size: 0.85rem; opacity: 0.85; }
+    .wrap { max-width: 820px; margin: -1.5rem auto 3rem; padding: 0 1.25rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06);
+    }
+    h2 { font-size: 1.15rem; margin: 0 0 0.75rem; color: var(--accent); }
+    h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+    p { margin: 0.5rem 0; }
+    ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    li { margin: 0.35rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f5f9; font-weight: 600; }
+    .pill {
+      display: inline-block;
+      background: #ccfbf1;
+      color: #115e59;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      margin-right: 0.35rem;
+    }
+    .note {
+      border-left: 3px solid var(--warn);
+      background: #fffbeb;
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    a { color: var(--accent); }
+    .toc a { text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 2rem 1rem;
+    }
+    @media print {
+      .top { background: #134e4a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .card { break-inside: avoid; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <h1>Стратегия развития, продвижения и соцсетей</h1>
+      <p>АРМАДА · armada.sx + app.armada.sx · двойная модель: перевозки и SaaS-кабинеты для малого парка.</p>
+      <p class="meta">Версия 1.0 · 21.09.2026 · Полный текст: <code>docs/MARKETING_GROWTH_STRATEGY.md</code></p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card toc">
+      <h2>Содержание</h2>
+      <ul>
+        <li><a href="#summary">1. Резюме</a></li>
+        <li><a href="#audience">2. Аудитории и сообщения</a></li>
+        <li><a href="#channels">3. Каналы продвижения</a></li>
+        <li><a href="#social">4. Соцсети</a></li>
+        <li><a href="#roadmap">5. Дорожная карта 12 мес.</a></li>
+        <li><a href="#decisions">6. Решения для согласования</a></li>
+      </ul>
+    </section>
+
+    <section class="card" id="summary">
+      <h2>1. Резюме</h2>
+      <p><span class="pill">P1</span> Заявки на транспорт (armada.sx → order.html) — деньги и репутация.</p>
+      <p><span class="pill">P2</span> Пилоты SaaS (логист / перевозчик 1–15 ТС) — рост платформы.</p>
+      <p><span class="pill">P3</span> SEO и соцсети — экспертиза и прогрев, не «охват ради охвата».</p>
+      <div class="note">
+        Не смешивать в одном посте «закажи шаланду» и «подключи TMS» без явной пометки. Два контура контента, одна инфраструктура ссылок и аналитики.
+      </div>
+      <table>
+        <tr><th>Приоритет</th><th>KPI</th></tr>
+        <tr><td>Услуги</td><td>Лиды order, время ответа диспетчера, сделки</td></tr>
+        <tr><td>SaaS</td><td>Заявки pilot → активный кабинет после 30 дней</td></tr>
+        <tr><td>Охват</td><td>Переходы на лендинги (UTM), качественные подписчики</td></tr>
+      </table>
+    </section>
+
+    <section class="card" id="audience">
+      <h2>2. Аудитории</h2>
+      <table>
+        <tr><th>Сегмент</th><th>Куда вести</th></tr>
+        <tr><td>Заказчик перевозки</td><td><a href="https://app.armada.sx/order.html">order.html</a> + source=armada.sx</td></tr>
+        <tr><td>Логист 1–15 ТС</td><td>kp-logist.html, pilot.html</td></tr>
+        <tr><td>Перевозчик в сети</td><td>kp.html</td></tr>
+        <tr><td>Заказчик с повторами</td><td>kp-zakaz.html, /z/</td></tr>
+      </table>
+      <p><strong>Формула бренда:</strong> перевозки и цифровой кабинет для тех, кто ведёт логистику руками — не enterprise-TMS и не открытая доска.</p>
+    </section>
+
+    <section class="card" id="channels">
+      <h2>3. Продвижение</h2>
+      <ul>
+        <li><strong>WordPress</strong> — все CTA по ARMADA_SX_ORDER_LINKS.md.</li>
+        <li><strong>Лендинги app</strong> — этапы L1–L3 из LANDING_PLAN (скрины, FAQ, OG).</li>
+        <li><strong>SEO</strong> — узкие intent-статьи (ЭТрН, портал), не журнал на 50 URL.</li>
+        <li><strong>Реклама</strong> — только после Metrika и SLA; сначала geo-услуги, потом пилоты.</li>
+        <li><strong>Партнёры</strong> — пилот, реферал логист→перевозчик, ЭДО/учёт.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="social">
+      <h2>4. Соцсети</h2>
+      <h3>Запуск</h3>
+      <table>
+        <tr><th>Площадка</th><th>Когда</th><th>Зачем</th></tr>
+        <tr><td>Telegram</td><td>Недели 1–4</td><td>Логисты, продукт, ЭТрН</td></tr>
+        <tr><td>VK</td><td>Месяц 2</td><td>Услуги + регион + B2B</td></tr>
+        <tr><td>YouTube / Rutube</td><td>Месяц 3+</td><td>Скринкасты 3–7 мин</td></tr>
+      </table>
+      <h3>Регламент</h3>
+      <ul>
+        <li>TG: 3 поста / нед · VK: 2 / нед</li>
+        <li>Рубрики: процесс, документы, миф/факт, Q&A, кейс раз в квартал</li>
+        <li>Knowledge doc + календарь на 4 недели; черновики LLM + вычитка человеком</li>
+      </ul>
+    </section>
+
+    <section class="card" id="roadmap">
+      <h2>5. Дорожная карта</h2>
+      <h3>Фаза 0 (нед. 1–4)</h3>
+      <ul>
+        <li>Knowledge + календарь · CTA на WP · Metrika · L1 лендинги · запуск TG · SLA на order</li>
+      </ul>
+      <h3>Фаза 1 (мес. 2–3)</h3>
+      <ul>
+        <li>Скрины L2 · VK · первое видео · 2 SEO-статьи · тест Директа на услуги</li>
+      </ul>
+      <h3>Фаза 2 (мес. 4–6)</h3>
+      <ul>
+        <li>Кейс · серия «Миф/факт» · реферал · ads пилотов · thanks-страница</li>
+      </ul>
+      <h3>Фаза 3 (мес. 7–12)</h3>
+      <ul>
+        <li>kp-driver, network · аудит контента · партнёры · регион/фокус SaaS</li>
+      </ul>
+    </section>
+
+    <section class="card" id="decisions">
+      <h2>6. Нужны ваши решения</h2>
+      <ol>
+        <li>Q4: 70/30 услуги vs пилоты или иной split?</li>
+        <li>Telegram: только канал или канал + чат?</li>
+        <li>Гeo услуг: один регион или РФ?</li>
+        <li>Лицо бренда: founder / эксперт / корпоративно?</li>
+        <li>Бюджет тестовой рекламы (от … ₽/мес)?</li>
+        <li>Можно ли публиковать кейс пилота (регион, N машин)?</li>
+      </ol>
+      <p>После ответов — 90-дневный понедельный план и при необходимости CONTENT_KNOWLEDGE в репо.</p>
+    </section>
+  </main>
+
+  <p class="footer">ООО «АРМАДА» · внутренний стратегический документ</p>
+</body>
+</html>
