@@ -1005,6 +1005,7 @@ function normalizeMaxBotTokenInput(raw){
 function maxBotTokenFieldError(tok){
   const t=normalizeMaxBotTokenInput(tok);
   if(!t) return '';
+  if(/•/.test(t)||/\u2022/.test(t)||/[^\x21-\x7E]/.test(t)) return 'В токене есть символы «•» или кириллица — это маска из интерфейса, не токен MAX. Скопируйте строку AAH… с dev.max.ru.';
   if(/^https?:\/\//i.test(t)||/max\.ru/i.test(t)) return 'Это ссылка на канал, не токен бота. dev.max.ru → Чат-боты → ⋮ → Настройки → копировать access_token';
   if(t.length<16) return 'Слишком короткая строка — похоже, в буфер попало не то (не текст «токен скопирован»). Выделите токен в поле на dev.max.ru и скопируйте вручную (Ctrl+C).';
   return '';
@@ -1043,7 +1044,7 @@ function marketingMaxPanelHtml(){
   const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
   const maxTok=mm.bot&&mm.bot.token?String(mm.bot.token):'';
   const maxTokStoredErr=maxBotTokenFieldError(maxTok);
-  const maxTokMask=maxTok?('••••'+maxTok.slice(-4)):'не задан';
+  const maxTokMask=maxTok&&typeof isPlausibleMaxBotToken==='function'&&isPlausibleMaxBotToken(maxTok)?('****'+maxTok.slice(-4)):(maxTok?'битый (вставьте заново)':'не задан');
   const q=Array.isArray(mm.queue)?mm.queue:[];
   const pending=q.filter(p=>p&&p.status!=='published'&&p.status!=='failed').length;
   return `

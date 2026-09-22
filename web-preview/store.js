@@ -1394,6 +1394,14 @@ function migrateMarketingSocial(){
   state.marketingSocial=ms;
 }
 /** Канал MAX (бот + chat_id) — хранится в облаке, посты через armada-api /marketing/max/* */
+function isPlausibleMaxBotToken(t){
+  const s=String(t||'').trim();
+  if(!s||s.length<16) return false;
+  if(/[^\x21-\x7E]/.test(s)) return false;
+  if(/max\.ru|^https?:/i.test(s)) return false;
+  if(/•/.test(s)||/\u2022/.test(s)) return false;
+  return true;
+}
 function migrateMarketingMax(){
   const mm=state.marketingMax;
   if(!mm||typeof mm!=='object'){
@@ -1402,6 +1410,7 @@ function migrateMarketingMax(){
   }
   if(!mm.bot||typeof mm.bot!=='object') mm.bot={ token:'', chatId:'', enabled:false };
   mm.bot.token=String(mm.bot.token||'');
+  if(mm.bot.token&&!isPlausibleMaxBotToken(mm.bot.token)) mm.bot.token='';
   mm.bot.chatId=String(mm.bot.chatId||'');
   mm.bot.enabled=!!mm.bot.enabled;
   if(!Array.isArray(mm.queue)) mm.queue=[];
