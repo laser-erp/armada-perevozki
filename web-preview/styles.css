@@ -492,6 +492,9 @@
     .calc .calc-row span:last-child{flex:0 1 auto;text-align:right;white-space:nowrap}
     .calc .hint{display:block;width:100%;text-align:left;white-space:normal}
     .ok{color:#059669;font-size:var(--fs-sm)}
+    .max-status-banner{min-height:2.5rem;margin:10px 0;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#f8fafc;font-size:var(--fs-sm)}
+    .max-status-banner.ok{border-color:#059669;background:#ecfdf5;color:#047857;font-weight:600}
+    .max-status-banner.err-hint{border-color:#dc2626;background:#fef2f2;color:#b91c1c;font-weight:600}
     .admin-cards{display:flex;flex-direction:column;gap:8px;padding:8px 10px 20px}
     .admin-cards .card button{margin-top:8px}
     .admin-cards .order-card button{margin-top:0}

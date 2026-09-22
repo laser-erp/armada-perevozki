@@ -1044,47 +1044,72 @@ function marketingMaxPanelHtml(){
       <input id="max-bot-chat-id" inputmode="numeric" placeholder="7802655283 — цифры из id7802655283_biz" value="${esc((mm.bot&&mm.bot.chatId)||'')}" style="width:100%" />
       <p class="hint">Из ссылки канала <a href="https://max.ru/id7802655283_biz" target="_blank" rel="noopener">id7802655283_biz</a> → chat_id <strong>7802655283</strong>. ИНН в это поле не вводите — только id канала для API.</p>
       <label class="check" style="margin-top:8px"><input type="checkbox" id="max-bot-enabled" ${mm.bot&&mm.bot.enabled?'checked':''}/> Автопубликация отложенных постов (tick)</label>
+      <p class="hint max-status-banner" id="max-bot-status" role="status" aria-live="polite"></p>
       <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
         <button type="button" class="primary" id="max-bot-save" style="width:auto">Сохранить MAX</button>
         <button type="button" class="secondary" id="max-bot-test" style="width:auto">Тестовый пост в канал</button>
         <button type="button" class="secondary" id="max-bot-tick" style="width:auto">Опубликовать due-посты</button>
       </div>
-      <p class="hint" id="max-bot-status"></p>
       ${q.length?`<p class="hint" style="margin-top:8px">Очередь постов: ${esc(String(q.length))}${pending?` · к публикации: ${pending}`:''}</p>`:''}
     </section>`;
 }
+function setMaxBotStatus(msg,isErr){
+  const el=$('max-bot-status');
+  if(!el) return;
+  el.textContent=msg||'';
+  el.className='hint max-status-banner'+(isErr?' err-hint':' ok');
+}
+async function saveMaxBotSettingsFromForm(rerender){
+  if(!isSuperAdmin()){ alert('Доступно только супер-админу'); return; }
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  if(!state.marketingMax||!state.marketingMax.bot){
+    state.marketingMax={ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  }
+  const tokInput=normalizeMaxBotTokenInput(($('max-bot-token')||{}).value||'');
+  const chatRaw=(($('max-bot-chat-id')||{}).value||'');
+  const chatId=normalizeMaxChatIdInput(chatRaw);
+  const storedTok=String(state.marketingMax.bot.token||'');
+  if(!tokInput&&maxBotTokenFieldError(storedTok)){
+    const msg='Нужен новый access_token в поле «Токен» (в базе ещё сохранена ссылка на канал, а не токен).';
+    setMaxBotStatus(msg, true);
+    alert(msg);
+    return;
+  }
+  const tok=tokInput||storedTok;
+  const tokErr=maxBotTokenFieldError(tok);
+  if(tokErr){ setMaxBotStatus(tokErr, true); alert(tokErr); return; }
+  const chatErr=maxChatIdFieldError(chatRaw);
+  if(chatErr){ setMaxBotStatus(chatErr, true); alert(chatErr); return; }
+  if(!tokInput){
+    const msg='Вставьте access_token в поле «Токен бота» (скопированный с dev.max.ru) и нажмите «Сохранить MAX».';
+    setMaxBotStatus(msg, true);
+    alert(msg);
+    return;
+  }
+  state.marketingMax.bot.token=tokInput;
+  state.marketingMax.bot.chatId=chatId;
+  state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);
+  if(!Array.isArray(state.marketingMax.queue)) state.marketingMax.queue=[];
+  const btn=$('max-bot-save');
+  const prevLabel=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Сохранение…'; }
+  setMaxBotStatus('Отправка на сервер…', false);
+  try{
+    await persistMaxSettingsImmediate();
+    if(typeof rerender==='function') rerender();
+    setMaxBotStatus('Сохранено на сервере. Нажмите «Тестовый пост в канал».', false);
+  }catch(e){
+    const msg=String(e.message||e);
+    setMaxBotStatus(msg, true);
+    alert('Не сохранилось: '+msg);
+  }finally{
+    const b=$('max-bot-save');
+    if(b){ b.disabled=false; b.textContent=prevLabel||'Сохранить MAX'; }
+  }
+}
 function wireMarketingMaxControls(rerender){
-  const setMaxStatus=(msg,isErr)=>{ const el=$('max-bot-status'); if(el){ el.textContent=msg||''; el.className=isErr?'hint err-hint':'hint ok'; } };
-  $('max-bot-save')&&($('max-bot-save').onclick=async()=>{
-    if(!isSuperAdmin()){ alert('Доступно только супер-админу'); return; }
-    if(typeof migrateMarketingMax==='function') migrateMarketingMax();
-    const tokInput=normalizeMaxBotTokenInput(($('max-bot-token')||{}).value||'');
-    const chatRaw=(($('max-bot-chat-id')||{}).value||'');
-    const chatId=normalizeMaxChatIdInput(chatRaw);
-    const storedTok=String(state.marketingMax?.bot?.token||'');
-    const tok=tokInput||storedTok;
-    const tokErr=maxBotTokenFieldError(tok);
-    if(tokErr){ setMaxStatus(tokErr, true); return; }
-    const chatErr=maxChatIdFieldError(chatRaw);
-    if(chatErr){ setMaxStatus(chatErr, true); return; }
-    if(!tok){ setMaxStatus('Вставьте токен бота (access_token) и нажмите «Сохранить MAX» снова', true); return; }
-    if(tokInput) state.marketingMax.bot.token=tokInput;
-    state.marketingMax.bot.chatId=chatId;
-    state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);
-    if(!Array.isArray(state.marketingMax.queue)) state.marketingMax.queue=[];
-    const btn=$('max-bot-save');
-    const prevLabel=btn?btn.textContent:'';
-    if(btn){ btn.disabled=true; btn.textContent='Сохранение…'; }
-    setMaxStatus('Отправка на сервер…');
-    try{
-      await persistMaxSettingsImmediate();
-      if(typeof rerender==='function') rerender();
-      setMaxStatus('Сохранено на сервере. Нажмите «Тестовый пост в канал».');
-    }catch(e){ setMaxStatus(String(e.message||e), true); }
-    finally{
-      if(btn){ btn.disabled=false; btn.textContent=prevLabel||'Сохранить MAX'; }
-    }
-  });
+  const setMaxStatus=(msg,isErr)=>setMaxBotStatus(msg,isErr);
+  $('max-bot-save')&&($('max-bot-save').onclick=()=>{ saveMaxBotSettingsFromForm(rerender).catch(e=>{ setMaxBotStatus(String(e.message||e), true); alert(String(e.message||e)); }); });
   $('max-bot-test')&&($('max-bot-test').onclick=async()=>{
     if(!isSuperAdmin()){ alert('Доступно только супер-админу'); return; }
     if(typeof marketingMaxTestPost!=='function'){ setMaxStatus('API недоступен', true); return; }
