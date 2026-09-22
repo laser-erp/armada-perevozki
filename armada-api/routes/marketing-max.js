@@ -12,6 +12,10 @@ export function normalizeMaxBotToken(raw) {
 export function maxBotTokenConfigError(token) {
   const t = normalizeMaxBotToken(token);
   if (!t) return 'token обязателен';
+  if (/•|\u2022/.test(t) || /[^\x21-\x7E]/.test(t)) {
+    return 'Токен содержит «•» или не-ASCII (маска UI). Сохраните настоящий access_token с dev.max.ru';
+  }
+  if (t.length < 16) return 'token слишком короткий';
   if (/^https?:\/\//i.test(t) || /max\.ru/i.test(t)) {
     return 'В «Токен» попала ссылка на канал. Нужен access_token: dev.max.ru → Чат-боты → ⋮ → Настройки → копировать';
   }
