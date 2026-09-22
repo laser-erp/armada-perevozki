@@ -16,17 +16,33 @@ function marketingMaxFromPayload(payload) {
   };
 }
 
+function wrapMaxFetchError(e) {
+  const code = e?.cause?.code || '';
+  const msg = String(e?.message || e);
+  if (msg === 'fetch failed' && /CERT|UNABLE_TO_GET_ISSUER|SELF_SIGNED/.test(String(code))) {
+    return new Error(
+      'TLS к platform-api2.max.ru: добавьте сертификат Минцифры (NODE_EXTRA_CA_CERTS). См. MAX_PODKLUCHENIE.md',
+    );
+  }
+  return e instanceof Error ? e : new Error(msg);
+}
+
 async function maxPostMessage(token, chatId, text) {
   const url = `${MAX_API}/messages?chat_id=${encodeURIComponent(chatId)}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: String(token),
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({ text: String(text || '').slice(0, 4000) }),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: String(token),
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ text: String(text || '').slice(0, 4000) }),
+    });
+  } catch (e) {
+    throw wrapMaxFetchError(e);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = (data && (data.message || data.error)) || `HTTP ${res.status}`;

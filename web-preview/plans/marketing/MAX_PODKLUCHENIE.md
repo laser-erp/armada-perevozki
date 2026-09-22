@@ -54,8 +54,9 @@
 |-------|-------------|
 | `marketingMax не настроен` | Нажмите «Сохранить MAX» ещё раз |
 | `token и chat_id обязательны` | Заполните оба поля |
-| `401` | Токен неверный или отозван |
+| `401` / `Invalid access_token` | Токен неверный или отозван — скопируйте заново с dev.max.ru и **Сохранить MAX** |
 | `403` / access | Бот не админ канала |
+| `fetch failed` / TLS | На VPS для **armada-api** нужен сертификат Минцифры: `NODE_EXTRA_CA_CERTS=/opt/armada-api/certs/russian_trusted_ca_bundle.pem` в `/etc/armada/api.env`, затем `systemctl restart armada-api`. Установка: `./scripts/install-max-api-ca-fvds.sh` |
 
 ---
 
