@@ -993,10 +993,22 @@ function marketingSocialTelegramVkHtml(){
       <p class="hint" id="social-vk-status"></p>
     </section>`;
 }
+function normalizeMaxBotTokenInput(raw){
+  let t=String(raw||'').trim();
+  if(/^bearer\s+/i.test(t)) t=t.replace(/^bearer\s+/i,'').trim();
+  return t;
+}
+function maxBotTokenFieldError(tok){
+  const t=normalizeMaxBotTokenInput(tok);
+  if(!t) return '';
+  if(/^https?:\/\//i.test(t)||/max\.ru/i.test(t)) return 'Это ссылка на канал, не токен бота. dev.max.ru → Чат-боты → ⋮ → Настройки → скопировать access_token';
+  return '';
+}
 function marketingMaxPanelHtml(){
   if(typeof migrateMarketingMax==='function') migrateMarketingMax();
   const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
   const maxTok=mm.bot&&mm.bot.token?String(mm.bot.token):'';
+  const maxTokStoredErr=maxBotTokenFieldError(maxTok);
   const maxTokMask=maxTok?('••••'+maxTok.slice(-4)):'не задан';
   const q=Array.isArray(mm.queue)?mm.queue:[];
   const pending=q.filter(p=>p&&p.status!=='published'&&p.status!=='failed').length;
@@ -1004,11 +1016,13 @@ function marketingMaxPanelHtml(){
     <section class="form-section" id="marketing-max-section">
       <h2 class="form-section-title">MAX</h2>
       <p class="cat-panel-hint">Бот и канал — автопост через <code>armada-api</code>. Пошагово: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
-      <label>Токен бота MAX</label>
-      <input id="max-bot-token" type="password" placeholder="${esc(maxTok?'Оставьте пустым, чтобы не менять':'Вставьте токен с dev.max.ru')}" autocomplete="off" style="width:100%" />
+      <label>Токен бота MAX (access_token)</label>
+      <input id="max-bot-token" type="password" placeholder="${esc(maxTok?'Оставьте пустым, чтобы не менять':'access_token с dev.max.ru — не ссылка на канал')}" autocomplete="off" style="width:100%" />
       <p class="hint">Сейчас: ${esc(maxTokMask)}</p>
+      ${maxTokStoredErr?`<p class="hint err-hint">${esc(maxTokStoredErr)}</p>`:''}
       <label>chat_id канала</label>
-      <input id="max-bot-chat-id" inputmode="numeric" placeholder="ID канала" value="${esc((mm.bot&&mm.bot.chatId)||'')}" style="width:100%" />
+      <input id="max-bot-chat-id" inputmode="numeric" placeholder="7802655283 — число из id…_biz, не URL" value="${esc((mm.bot&&mm.bot.chatId)||'')}" style="width:100%" />
+      <p class="hint">Канал <a href="https://max.ru/id7802655283_biz" target="_blank" rel="noopener">max.ru/id7802655283_biz</a> — ссылку сюда не вставляйте, только chat_id и токен бота.</p>
       <label class="check" style="margin-top:8px"><input type="checkbox" id="max-bot-enabled" ${mm.bot&&mm.bot.enabled?'checked':''}/> Автопубликация отложенных постов (tick)</label>
       <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
         <button type="button" class="primary" id="max-bot-save" style="width:auto">Сохранить MAX</button>
@@ -1024,8 +1038,10 @@ function wireMarketingMaxControls(rerender){
   $('max-bot-save')&&($('max-bot-save').onclick=async()=>{
     if(!isSuperAdmin()) return;
     if(typeof migrateMarketingMax==='function') migrateMarketingMax();
-    const tok=(($('max-bot-token')||{}).value||'').trim();
-    const chatId=(($('max-bot-chat-id')||{}).value||'').trim();
+    const tok=normalizeMaxBotTokenInput(($('max-bot-token')||{}).value||'');
+    const chatId=(($('max-bot-chat-id')||{}).value||'').trim().replace(/\D/g,'');
+    const tokErr=tok?maxBotTokenFieldError(tok):'';
+    if(tokErr){ setMaxStatus(tokErr, true); return; }
     if(tok) state.marketingMax.bot.token=tok;
     state.marketingMax.bot.chatId=chatId;
     state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);

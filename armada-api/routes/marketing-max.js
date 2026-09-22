@@ -2,6 +2,30 @@ import { fetchMainStateRecord, patchStateRecord, pbConfigured } from '../pb.js';
 
 const MAX_API = 'https://platform-api2.max.ru';
 
+/** access_token из dev.max.ru — не URL канала и не «Bearer …» в заголовке. */
+export function normalizeMaxBotToken(raw) {
+  let t = String(raw || '').trim();
+  if (/^bearer\s+/i.test(t)) t = t.replace(/^bearer\s+/i, '').trim();
+  return t;
+}
+
+export function maxBotTokenConfigError(token) {
+  const t = normalizeMaxBotToken(token);
+  if (!t) return 'token обязателен';
+  if (/^https?:\/\//i.test(t) || /max\.ru/i.test(t)) {
+    return 'В «Токен» попала ссылка на канал. Нужен access_token: dev.max.ru → Чат-боты → ⋮ → Настройки → копировать';
+  }
+  return '';
+}
+
+function clarifyMaxApiError(message) {
+  const m = String(message || '');
+  if (/invalid access_token/i.test(m)) {
+    return `${m} — проверьте токен бота (не ссылку max.ru) в dev.max.ru → Чат-боты → Настройки`;
+  }
+  return m;
+}
+
 function marketingMaxFromPayload(payload) {
   const mm = payload?.marketingMax;
   if (!mm || typeof mm !== 'object') return null;
@@ -28,13 +52,16 @@ function wrapMaxFetchError(e) {
 }
 
 async function maxPostMessage(token, chatId, text) {
+  const tok = normalizeMaxBotToken(token);
+  const tokErr = maxBotTokenConfigError(tok);
+  if (tokErr) throw new Error(tokErr);
   const url = `${MAX_API}/messages?chat_id=${encodeURIComponent(chatId)}`;
   let res;
   try {
     res = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: String(token),
+        Authorization: tok,
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
@@ -46,7 +73,7 @@ async function maxPostMessage(token, chatId, text) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = (data && (data.message || data.error)) || `HTTP ${res.status}`;
-    throw new Error(String(err));
+    throw new Error(clarifyMaxApiError(err));
   }
   const mid = data?.message_id ?? data?.messageId ?? data?.message?.body?.mid;
   return mid != null ? String(mid) : '';
