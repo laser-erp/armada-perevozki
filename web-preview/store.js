@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-21-social-tab";
+const APP_BUILD="2026-09-22-marketing-max-persist";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1796,8 +1796,30 @@ function snapshot(){
     docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
     customerPortalLeads:Array.isArray(state.customerPortalLeads)?state.customerPortalLeads:[],
     opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
+    marketingMax:typeof marketingMaxSnapshotSlice==='function'?marketingMaxSnapshotSlice():state.marketingMax,
+    marketingSocial:typeof marketingSocialSnapshotSlice==='function'?marketingSocialSnapshotSlice():state.marketingSocial,
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
+  };
+}
+function marketingMaxSnapshotSlice(){
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  return {
+    bot:{
+      token:String(mm.bot&&mm.bot.token||''),
+      chatId:String(mm.bot&&mm.bot.chatId||''),
+      enabled:!!(mm.bot&&mm.bot.enabled)
+    },
+    queue:Array.isArray(mm.queue)?mm.queue.slice():[]
+  };
+}
+function marketingSocialSnapshotSlice(){
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+  const ms=state.marketingSocial||{ telegramChannelUrl:'', vkGroupUrl:'' };
+  return {
+    telegramChannelUrl:String(ms.telegramChannelUrl||''),
+    vkGroupUrl:String(ms.vkGroupUrl||'')
   };
 }
 function scorePayload(p){
@@ -1837,6 +1859,10 @@ function applyPayload(p, opts){
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.customerPortalLeads=Array.isArray(p.customerPortalLeads)?p.customerPortalLeads.map(normalizeCustomerPortalLead).filter(Boolean):[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
+  if(p.marketingMax&&typeof p.marketingMax==='object') state.marketingMax=p.marketingMax;
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  if(p.marketingSocial&&typeof p.marketingSocial==='object') state.marketingSocial=p.marketingSocial;
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
   state.dataEpoch=Number(p.dataEpoch)||0;
   mergeAdminAuthFromRemote(p, opts);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
