@@ -994,15 +994,29 @@ function marketingSocialTelegramVkHtml(){
     </section>`;
 }
 function normalizeMaxBotTokenInput(raw){
-  let t=String(raw||'').trim();
+  let t=String(raw||'').trim().replace(/[\u200B-\u200D\uFEFF]/g,'');
   if(/^bearer\s+/i.test(t)) t=t.replace(/^bearer\s+/i,'').trim();
+  const authM=t.match(/^authorization:\s*(.+)$/i);
+  if(authM) t=authM[1].trim();
+  if((t.startsWith('"')&&t.endsWith('"'))||(t.startsWith("'")&&t.endsWith("'"))) t=t.slice(1,-1).trim();
+  if(/токен\s+(успешно\s+)?скопирован/i.test(t)) return '';
   return t;
 }
 function maxBotTokenFieldError(tok){
   const t=normalizeMaxBotTokenInput(tok);
   if(!t) return '';
-  if(/^https?:\/\//i.test(t)||/max\.ru/i.test(t)) return 'Это ссылка на канал, не токен бота. dev.max.ru → Чат-боты → ⋮ → Настройки → скопировать access_token';
+  if(/^https?:\/\//i.test(t)||/max\.ru/i.test(t)) return 'Это ссылка на канал, не токен бота. dev.max.ru → Чат-боты → ⋮ → Настройки → копировать access_token';
+  if(t.length<16) return 'Слишком короткая строка — похоже, в буфер попало не то (не текст «токен скопирован»). Выделите токен в поле на dev.max.ru и скопируйте вручную (Ctrl+C).';
   return '';
+}
+function updateMaxBotTokenPasteHint(){
+  const el=$('max-bot-token-hint');
+  const inp=$('max-bot-token');
+  if(!el||!inp) return;
+  const t=normalizeMaxBotTokenInput(inp.value||'');
+  if(!t){ el.textContent='После вставки здесь должна быть длина ~40+ символов (латиница/цифры). Если 0 — вставка не прошла или в буфере не токен.'; el.className='hint'; return; }
+  el.textContent=`В поле ${t.length} симв. · начало: ${t.slice(0,4)}…${t.slice(-3)} (токен MAX не показываем целиком)`;
+  el.className='hint ok';
 }
 function normalizeMaxChatIdInput(raw){
   let s=String(raw||'').trim();
@@ -1037,8 +1051,9 @@ function marketingMaxPanelHtml(){
       <h2 class="form-section-title">MAX</h2>
       <p class="cat-panel-hint">Бот и канал — автопост через <code>armada-api</code>. Пошагово: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
       <label>Токен бота MAX (access_token)</label>
-      <input id="max-bot-token" type="password" placeholder="${esc(maxTok?'Оставьте пустым, чтобы не менять':'access_token с dev.max.ru — не ссылка на канал')}" autocomplete="off" style="width:100%" />
-      <p class="hint">Сейчас: ${esc(maxTokMask)}</p>
+      <input id="max-bot-token" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="AAH… — выделите токен на dev.max.ru, Ctrl+C, сюда Ctrl+V" style="width:100%;font-family:monospace;font-size:.85rem" />
+      <p class="hint" id="max-bot-token-hint">Кнопка «скопировать» в MAX иногда кладёт в буфер не токен — надёжнее выделить строку токена в поле на dev.max.ru и скопировать вручную.</p>
+      <p class="hint">На сервере сейчас: ${esc(maxTokMask)}</p>
       ${maxTokStoredErr?`<p class="hint err-hint">${esc(maxTokStoredErr)}</p>`:''}
       <label>chat_id канала (не ИНН)</label>
       <input id="max-bot-chat-id" inputmode="numeric" placeholder="7802655283 — цифры из id7802655283_biz" value="${esc((mm.bot&&mm.bot.chatId)||'')}" style="width:100%" />
@@ -1081,7 +1096,7 @@ async function saveMaxBotSettingsFromForm(rerender){
   const chatErr=maxChatIdFieldError(chatRaw);
   if(chatErr){ setMaxBotStatus(chatErr, true); alert(chatErr); return; }
   if(!tokInput){
-    const msg='Вставьте access_token в поле «Токен бота» (скопированный с dev.max.ru) и нажмите «Сохранить MAX».';
+    const msg='В поле токена пусто (0 символов). Выделите сам токен на dev.max.ru (строка вида AAH…), Ctrl+C → сюда Ctrl+V. Сообщение «токен скопирован» — это не токен.';
     setMaxBotStatus(msg, true);
     alert(msg);
     return;
@@ -1109,6 +1124,13 @@ async function saveMaxBotSettingsFromForm(rerender){
 }
 function wireMarketingMaxControls(rerender){
   const setMaxStatus=(msg,isErr)=>setMaxBotStatus(msg,isErr);
+  const tokInp=$('max-bot-token');
+  if(tokInp&&!tokInp.dataset.maxTokWire){
+    tokInp.dataset.maxTokWire='1';
+    tokInp.addEventListener('input', updateMaxBotTokenPasteHint);
+    tokInp.addEventListener('paste', ()=>{ setTimeout(updateMaxBotTokenPasteHint, 0); });
+  }
+  updateMaxBotTokenPasteHint();
   $('max-bot-save')&&($('max-bot-save').onclick=()=>{ saveMaxBotSettingsFromForm(rerender).catch(e=>{ setMaxBotStatus(String(e.message||e), true); alert(String(e.message||e)); }); });
   $('max-bot-test')&&($('max-bot-test').onclick=async()=>{
     if(!isSuperAdmin()){ alert('Доступно только супер-админу'); return; }
