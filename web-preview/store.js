@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-24-doc-carrier-transport-app-v10";
+const APP_BUILD="2026-09-24-legal-compliance-v13";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -495,6 +495,73 @@ const ARMADA_SX_ORDER_VTYPES=[
   {id:'tral', label:'Трал'},
   {id:'board', label:'Бортовой'}
 ];
+/** Типовые т/габариты кузова для заявок с order.html (подбор ТС; логист может поправить). */
+const ARMADA_SX_VTYPE_DEFAULT_REQS={
+  shalanda:{reqPayloadTons:20,reqLengthM:13.6,reqWidthM:2.45,reqHeightM:2.5},
+  manipulator:{reqPayloadTons:5,reqLengthM:6,reqWidthM:2.4,reqHeightM:2.2},
+  tent:{reqPayloadTons:20,reqLengthM:13.6,reqWidthM:2.45,reqHeightM:2.7},
+  dump:{reqPayloadTons:15,reqLengthM:6.5,reqWidthM:2.3,reqHeightM:1.5},
+  tral:{reqPayloadTons:40,reqLengthM:13.6,reqWidthM:2.5,reqHeightM:0.6},
+  board:{reqPayloadTons:10,reqLengthM:6,reqWidthM:2.4,reqHeightM:2.2}
+};
+/** Высота пола кузова/платформы от дороги, м (ориентир для проверки 4 м с грузом). */
+const ARMADA_SX_VTYPE_DECK_HEIGHT_M={
+  shalanda:1.15, manipulator:0.55, tent:1.15, dump:1.2, tral:0.85, board:0.9
+};
+const ARMADA_ROAD_MAX_HEIGHT_M=4;
+const ARMADA_ROAD_HEIGHT_LIMIT_M=3.95;
+function armadaVtypeDeckHeightM(vtypeId){
+  const id=String(vtypeId||'').trim();
+  if(id&&ARMADA_SX_VTYPE_DECK_HEIGHT_M[id]>0) return ARMADA_SX_VTYPE_DECK_HEIGHT_M[id];
+  return 1;
+}
+function armadaCargoRoadHeightViolation(vtypeId, cargoHeightM){
+  const cargo=+cargoHeightM;
+  if(!(cargo>0)) return null;
+  const deck=armadaVtypeDeckHeightM(vtypeId);
+  const sum=Math.round((deck+cargo)*100)/100;
+  if(sum<=ARMADA_ROAD_HEIGHT_LIMIT_M) return null;
+  return {deck, cargo, sum, limit:ARMADA_ROAD_MAX_HEIGHT_M};
+}
+function armadaHeightRoadWarningText(v){
+  if(!v) return '';
+  const d=String(v.deck).replace('.',',');
+  const c=String(v.cargo).replace('.',',');
+  const s=String(v.sum).replace('.',',');
+  return `Пол кузова ${d} м + высота груза ${c} м = ${s} м. По приложению № 1 к Правилам перевозок грузов (постановление Правительства РФ № 2200 от 21.12.2020) допустимая высота транспортного средства с грузом — не более 4 м от поверхности дороги.\n\nВам требуется негабаритная перевозка (разрешение и маршрут). Выберите другой тип ТС, если изменение высоты груза не допустимо.`;
+}
+function applyVehicleTypeDefaultReqs(o, onlyEmpty){
+  if(!o||typeof o!=='object') return o;
+  const vtid=(Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds[0])||'';
+  const def=ARMADA_SX_VTYPE_DEFAULT_REQS[vtid]||null;
+  if(!def) return o;
+  const fill=(k,v)=>{
+    if(!(v>0)) return;
+    if(onlyEmpty && (o[k]>0)) return;
+    o[k]=v;
+  };
+  fill('reqPayloadTons', def.reqPayloadTons);
+  fill('reqLengthM', def.reqLengthM);
+  fill('reqWidthM', def.reqWidthM);
+  fill('reqHeightM', def.reqHeightM);
+  if(!o.reqBodyType&&typeof mapVtypeToBodyType==='function') o.reqBodyType=mapVtypeToBodyType(vtid);
+  if(!(o.cargoVolumeM3>0)&&o.reqLengthM>0&&o.reqWidthM>0&&o.reqHeightM>0){
+    o.cargoVolumeM3=Math.round(o.reqLengthM*o.reqWidthM*o.reqHeightM*10)/10;
+  }
+  return o;
+}
+function migrateArmadaSxOrderReqs(){
+  let changed=false;
+  (state.orders||[]).forEach(o=>{
+    if(!o||o.source!=='armada_sx') return;
+    const before=JSON.stringify([o.reqPayloadTons,o.reqLengthM,o.reqWidthM,o.reqHeightM,o.cargoVolumeM3]);
+    applyVehicleTypeDefaultReqs(o, true);
+    const after=JSON.stringify([o.reqPayloadTons,o.reqLengthM,o.reqWidthM,o.reqHeightM,o.cargoVolumeM3]);
+    if(before!==after) changed=true;
+  });
+  if(changed) bumpDataEpoch('armada-sx-req-defaults');
+  return changed;
+}
 function armadaPublicOrderUrl(opts){
   const o=opts&&typeof opts==='object'?opts:{};
   const origin=(typeof location!=='undefined'&&location.origin)?location.origin:ARMADA_LIVE_ORIGIN;
@@ -1431,6 +1498,12 @@ function normalizeCustomerPortalLead(raw){
     city,
     fleetSize,
     vehicleTypeId:vehicleTypeId||null,
+    cargoWeightKg:numOrNull(raw.cargoWeightKg),
+    cargoPlaces:numOrNull(raw.cargoPlaces),
+    cargoVolumeM3:numOrNull(raw.cargoVolumeM3),
+    reqLengthM:numOrNull(raw.reqLengthM||raw.cargoLengthM),
+    reqWidthM:numOrNull(raw.reqWidthM||raw.cargoWidthM),
+    reqHeightM:numOrNull(raw.reqHeightM||raw.cargoHeightM),
     loadAddress:String(raw.loadAddress||raw.address||'').trim()||null,
     unloadAddress:String(raw.unloadAddress||'').trim()||null,
     vehicleAt:String(raw.vehicleAt||'').trim()||null,
@@ -1708,6 +1781,19 @@ function insertPublicTransportOrder(lead, customerCo, armadaCo){
     partnerSpaceId:null,
     transportApp:null
   };
+  if(lead.cargoWeightKg>0){
+    order.cargoWeightKg=lead.cargoWeightKg;
+    order.reqPayloadTons=Math.round(lead.cargoWeightKg/10)/100;
+  }
+  if(lead.cargoPlaces>0) order.cargoPlaces=lead.cargoPlaces;
+  if(lead.cargoVolumeM3>0) order.cargoVolumeM3=lead.cargoVolumeM3;
+  if(lead.reqLengthM>0) order.reqLengthM=lead.reqLengthM;
+  if(lead.reqWidthM>0) order.reqWidthM=lead.reqWidthM;
+  if(lead.reqHeightM>0) order.reqHeightM=lead.reqHeightM;
+  applyVehicleTypeDefaultReqs(order, true);
+  if(!(order.cargoVolumeM3>0)&&order.reqLengthM>0&&order.reqWidthM>0&&order.reqHeightM>0){
+    order.cargoVolumeM3=Math.round(order.reqLengthM*order.reqWidthM*order.reqHeightM*10)/10;
+  }
   ensureRoutePoints(order);
   state.orders=state.orders||[];
   state.orders.unshift(order);
@@ -2080,6 +2166,7 @@ function applyPayload(p, opts){
   // Наоборот: заказы в списке, но выпали из смены — вернуть в смену + чат
   healOrphanOrdersIntoShifts();
   healAllOrders();
+  migrateArmadaSxOrderReqs();
   purgeCancelledOrders();
   if(typeof pruneInvoicesForDeletedOrders==='function') pruneInvoicesForDeletedOrders();
   if(typeof migrateRestoreNechaevDriver==='function') migrateRestoreNechaevDriver();

@@ -7,9 +7,10 @@ let adminDocsConstructorTpl = 'application';
 let adminDocsConstructorOrderId = '';
 
 const ADMIN_LEGAL_DOCS = [
+  { id: 'transport', n: 'Т', title: 'Заявка на транспорт (order.html)', meta: 'Условия и ПДн для клиента перевозки · не SaaS', href: 'legal-transport.html', htmlOnly: true },
   { id: 'full', n: '📦', title: 'Полный юридический пакет', meta: 'Все 7 документов одним PDF', href: 'legal-pdf/ARMADA_Legal_Package_Full.pdf' },
-  { id: '01', n: '01', title: 'Публичная оферта SaaS', meta: 'Главный договор с клиентом сервиса', href: 'legal-pdf/01-public-offer.pdf' },
-  { id: '02', n: '02', title: 'Политика конфиденциальности (152-ФЗ)', meta: 'Для сайта и портала заказчика', href: 'legal-pdf/02-privacy-policy.pdf' },
+  { id: '01', n: '01', title: 'Публичная оферта SaaS', meta: 'Главный договор с клиентом сервиса', href: 'legal-pdf/01-public-offer.pdf', htmlHref: 'legal.html#offer' },
+  { id: '02', n: '02', title: 'Политика конфиденциальности (152-ФЗ)', meta: 'Для сайта и портала заказчика', href: 'legal-pdf/02-privacy-policy.pdf', htmlHref: 'legal.html#privacy' },
   { id: '03', n: '03', title: 'Согласие на обработку ПДн', meta: 'Форма при регистрации заказчика', href: 'legal-pdf/03-pd-consent.pdf' },
   { id: '04', n: '04', title: 'Cookies / localStorage', meta: 'Техническое уведомление', href: 'legal-pdf/04-cookie-notice.pdf' },
   { id: '05', n: '05', title: 'Комиссия биржи', meta: 'Дополнение к оферте', href: 'legal-pdf/05-exchange-agency.pdf' },
@@ -56,7 +57,11 @@ function openAdminLetterBlank() {
 }
 
 function adminDocsLegalPanelHtml() {
-  const cards = ADMIN_LEGAL_DOCS.map(d => `
+  const cards = ADMIN_LEGAL_DOCS.map(d => {
+    const pdfBtn=d.htmlOnly?'':`<a class="secondary" href="${esc(d.href)}" target="_blank" rel="noopener">PDF</a>`;
+    const webHref=d.htmlHref||d.href;
+    const webLbl=d.htmlOnly?'Открыть':'На сайте';
+    return `
     <div class="adm-doc-card">
       <div>
         <span class="adm-doc-badge">${esc(d.n)}</span>
@@ -64,11 +69,13 @@ function adminDocsLegalPanelHtml() {
         <p class="meta">${esc(d.meta)}</p>
       </div>
       <div class="adm-doc-actions">
-        <a class="secondary" href="${esc(d.href)}" target="_blank" rel="noopener">PDF</a>
+        ${pdfBtn}
+        <a class="secondary" href="${esc(webHref)}" target="_blank" rel="noopener">${webLbl}</a>
       </div>
-    </div>`).join('');
-  return `<p class="cat-panel-hint">Юридические документы SaaS (оферта, ПДн). Бухгалтерские документы по заявкам — вкладка «Бух.доки».</p>
-    <p class="hint"><a href="legal.html" target="_blank" rel="noopener">legal.html</a> — страница для сайта и заказчиков.</p>
+    </div>`;
+  }).join('');
+  return `<p class="cat-panel-hint">SaaS — оферта и ПДн платформы. Заявка на <strong>перевозку</strong> — <a href="legal-transport.html" target="_blank" rel="noopener">legal-transport.html</a> (отдельно от SaaS). PDF в <code>legal-pdf/</code> — после юриста.</p>
+    <p class="hint"><a href="legal.html" target="_blank" rel="noopener">legal.html</a> · <a href="legal-transport.html" target="_blank" rel="noopener">legal-transport.html</a></p>
     ${cards}`;
 }
 

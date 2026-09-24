@@ -65,12 +65,29 @@
               <input type="time" id="order-time" name="time" required />
             </label>
           </div>
-          <label>Что перевозим / комментарий <span class="req">*</span>
-            <textarea id="order-comment" name="comment" rows="3" required placeholder="Груз, тоннаж, особенности погрузки…"></textarea>
+          <label id="order-weight-label">Вес груза, кг <span class="req" id="order-weight-req">*</span>
+            <input type="number" id="order-cargo-weight" name="cargoWeightKg" min="1" step="1" inputmode="numeric" placeholder="Например 5000" />
           </label>
+          <fieldset class="landing-order-cargo-dims">
+            <legend>Габариты груза, м <span class="landing-optional">по желанию</span></legend>
+            <div class="landing-order-dim-row">
+              <label>Длина <input type="text" id="order-cargo-l" inputmode="decimal" placeholder="6" autocomplete="off" /></label>
+              <label>Ширина <input type="text" id="order-cargo-w" inputmode="decimal" placeholder="2,4" autocomplete="off" /></label>
+              <label>Высота <input type="text" id="order-cargo-h" inputmode="decimal" placeholder="2" autocomplete="off" /></label>
+            </div>
+            <p class="landing-hero-note">Помогает подобрать ТС и объём без уточняющего звонка.</p>
+          </fieldset>
+          <label>Что перевозим / комментарий <span class="req">*</span>
+            <textarea id="order-comment" name="comment" rows="3" required placeholder="Что везём, упаковка, особенности погрузки…"></textarea>
+          </label>
+          <div class="landing-order-law-warn" id="order-height-law-warn" hidden role="alert"></div>
           <p class="landing-lead-status" id="order-status" hidden></p>
+          <label class="landing-order-legal-check">
+            <input type="checkbox" id="order-legal-agree" required />
+            <span>Принимаю <a href="/legal-transport.html" target="_blank" rel="noopener">условия заявки на транспорт</a> и <a href="/legal-transport.html#privacy" target="_blank" rel="noopener">обработку данных для этой заявки</a>.</span>
+          </label>
           <button type="submit" class="landing-btn landing-btn-primary" id="order-submit">Отправить заявку</button>
-          <p class="landing-order-legal">Нажимая «Отправить», вы соглашаетесь на обработку данных для связи по заявке. <a href="/legal.html#privacy">Политика ПДн</a></p>
+          <p class="landing-order-legal landing-order-legal-muted">Программа для логистов — отдельно: <a href="/legal.html">оферта SaaS</a>.</p>
         </form>
 
         <div class="landing-lead-success landing-order-success" id="order-success" hidden>
@@ -92,6 +109,6 @@
     <p>ООО «Армада» · app.armada.sx</p>
   </footer>
 
-  <script src="/order-public.js?v=2026-09-24-order-public-sync-v7"></script>
+  <script src="/order-public.js?v=2026-09-24-legal-compliance-v13"></script>
 </body>
 </html>

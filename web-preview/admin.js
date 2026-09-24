@@ -4291,6 +4291,7 @@ function adminCustomerPartyType(o){
 }
 function adminHydrateOrderReqsForDisplay(o){
   if(!o) return o;
+  if(typeof applyVehicleTypeDefaultReqs==='function') applyVehicleTypeDefaultReqs(o, true);
   if(!o.reqBodyType&&Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds[0]&&typeof mapVtypeToBodyType==='function'){
     o.reqBodyType=mapVtypeToBodyType(o.vehicleTypeIds[0]);
   }
@@ -4341,6 +4342,27 @@ function adminRecalcCargoVolumeFromDims(){
   if(!volEl||!(l>0&&w>0&&h>0)) return;
   volEl.value=String(Math.round(l*w*h*10)/10);
 }
+function adminOrderRoadHeightWarnHtml(o){
+  if(typeof armadaCargoRoadHeightViolation!=='function'||typeof armadaHeightRoadWarningText!=='function') return '';
+  const ids=Array.isArray(o&&o.vehicleTypeIds)?o.vehicleTypeIds:[];
+  const vtid=ids[0]||'';
+  let cargoH=0;
+  if(o&&o.source==='armada_sx'&&o.reqHeightM>0) cargoH=+o.reqHeightM;
+  else if(Array.isArray(o&&o.cargoItems)&&o.cargoItems.length){
+    o.cargoItems.forEach(it=>{
+      const h=+(it&&(it.reqHeightM||it.heightM)||0);
+      if(h>cargoH) cargoH=h;
+    });
+  }
+  if(!(cargoH>0)&&o&&o.reqHeightM>0) cargoH=+o.reqHeightM;
+  const v=armadaCargoRoadHeightViolation(vtid, cargoH);
+  if(!v) return '';
+  const parts=armadaHeightRoadWarningText(v).split('\n\n');
+  return `<section class="form-section admin-order-law-warn" role="alert">
+    <p class="form-section-hint" style="color:var(--warn,#b45309)"><strong>${esc(parts[0]||'')}</strong></p>
+    ${parts[1]?`<p class="form-section-hint">${esc(parts[1])}</p>`:''}
+  </section>`;
+}
 function adminOrderDetailHeroHtml(o){
   const route=typeof routeText==='function'?routeText(o):'—';
   const when=o.vehicleAt&&typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(o.vehicleAt):'—';
@@ -4372,7 +4394,9 @@ function adminOrderDetailAssignSectionHtml(o){
   const openTrip=!o.startOdometer&&!o.departOdometer&&!looksClosedOrder(o)&&!o.cancelledAt;
   if(!canFleet||!openTrip||!firmId) return '';
   const drvList=fleetDriversForCompany(firmId);
-  const vehList=(fleetVehiclesForCompany(firmId)||[]).filter(v=>typeof vehicleFitsOrder!=='function'||vehicleFitsOrder(v,o));
+  const platePack=typeof adminFleetPlateOptionsForOrder==='function'
+    ?adminFleetPlateOptionsForOrder(o, firmId, {bookedPlate:String(o.bookedPlate||'').trim()})
+    :{html:'', emptyHint:'', allCount:0, okCount:0};
   const curDrv=typeof orderDocDriverName==='function'?orderDocDriverName(o):String(o.driverName||'');
   let curPlate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'');
   if(curPlate==='—'||curPlate==='-') curPlate='';
@@ -4381,12 +4405,16 @@ function adminOrderDetailAssignSectionHtml(o){
   const drvField=drvList.length
     ?`<select id="d-driver-name"><option value=""${!drvSelected?' selected':''}>Назначьте водителя</option>${drvList.map(d=>`<option value="${esc(d.name)}"${samePersonName(d.name,drvVal)?' selected':''}>${esc(d.name)}</option>`).join('')}</select>`
     :`<input id="d-driver-name" value="${esc(drvVal)}" placeholder="Назначьте водителя" />`;
-  const plateField=vehList.length
-    ?`<select id="d-vehicle-plate"><option value=""${!curPlate?' selected':''}>Выберите ТС</option>${vehList.map(v=>`<option value="${esc(v.plate)}"${curPlate&&v.plate===curPlate?' selected':''}>${esc(v.plate)}</option>`).join('')}</select>`
-    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Выберите ТС" />`;
+  const plateField=platePack.html
+    ?`<select id="d-vehicle-plate"><option value=""${!curPlate?' selected':''}>Выберите ТС</option>${platePack.html}</select>`
+    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Выберите ТС" list="d-vehicle-plate-list" autocomplete="off" /><datalist id="d-vehicle-plate-list"></datalist>`;
+  const plateHint=platePack.allCount&&platePack.okCount===0&&platePack.emptyHint
+    ?`<p class="form-section-hint">${esc(platePack.emptyHint)}</p>`
+    :(!platePack.allCount?`<p class="form-section-hint">${esc(platePack.emptyHint||'В парке нет авто — Справочники → Авто.')}</p>`:'');
   return `<section class="form-section admin-order-assign">
     <h2 class="form-section-title">Назначение парка</h2>
     <p class="form-section-hint">Выберите водителя и авто — номер появится в карточке и у водителя в «Мои заявки».</p>
+    ${plateHint}
     <div class="form-fields">
       <div class="form-pair">
         <div><label for="d-driver-name">Водитель</label>${drvField}</div>
@@ -4556,6 +4584,7 @@ function openDetail(id){
   $('detail-form').innerHTML=`
     <div class="cust-form-blocks admin-order-blocks">
     ${adminOrderDetailHeroHtml(o)}
+    ${adminOrderRoadHeightWarnHtml(o)}
     ${assignSection}
     ${svodkaSection}
     ${portalOpen?'':docsBlock}
