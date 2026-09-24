@@ -38,20 +38,23 @@
 
 | Тема | Файл | Символы / зона |
 |------|------|----------------|
+| **Агент закон** — НПА, экспедиция, негабарит, «4 м» | `legal/INDEX.md`, `legal/MANIFEST.yaml`, `.cursor/skills/legal-legislation-verify/` | в чате: «Агент закон: …»; PDF в `legal/npa/` |
 | Данные, sync, push, заказы в state | `web-preview/store.js` | `persist`, `initCloudSync`, `appendCustomerPortalLead`, `insertPublicTransportOrder`, `financeForOrder` |
 | Общая логика, тариф, канбан, heal inbox | `web-preview/app.js` | `isLogistInboxOrder`, `adminKanbanColumnKey`, `healPhantomPortalTrip`, `suggestCustomerOrderPrice`, `clientRate` |
 | Кабинет логиста `/a` | `web-preview/admin.js` | `openDetail`, `renderAdmin`, `adminOrderDetailAssignSectionHtml`, канбан |
 | Карточка заявки (цены, блоки) | `web-preview/admin.js` | `openDetail` (~4500+), `ADMIN_LOGIST_CLIENT_MARKUP`, `adminOrderLogistPricePair` |
 | Публичная форма | `web-preview/order-public.js`, `order.html` | `validate`, submit, `initCloudSync` |
 | Кабинет заказчика | `web-preview/customer.js` | заявки, черновики, чат |
-| Водитель | `web-preview/driver.js` | смена, выезд, закрытие |
-| Печать: заявка, договор‑заявка, акт | `web-preview/order-documents.js` | `buildOrderDocBody`, `printOrderDoc`, `orderPaymentDocLinesForAudience` (`customer` / `carrier`), `orderDocCustomerAmount`, `orderDocCarrierAmount` |
+| Водитель | `web-preview/driver.js` | смена, выезд, закрытие; создание заказа → `transportDocMode` (`transportDocMode` шаг) |
+| Бумага / ЭТрН в заказе | `web-preview/app.js` | `orderTransportDocMode`, `orderTransportDocUsesEtrn` |
+| Печать: заявка, ТН бланк, договор‑заявка, акт | `web-preview/order-documents.js` | `buildOrderDocBody`, `printOrderDoc` (`paperTn`), `orderPaymentDocLinesForAudience` (`customer` / `carrier`), `orderDocCustomerAmount`, `orderDocCarrierAmount` |
 | Км по дороге (авто) | `web-preview/store.js`, `web-preview/app.js` | `estimateRouteGeometry`, `refreshCreateRouteKm`; в карточке — поле `#d-route-km` (ручное / позже авто) |
 | Шаблоны документов | `web-preview/doc-templates.js` | `buildOrderDocFromTemplate`, `{{order.*}}` |
-| ЭТрН | `web-preview/etrn.js` | T1–T4, подпись |
+| ЭТрН | `web-preview/etrn.js` | По закону T1–T4; выезд со стоянки без T1; T1+T2 до выезда с грузом; `orderEtrnReadyForLeaveLoading` |
 | Service Worker | `web-preview/sw.js` | кэш, `swResponseOrError` |
 | Стили | `web-preview/styles.css` | по классам из grep |
 | API на VPS | `armada-api/server.mjs` | health, state, marketing |
+| QA: тест-учётки Армада (ТЕСТ) | `scripts/qa-armada-test-seed-console.js` | `armadaQaSeedTestAccounts()` в консоли /a |
 | Деплой staging/prod | `scripts/deploy-staging-fvds.sh`, `scripts/deploy-fvds.sh` | `scripts/STAGING.md` |
 | **Git: одна ветка** | `scripts/GIT_ONE_BRANCH.md`, `scripts/SYNC_FROM_GITHUB.md` | ветка **`cursor/dev-f6d2`** |
 | Правила агента | `AGENTS.md`, `.cursor/rules/*.mdc` | `00-core.mdc`, `entry-routing.mdc`, … |

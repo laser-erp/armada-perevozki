@@ -7,6 +7,7 @@ const DOC_STATUSES=[
 ];
 const DOC_KINDS=[
   {id:'application', title:'Заявка на перевозку', hint:'Основные данные заявки для заказчика'},
+  {id:'paperTn', title:'Транспортная накладная (бланк)', hint:'Печать на погрузке, если у клиента нет своей ТН'},
   {id:'transportApp', title:'Договор‑заявка', hint:'Печать: для заказчика или для перевозчика (разные суммы)'},
   {id:'act', title:'Акт выполненных работ', hint:'После выполнения / закрытия заказа'}
 ];
@@ -486,6 +487,47 @@ function buildOrderDocBody(kind, o, opts){
       <h1>${esc(title)}</h1>
       <div class="muted">к заявке № ${esc(num)} · ${esc(when)}</div>
     </div>`;
+  if(kind==='paperTn'){
+    const shipper=orderShipperParty(o);
+    const consignee=orderConsigneeParty(o);
+    const executor=o.executorType==='partner'?carrier:own;
+    const driver=orderDocDriverName(o);
+    const plate=orderDocVehiclePlate(o);
+    const carrierResp=orderCarrierResponsibleLine(o);
+    const deadline=orderTransportDeadlineLine(o);
+    const tnHead=`
+    <div class="doc-head">
+      <div class="brand">АРМАДА</div>
+      <h1>Транспортная накладная</h1>
+      <div class="muted">к заявке № ${esc(num)} · ${esc(when)} · черновик для печати</div>
+    </div>`;
+    return `${tnHead}
+      <p class="muted"><strong>Не юридический документ.</strong> Заполните и проверьте реквизиты перед печатью. Подписи и печати сторон — на бумаге на погрузке и выгрузке (форма по ПП РФ № 2200, прил. № 5).</p>
+      <h2>1. Грузоотправитель</h2>
+      ${partyLinesWithPhoneHtml(shipper, shipper.phone)}
+      <h2>2. Грузополучатель</h2>
+      ${partyLinesWithPhoneHtml(consignee, consignee.phone)}
+      <h2>3. Перевозчик</h2>
+      ${partyLinesWithPhoneHtml(executor, '')}
+      ${carrierResp?`<p>Ответственный перевозчика: ${esc(carrierResp)}</p>`:''}
+      <h2>4. Заказчик перевозки</h2>
+      ${partyLinesWithPhoneHtml(customer, formatPhone(o.contactPhone||''), contact!=='—'?`Контакт: ${contact}`:'')}
+      <h2>5. Сведения о грузе</h2>
+      ${orderCargoDocHtml(o)}
+      <h2>6. Маршрут и сроки</h2>
+      <p>Подача ТС: <strong>${esc(o.vehicleAt?dateTime(o.vehicleAt):'—')}</strong></p>
+      ${deadline?`<p>${esc(deadline)}</p>`:''}
+      <table><thead><tr><th>Точка</th><th>Адрес</th></tr></thead><tbody>${orderDocRouteRowsDetailed(o)}</tbody></table>
+      <h2>7. Транспорт и водитель</h2>
+      <p>Водитель: <strong>${esc(driver)}</strong> · ТС: <strong>${esc(plate)}</strong></p>
+      ${orderVehicleReqDocHtml(o)}
+      <h2>8. Подписи на погрузке / выгрузке</h2>
+      ${orderDocSignBlock(o, 'Грузоотправитель / сдал', 'Водитель / принял', o.contactName||shipper.name, driver)}
+      <div class="sign" style="margin-top:18px">
+        <div>Грузополучатель / принял: _______________ / ${esc(consignee.name||'_______________')}</div>
+        <div>Водитель / сдал: _______________ / ${esc(driver)}</div>
+      </div>`;
+  }
   if(kind==='application'){
     const shipper=orderShipperParty(o);
     const consignee=orderConsigneeParty(o);
@@ -679,9 +721,13 @@ function orderDocsSectionHtml(o){
       </div>
     </div>`;
   }).join('');
+  const modeHint=(typeof orderTransportDocMode==='function'&&orderTransportDocMode(o)==='paper_tn')
+    ?'<p class="form-section-hint">Водитель выбрал <strong>бумажную ТН</strong> — печать бланка ниже (логист дополняет грузоотправителя и груз в карточке).</p>'
+    :'';
   return `<section class="form-section" id="order-docs-section">
     <h2 class="form-section-title">Документы</h2>
     <p class="form-section-hint">Печать или PDF через диалог браузера. Статус сохраняется в заявке.</p>
+    ${modeHint}
     <div class="docs-list">${rows}</div>
   </section>`;
 }

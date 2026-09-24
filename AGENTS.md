@@ -6,6 +6,10 @@
 
 **`.cursor/rules/00-core.mdc`** — не ломать, две проверки, стоп после задачи, staging/прод, токены.
 
+**`.cursor/rules/agree-before-code.mdc`** — **правки в коде только после вашего «ок»** (сначала план, потом diff).
+
+**Агент закон** (skill `legal-legislation-verify`): `.cursor/skills/legal-legislation-verify/` — НПА, формулировки UI, каталог **`legal/`** (не заменяет юриста). В чате: «Агент закон: …».
+
 Задачи от Евгения: **`КАК_ПИСАТЬ_ЗАДАЧИ.md`** (он не программист).
 
 ## Прод и staging
@@ -20,6 +24,8 @@
 
 | Файл | Когда |
 |------|--------|
+| `agree-before-code.mdc` | всегда — согласование перед правками |
+| `legal-verify-agent.mdc` | **Агент закон** — ПДД/НПА, экспедиция, габариты, тексты «по закону» |
 | `investigate-before-fix.mdc` | данные, справочники, sync |
 | `entry-routing.mdc` | boot, `/`, `/a` `/v` `/z` |
 | `customer-chat-mobile.mdc` | чат заказчика |

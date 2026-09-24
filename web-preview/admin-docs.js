@@ -240,7 +240,7 @@ function adminDocsLettersPanelHtml() {
       <div class="adm-doc-actions"><button type="button" class="primary" id="adm-letter-blank">Открыть</button></div>
     </div>
     <h3 class="adm-docs-subtitle">Письма оператору подписи (КЭП / ПЭП)</h3>
-    <p class="cat-panel-hint">Подключение подписи для ЭТrН — заказчик (T1), перевозчик (T2), водитель (T3/T4).</p>
+    <p class="cat-panel-hint">Подключение подписи для ЭТрН — грузоотправитель (T1), перевозчик (T2/T4), грузополучатель (T3), водитель ПЭП (T2/T4).</p>
     ${signOps || '<div class="empty">Нет шаблонов</div>'}
     ${konturBlock}`;
 }

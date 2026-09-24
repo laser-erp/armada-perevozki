@@ -2427,6 +2427,9 @@ function applyOwnFleetAssignment(o, driver, plate, firmId, opts){
 }
 function commitOwnFleetAssignment(o){
   if(!o) return;
+  if(typeof ensureEtrnForOrder==='function'&&typeof orderTransportDocUsesEtrn==='function'&&orderTransportDocUsesEtrn(o)){
+    ensureEtrnForOrder(o, {silent:true});
+  }
   upsertOrder(o);
   if(typeof persistOrderAssignmentImmediate==='function'){
     persistOrderAssignmentImmediate().then(r=>{
@@ -2473,6 +2476,11 @@ function adminBulkAssignSelectedOrders(){
     } else skipped.push(o.sequentialNumber);
   });
   if(assigned){
+    okOrders.forEach(o=>{
+      if(typeof ensureEtrnForOrder==='function'&&typeof orderTransportDocUsesEtrn==='function'&&orderTransportDocUsesEtrn(o)){
+        ensureEtrnForOrder(o, {silent:true});
+      }
+    });
     if(typeof persistOrderAssignmentImmediate==='function') persistOrderAssignmentImmediate();
     else if(typeof persist==='function') persist();
   }
@@ -2537,7 +2545,8 @@ function orderStatusClass(o){
   if(looksClosedOrder(o)) return 'closed';
   if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) return 'inbox';
   if(o.onExchange && o.startOdometer==null) return 'exchange';
-  if(o.startOdometer!=null || o.departOdometer!=null) return 'progress';
+  if(o.startOdometer!=null||o.arrivedAt) return 'progress';
+  if(o.departOdometer!=null) return 'progress';
   return '';
 }
 function adminOrderCardHtml(o){
@@ -2568,6 +2577,7 @@ function adminOrderCardHtml(o){
       ?`<button type="button" class="secondary cancel-order" data-id="${o.id}">Отменить</button>`:''
   ].filter(Boolean).join('');
   const etrnBadge=typeof orderEtrnBadgeHtml==='function'?orderEtrnBadgeHtml(o):'';
+  const etrnCheck=typeof orderEtrnChecklistHtml==='function'?orderEtrnChecklistHtml(o):'';
   const etrnAct=typeof adminOrderEtrnActionHtml==='function'?adminOrderEtrnActionHtml(o):'';
   return `<div class="order-card${onEx?' exchange-mark':''}" data-order-card="${esc(o.id)}">
     <div class="order-card-head">
@@ -2576,6 +2586,7 @@ function adminOrderCardHtml(o){
       ${etrnBadge}
     </div>
     <div class="order-status ${stCls}">${esc(st)}</div>
+    ${etrnCheck}
     <p>${esc(dateTime(o.createdAt))}</p>
     ${ownerLine}
     ${o.ownCompanyName?`<p style="color:var(--text);font-weight:600">От: ${esc(o.ownCompanyName)}</p>`:''}
@@ -3454,6 +3465,7 @@ function adminKanbanCardHtml(o){
     badges.push('<span class="kanban-badge">Срочно</span>');
   }
   const etrn=typeof orderEtrnBadgeHtml==='function'?orderEtrnBadgeHtml(o):'';
+  const etrnCheck=typeof orderEtrnChecklistHtml==='function'?orderEtrnChecklistHtml(o,{compact:true}):'';
   const price=o.priceForClient?`${fmt(o.priceForClient)} ₽`:o.pricePending?'цена уточняется':'';
   const when=o.vehicleAt&&typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(o.vehicleAt):dateTime(o.createdAt);
   const drv=(o.driverName&&o.driverName!=='Диспетчер'&&o.driverName!=='Биржа'&&o.driverName!=='—')
@@ -3479,6 +3491,7 @@ function adminKanbanCardHtml(o){
     <p class="kanban-card-route">${esc(routeText(o))}</p>
     <p class="kanban-card-meta">${esc(when)}${price?` · ${esc(price)}`:''}</p>
     ${drv}
+    ${etrnCheck}
     ${badges.length||etrn?`<div class="kanban-card-badges">${badges.join('')}${etrn||''}</div>`:''}
     ${adminKanbanAssignBlockHtml(o)}
     ${adminKanbanReassignBlockHtml(o)}
@@ -3511,7 +3524,7 @@ function renderAdminKanbanBoard(orders){
     </section>`;
   }).join('');
   return `<div class="orders-board-head">
-    <p class="cat-panel-hint">Канбан: «Входящие» — назначьте водителя и ТС. «Подписать T2» — после T1 грузоотправителя (нужна КЭП; без КЭП — бумажная накладная, не ссылка T1). «Карточка» — детали и ставки.</p>
+    <p class="cat-panel-hint">Канбан: T1 не блокирует выезд со стоянки. T1+T2 — до выезда с грузом с погрузки. T3 — грузополучатель, T4 — выдача перевозчиком.</p>
   </div>
   <div class="kanban-board-wrap"><div class="kanban-board">${cols}</div></div>`;
 }
@@ -3632,7 +3645,7 @@ function renderAdmin(){
       : (state.adminFilter||'all')==='etrn-wait-customer'
       ? 'Нет заказов, где ждём подпись заказчика (T1).'
       : (state.adminFilter||'all')==='etrn-wait-driver'
-      ? 'Нет заказов, где ждём подпись водителя (T3/T4).'
+      ? 'Нет заказов, где ждём подпись водителя/перевозчика (T2/T4).'
       : isSuperAdmin()
       ? 'Пока нет заявок в выбранном кабинете. Переключите «Все кабинеты» или фирму с заказами (например «ИП Нечаев»).'
       : 'Пока нет заявок. Пройдите чеклист в «Настройки кабинета» и нажмите + Заказ';
@@ -4554,7 +4567,7 @@ function openDetail(id){
     </section>`:'';
   const tariffWrapOpen=portalOpen?'<details class="admin-order-advanced"><summary class="admin-order-advanced-summary">Тариф и итоги (для закрытых рейсов)</summary>':'';
   const tariffWrapClose=portalOpen?'</details>':'';
-  const docsBlock=`${orderDocsSectionHtml(o)}${orderEtrnSectionHtml(o)}`;
+  const docsBlock=`${typeof orderEtrnChecklistHtml==='function'?orderEtrnChecklistHtml(o):''}${orderDocsSectionHtml(o)}${orderEtrnSectionHtml(o)}`;
   const driverFieldsFallback=assignSection?'':`<div class="form-pair">
           <div>
             <label for="d-driver-name">Водитель</label>

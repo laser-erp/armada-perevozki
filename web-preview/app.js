@@ -2753,6 +2753,21 @@ function canCloseOrderMessage(order){
   if(!orderAfterLoadingArrival(order)){
     return `Сначала «Выехал», затем «Прибыл на загрузку» с одометром (№${order.sequentialNumber||'—'}).`;
   }
+  // Погрузка и выгрузка — разные статусы
+  if(typeof orderLifecycleStatusIssues==='function'){
+    const bad=orderLifecycleStatusIssues(order).filter(msg=>{
+      if(msg.indexOf('На погрузке:')===0) return true;
+      if(msg.indexOf('В работе без T2')===0) return true;
+      if(msg.indexOf('В работе: нет T1')===0) return true;
+      if(msg.indexOf('Прибытие на выгрузку без погрузки')===0) return true;
+      if(msg.indexOf('T2 подписан раньше T1')===0) return true;
+      return false;
+    });
+    if(bad.length) return 'Статусы не сходятся: '+bad[0];
+  }
+  if(typeof orderLeftLoading==='function'&&!orderLeftLoading(order)){
+    return `Сначала «Выехал с погрузки» (№${order.sequentialNumber||'—'}) — затем прибытие на выгрузку.`;
+  }
   return null;
 }
 /** Заказ текущего водителя уже на загрузке / в работе (не чужие!). */
@@ -2845,6 +2860,16 @@ function upsertOrder(order){
   persist();
 }
 function orderById(id){ return id?(state.orders||[]).find(o=>o.id===id)||null:null; }
+/** Бумажная ТН или ЭТрН (заказы водителя); без поля — ЭТрН, как у заявок логиста. */
+function orderTransportDocMode(o){
+  const m=String(o&&o.transportDocMode||'').trim();
+  if(m==='paper_tn'||m==='etrn') return m;
+  return 'etrn';
+}
+function orderTransportDocUsesEtrn(o){ return orderTransportDocMode(o)!=='paper_tn'; }
+function orderTransportDocModeLabel(o){
+  return orderTransportDocMode(o)==='paper_tn'?'Бумажная ТН':'ЭТрН';
+}
 /** Заказ, который сейчас закрываем (по id из draft, иначе открытый в работе). */
 function orderBeingClosed(){
   const pinned=orderById(state.draft&&state.draft.closingOrderId);
@@ -3059,7 +3084,9 @@ function statusText(o){
   if(o.onExchange && o.startOdometer==null) return 'На бирже (ищем партнёра)';
   if(o.startOdometer!=null && o.staysLoadedOvernight) return 'В работе · до выгрузки';
   if(typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(o)) return 'На выгрузке · ждём закрытие';
-  if(o.startOdometer!=null) return 'В работе';
+  // После погрузки: «В работе» только когда выехал с грузом на выгрузку
+  if(o.startOdometer!=null && typeof orderLeftLoading==='function'&&orderLeftLoading(o)) return 'В работе';
+  if(o.startOdometer!=null||o.arrivedAt) return 'На погрузке';
   if(o.departOdometer!=null) return 'В пути · ждём загрузку';
   if(o.executorType==='partner' && o.transportApp) return 'Партнёр везёт';
   if(!o.onExchange && o.startOdometer==null && o.departOdometer==null && waitingLogistDriver(o.driverName)){
@@ -3074,7 +3101,8 @@ function adminKanbanColumnKey(o){
   if(looksClosedOrder(o)) return 'closed';
   if(o.onExchange&&o.startOdometer==null) return 'exchange';
   if(typeof isLogistInboxOrder==='function'&&isLogistInboxOrder(o)) return 'inbox';
-  if(o.startOdometer!=null||o.departOdometer!=null) return 'progress';
+  // «В пути на погрузку» остаётся в «Назначен»; «В работе» — с прибытия на погрузку
+  if(o.startOdometer!=null||o.arrivedAt) return 'progress';
   return 'assigned';
 }
 /** Снять все связи заказа перед удалением из state.orders. */
@@ -3247,14 +3275,34 @@ function canStartAssignedMessage(){
   if(inProgressOrder()) return 'Сначала закройте текущий заказ';
   return null;
 }
-/** Для выезда: нельзя, если уже в пути или в работе */
+/** Для выезда со стоянки: смена+ЕТО; ЭТрН T1 не блокирует; плюс проверка статусов */
 function canDepartMessage(){
   const gate=canStartAssignedMessage();
   if(gate) return gate;
   if(enRouteOrder()) return 'Сначала отметьте прибытие на загрузку по текущему заказу';
+  const assignedId=state.draft&&state.draft.assignedId;
+  const order=assignedId?(state.orders||[]).find(o=>o.id===assignedId):null;
+  if(order&&typeof orderLifecycleStatusIssues==='function'){
+    const pre=orderLifecycleStatusIssues(order).filter(msg=>{
+      // до выезда не ругаем на шаги погрузки/выгрузки
+      if(msg.indexOf('На погрузке')===0) return false;
+      if(msg.indexOf('На выгрузке')===0) return false;
+      if(msg.indexOf('В работе')===0) return false;
+      if(msg.indexOf('В пути на погрузку:')===0) return false;
+      if(msg.indexOf('Прибытие на погрузку')===0) return false;
+      if(msg.indexOf('Прибытие на выгрузку')===0) return false;
+      if(msg.indexOf('Одометр выгрузки')===0) return false;
+      return true;
+    });
+    if(pre.length) return 'Статусы не сходятся: '+pre[0];
+  }
+  if(order&&typeof orderEtrnReadyForDepart==='function'){
+    const et=orderEtrnReadyForDepart(order);
+    if(!et.ok) return et.message;
+  }
   return null;
 }
-/** Для прибытия: смена+ЕТО; чужие «в работе» не блокируют. */
+/** Для прибытия: смена+ЕТО; чужие «в работе» не блокируют; статусы ЭТрН с шагом. */
 function canArriveMessage(orderId){
   const shift=syncOpenShiftRuntime();
   if(!shift && !state.shift) return 'Сначала откройте смену';
@@ -3263,6 +3311,14 @@ function canArriveMessage(orderId){
   }
   state.step='done';
   const target=orderId?(state.orders||[]).find(o=>o.id===orderId):null;
+  if(target && typeof orderLifecycleStatusIssues==='function'){
+    const bad=orderLifecycleStatusIssues(target).filter(msg=>
+      msg.indexOf('В пути на погрузку: нет T1')===0 ||
+      msg.indexOf('T2 подписан раньше T1')===0 ||
+      msg.indexOf('Прибытие на погрузку без выезда')===0
+    );
+    if(bad.length) return 'Статусы не сходятся: '+bad[0];
+  }
   // Свой заказ «в пути» — как раз то, на что жмём «Прибыл»
   if(target && orderBelongsToDriver(target) && orderEnRouteToLoading(target) && !target.closedAt){
     return null;
