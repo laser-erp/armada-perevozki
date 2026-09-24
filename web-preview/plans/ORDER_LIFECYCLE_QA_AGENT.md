@@ -2,7 +2,8 @@
 
 Технические подшаги, файлы, коммиты. Пользователь читает [ORDER_LIFECYCLE_QA_RUN.md](ORDER_LIFECYCLE_QA_RUN.md).
 
-**Изоляция файлов:** [ORDER_LIFECYCLE_QA_ISOLATION.md](ORDER_LIFECYCLE_QA_ISOLATION.md)
+**Изоляция файлов:** [ORDER_LIFECYCLE_QA_ISOLATION.md](ORDER_LIFECYCLE_QA_ISOLATION.md)  
+**Handoff локальному агенту:** [ORDER_LIFECYCLE_QA_LOCAL_AGENT.md](ORDER_LIFECYCLE_QA_LOCAL_AGENT.md)
 
 ---
 

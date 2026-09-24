@@ -2,7 +2,7 @@
 
 **Старт:** 24.09.2026 · **Окружение:** **staging** `https://staging.app.armada.sx` (prod без order-fix до «ок»)  
 **База:** чистим/удаляем **только заказы space ООО «Армада»**. Нечаев восстановлен из бэкапа 24.09.  
-**План:** [ORDER_LIFECYCLE_QA_PLAN.md](ORDER_LIFECYCLE_QA_PLAN.md)
+**План:** [ORDER_LIFECYCLE_QA_PLAN.md](ORDER_LIFECYCLE_QA_PLAN.md) · **Локальный агент (handoff):** [ORDER_LIFECYCLE_QA_LOCAL_AGENT.md](ORDER_LIFECYCLE_QA_LOCAL_AGENT.md)
 
 | Шаг | Статус | Замок | Кто проверяет |
 |-----|--------|-------|---------------|
