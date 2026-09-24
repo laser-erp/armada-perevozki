@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-24-order-public-sync-v5";
+const APP_BUILD="2026-09-24-order-public-sync-v6";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2045,8 +2045,8 @@ function applyPayload(p, opts){
   if(!('orders' in p) && state.shifts.length && !state.orders.length){
     state.orders=stripCancelledFromOrders(state.shifts.flatMap(s=>s.orders||[]));
   }
-  if(keepShifts) mergeLocalShifts(keepShifts);
-  if(keepOrders) mergeLocalOrders(keepOrders);
+  if(keepShifts && typeof mergeLocalShifts==='function') mergeLocalShifts(keepShifts);
+  if(keepOrders && typeof mergeLocalOrders==='function') mergeLocalOrders(keepOrders);
   state.orders=stripCancelledFromOrders(state.orders);
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
