@@ -3511,7 +3511,7 @@ function renderAdminKanbanBoard(orders){
     </section>`;
   }).join('');
   return `<div class="orders-board-head">
-    <p class="cat-panel-hint">Канбан: «Входящие» — назначьте водителя и ТС. «Подписать T2» загорается после T1 грузоотправителя. «Карточка» — детали и ставки.</p>
+    <p class="cat-panel-hint">Канбан: «Входящие» — назначьте водителя и ТС. «Подписать T2» — после T1 грузоотправителя (нужна КЭП; без КЭП — бумажная накладная, не ссылка T1). «Карточка» — детали и ставки.</p>
   </div>
   <div class="kanban-board-wrap"><div class="kanban-board">${cols}</div></div>`;
 }
@@ -4721,7 +4721,7 @@ function openDetail(id){
           <span>Грузоотправитель = заказчик</span>
         </label>
         <div id="d-shipper-fields" class="cust-shipper-fields" ${o.shipperSameAsCustomer!==false?'hidden':''}>
-          <p class="hint">Грузоотправитель подписывает T1 в ЭТрН на погрузке.</p>
+          <p class="hint">Грузоотправитель подписывает T1 в ЭТрН на погрузке (КЭП через оператора). Без КЭП — бумажная ТН на погрузке; ссылка T1 в приложении не заменяет бумагу и не НЭП.</p>
           <div class="form-pair">
             <div>
               <label for="d-shipper-name">Грузоотправитель</label>

@@ -2118,7 +2118,7 @@ function customerSubmitSuccessMessage(invoice, order){
   html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (вкладка «Бух доки»)':'будет подготовлен'}</li>`;
   html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
   html+=`<li><strong>Акт</strong> — после закрытия заказа</li>`;
-  html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке${order&&order.shipperSameAsCustomer===false?' (отдельная ссылка отправится грузоотправителю)':''}, QR у водителя в пути</li>`;
+  html+=`<li><strong>ЭТрН</strong> — T1 на погрузке (КЭП грузоотправителя)${order&&order.shipperSameAsCustomer===false?' · ссылка только грузоотправителю с КЭП':''}; без КЭП — бумажная ТН. QR у водителя в пути</li>`;
   html+=`</ul>`;
   if(invoice){
     html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}" data-order-id="${esc(order&&order.id||'')}">Открыть счёт №${esc(invoice.number)}</button>`;
@@ -3084,7 +3084,7 @@ function customerChatBotPrompt(stepId){
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Введите адрес внизу или выберите из недавних.';
   if(stepId==='unload') return '<strong>Куда везём?</strong> Введите адрес внизу или выберите из недавних.';
   if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — введите внизу или выберите из недавних.';
-  if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> Грузоотправитель подписывает ЭТрН (T1) на погрузке. Заказчик перевозки может быть другим.';
+  if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> T1 в ЭТрН на погрузке — с КЭП. Заказчик перевозки может быть другим. Без КЭП — бумажная накладная на погрузке, не ссылка в приложении.';
   if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Введите внизу, выберите из недавних или «пропустить».';
   if(stepId==='body') return '<strong>Какой кузов?</strong> Нажмите тип ниже или напишите внизу: тент, реф…';
   if(stepId==='loadMethod'){

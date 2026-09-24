@@ -12,6 +12,13 @@ function etrnTitulWhenHint(key){
   };
   return m[key]||'';
 }
+/** Не юр.консультация: T1 в ЭТрН ≠ бумажная ТН и ≠ НЭП по ссылке. */
+function etrnT1KepHintHtml(compact){
+  const t=compact
+    ? 'T1 в ЭТрН — только КЭП грузоотправителя. Без КЭП — бумажная накладная на погрузке; ссылка T1 это не заменяет.'
+    : 'Подпись T1 в электронной ЭТрН — усиленной подписью (КЭП) грузоотправителя через оператора. Если у грузоотправителя нет КЭП, на погрузке оформляют бумажную транспортную накладную; ссылка в приложении не заменяет бумагу и не считается «электронным бланком с НЭП».';
+  return `<p class="hint etrn-t1-kep-hint">${t}</p>`;
+}
 function etrnTitulStatusLabel(st){
   if(st==='signed') return 'подписан';
   if(st==='error') return 'ошибка';
@@ -169,19 +176,22 @@ function orderEtrnSectionHtml(o){
   const head=et
     ? `<p class="hint">Оператор: <strong>${esc(et.operatorId||epd||'—')}</strong> · ID: ${esc(et.externalId||'—')}${et.sandbox?' · sandbox':''} · ${esc(et.status||'draft')}</p>
        ${et.createdAt?`<p class="hint">Создан: ${esc(dateTime(et.createdAt))}</p>`:''}
-       ${tituls?`<div class="calc" style="margin-top:8px">${tituls}</div>`:''}
+       ${tituls?`<div class="calc etrn-tituls-panel">${tituls}</div>`:''}
        ${et.lastError?`<p class="error">${esc(et.lastError)}</p>`:''}`
     : `<p class="hint">ЭТрН создаётся при выезде (QR для инспектора в пути). Подписи: T1–T3 на погрузке, T4 на выгрузке.${epd?` Оператор: ${esc(epd)}.`:''}</p>`;
   const printBtn=et?`<button type="button" class="secondary" id="etrn-print" data-order-id="${esc(o.id)}">Печать / PDF</button>`:'';
   return `
-    <section class="form-section" id="etrn-section">
+    <section class="form-section etrn-admin-section" id="etrn-section">
       <h2 class="form-section-title">ЭТрН</h2>
-      ${banner}
-      ${head}
-      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
-        <button type="button" class="secondary" id="etrn-create" ${et?'disabled':''}>${et?'ЭТрН создан':'Создать ЭТрН'}</button>
-        ${printBtn}
-        <span class="hint" id="etrn-status"></span>
+      <div class="etrn-section-body">
+        ${etrnT1KepHintHtml(true)}
+        ${banner}
+        ${head}
+        <div class="row etrn-section-actions">
+          <button type="button" class="secondary" id="etrn-create" ${et?'disabled':''}>${et?'ЭТрН создан':'Создать ЭТрН'}</button>
+          ${printBtn}
+          <span class="hint" id="etrn-status"></span>
+        </div>
       </div>
     </section>`;
 }
@@ -457,7 +467,8 @@ function customerEtrnT1SignHtml(o){
   if(customerCanSignEtrnT1(o)){
     return `<div class="cust-etrn-t1-block">
       <strong>ЭТрН · T1 · грузоотправитель</strong>
-      <p class="hint">Водитель на погрузке — подтвердите отгрузку (${st}).</p>
+      <p class="hint">Водитель на погрузке — подтвердите отгрузку (${st}). Нужна КЭП грузоотправителя.</p>
+      ${etrnT1KepHintHtml(true)}
       <button type="button" class="primary cust-etrn-t1-sign" data-order-id="${esc(o.id)}">Подписать T1</button>
     </div>`;
   }
@@ -465,7 +476,8 @@ function customerEtrnT1SignHtml(o){
   const shipLine=ship.name?`${esc(ship.name)}${ship.phone?` · ${esc(formatPhone(ship.phone))}`:''}`:'грузоотправитель';
   return `<div class="cust-etrn-t1-block">
     <strong>ЭТрН · T1 · грузоотправитель</strong>
-    <p class="hint">Грузоотправитель: ${shipLine}. Отправьте ссылку для подписи T1 (${st}).</p>
+    <p class="hint">Грузоотправитель: ${shipLine}. Отправьте ссылку для подписи T1 (${st}) — только если у него есть КЭП.</p>
+    ${etrnT1KepHintHtml(true)}
     <div class="cust-etrn-t1-actions">
       <button type="button" class="secondary cust-etrn-shipper-copy" data-order-id="${esc(o.id)}" data-url="${esc(url)}">Скопировать ссылку</button>
       ${ship.phone?`<a class="secondary cust-etrn-shipper-sms" href="sms:${encodeURIComponent(formatPhone(ship.phone))}?body=${encodeURIComponent(shipperEtrnT1SmsText(o))}">SMS грузоотправителю</a>`:''}
