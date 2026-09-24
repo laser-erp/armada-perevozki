@@ -1,6 +1,6 @@
 /* order.html — публичная заявка с armada.sx (CSP: без inline) */
 (function () {
-  var BUILD = '2026-09-24-order-public-sync-v6';
+  var BUILD = '2026-09-24-order-public-sync-v7';
   var form = null;
   var statusEl = null;
   var selectedVtype = '';
@@ -152,12 +152,22 @@
     };
   }
 
+  function isRentalOnlyVtype() {
+    return selectedVtype === 'shalanda' || selectedVtype === 'manipulator';
+  }
+
   function validate(data) {
     if (!selectedVtype) return 'Выберите тип транспорта';
     if (!data.company) return 'Укажите компанию или ФИО';
     if (!data.phone || data.phone.replace(/\D/g, '').length < 10) return 'Укажите телефон для связи';
-    if (!data.loadAddress) return 'Укажите адрес подачи';
-    if (!data.vehicleAt) return 'Укажите дату подачи';
+    if (!data.contactName) return 'Укажите контактное лицо';
+    if (!data.loadAddress) return isRentalOnlyVtype() ? 'Укажите адрес подачи' : 'Укажите адрес загрузки';
+    if (!isRentalOnlyVtype() && !data.unloadAddress) return 'Укажите адрес выгрузки';
+    var d = (qs('order-date') && qs('order-date').value || '').trim();
+    var t = (qs('order-time') && qs('order-time').value || '').trim();
+    if (!d) return 'Укажите дату подачи';
+    if (!t) return 'Укажите время подачи (выберите из списка)';
+    if (!data.comment) return 'Опишите груз или особенности (комментарий)';
     return '';
   }
 
