@@ -1,5 +1,5 @@
 /* АРМАДА PWA — JS/CSS network-first (не держать сломанный кэш) */
-const CACHE = 'armada-shell-v82';
+const CACHE = 'armada-shell-v83';
 function swResponseOrError(promise, fallbackUrl){
   return Promise.resolve(promise).then(r=>{
     if(r) return r;

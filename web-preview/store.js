@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-24-order-public-sync-v3";
+const APP_BUILD="2026-09-24-order-public-sync-v4";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1516,6 +1516,67 @@ async function marketingMaxPublishScheduled(){
 function companyOwnRole(c){
   return !!(c&&Array.isArray(c.roles)&&c.roles.includes('own'));
 }
+function companyHasRole(c, role){
+  return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role));
+}
+function contactPhone(contact){
+  if(!contact) return '';
+  if(typeof contact==='string') return formatPhone(contact);
+  if(contact.phone) return formatPhone(contact.phone);
+  const ph=(contact.phones||[])[0];
+  if(ph) return formatPhone(ph.number||ph.phone||ph);
+  return '';
+}
+function driverPercent(name, companyId){
+  const list=state.drivers||[];
+  if(companyId){
+    const hit=list.find(d=>samePersonName(d.name,name) && d.companyId===companyId);
+    if(hit) return hit.salaryPercent??30;
+  }
+  return (list.find(d=>samePersonName(d.name,name))||{salaryPercent:30}).salaryPercent;
+}
+/** Минимальный upsert для order.html (полная версия в app.js на /a). */
+function upsertCompany(raw){
+  if(!raw) return null;
+  const name=String(raw.name||'').trim();
+  if(!name) return null;
+  const spaceId=raw.spaceId||null;
+  const roles=Array.isArray(raw.roles)?raw.roles.slice():[];
+  const idx=(state.companies||[]).findIndex(x=>{
+    if(raw.id && x.id===raw.id) return true;
+    return String(x.name).toLowerCase()===name.toLowerCase() && (x.spaceId||null)===(spaceId||null);
+  });
+  const base={
+    name,
+    roles,
+    note:String(raw.note||'').trim(),
+    contacts:raw.contacts||[],
+    phones:raw.phones||[],
+    loadingAddresses:raw.loadingAddresses||[],
+    unloadingAddresses:raw.unloadingAddresses||[],
+    vehicles:raw.vehicles||[],
+    drivers:raw.drivers||[],
+    spaceId,
+    inn:raw.inn||'',
+    ogrn:raw.ogrn||'',
+    kpp:raw.kpp||'',
+    address:raw.address||''
+  };
+  if(idx>=0){
+    const prev=state.companies[idx];
+    const merged=Object.assign({}, prev, base, {
+      id:prev.id,
+      roles:[...new Set([...(prev.roles||[]), ...roles])]
+    });
+    state.companies[idx]=merged;
+    state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+    return merged;
+  }
+  const created=Object.assign({id:raw.id||uuid()}, base);
+  state.companies.push(created);
+  state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  return created;
+}
 function findArmadaLogistCompany(){
   if(typeof migrateSpaces==='function') migrateSpaces();
   const companies=state.companies||[];
@@ -1989,22 +2050,22 @@ function applyPayload(p, opts){
   state.orders=stripCancelledFromOrders(state.orders);
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
-    if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
+    if(o.driverPercent==null && typeof driverPercent==='function') o.driverPercent=driverPercent(o.driverName||DRIVER);
     ensureRoutePoints(o);
   });
-  migrateCompanies();
-  migrateAdmins();
+  if(typeof migrateCompanies==='function') migrateCompanies();
+  if(typeof migrateAdmins==='function') migrateAdmins();
   migrateDriverOwners();
   migrateSpaces();
   if(typeof migrateBilling==='function') migrateBilling();
-  migrateDriverOrderOwners();
+  if(typeof migrateDriverOrderOwners==='function') migrateDriverOrderOwners();
   if(typeof migrateRepairOrderOwnersBySpace==='function') migrateRepairOrderOwnersBySpace();
-  migrateShiftOwners();
+  if(typeof migrateShiftOwners==='function') migrateShiftOwners();
   migrateDriverPins();
   migrateCompanyFinance();
-  healVehicleOdometersFromShifts();
-  ensureManufacturerServiceIntervals();
-  migrateEtoFromMessages();
+  if(typeof healVehicleOdometersFromShifts==='function') healVehicleOdometersFromShifts();
+  if(typeof ensureManufacturerServiceIntervals==='function') ensureManufacturerServiceIntervals();
+  if(typeof migrateEtoFromMessages==='function') migrateEtoFromMessages();
   // Заказы только в смене (потерялись из state.orders) — поднять в общий список
   (state.shifts||[]).forEach(s=>{
     (s.orders||[]).forEach(o=>{

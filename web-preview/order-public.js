@@ -1,6 +1,6 @@
 /* order.html — публичная заявка с armada.sx (CSP: без inline) */
 (function () {
-  var BUILD = '2026-09-24-order-public-sync-v3';
+  var BUILD = '2026-09-24-order-public-sync-v4';
   var form = null;
   var statusEl = null;
   var selectedVtype = '';
