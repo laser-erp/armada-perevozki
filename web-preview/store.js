@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-22-max-token-ascii";
+const APP_BUILD="2026-09-24-order-public-sync-v3";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1018,6 +1018,85 @@ function uuid(){
     return v.toString(16);
   });
 }
+/** Единый формат: +7XXXXXXXXXX — order.html грузит только store.js (без app.js). */
+function formatPhone(raw){
+  let d=String(raw??'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.length===11 && d[0]==='8') d='7'+d.slice(1);
+  if(d.length===10) d='7'+d;
+  if(d.length===11 && d[0]==='7') return '+'+d;
+  if(d.length>11 && d[0]==='7') return '+'+d.slice(0,11);
+  if(d.length>=10) return '+7'+d.slice(-10);
+  return '';
+}
+function numOrNull(raw){
+  const n=+String(raw??'').replace(',','.');
+  return (n>0 && !Number.isNaN(n))?n:null;
+}
+/** Минимальная нормализация ТС для initCloudSync на публичной форме. */
+function normalizeFleetVehicle(v){
+  if(!v) return null;
+  const plate=String(v.plate||'').trim();
+  if(!plate) return null;
+  return {
+    id:v.id||uuid(),
+    plate,
+    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
+    makeModel:String(v.makeModel||'').trim(),
+    payloadTons:numOrNull(v.payloadTons),
+    bodyLengthM:numOrNull(v.bodyLengthM),
+    bodyWidthM:numOrNull(v.bodyWidthM),
+    bodyHeightM:numOrNull(v.bodyHeightM),
+    bodyTypeId:v.bodyTypeId?String(v.bodyTypeId).trim():null,
+    hasTrailer:!!v.hasTrailer,
+    trailerPlate:v.hasTrailer?String(v.trailerPlate||'').trim():'',
+    spaceId:v.spaceId||null,
+    companyId:v.companyId||null,
+    companyName:v.companyName||null,
+    currentOdometer:numOrNull(v.currentOdometer),
+    stsSeries:String(v.stsSeries||'').trim(),
+    stsNumber:String(v.stsNumber||'').trim(),
+    stsPhoto:v.stsPhoto||null,
+    assignedDriverIds:(Array.isArray(v.assignedDriverIds)?v.assignedDriverIds:[]).map(String).filter(Boolean),
+    crewName:String(v.crewName||'').trim(),
+    serviceIntervals:Array.isArray(v.serviceIntervals)?v.serviceIntervals:[],
+    maintenanceLogs:Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]
+  };
+}
+function normalizeAllPhones(){
+  let changed=false;
+  const fix=v=>{
+    const f=formatPhone(v);
+    if(!v && !f) return v||'';
+    if(f && f!==v){ changed=true; return f; }
+    return v||'';
+  };
+  (state.drivers||[]).forEach(d=>{
+    const next=fix(d.phone);
+    if(next!==(d.phone||'')) d.phone=next;
+  });
+  (state.companies||[]).forEach(c=>{
+    (c.phones||[]).forEach(p=>{ if(p && p.number!=null){ const n=fix(p.number); if(n!==p.number) p.number=n; } });
+    (c.contacts||[]).forEach(ct=>{
+      (ct.phones||[]).forEach(p=>{ if(p && p.number!=null){ const n=fix(p.number); if(n!==p.number) p.number=n; } });
+      if(ct.phone){ const n=fix(ct.phone); if(n!==ct.phone){ ct.phone=n; changed=true; } }
+    });
+    (c.drivers||[]).forEach(d=>{
+      const n=fix(d.phone); if(n!==(d.phone||'')) d.phone=n;
+    });
+  });
+  (state.orders||[]).forEach(o=>{
+    if(o.contactPhone!=null){ const n=fix(o.contactPhone); if(n!==o.contactPhone){ o.contactPhone=n; changed=true; } }
+    if(o.loadingContactPhone!=null){ const n=fix(o.loadingContactPhone); if(n!==o.loadingContactPhone){ o.loadingContactPhone=n; changed=true; } }
+    if(o.unloadingContactPhone!=null){ const n=fix(o.unloadingContactPhone); if(n!==o.unloadingContactPhone){ o.unloadingContactPhone=n; changed=true; } }
+    if(o.driverPhone!=null){ const n=fix(o.driverPhone); if(n!==o.driverPhone){ o.driverPhone=n; changed=true; } }
+    if(o.transportApp && o.transportApp.driverPhone!=null){
+      const n=fix(o.transportApp.driverPhone);
+      if(n!==o.transportApp.driverPhone){ o.transportApp.driverPhone=n; changed=true; }
+    }
+  });
+  return changed;
+}
 /** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
 const PB_BASE=(function(){
   const h=location.hostname;
@@ -1609,8 +1688,26 @@ async function appendCustomerPortalLead(raw){
   }
   bumpDataEpoch('customer-portal-lead');
   persistLocalOnly();
+  if(rec.kind==='transport'&&!rec.orderId){
+    return {ok:false, error:'Не удалось создать заказ — проверьте связь с сервером и справочник ООО «Армада»'};
+  }
   try{
-    await persist();
+    if(typeof persistCustomerPortalOrderImmediate==='function'){
+      const push=await persistCustomerPortalOrderImmediate();
+      if(push&&push.ok===false&&push.offline){
+        return {
+          ok:true,
+          id:rec.id,
+          offline:true,
+          orderId:rec.orderId||null,
+          orderNumber:order&&order.sequentialNumber||null,
+          customerId:rec.customerId||null
+        };
+      }
+      if(push&&push.ok===false) throw new Error('Не удалось сохранить на сервер');
+    }else{
+      await persist();
+    }
     return {
       ok:true,
       id:rec.id,
@@ -2032,6 +2129,9 @@ function normalizeSpace(s){
     routeTemplates,
     createdAt:s.createdAt||new Date().toISOString()
   };
+}
+function findCompanyById(id){
+  return (state.companies||[]).find(c=>c.id===id)||null;
 }
 function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
 function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
