@@ -26,6 +26,12 @@
 | `mobile-performance.mdc` | UI в `web-preview/` |
 | `00-never-break.mdc` / `do-not-break-verify.mdc` | детальный чеклист |
 
+## Тесты и удаления данных
+
+- База **общая** (Армада, Нечаев, МБН). **E2E, QA, массовое удаление заказов** — **только кабинет ООО «Армада»** (`spaceId` фирмы «Армада», `findArmadaLogistCompany()`).
+- **Не удалять** и не «чистить» заказы **ИП Нечаев**, **МБН** и других space без **отдельного явного** указания.
+- Скрипты/API: фильтр `order.spaceId === <armada>` (или `ownCompanyId` Армады). Не «все orders в payload».
+
 ## Облако
 
 Одна строка + `scripts/CLOUD_AGENT_*.md`. Цикл: **правка → staging → ждём «ок» → prod**.

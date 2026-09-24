@@ -2,6 +2,9 @@
 /**
  * Удалить заказ(ы) по sequentialNumber на сервере + tombstone + перенумерация 1…N.
  * Usage: ADMIN_PIN=7830 node scripts/delete-order-by-seq.mjs 9
+ *
+ * QA / тесты: удалять только заказы кабинета ООО «Армада» (spaceId). Не трогать Нечаев, МБН.
+ * Перед массовым удалением — фильтр по spaceId в скрипте или отдельная команда от Евгения.
  */
 const API = process.env.ARMADA_API || 'https://app.armada.sx/armada-api';
 const PIN = process.env.ADMIN_PIN || '7830';
