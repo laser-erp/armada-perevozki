@@ -53,6 +53,7 @@
 | Стили | `web-preview/styles.css` | по классам из grep |
 | API на VPS | `armada-api/server.mjs` | health, state, marketing |
 | Деплой staging/prod | `scripts/deploy-staging-fvds.sh`, `scripts/deploy-fvds.sh` | `scripts/STAGING.md` |
+| **Git: одна ветка** | `scripts/GIT_ONE_BRANCH.md`, `scripts/SYNC_FROM_GITHUB.md` | ветка **`cursor/dev-f6d2`** |
 | Правила агента | `AGENTS.md`, `.cursor/rules/*.mdc` | `00-core.mdc`, `entry-routing.mdc`, … |
 | **Карта навигации** | `AGENT_NAVIGATION.md` | §3 таблица, §6 правило дополнения |
 

@@ -1,34 +1,41 @@
 # Обновить локальную папку с GitHub
 
-Для **локального Cursor** на вашем компьютере (Windows, PowerShell).
+Windows · PowerShell · **локальный Cursor**.
 
-## Обычно — только main
+## Всегда одна рабочая ветка
+
+**`cursor/dev-f6d2`** — здесь и облачный, и локальный агент. Новую ветку на каждую правку **не** создаём.
 
 ```powershell
 cd C:\путь\к\armada-perevozki
+git fetch origin
+git checkout cursor/dev-f6d2
+git pull origin cursor/dev-f6d2
+```
+
+Проверка: `git branch --show-current` → `cursor/dev-f6d2`.
+
+## main
+
+Только стабильное / уже принятое. Обновить main:
+
+```powershell
 git fetch origin
 git checkout main
 git pull origin main
 ```
 
-Последний коммит: `git log -1 --oneline` — должен совпадать с GitHub → ветка **main**.
-
-## Если нужны правки формы order / QA (ещё не в main)
-
-```powershell
-git fetch origin
-git checkout cursor/order-public-sync-f6d2
-git pull origin cursor/order-public-sync-f6d2
-```
+Перед работой снова переключитесь на **`cursor/dev-f6d2`**.
 
 ## Не использовать
 
-- **`cursor/customer-draft-fix-f6d2`** — ветки на GitHub **нет** (PR #128 закрыт, fix уже в **main** через PR #131).
+- **`cursor/customer-draft-fix-f6d2`** — удалена; fix в **main** (PR #131).
+- Старые **`cursor/*-f6d2`** feature-ветки — только если вы сами попросите.
 
 ## Задача локальному агенту
 
-«`git fetch origin`, перейди на **main**, `git pull origin main`. Для order — ветка **cursor/order-public-sync-f6d2**. Не checkout customer-draft-fix.»
+«`git fetch`, **`git checkout cursor/dev-f6d2`**, **`git pull`**, правки, **`git push origin cursor/dev-f6d2`**. Не создавать новую ветку. См. `scripts/GIT_ONE_BRANCH.md`.»
 
 ## Карта кода
 
-Корень репо: **`AGENT_NAVIGATION.md`**.
+**`AGENT_NAVIGATION.md`**
