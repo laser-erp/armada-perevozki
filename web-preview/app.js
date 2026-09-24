@@ -3019,6 +3019,18 @@ function healPhantomPortalClose(o){
 function healFalseClosedInboxOrder(o){
   return healPhantomPortalClose(o);
 }
+/** Заявка с портала / order.html без назначения — одометр «выезд» с sync/shift ложный → во «Входящие». */
+function healPhantomPortalTrip(o){
+  if(!o||o.cancelledAt) return false;
+  if(typeof orderKeepsLogist!=='function'||!orderKeepsLogist(o)) return false;
+  if(typeof orderHasDriverVehicleAssigned==='function'&&orderHasDriverVehicleAssigned(o)) return false;
+  if(o.startOdometer==null&&o.departOdometer==null) return false;
+  let changed=false;
+  ['startOdometer','departOdometer','departAt','arrivedAt','endOdometer','loadedKm','emptyKmAfter','closedAt','endAt','parkingAt'].forEach(k=>{
+    if(o[k]!=null&&o[k]!==''){ o[k]=null; changed=true; }
+  });
+  return changed;
+}
 function logistMargin(o){
   const client=+o.priceForClient||0;
   const carr=+o.priceForCarrier||0;
@@ -3058,6 +3070,7 @@ function statusText(o){
 /** Колонка канбана логиста (одна на заказ). */
 function adminKanbanColumnKey(o){
   if(!o||o.cancelledAt||(o.closedAt&&o.cancelReason)) return null;
+  if(typeof healPhantomPortalTrip==='function') healPhantomPortalTrip(o);
   if(looksClosedOrder(o)) return 'closed';
   if(o.onExchange&&o.startOdometer==null) return 'exchange';
   if(typeof isLogistInboxOrder==='function'&&isLogistInboxOrder(o)) return 'inbox';
@@ -4300,6 +4313,7 @@ function reconcileOrdersAfterSync(){
   let changed=false;
   if(typeof migrateRepairOrderOwnersBySpace==='function'&&migrateRepairOrderOwnersBySpace()) changed=true;
   (state.orders||[]).forEach(o=>{
+    if(typeof healPhantomPortalTrip==='function'&&healPhantomPortalTrip(o)) changed=true;
     if(typeof healPortalInboxDriverStub==='function'&&healPortalInboxDriverStub(o)) changed=true;
     if(healOrderDriverAssignment(o)) changed=true;
     if(typeof healPhantomPortalClose==='function'&&healPhantomPortalClose(o)) changed=true;
