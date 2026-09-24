@@ -6,6 +6,8 @@ Windows · PowerShell · **локальный Cursor**.
 
 **`cursor/dev-f6d2`** — здесь и облачный, и локальный агент. Новую ветку на каждую правку **не** создаём.
 
+Команды — **только из папки проекта** (где есть `.git`), не из `C:\Users\Жека`. Проще: открыть проект в Cursor и попросить агента выполнить git (см. `ORDER_LIFECYCLE_QA_COPY_LINE.txt`).
+
 ```powershell
 cd C:\путь\к\armada-perevozki
 git fetch origin

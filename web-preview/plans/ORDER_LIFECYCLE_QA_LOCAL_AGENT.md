@@ -35,7 +35,9 @@
 ### Git — одна ветка (локальный = облако)
 
 - Рабочая ветка: **`cursor/dev-f6d2`** только.
-- Старт: `git fetch` → `checkout cursor/dev-f6d2` → `pull`.
+- **Первое действие агента:** git **из корня открытой папки Cursor** (где лежат `AGENTS.md` и `.git`), **не** из `C:\Users\Жека`:
+  `git fetch origin && git checkout cursor/dev-f6d2 && git pull origin cursor/dev-f6d2`
+  Если `fatal: not a git repository` — сказать Евгению открыть в Cursor папку **`armada-perevozki`**, не домашний каталог.
 - Push: **только** если Евгений сказал «пуш» / «коммить» (облако по умолчанию пушит в dev-ветку).
 - **Не** создавать `cursor/новая-задача-f6d2` на каждую правку.
 - Доки: `scripts/GIT_ONE_BRANCH.md`, `scripts/SYNC_FROM_GITHUB.md`, `scripts/CLOUD_AGENT_GIT.md`.
@@ -174,4 +176,4 @@ chmod +x scripts/*.sh
 
 ## Задание одной строкой (вставка в чат локального агента)
 
-«Прочитай `web-preview/plans/ORDER_LIFECYCLE_QA_LOCAL_AGENT.md` и `ORDER_LIFECYCLE_QA_RUN.md`. Работаем на **staging**, заявка **№9**, **ЗАМОК шаг 1**, сейчас **шаг 2** (карточка/цены/печать) — помоги Евгению проверить или чини по его замечаниям. Ветка **`cursor/dev-f6d2`**, соблюдай **ЗАМКИ**, QA только **Армада**, prod не трогать. После его **ДА** на шаг 2 — записать ЗАМОК и перейти к шагу 3.»
+См. **`ORDER_LIFECYCLE_QA_COPY_LINE.txt`** в корне репо — одна строка для копирования.
