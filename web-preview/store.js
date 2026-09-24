@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-24-order-public-sync-v4";
+const APP_BUILD="2026-09-24-order-public-sync-v5";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -2031,7 +2031,7 @@ function applyPayload(p, opts){
   if(p.marketingSocial&&typeof p.marketingSocial==='object') state.marketingSocial=p.marketingSocial;
   if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
   state.dataEpoch=Number(p.dataEpoch)||0;
-  mergeAdminAuthFromRemote(p, opts);
+  if(typeof mergeAdminAuthFromRemote==='function') mergeAdminAuthFromRemote(p, opts);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -3362,14 +3362,14 @@ async function persistAdminPinImmediate(){
   persistLocalOnly();
   if(navigator.onLine===false){
     syncStatus='local';
-    updateDriverNetHint();
+    if(typeof updateDriverNetHint==='function') updateDriverNetHint();
     if(typeof updateSyncHint==='function') updateSyncHint();
     return { ok:false, offline:true };
   }
   clearTimeout(persistTimer);
   persistTimer=null;
   syncStatus='syncing';
-  updateDriverNetHint();
+  if(typeof updateDriverNetHint==='function') updateDriverNetHint();
   if(typeof updateSyncHint==='function') updateSyncHint();
   let lastErr=null;
   for(let attempt=0; attempt<3; attempt++){
