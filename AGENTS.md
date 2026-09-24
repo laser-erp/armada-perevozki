@@ -39,7 +39,7 @@
 
 ## Облако
 
-Одна строка + `scripts/CLOUD_AGENT_*.md`. Цикл: **правка → staging → ждём «ок» → prod**.
+Одна строка + `scripts/CLOUD_AGENT_*.md`. Локальный ПК: **`scripts/SYNC_FROM_GITHUB.md`**. Цикл: **правка → staging → ждём «ок» → prod**.
 
 ## Не открывать без запроса
 
