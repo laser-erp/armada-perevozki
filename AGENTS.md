@@ -11,8 +11,10 @@
 ## Прод и staging
 
 - Live: https://app.armada.sx/ · staging: https://staging.app.armada.sx/
-- Прод `deploy-fvds.sh` / push — только по явной просьбе («пуш», «деплой»).
-- Staging: `scripts/STAGING.md`, `deploy-staging-fvds.sh`.
+- **Новые правки (UI/скрипты): всегда сначала только staging** — `./scripts/deploy-staging-fvds.sh` (или ветка). **Prod не трогать.**
+- **Prod** — `./scripts/deploy-fvds.sh` **только после проверки Евгением на staging** и явных слов: «деплоим на прод», «ок на prod», «выложи на прод» (не путать с «пуш» в git).
+- Push в git — отдельно, только по просьбе «пуш» / «коммить».
+- Staging: `scripts/STAGING.md`. Пароль VPS в окружении агента: секрет **`root`** (или `FVDS_SSH_PASSWORD`) — **не спрашивать**, staging деплоить сразу после правок.
 
 ## Правила по теме (не always — подключаются при работе с файлами)
 
@@ -24,9 +26,15 @@
 | `mobile-performance.mdc` | UI в `web-preview/` |
 | `00-never-break.mdc` / `do-not-break-verify.mdc` | детальный чеклист |
 
+## Тесты и удаления данных
+
+- База **общая** (Армада, Нечаев, МБН). **E2E, QA, массовое удаление заказов** — **только кабинет ООО «Армада»** (`spaceId` фирмы «Армада», `findArmadaLogistCompany()`).
+- **Не удалять** и не «чистить» заказы **ИП Нечаев**, **МБН** и других space без **отдельного явного** указания.
+- Скрипты/API: фильтр `order.spaceId === <armada>` (или `ownCompanyId` Армады). Не «все orders в payload».
+
 ## Облако
 
-Одна строка + `scripts/CLOUD_AGENT_*.md`. Прод не трогать без просьбы.
+Одна строка + `scripts/CLOUD_AGENT_*.md`. Цикл: **правка → staging → ждём «ок» → prod**.
 
 ## Не открывать без запроса
 

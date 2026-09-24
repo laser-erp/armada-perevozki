@@ -1,6 +1,6 @@
 /* order.html — публичная заявка с armada.sx (CSP: без inline) */
 (function () {
-  var BUILD = '2026-08-31-armada-logist4317';
+  var BUILD = '2026-09-24-order-public-sync-v6';
   var form = null;
   var statusEl = null;
   var selectedVtype = '';
@@ -188,8 +188,12 @@
     try {
       await ensureStore();
       if (typeof appendCustomerPortalLead !== 'function') throw new Error('sync');
+      if (typeof initCloudSync === 'function') await initCloudSync();
       var res = await appendCustomerPortalLead(data);
       if (!res || !res.ok) throw new Error((res && res.error) || 'Не удалось сохранить');
+      if (!res.duplicate && !res.orderId) {
+        throw new Error('Заявка не попала в диспетчерскую (нет ООО «Армада» в базе)');
+      }
       if (form) form.hidden = true;
       var okBox = qs('order-success');
       if (okBox) {

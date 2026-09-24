@@ -20,15 +20,17 @@ DNS **A** `staging.app.armada.sx` → `176.12.67.35`. Caddy выдаёт **Let's
 1. Проверка: `powershell -File scripts/check-vps-access.ps1`
 2. **GitHub Actions:** репо → **Actions** → **Deploy staging (VPS)** → Run workflow (нужен секрет `FVDS_SSH_PASSWORD` в Settings → Secrets).
 
-## Обычный цикл
+## Обычный цикл (обязательный для агента)
 
 | Шаг | Команда |
 |-----|---------|
-| Выложить ветку на staging | `./scripts/deploy-staging-fvds.sh имя-ветки` |
-| Выложить то, что в папке сейчас | `./scripts/deploy-staging-fvds.sh` |
+| 1. После правок в коде | **Только staging** — `./scripts/deploy-staging-fvds.sh` или `./scripts/deploy-staging-fvds.sh имя-ветки` |
+| 2. Евгений проверяет | https://staging.app.armada.sx/ (оранжевая полоса) |
+| 3. На прод | **Только** когда сказал «деплоим на прод» / «ок на prod» → `./scripts/deploy-fvds.sh` |
 | Сравнить файлы с staging | `./scripts/verify-staging-sync.sh` |
-| На прод (только после «ок») | `./scripts/deploy-fvds.sh` |
+
+**Запрет:** `deploy-fvds.sh` без явного разрешения после проверки на staging.
 
 ## Облачный агент
 
-Правило: **merge в `main` и прод** — только после проверки на staging и явного «ок» от Евгения.
+Правило: **новые правки → staging всегда; prod и merge в `main` на live** — только после проверки на staging и явного «ок» от Евгения.
