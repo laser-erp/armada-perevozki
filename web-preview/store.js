@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-19-cust-status-await-assign";
+const APP_BUILD="2026-09-22-max-token-ascii";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -1210,12 +1210,12 @@ function routeText(o){
 }
 const $ = id => document.getElementById(id);
 function show(id){
-  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
+  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-social-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
     if(typeof clearEntrySkin==='function') clearEntrySkin();
   }
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-social-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
@@ -1368,6 +1368,71 @@ function normalizeCustomerPortalLead(raw){
 }
 function migrateCustomerPortalLeads(){
   state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
+  migrateTransportLeadsInboxOnly();
+}
+/** Заявка transport → заказ во «Входящие»; pilot/portal — вкладка «Заявки на подключение»; сбой без orderId — Активность. */
+function migrateTransportLeadsInboxOnly(){
+  let changed=false;
+  (state.customerPortalLeads||[]).forEach(l=>{
+    if(l.kind!=='transport'||l.status!=='pending'||!l.orderId) return;
+    l.status='done';
+    l.doneAt=l.doneAt||new Date().toISOString();
+    changed=true;
+  });
+  if(changed) bumpDataEpoch('transport-lead-inbox');
+  return changed;
+}
+/** Ссылки TG/VK для супер-админа (автопост TG/VK — позже на armada-api). */
+function migrateMarketingSocial(){
+  const ms=state.marketingSocial;
+  if(!ms||typeof ms!=='object'){
+    state.marketingSocial={ telegramChannelUrl:'', vkGroupUrl:'' };
+    return;
+  }
+  ms.telegramChannelUrl=String(ms.telegramChannelUrl||'').trim();
+  ms.vkGroupUrl=String(ms.vkGroupUrl||'').trim();
+  state.marketingSocial=ms;
+}
+/** Канал MAX (бот + chat_id) — хранится в облаке, посты через armada-api /marketing/max/* */
+function isPlausibleMaxBotToken(t){
+  const s=String(t||'').trim();
+  if(!s||s.length<16) return false;
+  if(/[^\x21-\x7E]/.test(s)) return false;
+  if(/max\.ru|^https?:/i.test(s)) return false;
+  if(/•/.test(s)||/\u2022/.test(s)) return false;
+  return true;
+}
+function migrateMarketingMax(){
+  const mm=state.marketingMax;
+  if(!mm||typeof mm!=='object'){
+    state.marketingMax={ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+    return;
+  }
+  if(!mm.bot||typeof mm.bot!=='object') mm.bot={ token:'', chatId:'', enabled:false };
+  mm.bot.token=String(mm.bot.token||'');
+  if(mm.bot.token&&!isPlausibleMaxBotToken(mm.bot.token)) mm.bot.token='';
+  mm.bot.chatId=String(mm.bot.chatId||'');
+  mm.bot.enabled=!!mm.bot.enabled;
+  if(!Array.isArray(mm.queue)) mm.queue=[];
+  state.marketingMax=mm;
+}
+async function postMarketingMaxApi(action, body){
+  if(!API_BASE) throw new Error('API недоступен');
+  await ensureArmadaApiToken({});
+  const res=await fetchWithTimeout(`${API_BASE}/marketing/max/${action}`, {
+    method:'POST',
+    headers:armadaApiJsonHeaders(),
+    body:JSON.stringify(body||{})
+  }, 20000);
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error||data.message||('HTTP '+res.status));
+  return data;
+}
+async function marketingMaxTestPost(){
+  return postMarketingMaxApi('test', {});
+}
+async function marketingMaxPublishScheduled(){
+  return postMarketingMaxApi('tick', {});
 }
 function companyOwnRole(c){
   return !!(c&&Array.isArray(c.roles)&&c.roles.includes('own'));
@@ -1536,7 +1601,11 @@ async function appendCustomerPortalLead(raw){
   let order=null;
   if(rec.kind==='transport'){
     order=attachArmadaTransportLead(rec);
-    if(order) bumpDataEpoch('armada-sx-order');
+    if(order){
+      bumpDataEpoch('armada-sx-order');
+      rec.status='done';
+      rec.doneAt=new Date().toISOString();
+    }
   }
   bumpDataEpoch('customer-portal-lead');
   persistLocalOnly();
@@ -1583,6 +1652,23 @@ function pendingPortalAccessLeads(){
 }
 function pendingPilotLeads(){
   return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot');
+}
+function pilotRoleNorm(role){
+  const r=String(role||'').trim().toLowerCase();
+  if(r==='carrier'||r==='перевозчик') return 'carrier';
+  if(r==='logist'||r==='логист') return 'logist';
+  return r||'';
+}
+/** Заявки на подключение: перевозчик (pilot). */
+function pendingCarrierConnectLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot'&&pilotRoleNorm(l.pilotRole)==='carrier');
+}
+/** Заявки на подключение: логист / кабинет (pilot). */
+function pendingLogistConnectLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot'&&pilotRoleNorm(l.pilotRole)==='logist');
+}
+function pendingConnectLeadsCount(){
+  return pendingPortalAccessLeads().length+pendingCarrierConnectLeads().length+pendingLogistConnectLeads().length;
 }
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
@@ -1719,8 +1805,30 @@ function snapshot(){
     docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
     customerPortalLeads:Array.isArray(state.customerPortalLeads)?state.customerPortalLeads:[],
     opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
+    marketingMax:typeof marketingMaxSnapshotSlice==='function'?marketingMaxSnapshotSlice():state.marketingMax,
+    marketingSocial:typeof marketingSocialSnapshotSlice==='function'?marketingSocialSnapshotSlice():state.marketingSocial,
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
+  };
+}
+function marketingMaxSnapshotSlice(){
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  return {
+    bot:{
+      token:String(mm.bot&&mm.bot.token||''),
+      chatId:String(mm.bot&&mm.bot.chatId||''),
+      enabled:!!(mm.bot&&mm.bot.enabled)
+    },
+    queue:Array.isArray(mm.queue)?mm.queue.slice():[]
+  };
+}
+function marketingSocialSnapshotSlice(){
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+  const ms=state.marketingSocial||{ telegramChannelUrl:'', vkGroupUrl:'' };
+  return {
+    telegramChannelUrl:String(ms.telegramChannelUrl||''),
+    vkGroupUrl:String(ms.vkGroupUrl||'')
   };
 }
 function scorePayload(p){
@@ -1760,6 +1868,10 @@ function applyPayload(p, opts){
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.customerPortalLeads=Array.isArray(p.customerPortalLeads)?p.customerPortalLeads.map(normalizeCustomerPortalLead).filter(Boolean):[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
+  if(p.marketingMax&&typeof p.marketingMax==='object') state.marketingMax=p.marketingMax;
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  if(p.marketingSocial&&typeof p.marketingSocial==='object') state.marketingSocial=p.marketingSocial;
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
   state.dataEpoch=Number(p.dataEpoch)||0;
   mergeAdminAuthFromRemote(p, opts);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;

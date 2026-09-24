@@ -12,7 +12,7 @@
 
 - Live: https://app.armada.sx/ · staging: https://staging.app.armada.sx/
 - Прод `deploy-fvds.sh` / push — только по явной просьбе («пуш», «деплой»).
-- Staging: `scripts/STAGING.md`, `deploy-staging-fvds.sh`.
+- Staging: `scripts/STAGING.md`, `deploy-staging-fvds.sh`. Пароль VPS уже в окружении агента: секрет **`root`** (или `FVDS_SSH_PASSWORD`) — **не спрашивать у пользователя**, сразу деплоить.
 
 ## Правила по теме (не always — подключаются при работе с файлами)
 
