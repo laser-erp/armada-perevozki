@@ -47,7 +47,7 @@
 
 ## Облако
 
-`scripts/CLOUD_AGENT_*.md`. Цикл: **правка → staging → ждём «ок» → prod**.
+`scripts/CLOUD_AGENT_*.md` · **ветка:** `scripts/CLOUD_AGENT_GIT.md` (только **`cursor/dev-f6d2`**, без новых `cursor/*-f6d2`). Цикл: **правка → staging → ждём «ок» → prod**.
 
 ## Не открывать без запроса
 
