@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-24-legal-compliance-v13";
+const APP_BUILD="2026-09-24-shift-close-sync-v14";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -3394,8 +3394,15 @@ async function reconcileBeforePush(){
     pbRecordId=rec.id||pbRecordId;
     const remoteEpoch=Number(remote.dataEpoch)||0;
     const localEpoch=Number(state.dataEpoch)||0;
-    if(localEpoch<remoteEpoch) return false;
     let changed=false;
+    if(typeof mergeRemoteShiftClosures==='function'&&mergeRemoteShiftClosures(remote)) changed=true;
+    if(localEpoch<remoteEpoch){
+      if(changed){
+        bumpDataEpoch('pre-push-remote-shift-close');
+        persistLocalOnly();
+      }
+      return changed;
+    }
     if(typeof mergeRemoteOrderAssignments==='function'&&mergeRemoteOrderAssignments(remote)) changed=true;
     if(typeof reconcileOrdersAfterSync==='function'&&reconcileOrdersAfterSync()) changed=true;
     if(changed){
@@ -3575,7 +3582,18 @@ async function pullRemoteUpdates(reason){
     const remote=rec.payload||{};
     const remoteEpoch=Number(remote.dataEpoch)||0;
     const localEpoch=Number(state.dataEpoch)||0;
-    if(remoteEpoch<=localEpoch) return false;
+    if(remoteEpoch<=localEpoch){
+      if(typeof mergeRemoteShiftClosures==='function'&&mergeRemoteShiftClosures(remote)){
+        bumpDataEpoch('poll-remote-shift-close');
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        if(currentAdmin&&typeof scheduleAdminRerender==='function') scheduleAdminRerender();
+        touchSyncServerOk();
+        updateSyncHint();
+        console.info('auto-sync', reason, 'shift-close-only epoch', remoteEpoch);
+        return true;
+      }
+      return false;
+    }
     const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
     const localOrders=(state.orders||[]).map(o=>structuredClone(o));
     const localInvoices=(state.invoices||[]).map(i=>structuredClone(i));

@@ -4095,6 +4095,30 @@ function healOrphanOrdersIntoShifts(){
   });
   return changed;
 }
+/** С сервера: закрытая смена не должна снова «открываться» у логиста при push. */
+function mergeRemoteShiftClosures(remote){
+  if(!remote||typeof remote!=='object') return false;
+  const remoteShifts=Array.isArray(remote.shifts)?remote.shifts:[];
+  if(!remoteShifts.length) return false;
+  let changed=false;
+  const byId=new Map((state.shifts||[]).map(s=>[s.id,s]));
+  remoteShifts.forEach(rs=>{
+    if(!rs||!rs.id||!rs.endedAt) return;
+    const cur=byId.get(rs.id);
+    if(!cur||cur.endedAt) return;
+    cur.endedAt=rs.endedAt;
+    if(rs.parkingOdometer!=null) cur.parkingOdometer=rs.parkingOdometer;
+    if(rs.lastOdometerPoint!=null) cur.lastOdometerPoint=rs.lastOdometerPoint;
+    if(rs.completedAt) cur.completedAt=rs.completedAt;
+    if(rs.abandoned!=null) cur.abandoned=rs.abandoned;
+    changed=true;
+  });
+  if(state.shift&&state.shift.id){
+    const canon=byId.get(state.shift.id);
+    if(canon&&canon.endedAt){ state.shift=null; changed=true; }
+  }
+  return changed;
+}
 /** После sync remote_ahead — не потерять локальные смены, заказы и чат. */
 function mergeLocalShifts(localShifts){
   if(!Array.isArray(localShifts)||!localShifts.length) return false;
