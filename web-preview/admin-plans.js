@@ -6,7 +6,8 @@ const ADMIN_PLAN_ITEMS = [
   { id: 'customer', file: 'CUSTOMER_PLAN.md', title: 'Заказчик', short: 'Портал /z' },
   { id: 'billing', file: 'BILLING_SUBSCRIPTION_PLAN.md', title: 'Биллинг SaaS', short: 'Счета · подписка · активация' },
   { id: 'platform', file: 'PLATFORM_PLAN.md', title: 'Платформа', short: 'Супер-админ' },
-  { id: 'documents', file: 'DOCUMENTS_PLAN.md', title: 'Документы', short: 'Юр. · бух. · письма' }
+  { id: 'documents', file: 'DOCUMENTS_PLAN.md', title: 'Документы', short: 'Юр. · бух. · письма' },
+  { id: 'marketing', file: 'MARKETING_PLAN.md', title: 'Маркетинг', short: 'TG · VK · MAX · воронка · контент' }
 ];
 let adminPlansActiveId = 'index';
 let adminPlansCache = {};
@@ -44,8 +45,11 @@ function renderPlanMarkdown(md) {
     t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
     t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
-      const h = escapePlanHtml(href);
-      if (/^https?:\/\//i.test(href) || href.startsWith('/')) {
+      let path = href;
+      if (/^marketing\//.test(path)) path = '/plans/' + path;
+      else if (/^[A-Za-z0-9_.-]+\.md$/i.test(path)) path = '/plans/' + path;
+      const h = escapePlanHtml(path);
+      if (/^https?:\/\//i.test(path) || path.startsWith('/')) {
         return '<a href="' + h + '" target="_blank" rel="noopener">' + escapePlanHtml(label) + '</a>';
       }
       return escapePlanHtml(label);

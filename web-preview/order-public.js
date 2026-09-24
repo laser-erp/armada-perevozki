@@ -1,6 +1,6 @@
 /* order.html — публичная заявка с armada.sx (CSP: без inline) */
 (function () {
-  var BUILD = '2026-08-31-armada-logist4317';
+  var BUILD = '2026-09-24-order-public-sync-v7';
   var form = null;
   var statusEl = null;
   var selectedVtype = '';
@@ -152,12 +152,22 @@
     };
   }
 
+  function isRentalOnlyVtype() {
+    return selectedVtype === 'shalanda' || selectedVtype === 'manipulator';
+  }
+
   function validate(data) {
     if (!selectedVtype) return 'Выберите тип транспорта';
     if (!data.company) return 'Укажите компанию или ФИО';
     if (!data.phone || data.phone.replace(/\D/g, '').length < 10) return 'Укажите телефон для связи';
-    if (!data.loadAddress) return 'Укажите адрес подачи';
-    if (!data.vehicleAt) return 'Укажите дату подачи';
+    if (!data.contactName) return 'Укажите контактное лицо';
+    if (!data.loadAddress) return isRentalOnlyVtype() ? 'Укажите адрес подачи' : 'Укажите адрес загрузки';
+    if (!isRentalOnlyVtype() && !data.unloadAddress) return 'Укажите адрес выгрузки';
+    var d = (qs('order-date') && qs('order-date').value || '').trim();
+    var t = (qs('order-time') && qs('order-time').value || '').trim();
+    if (!d) return 'Укажите дату подачи';
+    if (!t) return 'Укажите время подачи (выберите из списка)';
+    if (!data.comment) return 'Опишите груз или особенности (комментарий)';
     return '';
   }
 
@@ -188,8 +198,12 @@
     try {
       await ensureStore();
       if (typeof appendCustomerPortalLead !== 'function') throw new Error('sync');
+      if (typeof initCloudSync === 'function') await initCloudSync();
       var res = await appendCustomerPortalLead(data);
       if (!res || !res.ok) throw new Error((res && res.error) || 'Не удалось сохранить');
+      if (!res.duplicate && !res.orderId) {
+        throw new Error('Заявка не попала в диспетчерскую (нет ООО «Армада» в базе)');
+      }
       if (form) form.hidden = true;
       var okBox = qs('order-success');
       if (okBox) {

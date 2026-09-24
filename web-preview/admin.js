@@ -456,6 +456,8 @@ function setAdminNav(nav){
   closeAdminSidebar();
   if(nav==='catalogs'){ openCatalogs(); return; }
   if(nav==='settings'){ if(typeof openCabinetSettings==='function') openCabinetSettings('hub'); return; }
+  if(nav==='connect-leads'){ openAdminConnectLeads(); return; }
+  if(nav==='social'){ openAdminSocial(); return; }
   if(nav==='activity'){ openAdminActivity(); return; }
   if(nav==='billing'){ openAdminBilling(); return; }
   if(nav==='plans'){ openAdminPlans(); return; }
@@ -475,11 +477,16 @@ function setAdminNav(nav){
 }
 function updateAdminChrome(){
   const act=$('admin-activity');
+  const conn=$('admin-connect-leads');
+  const social=$('admin-social');
   const bill=$('admin-billing');
   const plans=$('admin-plans');
   if(act) act.style.display=isSuperAdmin()?'':'none';
+  if(conn) conn.style.display=isSuperAdmin()?'':'none';
+  if(social) social.style.display=isSuperAdmin()?'':'none';
   if(bill) bill.style.display=isSuperAdmin()?'':'none';
   if(plans) plans.style.display=isSuperAdmin()?'':'none';
+  if(typeof updateAdminConnectLeadsBadge==='function') updateAdminConnectLeadsBadge();
   const title=$('admin-title');
   const userEl=$('admin-sidebar-user');
   if(!currentAdmin){
@@ -634,6 +641,104 @@ function logoutAdmin(){
   updateAdminChrome();
   if(getEntryMode()==='admin') goEntryLanding('admin');
   else show('roles');
+}
+function updateAdminConnectLeadsBadge(){
+  const badge=$('admin-connect-leads-badge');
+  if(!badge) return;
+  const n=typeof pendingConnectLeadsCount==='function'?pendingConnectLeadsCount():0;
+  if(n>0){ badge.hidden=false; badge.textContent=String(n); }
+  else { badge.hidden=true; badge.textContent=''; }
+}
+function wireCustomerPortalLeadButtons(root, rerender){
+  if(!root) return;
+  root.querySelectorAll('.lead-open-order-btn').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.orderId;
+    if(!id) return;
+    if(typeof openDetail==='function') openDetail(id);
+  });
+  root.querySelectorAll('.lead-done-btn').forEach(b=>b.onclick=()=>{
+    if(!isSuperAdmin()) return;
+    const id=b.dataset.leadId;
+    if(!id||typeof markCustomerPortalLeadDone!=='function') return;
+    markCustomerPortalLeadDone(id);
+    if(typeof rerender==='function') rerender();
+    updateAdminConnectLeadsBadge();
+  });
+}
+function openAdminConnectLeads(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  renderAdminConnectLeads();
+  show('admin-connect-leads-screen');
+}
+function renderAdminConnectLeads(){
+  migrateCustomerPortalLeads();
+  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():[];
+  const carrierLeads=typeof pendingCarrierConnectLeads==='function'?pendingCarrierConnectLeads():[];
+  const logistLeads=typeof pendingLogistConnectLeads==='function'?pendingLogistConnectLeads():[];
+  const form=$('connect-leads-form');
+  if(!form) return;
+  const emptyAll=!portalLeads.length&&!carrierLeads.length&&!logistLeads.length;
+  form.innerHTML=`
+    <p class="cat-panel-hint">Очередь с лендингов: подключить <strong>заказчика</strong> (портал /z), <strong>перевозчика</strong> или <strong>логиста</strong> (пилот). Заявки на перевозку с <a href="/order.html" target="_blank" rel="noopener">order.html</a> — в канбан «Входящие».</p>
+    ${emptyAll?`<div class="empty" style="margin:12px 0">Нет необработанных заявок на подключение</div>`:''}
+    <section class="form-section">
+      <h2 class="form-section-title">Новый заказчик · портал</h2>
+      <p class="cat-panel-hint">С <a href="/kp-zakaz.html" target="_blank" rel="noopener">kp-zakaz.html</a> — «Хочу отправлять грузы». В справочнике включите портал и выдайте PIN.</p>
+      <div class="cat-list">
+        ${portalLeads.length?portalLeads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)}</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.inn?` · ИНН ${esc(l.inn)}`:''}${l.contactName?` · ${esc(l.contactName)}`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            ${l.carrierHint?`<div class="hint">Перевозчик: ${esc(l.carrierHint)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join(''):`<div class="empty">Пока пусто</div>`}
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Новый перевозчик</h2>
+      <p class="cat-panel-hint"><a href="/pilot.html?role=carrier" target="_blank" rel="noopener">pilot.html</a> · роль перевозчик. Создайте space, админа, кабинет /a и /v.</p>
+      <div class="cat-list">
+        ${carrierLeads.length?carrierLeads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)} · перевозчик</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join(''):`<div class="empty">Пока пусто</div>`}
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">Новый логист · кабинет</h2>
+      <p class="cat-panel-hint"><a href="/pilot.html?role=logist" target="_blank" rel="noopener">pilot.html</a> · роль логист. Пилот 30 дней — space, админ, справочники.</p>
+      <div class="cat-list">
+        ${logistLeads.length?logistLeads.map(l=>`
+          <div class="item-card" data-lead-id="${esc(l.id)}">
+            <div class="item-top">
+              <div class="item-name">${esc(l.company)} · логист</div>
+              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
+            </div>
+            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
+            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
+            <div class="row" style="margin-top:8px">
+              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
+            </div>
+          </div>`).join(''):`<div class="empty">Пока пусто</div>`}
+      </div>
+    </section>`;
+  $('connect-leads-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireCustomerPortalLeadButtons(form, renderAdminConnectLeads);
+  updateAdminConnectLeadsBadge();
 }
 function openAdminActivity(){
   if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
@@ -860,6 +965,244 @@ function paintEpdServerStatus(){
     el.textContent='armada-api: ошибка проверки';
   });
 }
+function marketingSocialTelegramVkHtml(){
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+  const ms=state.marketingSocial||{ telegramChannelUrl:'', vkGroupUrl:'' };
+  return `
+    <section class="form-section" id="marketing-telegram-section">
+      <h2 class="form-section-title">Telegram</h2>
+      <p class="cat-panel-hint">Промо-канал (не заявки на перевозку — они на <a href="/order.html" target="_blank" rel="noopener">order.html</a>). Сейчас: посты вручную или «отложенные» в Telegram. План автопоста: <a href="/plans/marketing/MARKETING_RAZDEL_APP.md" target="_blank" rel="noopener">MARKETING_RAZDEL_APP.md</a>.</p>
+      <p class="cat-panel-hint">Чеклист: <a href="/plans/marketing/SOCIAL_TELEGRAM.md" target="_blank" rel="noopener">SOCIAL_TELEGRAM.md</a></p>
+      <label>Ссылка на канал (для себя)</label>
+      <input id="social-tg-url" type="url" placeholder="https://t.me/…" value="${esc(ms.telegramChannelUrl||'')}" style="width:100%" />
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="primary" id="social-tg-save" style="width:auto">Сохранить TG</button>
+        ${ms.telegramChannelUrl?`<a class="secondary" href="${esc(ms.telegramChannelUrl)}" target="_blank" rel="noopener" style="width:auto;padding:8px 12px">Открыть канал</a>`:''}
+      </div>
+      <p class="hint" id="social-tg-status"></p>
+    </section>
+    <section class="form-section" id="marketing-vk-section">
+      <h2 class="form-section-title">ВКонтакте</h2>
+      <p class="cat-panel-hint">Сообщество — услуги и регион. Сейчас: вручную или «отложенные записи» VK. Чеклист: <a href="/plans/marketing/SOCIAL_VK.md" target="_blank" rel="noopener">SOCIAL_VK.md</a></p>
+      <label>Ссылка на группу (для себя)</label>
+      <input id="social-vk-url" type="url" placeholder="https://vk.com/…" value="${esc(ms.vkGroupUrl||'')}" style="width:100%" />
+      <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="primary" id="social-vk-save" style="width:auto">Сохранить VK</button>
+        ${ms.vkGroupUrl?`<a class="secondary" href="${esc(ms.vkGroupUrl)}" target="_blank" rel="noopener" style="width:auto;padding:8px 12px">Открыть группу</a>`:''}
+      </div>
+      <p class="hint" id="social-vk-status"></p>
+    </section>`;
+}
+function normalizeMaxBotTokenInput(raw){
+  let t=String(raw||'').trim().replace(/[\u200B-\u200D\uFEFF]/g,'');
+  if(/^bearer\s+/i.test(t)) t=t.replace(/^bearer\s+/i,'').trim();
+  const authM=t.match(/^authorization:\s*(.+)$/i);
+  if(authM) t=authM[1].trim();
+  if((t.startsWith('"')&&t.endsWith('"'))||(t.startsWith("'")&&t.endsWith("'"))) t=t.slice(1,-1).trim();
+  if(/токен\s+(успешно\s+)?скопирован/i.test(t)) return '';
+  return t;
+}
+function maxBotTokenFieldError(tok){
+  const t=normalizeMaxBotTokenInput(tok);
+  if(!t) return '';
+  if(/•/.test(t)||/\u2022/.test(t)||/[^\x21-\x7E]/.test(t)) return 'В токене есть символы «•» или кириллица — это маска из интерфейса, не токен MAX. Скопируйте строку AAH… с dev.max.ru.';
+  if(/^https?:\/\//i.test(t)||/max\.ru/i.test(t)) return 'Это ссылка на канал, не токен бота. dev.max.ru → Чат-боты → ⋮ → Настройки → копировать access_token';
+  if(t.length<16) return 'Слишком короткая строка — похоже, в буфер попало не то (не текст «токен скопирован»). Выделите токен в поле на dev.max.ru и скопируйте вручную (Ctrl+C).';
+  return '';
+}
+function updateMaxBotTokenPasteHint(){
+  const el=$('max-bot-token-hint');
+  const inp=$('max-bot-token');
+  if(!el||!inp) return;
+  const t=normalizeMaxBotTokenInput(inp.value||'');
+  if(!t){ el.textContent='После вставки здесь должна быть длина ~40+ символов (латиница/цифры). Если 0 — вставка не прошла или в буфере не токен.'; el.className='hint'; return; }
+  el.textContent=`В поле ${t.length} симв. · начало: ${t.slice(0,4)}…${t.slice(-3)} (токен MAX не показываем целиком)`;
+  el.className='hint ok';
+}
+function normalizeMaxChatIdInput(raw){
+  let s=String(raw||'').trim();
+  const fromUrl=s.match(/id(\d+)_biz/i);
+  if(fromUrl) return fromUrl[1];
+  return s.replace(/\s+/g,'').replace(/\D/g,'');
+}
+function maxChatIdFieldError(chatId){
+  const id=normalizeMaxChatIdInput(chatId);
+  if(!id) return 'Укажите chat_id канала (число из ссылки id…_biz). Это не ИНН организации.';
+  if(id.length<6) return 'chat_id слишком короткий';
+  return '';
+}
+async function persistMaxSettingsImmediate(){
+  if(typeof persistAdminPinImmediate!=='function'){ persist(); return { ok:true }; }
+  const r=await persistAdminPinImmediate();
+  if(r&&r.ok) return r;
+  const msg=r&&r.offline?'Нет интернета — на сервер не отправилось'
+    :(r&&r.err?String(r.err.message||r.err):'Не удалось сохранить на сервер');
+  throw new Error(msg);
+}
+function marketingMaxPanelHtml(){
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  const maxTok=mm.bot&&mm.bot.token?String(mm.bot.token):'';
+  const maxTokStoredErr=maxBotTokenFieldError(maxTok);
+  const maxTokMask=maxTok&&typeof isPlausibleMaxBotToken==='function'&&isPlausibleMaxBotToken(maxTok)?('****'+maxTok.slice(-4)):(maxTok?'битый (вставьте заново)':'не задан');
+  const q=Array.isArray(mm.queue)?mm.queue:[];
+  const pending=q.filter(p=>p&&p.status!=='published'&&p.status!=='failed').length;
+  return `
+    <section class="form-section" id="marketing-max-section">
+      <h2 class="form-section-title">MAX</h2>
+      <p class="cat-panel-hint">Бот и канал — автопост через <code>armada-api</code>. Пошагово: <a href="/plans/marketing/MAX_PODKLUCHENIE.md" target="_blank" rel="noopener">MAX_PODKLUCHENIE.md</a></p>
+      <label>Токен бота MAX (access_token)</label>
+      <input id="max-bot-token" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="AAH… — выделите токен на dev.max.ru, Ctrl+C, сюда Ctrl+V" style="width:100%;font-family:monospace;font-size:.85rem" />
+      <p class="hint" id="max-bot-token-hint">Кнопка «скопировать» в MAX иногда кладёт в буфер не токен — надёжнее выделить строку токена в поле на dev.max.ru и скопировать вручную.</p>
+      <p class="hint">На сервере сейчас: ${esc(maxTokMask)}</p>
+      ${maxTokStoredErr?`<p class="hint err-hint">${esc(maxTokStoredErr)}</p>`:''}
+      <label>chat_id канала (не ИНН)</label>
+      <input id="max-bot-chat-id" inputmode="numeric" placeholder="7802655283 — цифры из id7802655283_biz" value="${esc((mm.bot&&mm.bot.chatId)||'')}" style="width:100%" />
+      <p class="hint">Из ссылки канала <a href="https://max.ru/id7802655283_biz" target="_blank" rel="noopener">id7802655283_biz</a> → chat_id <strong>7802655283</strong>. ИНН в это поле не вводите — только id канала для API.</p>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="max-bot-enabled" ${mm.bot&&mm.bot.enabled?'checked':''}/> Автопубликация отложенных постов (tick)</label>
+      <p class="hint max-status-banner" id="max-bot-status" role="status" aria-live="polite"></p>
+      <div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+        <button type="button" class="primary" id="max-bot-save" style="width:auto">Сохранить MAX</button>
+        <button type="button" class="secondary" id="max-bot-test" style="width:auto">Тестовый пост в канал</button>
+        <button type="button" class="secondary" id="max-bot-tick" style="width:auto">Опубликовать due-посты</button>
+      </div>
+      ${q.length?`<p class="hint" style="margin-top:8px">Очередь постов: ${esc(String(q.length))}${pending?` · к публикации: ${pending}`:''}</p>`:''}
+    </section>`;
+}
+function setMaxBotStatus(msg,isErr){
+  const el=$('max-bot-status');
+  if(!el) return;
+  el.textContent=msg||'';
+  el.className='hint max-status-banner'+(isErr?' err-hint':' ok');
+}
+async function saveMaxBotSettingsFromForm(rerender){
+  if(!isSuperAdmin()){ alert('Доступно только супер-админу'); return; }
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  if(!state.marketingMax||!state.marketingMax.bot){
+    state.marketingMax={ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  }
+  const tokInput=normalizeMaxBotTokenInput(($('max-bot-token')||{}).value||'');
+  const chatRaw=(($('max-bot-chat-id')||{}).value||'');
+  const chatId=normalizeMaxChatIdInput(chatRaw);
+  const storedTok=String(state.marketingMax.bot.token||'');
+  if(!tokInput&&maxBotTokenFieldError(storedTok)){
+    const msg='Нужен новый access_token в поле «Токен» (в базе ещё сохранена ссылка на канал, а не токен).';
+    setMaxBotStatus(msg, true);
+    alert(msg);
+    return;
+  }
+  const tok=tokInput||storedTok;
+  const tokErr=maxBotTokenFieldError(tok);
+  if(tokErr){ setMaxBotStatus(tokErr, true); alert(tokErr); return; }
+  const chatErr=maxChatIdFieldError(chatRaw);
+  if(chatErr){ setMaxBotStatus(chatErr, true); alert(chatErr); return; }
+  if(!tokInput){
+    const msg='В поле токена пусто (0 символов). Выделите сам токен на dev.max.ru (строка вида AAH…), Ctrl+C → сюда Ctrl+V. Сообщение «токен скопирован» — это не токен.';
+    setMaxBotStatus(msg, true);
+    alert(msg);
+    return;
+  }
+  state.marketingMax.bot.token=tokInput;
+  state.marketingMax.bot.chatId=chatId;
+  state.marketingMax.bot.enabled=!!(($('max-bot-enabled')||{}).checked);
+  if(!Array.isArray(state.marketingMax.queue)) state.marketingMax.queue=[];
+  const btn=$('max-bot-save');
+  const prevLabel=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Сохранение…'; }
+  setMaxBotStatus('Отправка на сервер…', false);
+  try{
+    await persistMaxSettingsImmediate();
+    if(typeof rerender==='function') rerender();
+    setMaxBotStatus('Сохранено на сервере. Нажмите «Тестовый пост в канал».', false);
+  }catch(e){
+    const msg=String(e.message||e);
+    setMaxBotStatus(msg, true);
+    alert('Не сохранилось: '+msg);
+  }finally{
+    const b=$('max-bot-save');
+    if(b){ b.disabled=false; b.textContent=prevLabel||'Сохранить MAX'; }
+  }
+}
+function wireMarketingMaxControls(rerender){
+  const setMaxStatus=(msg,isErr)=>setMaxBotStatus(msg,isErr);
+  const tokInp=$('max-bot-token');
+  if(tokInp&&!tokInp.dataset.maxTokWire){
+    tokInp.dataset.maxTokWire='1';
+    tokInp.addEventListener('input', updateMaxBotTokenPasteHint);
+    tokInp.addEventListener('paste', ()=>{ setTimeout(updateMaxBotTokenPasteHint, 0); });
+  }
+  updateMaxBotTokenPasteHint();
+  $('max-bot-save')&&($('max-bot-save').onclick=()=>{ saveMaxBotSettingsFromForm(rerender).catch(e=>{ setMaxBotStatus(String(e.message||e), true); alert(String(e.message||e)); }); });
+  $('max-bot-test')&&($('max-bot-test').onclick=async()=>{
+    if(!isSuperAdmin()){ alert('Доступно только супер-админу'); return; }
+    if(typeof marketingMaxTestPost!=='function'){ setMaxStatus('API недоступен', true); return; }
+    const btn=$('max-bot-test');
+    const prevLabel=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='Отправка…'; }
+    setMaxStatus('Отправка в MAX…');
+    try{
+      if(!await ensureArmadaApiToken({})) throw new Error('Нет сессии API — перелогиньтесь в админку');
+      const r=await marketingMaxTestPost();
+      setMaxStatus(r.messageId?('Опубликовано · messageId '+r.messageId):'Тест отправлен');
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+    finally{
+      if(btn){ btn.disabled=false; btn.textContent=prevLabel||'Тестовый пост в канал'; }
+    }
+  });
+  $('max-bot-tick')&&($('max-bot-tick').onclick=async()=>{
+    if(typeof marketingMaxPublishScheduled!=='function'){ setMaxStatus('API недоступен', true); return; }
+    setMaxStatus('Проверка очереди…');
+    try{
+      const r=await marketingMaxPublishScheduled();
+      setMaxStatus(`Готово · опубликовано: ${r.published||0}, ошибок: ${r.failed||0}${r.skipped?(' · '+r.skipped):''}`);
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setMaxStatus(String(e.message||e), true); }
+  });
+}
+function wireMarketingSocialRefs(rerender){
+  const setTg=(msg,err)=>{ const el=$('social-tg-status'); if(el){ el.textContent=msg||''; el.className=err?'hint err-hint':'hint ok'; } };
+  const setVk=(msg,err)=>{ const el=$('social-vk-status'); if(el){ el.textContent=msg||''; el.className=err?'hint err-hint':'hint ok'; } };
+  $('social-tg-save')&&($('social-tg-save').onclick=async()=>{
+    if(!isSuperAdmin()) return;
+    if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+    state.marketingSocial.telegramChannelUrl=(($('social-tg-url')||{}).value||'').trim();
+    setTg('Сохранение…');
+    try{
+      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
+      else persist();
+      setTg('Сохранено');
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setTg(String(e.message||e), true); }
+  });
+  $('social-vk-save')&&($('social-vk-save').onclick=async()=>{
+    if(!isSuperAdmin()) return;
+    if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+    state.marketingSocial.vkGroupUrl=(($('social-vk-url')||{}).value||'').trim();
+    setVk('Сохранение…');
+    try{
+      if(typeof persistAdminPinImmediate==='function') await persistAdminPinImmediate();
+      else persist();
+      setVk('Сохранено');
+      if(typeof rerender==='function') rerender();
+    }catch(e){ setVk(String(e.message||e), true); }
+  });
+}
+function openAdminSocial(){
+  if(!isSuperAdmin()){ alert('Доступно только супер админу'); return; }
+  renderAdminSocial();
+  show('admin-social-screen');
+}
+function renderAdminSocial(){
+  const form=$('social-form');
+  if(!form) return;
+  form.innerHTML=`
+    <p class="cat-panel-hint">Исходящий промо-контент: <strong>MAX · Telegram · VK</strong>. Входящие лиды — «Заявки на подключение»; заявки на перевозку — канбан «Входящие». Общий план: <a href="/plans/MARKETING_PLAN.md" target="_blank" rel="noopener">MARKETING_PLAN.md</a></p>
+    ${marketingMaxPanelHtml()}
+    ${marketingSocialTelegramVkHtml()}`;
+  $('social-back').onclick=()=>{ show('admin'); renderAdmin(); };
+  wireMarketingMaxControls(renderAdminSocial);
+  wireMarketingSocialRefs(renderAdminSocial);
+}
 function renderAdminActivity(){
   migrateAdmins();
   migrateCustomerPortalLeads();
@@ -871,16 +1214,15 @@ function renderAdminActivity(){
   const ops=(state.opsLog||[]).slice(0,25);
   const leads=typeof pendingCustomerPortalLeads==='function'?pendingCustomerPortalLeads():[];
   const transportLeads=typeof pendingTransportOrders==='function'?pendingTransportOrders():leads.filter(l=>l.kind==='transport');
-  const pilotLeads=typeof pendingPilotLeads==='function'?pendingPilotLeads():leads.filter(l=>l.kind==='pilot');
-  const portalLeads=typeof pendingPortalAccessLeads==='function'?pendingPortalAccessLeads():leads.filter(l=>l.kind==='portal');
+  const transportLeadFailures=transportLeads.filter(l=>!l.orderId);
   const admins=state.admins.slice().sort((a,b)=>(b.isSuper?1:0)-(a.isSuper?1:0) || String(a.name).localeCompare(String(b.name),'ru'));
   $('activity-form').innerHTML=`
-    <p class="cat-panel-hint">Видит только супер админ. Онлайн = активность за последние 1–2 мин.</p>
-    ${transportLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки на транспорт · armada.sx</h2>
-      <p class="cat-panel-hint">С armada.sx → <a href="/order.html" target="_blank" rel="noopener">order.html</a>. Логист — <strong>ООО «Армада»</strong>, заказчик автоматически закрепляется в её справочнике, заявка попадает в общий список.</p>
+    <p class="cat-panel-hint">Супер-админ: онлайн, ключи API, администраторы. <strong>Соцсети</strong> (MAX, TG, VK) и заявки на подключение — отдельные вкладки. Онлайн = активность за 1–2 мин.</p>
+    ${transportLeadFailures.length?`<section class="form-section">
+      <h2 class="form-section-title">Transport · не создался заказ</h2>
+      <p class="cat-panel-hint">Обычно заявки с <a href="/order.html" target="_blank" rel="noopener">order.html</a> сразу во <strong>Заказы → канбан → Входящие</strong>. Здесь только ошибка (нет ООО «Армада» в справочнике и т.п.).</p>
       <div class="cat-list">
-        ${transportLeads.map(l=>{
+        ${transportLeadFailures.map(l=>{
           const vLabel=l.vehicleTypeId&&typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(l.vehicleTypeId):(l.vehicleTypeId||'—');
           const ord=l.orderId?(state.orders||[]).find(o=>o.id===l.orderId):null;
           const ordNum=ord&&ord.sequentialNumber?`№${ord.sequentialNumber}`:'';
@@ -903,46 +1245,6 @@ function renderAdminActivity(){
             </div>
           </div>`;
         }).join('')}
-      </div>
-    </section>`:''}
-    ${pilotLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки на пилот 30 дней</h2>
-      <p class="cat-panel-hint">С <a href="/pilot.html" target="_blank" rel="noopener">pilot.html</a> — логист или перевозчик. Подключите кабинет и отметьте «Обработано».</p>
-      <div class="cat-list">
-        ${pilotLeads.map(l=>{
-          const roleLbl=l.pilotRole==='carrier'?'перевозчик':l.pilotRole==='logist'?'логист':(l.pilotRole||'—');
-          return `
-          <div class="item-card" data-lead-id="${esc(l.id)}">
-            <div class="item-top">
-              <div class="item-name">${esc(l.company)} · пилот · ${esc(roleLbl)}</div>
-              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
-            </div>
-            <div class="hint">${esc(l.phone)}${l.contactName?` · ${esc(l.contactName)}`:''}${l.city?` · ${esc(l.city)}`:''}${l.fleetSize?` · ${esc(l.fleetSize)} маш.`:''}</div>
-            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
-            <div class="row" style="margin-top:8px">
-              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </section>`:''}
-    ${portalLeads.length?`<section class="form-section">
-      <h2 class="form-section-title">Заявки заказчиков · портал</h2>
-      <p class="cat-panel-hint">С kp-zakaz.html — «Хочу отправлять грузы». Включите портал в карточке компании и выдайте PIN.</p>
-      <div class="cat-list">
-        ${portalLeads.map(l=>`
-          <div class="item-card" data-lead-id="${esc(l.id)}">
-            <div class="item-top">
-              <div class="item-name">${esc(l.company)}</div>
-              <span class="hint">${esc(typeof dateTime==='function'?dateTime(l.createdAt):l.createdAt)}</span>
-            </div>
-            <div class="hint">${esc(l.phone)}${l.inn?` · ИНН ${esc(l.inn)}`:''}${l.contactName?` · ${esc(l.contactName)}`:''}</div>
-            ${l.comment?`<div class="hint">${esc(l.comment)}</div>`:''}
-            ${l.carrierHint?`<div class="hint">Перевозчик: ${esc(l.carrierHint)}</div>`:''}
-            <div class="row" style="margin-top:8px">
-              <button type="button" class="secondary lead-done-btn" data-lead-id="${esc(l.id)}">Обработано</button>
-            </div>
-          </div>`).join('')}
       </div>
     </section>`:''}
     ${ops.length?`<section class="form-section">
@@ -1296,18 +1598,8 @@ function renderAdminActivity(){
     state.admins=state.admins.filter(a=>a.id!==id);
     persist(); renderAdminActivity();
   });
-  document.querySelectorAll('.lead-open-order-btn').forEach(b=>b.onclick=()=>{
-    const id=b.dataset.orderId;
-    if(!id) return;
-    if(typeof openDetail==='function') openDetail(id);
-  });
-  document.querySelectorAll('.lead-done-btn').forEach(b=>b.onclick=()=>{
-    if(!isSuperAdmin()) return;
-    const id=b.dataset.leadId;
-    if(!id||typeof markCustomerPortalLeadDone!=='function') return;
-    markCustomerPortalLeadDone(id);
-    renderAdminActivity();
-  });
+  wireCustomerPortalLeadButtons($('activity-form'), renderAdminActivity);
+  updateAdminConnectLeadsBadge();
 }
 
 function openVehicleCard(vehicleId){
@@ -3988,6 +4280,67 @@ function adminDetailDisplayPlate(o){
   if(!p||p==='—'||p==='-') return 'не назначено';
   return p;
 }
+const ADMIN_LOGIST_CLIENT_MARKUP=1.35;
+function adminCustomerPartyType(o){
+  const inn=String((o&&o.customerInn)||'').replace(/\D/g,'');
+  if(inn.length===10) return 'legal';
+  if(inn.length===12) return 'person';
+  const n=String((o&&o.customer)||'').toLowerCase();
+  if(/\b(ооо|оао|зао|пао|ао|ип|общество|компания)\b/u.test(n)) return 'legal';
+  return 'person';
+}
+function adminHydrateOrderReqsForDisplay(o){
+  if(!o) return o;
+  if(!o.reqBodyType&&Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds[0]&&typeof mapVtypeToBodyType==='function'){
+    o.reqBodyType=mapVtypeToBodyType(o.vehicleTypeIds[0]);
+  }
+  if(!(o.reqPayloadTons>0)&&o.cargoWeightKg>0) o.reqPayloadTons=Math.round(o.cargoWeightKg/10)/100;
+  if(!(o.cargoVolumeM3>0)&&o.reqLengthM>0&&o.reqWidthM>0&&o.reqHeightM>0){
+    o.cargoVolumeM3=Math.round(o.reqLengthM*o.reqWidthM*o.reqHeightM*10)/10;
+  }
+  return o;
+}
+function adminVehicleTypeHint(o){
+  const ids=Array.isArray(o&&o.vehicleTypeIds)?o.vehicleTypeIds:[];
+  const labels=ids.map(id=>typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(id):id).filter(Boolean);
+  return labels.length?labels.join(', '):'';
+}
+function adminCarrierOptionsForOrder(o){
+  const seen=new Set();
+  const out=[];
+  const push=c=>{ if(!c||!c.id||seen.has(c.id)) return; seen.add(c.id); out.push(c); };
+  push(findCompanyById(o&&o.ownCompanyId));
+  (companiesByRole('carrier')||[]).forEach(push);
+  (ownCompanies()||[]).forEach(push);
+  return out.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+}
+function adminDefaultCarrierId(o){
+  if(o&&o.carrierCompanyId) return o.carrierCompanyId;
+  if(o&&o.ownCompanyId) return o.ownCompanyId;
+  const cur=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  return cur&&cur.id||'';
+}
+function adminOrderLogistPricePair(o){
+  if(typeof suggestCustomerOrderPrice!=='function') return null;
+  const quote=suggestCustomerOrderPrice(o);
+  if(!quote) return null;
+  let carrier=typeof customerCarrierBaseCash==='function'?customerCarrierBaseCash(quote):null;
+  if(!(carrier>0)&&quote.minimumCash>0) carrier=Math.round(quote.minimumCash/ADMIN_LOGIST_CLIENT_MARKUP);
+  if(!(carrier>0)) return null;
+  return {
+    carrier:Math.round(carrier),
+    client:Math.round(carrier*ADMIN_LOGIST_CLIENT_MARKUP),
+    hint:quote.summary||''
+  };
+}
+function adminRecalcCargoVolumeFromDims(){
+  const l=numOrNull(($('d-req-l')||{}).value);
+  const w=numOrNull(($('d-req-w')||{}).value);
+  const h=numOrNull(($('d-req-h')||{}).value);
+  const volEl=$('d-cargo-volume');
+  if(!volEl||!(l>0&&w>0&&h>0)) return;
+  volEl.value=String(Math.round(l*w*h*10)/10);
+}
 function adminOrderDetailHeroHtml(o){
   const route=typeof routeText==='function'?routeText(o):'—';
   const when=o.vehicleAt&&typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(o.vehicleAt):'—';
@@ -4024,12 +4377,13 @@ function adminOrderDetailAssignSectionHtml(o){
   let curPlate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'');
   if(curPlate==='—'||curPlate==='-') curPlate='';
   const drvVal=curDrv==='Диспетчер'||curDrv==='Биржа'||curDrv==='—'?'':curDrv;
+  const drvSelected=drvVal&&drvList.some(d=>samePersonName(d.name,drvVal));
   const drvField=drvList.length
-    ?`<select id="d-driver-name">${drvList.map(d=>`<option value="${esc(d.name)}"${samePersonName(d.name,drvVal||curDrv)?' selected':''}>${esc(d.name)}</option>`).join('')}</select>`
-    :`<input id="d-driver-name" value="${esc(drvVal)}" placeholder="ФИО водителя" />`;
+    ?`<select id="d-driver-name"><option value=""${!drvSelected?' selected':''}>Назначьте водителя</option>${drvList.map(d=>`<option value="${esc(d.name)}"${samePersonName(d.name,drvVal)?' selected':''}>${esc(d.name)}</option>`).join('')}</select>`
+    :`<input id="d-driver-name" value="${esc(drvVal)}" placeholder="Назначьте водителя" />`;
   const plateField=vehList.length
-    ?`<select id="d-vehicle-plate"><option value="">— выберите ТС —</option>${vehList.map(v=>`<option value="${esc(v.plate)}"${curPlate&&v.plate===curPlate?' selected':''}>${esc(v.plate)}</option>`).join('')}</select>`
-    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Госномер" />`;
+    ?`<select id="d-vehicle-plate"><option value=""${!curPlate?' selected':''}>Выберите ТС</option>${vehList.map(v=>`<option value="${esc(v.plate)}"${curPlate&&v.plate===curPlate?' selected':''}>${esc(v.plate)}</option>`).join('')}</select>`
+    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Выберите ТС" />`;
   return `<section class="form-section admin-order-assign">
     <h2 class="form-section-title">Назначение парка</h2>
     <p class="form-section-hint">Выберите водителя и авто — номер появится в карточке и у водителя в «Мои заявки».</p>
@@ -4053,6 +4407,7 @@ function openDetail(id){
   if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) markAdminInboxOrdersSeen([o]);
   if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
   recomputeOrderTimes(ensureOrderTimeStamps(o));
+  adminHydrateOrderReqsForDisplay(o);
   const m=metrics(o);
   let editPoints=ensureRoutePoints(o).map(p=>({...p}));
   const readPointsFromDom=()=>{
@@ -4189,6 +4544,15 @@ function openDetail(id){
           </div>
         </div>
         <div id="d-driver-docs-warn" hidden></div>`;
+  const partyType=adminCustomerPartyType(o);
+  const vTypeHint=adminVehicleTypeHint(o);
+  const priceDraft=Object.assign({}, o, {fulfillment:o.fulfillment||'direct'});
+  const pricePair=adminOrderLogistPricePair(priceDraft);
+  const priceClientShow=o.priceForClient??(pricePair?pricePair.client:'');
+  const priceCarrierShow=o.priceForCarrier??(pricePair?pricePair.carrier:'');
+  const carrierDef=adminDefaultCarrierId(o);
+  const carrierOpts=adminCarrierOptionsForOrder(o);
+  const custInnShow=o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'';
   $('detail-form').innerHTML=`
     <div class="cust-form-blocks admin-order-blocks">
     ${adminOrderDetailHeroHtml(o)}
@@ -4196,11 +4560,51 @@ function openDetail(id){
     ${svodkaSection}
     ${portalOpen?'':docsBlock}
     <section class="form-section">
-      <h2 class="form-section-title">${portalOpen?'Заказчик и груз':'1. Заказчик и груз'}</h2>
+      <h2 class="form-section-title">${portalOpen?'Заказчик':'1. Заказчик'}</h2>
       <div class="form-fields">
         ${driverFieldsFallback}
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
+        <label for="d-customer-type">Тип заказчика</label>
+        <select id="d-customer-type">
+          <option value="person" ${partyType==='person'?'selected':''}>Физическое лицо</option>
+          <option value="legal" ${partyType==='legal'?'selected':''}>Юридическое лицо</option>
+        </select>
+        <label for="d-customer">Наименование / ФИО</label>
+        <input id="d-customer" value="${esc(o.customer||'')}" placeholder="Компания или ФИО" />
+        <div id="d-customer-inn-wrap" ${partyType==='person'?'hidden':''}>
+          <label for="d-customer-inn">ИНН заказчика (обязательно для юр. лица)</label>
+          <div class="row" style="gap:8px;align-items:center">
+            <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 цифр" style="flex:1" value="${esc(custInnShow)}" />
+            <button type="button" class="secondary" id="d-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
+          </div>
+          <div class="hint" id="d-customer-inn-status"></div>
+        </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-contact-name">Контакт</label>
+            <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
+          </div>
+          <div>
+            <label for="d-contact-phone">Телефон контакта</label>
+            <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
+          </div>
+        </div>
+        <label for="d-carrier-company">Перевозчик</label>
+        <p class="hint">По умолчанию — наша фирма; смените, если возите партнёром.</p>
+        <select id="d-carrier-company">${carrierOpts.map(c=>`<option value="${esc(c.id)}" ${(o.carrierCompanyId===c.id||(!o.carrierCompanyId&&c.id===carrierDef))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет перевозчика —</option>`}</select>
+        <label for="d-vehicle-date">Подача ТС — дата</label>
+        <input id="d-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
+        <label for="d-vehicle-time">Подача ТС — время</label>
+        <input id="d-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" value="${esc(toTimeHmValue(o.vehicleAt))}" autocomplete="off" />
+        <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">${portalOpen?'Груз и ТС':'2. Груз и требования к ТС'}</h2>
+      <div class="form-fields">
+        <input type="hidden" id="d-cargo-kind" value="${esc(o.cargoKind||'')}" />
+        ${vTypeHint?`<p class="hint">Тип ТС из заявки: <strong>${esc(vTypeHint)}</strong> — ниже подставлены требования к кузову.</p>`:''}
         <label>Требования к ТС (т / Д×Ш×В)</label>
         <div class="row">
           <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" style="flex:0 0 64px;text-align:center" />
@@ -4208,22 +4612,11 @@ function openDetail(id){
           <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
         </div>
-        <div class="form-pair">
-          <div>
-            <label for="d-body-type">Кузов</label>
-            <select id="d-body-type">
-              <option value="">— не указан —</option>
-              ${(BODY_TYPES||[]).map(t=>`<option value="${esc(t.id)}" ${o.reqBodyType===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label for="d-cargo-kind">Груз</label>
-            <select id="d-cargo-kind">
-              <option value="">— не указан —</option>
-              ${(CARGO_KINDS||[]).map(t=>`<option value="${esc(t.id)}" ${o.cargoKind===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
-            </select>
-          </div>
-        </div>
+        <label for="d-body-type">Кузов</label>
+        <select id="d-body-type">
+          <option value="">— не указан —</option>
+          ${(BODY_TYPES||[]).map(t=>`<option value="${esc(t.id)}" ${o.reqBodyType===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
+        </select>
         <label for="d-cargo-desc">Описание груза (для документов)</label>
         <input id="d-cargo-desc" value="${esc(o.cargoDescription||'')}" placeholder="Паллеты, оборудование…" />
         <div class="form-triple">
@@ -4233,7 +4626,7 @@ function openDetail(id){
           </div>
           <div>
             <label for="d-cargo-volume">Объём, м³</label>
-            <input id="d-cargo-volume" inputmode="decimal" value="${o.cargoVolumeM3??''}" placeholder="12" />
+            <input id="d-cargo-volume" inputmode="decimal" value="${o.cargoVolumeM3??''}" placeholder="из Д×Ш×В" />
           </div>
           <div>
             <label for="d-cargo-weight">Масса, кг</label>
@@ -4253,50 +4646,31 @@ function openDetail(id){
             <input id="d-route-km" inputmode="numeric" value="${o.routeKm??''}" placeholder="авто" />
           </div>
         </div>
-        <label for="d-customer-inn">ИНН заказчика</label>
-        <div class="row" style="gap:8px;align-items:center">
-          <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" value="${esc(o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'')}" />
-          <button type="button" class="secondary" id="d-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
-        </div>
-        <div class="hint" id="d-customer-inn-status"></div>
-        <label for="d-customer">Заказчик (наименование)</label>
-        <input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название компании" />
-        <label for="d-carrier-company">Перевозчик</label>
-        <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">${portalOpen?'Цена':'3. Цена'}</h2>
+      <p class="form-section-hint">Перевозчик — по тарифу и типу ТС; заказчик — на <strong>35%</strong> выше перевозчика (можно поправить вручную).</p>
+      ${pricePair&&pricePair.hint?`<p class="hint" id="d-price-tariff-hint">${esc(pricePair.hint)}</p>`:''}
+      <div class="form-fields">
         <div class="form-pair">
           <div>
-            <label for="d-contact-name">Контакт</label>
-            <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
+            <label for="d-price-carrier">Цена перевозчику, ₽</label>
+            <input id="d-price-carrier" inputmode="decimal" value="${priceCarrierShow??''}" placeholder="из тарифа" />
           </div>
           <div>
-            <label for="d-contact-phone">Телефон контакта</label>
-            <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
+            <label for="d-price-client">Цена заказчику, ₽</label>
+            <input id="d-price-client" inputmode="decimal" value="${priceClientShow??''}" placeholder="+35%" />
           </div>
         </div>
-        <label for="d-vehicle-date">Подача ТС — дата</label>
-        <input id="d-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
-        <label for="d-vehicle-time">Подача ТС — время</label>
-        <input id="d-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" value="${esc(toTimeHmValue(o.vehicleAt))}" autocomplete="off" />
-        <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
-        <h3 style="margin:12px 0 4px;font-size:.85rem">Цены</h3>
-        <div class="form-pair">
-          <div>
-            <label for="d-price-client">Цена для заказчика, ₽</label>
-            <input id="d-price-client" inputmode="decimal" value="${o.priceForClient??''}" placeholder="сумма" />
-          </div>
-          <div>
-            <label for="d-price-carrier">Цена для перевозчика, ₽</label>
-            <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
-          </div>
-        </div>
-        ${o.bookedPlate?`<p class="hint">${o.bookStatus==='confirmed'?'Бронь подтверждена':'Запрос брони'}: ${esc(o.bookedPlate)}${o.bookStatus==='confirmed'?' · в календаре на дату подачи':o.bookStatus==='requested'?' · ждут вашего подтверждения':o.bookStatus==='rejected'?' · отклонена':''}</p>`:''}
-        ${o.fulfillment==='logist'?'<p class="hint">Срочно: заказчик просит закрыть как можно скорее, ставка логиста в цене.</p>':o.fulfillment==='direct'?'<p class="hint">Прямой парк, без срочной ставки логиста.</p>':''}
+        <button type="button" class="secondary" id="d-price-recalc" style="width:auto">Пересчитать из тарифа</button>
         ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="hint">${esc(logistMarginLine(o))}</p>`:''}
+        ${o.bookedPlate?`<p class="hint">${o.bookStatus==='confirmed'?'Бронь подтверждена':'Запрос брони'}: ${esc(o.bookedPlate)}</p>`:''}
       </div>
     </section>
     ${typeof orderDriverVehicleDocsSectionHtml==='function'?orderDriverVehicleDocsSectionHtml(o):''}
     <section class="form-section">
-      <h2 class="form-section-title">2. Маршрут</h2>
+      <h2 class="form-section-title">${portalOpen?'Маршрут':'4. Маршрут'}</h2>
       <div class="form-fields">
         <div id="route-editor"></div>
         <div class="form-pair">
@@ -4506,7 +4880,6 @@ function openDetail(id){
     refreshDriverDocsWarnBox($('d-driver-docs-warn'), nm, detailFirmId());
   };
   $('d-driver-name')&&($('d-driver-name').oninput=refreshDetailDrvWarn);
-  $('d-driver-name')&&($('d-driver-name').onchange=refreshDetailDrvWarn);
   $('d-own-company')&&($('d-own-company').onchange=refreshDetailDrvWarn);
   refreshDetailDrvWarn();
   const detailAssignBtn=$('detail-assign-apply');
@@ -4543,6 +4916,51 @@ function openDetail(id){
   if(shipSameEl&&shipBox){
     shipSameEl.onchange=()=>{ shipBox.hidden=shipSameEl.checked; };
   }
+  const syncCustomerInnWrap=()=>{
+    const wrap=$('d-customer-inn-wrap');
+    const typ=(($('d-customer-type')||{}).value||'person');
+    if(wrap) wrap.hidden=(typ==='person');
+    if(typ==='person'&&$('d-customer-inn')) $('d-customer-inn').value='';
+  };
+  $('d-customer-type')&&($('d-customer-type').onchange=syncCustomerInnWrap);
+  syncCustomerInnWrap();
+  const applyDetailPriceFromCarrier=()=>{
+    const c=numOrNull(($('d-price-carrier')||{}).value);
+    if(!(c>0)) return;
+    const cl=$('d-price-client');
+    if(cl) cl.value=String(Math.round(c*ADMIN_LOGIST_CLIENT_MARKUP));
+  };
+  const recalcDetailPricesFromTariff=()=>{
+    const order=state.orders.find(x=>x.id===id);
+    if(!order) return;
+    const draft=Object.assign({}, order, {
+      ownCompanyId:(($('d-own-company')||{}).value)||order.ownCompanyId,
+      reqBodyType:(($('d-body-type')||{}).value||'').trim()||order.reqBodyType,
+      reqPayloadTons:numOrNull(($('d-req-pay')||{}).value),
+      tripMode:(($('d-trip-mode')||{}).value||'')==='intercity'?'intercity':'city',
+      routeKm:numOrNull(($('d-route-km')||{}).value),
+      fulfillment:order.fulfillment||'direct'
+    });
+    const pair=adminOrderLogistPricePair(draft);
+    if(!pair) return;
+    if($('d-price-carrier')) $('d-price-carrier').value=String(pair.carrier);
+    if($('d-price-client')) $('d-price-client').value=String(pair.client);
+    const hint=$('d-price-tariff-hint');
+    if(hint&&pair.hint) hint.textContent=pair.hint;
+  };
+  $('d-price-carrier')&&($('d-price-carrier').onchange=applyDetailPriceFromCarrier);
+  $('d-price-recalc')&&($('d-price-recalc').onclick=recalcDetailPricesFromTariff);
+  ['d-req-l','d-req-w','d-req-h'].forEach(id=>{
+    const el=$(id);
+    if(el) el.oninput=adminRecalcCargoVolumeFromDims;
+  });
+  const fillDetailDriverPhone=()=>{
+    const nm=(($('d-driver-name')||{}).value||'').trim();
+    if(!nm) return;
+    const rec=findDriverRecord(nm, detailFirmId());
+    if(rec&&rec.phone&&$('d-driver-phone')) $('d-driver-phone').value=formatPhone(rec.phone);
+  };
+  $('d-driver-name')&&($('d-driver-name').onchange=()=>{ refreshDetailDrvWarn(); fillDetailDriverPhone(); });
   $('d-customer-inn-lookup')&&($('d-customer-inn-lookup').onclick=()=>{
     applyCustomerFromInn((($('d-customer-inn')||{}).value||'').trim(), $('d-customer-inn-status'), 'd');
   });
@@ -4590,7 +5008,14 @@ function openDetail(id){
     }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
-    const custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
+    const custParty=(($('d-customer-type')||{}).value||'person');
+    let custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
+    if(custParty==='person'){
+      custInn='';
+    }else if(custInn.length!==10){
+      showErr('Для юридического лица укажите ИНН (10 цифр) или нажмите «Загрузить»');
+      return;
+    }
     order.customerInn=custInn;
     order.priceForClient=numOrNull(($('d-price-client')||{}).value);
     order.priceForCarrier=numOrNull(($('d-price-carrier')||{}).value);

@@ -1,5 +1,12 @@
 /* АРМАДА PWA — JS/CSS network-first (не держать сломанный кэш) */
-const CACHE = 'armada-shell-v80';
+const CACHE = 'armada-shell-v85';
+function swResponseOrError(promise, fallbackUrl){
+  return Promise.resolve(promise).then(r=>{
+    if(r) return r;
+    if(fallbackUrl) return caches.match(fallbackUrl);
+    return Response.error();
+  }).then(r=>r||Response.error());
+}
 const SHELL = ['./manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './logo.png'];
 
 self.addEventListener('install', (event) => {
@@ -23,24 +30,23 @@ self.addEventListener('fetch', (event) => {
   const isDoc = req.mode === 'navigate' || path.endsWith('/') || /index\.html$/i.test(path) || /\/sw\.js$/i.test(path);
   const isScriptOrStyle = /\.(js|css)$/i.test(path);
   if (isDoc) {
-    event.respondWith(
-      fetch(req, { cache: 'no-store' }).catch(() =>
-        caches.match('./index.html').then((r) => r || caches.match('./'))
-      )
-    );
+    event.respondWith(swResponseOrError(
+      fetch(req, { cache: 'no-store' }).catch(()=>caches.match('./index.html')),
+      './'
+    ));
     return;
   }
   if (isScriptOrStyle) {
     const versioned = url.searchParams.has('v');
     if (versioned) {
-      event.respondWith(
-        fetch(req, { cache: 'no-store' }).catch(() => caches.match(req))
-      );
+      event.respondWith(swResponseOrError(
+        fetch(req, { cache: 'no-store' }).catch(()=>caches.match(req))
+      ));
       return;
     }
-    event.respondWith(
-      fetch(req).catch(() => caches.match(req))
-    );
+    event.respondWith(swResponseOrError(
+      fetch(req).catch(()=>caches.match(req))
+    ));
     return;
   }
   event.respondWith(

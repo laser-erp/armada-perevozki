@@ -48,25 +48,25 @@
           <label>Телефон <span class="req">*</span>
             <input type="tel" id="order-phone" name="phone" required autocomplete="tel" placeholder="+7 …" />
           </label>
-          <label>Контактное лицо
-            <input type="text" id="order-name" name="contactName" autocomplete="name" placeholder="Если отличается от ФИО выше" />
+          <label>Контактное лицо <span class="req">*</span>
+            <input type="text" id="order-name" name="contactName" required autocomplete="name" placeholder="ФИО на объекте" />
           </label>
           <label id="order-address-label">Адрес подачи <span class="req">*</span>
             <input type="text" id="order-address" name="loadAddress" required placeholder="Город, улица, объект" />
           </label>
-          <label id="order-unload-wrap">Адрес выгрузки
-            <input type="text" id="order-unload" name="unloadAddress" placeholder="Если нужна перевозка между точками" />
+          <label id="order-unload-wrap">Адрес выгрузки <span class="req">*</span>
+            <input type="text" id="order-unload" name="unloadAddress" placeholder="Куда везём груз" />
           </label>
           <div class="landing-order-datetime">
             <label>Дата подачи <span class="req">*</span>
               <input type="date" id="order-date" name="date" required />
             </label>
-            <label>Время
-              <input type="time" id="order-time" name="time" />
+            <label>Время <span class="req">*</span>
+              <input type="time" id="order-time" name="time" required />
             </label>
           </div>
-          <label>Что перевозим / комментарий
-            <textarea id="order-comment" name="comment" rows="3" placeholder="Груз, тоннаж, особенности погрузки…"></textarea>
+          <label>Что перевозим / комментарий <span class="req">*</span>
+            <textarea id="order-comment" name="comment" rows="3" required placeholder="Груз, тоннаж, особенности погрузки…"></textarea>
           </label>
           <p class="landing-lead-status" id="order-status" hidden></p>
           <button type="submit" class="landing-btn landing-btn-primary" id="order-submit">Отправить заявку</button>
@@ -92,6 +92,6 @@
     <p>ООО «Армада» · app.armada.sx</p>
   </footer>
 
-  <script src="/order-public.js?v=2026-08-31-armada-logist4317"></script>
+  <script src="/order-public.js?v=2026-09-24-order-public-sync-v7"></script>
 </body>
 </html>
