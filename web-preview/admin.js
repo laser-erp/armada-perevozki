@@ -4280,6 +4280,67 @@ function adminDetailDisplayPlate(o){
   if(!p||p==='—'||p==='-') return 'не назначено';
   return p;
 }
+const ADMIN_LOGIST_CLIENT_MARKUP=1.35;
+function adminCustomerPartyType(o){
+  const inn=String((o&&o.customerInn)||'').replace(/\D/g,'');
+  if(inn.length===10) return 'legal';
+  if(inn.length===12) return 'person';
+  const n=String((o&&o.customer)||'').toLowerCase();
+  if(/\b(ооо|оао|зао|пао|ао|ип|общество|компания)\b/u.test(n)) return 'legal';
+  return 'person';
+}
+function adminHydrateOrderReqsForDisplay(o){
+  if(!o) return o;
+  if(!o.reqBodyType&&Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds[0]&&typeof mapVtypeToBodyType==='function'){
+    o.reqBodyType=mapVtypeToBodyType(o.vehicleTypeIds[0]);
+  }
+  if(!(o.reqPayloadTons>0)&&o.cargoWeightKg>0) o.reqPayloadTons=Math.round(o.cargoWeightKg/10)/100;
+  if(!(o.cargoVolumeM3>0)&&o.reqLengthM>0&&o.reqWidthM>0&&o.reqHeightM>0){
+    o.cargoVolumeM3=Math.round(o.reqLengthM*o.reqWidthM*o.reqHeightM*10)/10;
+  }
+  return o;
+}
+function adminVehicleTypeHint(o){
+  const ids=Array.isArray(o&&o.vehicleTypeIds)?o.vehicleTypeIds:[];
+  const labels=ids.map(id=>typeof custVehicleTypeLabel==='function'?custVehicleTypeLabel(id):id).filter(Boolean);
+  return labels.length?labels.join(', '):'';
+}
+function adminCarrierOptionsForOrder(o){
+  const seen=new Set();
+  const out=[];
+  const push=c=>{ if(!c||!c.id||seen.has(c.id)) return; seen.add(c.id); out.push(c); };
+  push(findCompanyById(o&&o.ownCompanyId));
+  (companiesByRole('carrier')||[]).forEach(push);
+  (ownCompanies()||[]).forEach(push);
+  return out.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+}
+function adminDefaultCarrierId(o){
+  if(o&&o.carrierCompanyId) return o.carrierCompanyId;
+  if(o&&o.ownCompanyId) return o.ownCompanyId;
+  const cur=typeof currentOwnCompany==='function'?currentOwnCompany():null;
+  return cur&&cur.id||'';
+}
+function adminOrderLogistPricePair(o){
+  if(typeof suggestCustomerOrderPrice!=='function') return null;
+  const quote=suggestCustomerOrderPrice(o);
+  if(!quote) return null;
+  let carrier=typeof customerCarrierBaseCash==='function'?customerCarrierBaseCash(quote):null;
+  if(!(carrier>0)&&quote.minimumCash>0) carrier=Math.round(quote.minimumCash/ADMIN_LOGIST_CLIENT_MARKUP);
+  if(!(carrier>0)) return null;
+  return {
+    carrier:Math.round(carrier),
+    client:Math.round(carrier*ADMIN_LOGIST_CLIENT_MARKUP),
+    hint:quote.summary||''
+  };
+}
+function adminRecalcCargoVolumeFromDims(){
+  const l=numOrNull(($('d-req-l')||{}).value);
+  const w=numOrNull(($('d-req-w')||{}).value);
+  const h=numOrNull(($('d-req-h')||{}).value);
+  const volEl=$('d-cargo-volume');
+  if(!volEl||!(l>0&&w>0&&h>0)) return;
+  volEl.value=String(Math.round(l*w*h*10)/10);
+}
 function adminOrderDetailHeroHtml(o){
   const route=typeof routeText==='function'?routeText(o):'—';
   const when=o.vehicleAt&&typeof formatRuDateTimeAt==='function'?formatRuDateTimeAt(o.vehicleAt):'—';
@@ -4316,12 +4377,13 @@ function adminOrderDetailAssignSectionHtml(o){
   let curPlate=typeof orderDocVehiclePlate==='function'?orderDocVehiclePlate(o):String(o.vehiclePlate||'');
   if(curPlate==='—'||curPlate==='-') curPlate='';
   const drvVal=curDrv==='Диспетчер'||curDrv==='Биржа'||curDrv==='—'?'':curDrv;
+  const drvSelected=drvVal&&drvList.some(d=>samePersonName(d.name,drvVal));
   const drvField=drvList.length
-    ?`<select id="d-driver-name">${drvList.map(d=>`<option value="${esc(d.name)}"${samePersonName(d.name,drvVal||curDrv)?' selected':''}>${esc(d.name)}</option>`).join('')}</select>`
-    :`<input id="d-driver-name" value="${esc(drvVal)}" placeholder="ФИО водителя" />`;
+    ?`<select id="d-driver-name"><option value=""${!drvSelected?' selected':''}>Назначьте водителя</option>${drvList.map(d=>`<option value="${esc(d.name)}"${samePersonName(d.name,drvVal)?' selected':''}>${esc(d.name)}</option>`).join('')}</select>`
+    :`<input id="d-driver-name" value="${esc(drvVal)}" placeholder="Назначьте водителя" />`;
   const plateField=vehList.length
-    ?`<select id="d-vehicle-plate"><option value="">— выберите ТС —</option>${vehList.map(v=>`<option value="${esc(v.plate)}"${curPlate&&v.plate===curPlate?' selected':''}>${esc(v.plate)}</option>`).join('')}</select>`
-    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Госномер" />`;
+    ?`<select id="d-vehicle-plate"><option value=""${!curPlate?' selected':''}>Выберите ТС</option>${vehList.map(v=>`<option value="${esc(v.plate)}"${curPlate&&v.plate===curPlate?' selected':''}>${esc(v.plate)}</option>`).join('')}</select>`
+    :`<input id="d-vehicle-plate" value="${esc(curPlate)}" placeholder="Выберите ТС" />`;
   return `<section class="form-section admin-order-assign">
     <h2 class="form-section-title">Назначение парка</h2>
     <p class="form-section-hint">Выберите водителя и авто — номер появится в карточке и у водителя в «Мои заявки».</p>
@@ -4345,6 +4407,7 @@ function openDetail(id){
   if(typeof isLogistInboxOrder==='function' && isLogistInboxOrder(o)) markAdminInboxOrdersSeen([o]);
   if(!canAdminSeeOrder(o)){ alert('Чужой заказ — нет доступа'); show('admin'); renderAdmin(); return; }
   recomputeOrderTimes(ensureOrderTimeStamps(o));
+  adminHydrateOrderReqsForDisplay(o);
   const m=metrics(o);
   let editPoints=ensureRoutePoints(o).map(p=>({...p}));
   const readPointsFromDom=()=>{
@@ -4481,6 +4544,15 @@ function openDetail(id){
           </div>
         </div>
         <div id="d-driver-docs-warn" hidden></div>`;
+  const partyType=adminCustomerPartyType(o);
+  const vTypeHint=adminVehicleTypeHint(o);
+  const priceDraft=Object.assign({}, o, {fulfillment:o.fulfillment||'direct'});
+  const pricePair=adminOrderLogistPricePair(priceDraft);
+  const priceClientShow=o.priceForClient??(pricePair?pricePair.client:'');
+  const priceCarrierShow=o.priceForCarrier??(pricePair?pricePair.carrier:'');
+  const carrierDef=adminDefaultCarrierId(o);
+  const carrierOpts=adminCarrierOptionsForOrder(o);
+  const custInnShow=o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'';
   $('detail-form').innerHTML=`
     <div class="cust-form-blocks admin-order-blocks">
     ${adminOrderDetailHeroHtml(o)}
@@ -4488,11 +4560,51 @@ function openDetail(id){
     ${svodkaSection}
     ${portalOpen?'':docsBlock}
     <section class="form-section">
-      <h2 class="form-section-title">${portalOpen?'Заказчик и груз':'1. Заказчик и груз'}</h2>
+      <h2 class="form-section-title">${portalOpen?'Заказчик':'1. Заказчик'}</h2>
       <div class="form-fields">
         ${driverFieldsFallback}
         <label for="d-own-company">От нашей фирмы</label>
         <select id="d-own-company">${ownCompanies().map(c=>`<option value="${esc(c.id)}" ${(o.ownCompanyId===c.id || (!o.ownCompanyId && o.ownCompanyName===c.name))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет наших фирм —</option>`}</select>
+        <label for="d-customer-type">Тип заказчика</label>
+        <select id="d-customer-type">
+          <option value="person" ${partyType==='person'?'selected':''}>Физическое лицо</option>
+          <option value="legal" ${partyType==='legal'?'selected':''}>Юридическое лицо</option>
+        </select>
+        <label for="d-customer">Наименование / ФИО</label>
+        <input id="d-customer" value="${esc(o.customer||'')}" placeholder="Компания или ФИО" />
+        <div id="d-customer-inn-wrap" ${partyType==='person'?'hidden':''}>
+          <label for="d-customer-inn">ИНН заказчика (обязательно для юр. лица)</label>
+          <div class="row" style="gap:8px;align-items:center">
+            <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 цифр" style="flex:1" value="${esc(custInnShow)}" />
+            <button type="button" class="secondary" id="d-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
+          </div>
+          <div class="hint" id="d-customer-inn-status"></div>
+        </div>
+        <div class="form-pair">
+          <div>
+            <label for="d-contact-name">Контакт</label>
+            <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
+          </div>
+          <div>
+            <label for="d-contact-phone">Телефон контакта</label>
+            <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
+          </div>
+        </div>
+        <label for="d-carrier-company">Перевозчик</label>
+        <p class="hint">По умолчанию — наша фирма; смените, если возите партнёром.</p>
+        <select id="d-carrier-company">${carrierOpts.map(c=>`<option value="${esc(c.id)}" ${(o.carrierCompanyId===c.id||(!o.carrierCompanyId&&c.id===carrierDef))?'selected':''}>${esc(c.name)}</option>`).join('')||`<option value="">— нет перевозчика —</option>`}</select>
+        <label for="d-vehicle-date">Подача ТС — дата</label>
+        <input id="d-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
+        <label for="d-vehicle-time">Подача ТС — время</label>
+        <input id="d-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" value="${esc(toTimeHmValue(o.vehicleAt))}" autocomplete="off" />
+        <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">${portalOpen?'Груз и ТС':'2. Груз и требования к ТС'}</h2>
+      <div class="form-fields">
+        <input type="hidden" id="d-cargo-kind" value="${esc(o.cargoKind||'')}" />
+        ${vTypeHint?`<p class="hint">Тип ТС из заявки: <strong>${esc(vTypeHint)}</strong> — ниже подставлены требования к кузову.</p>`:''}
         <label>Требования к ТС (т / Д×Ш×В)</label>
         <div class="row">
           <input id="d-req-pay" inputmode="decimal" placeholder="т" value="${o.reqPayloadTons??''}" style="flex:0 0 64px;text-align:center" />
@@ -4500,22 +4612,11 @@ function openDetail(id){
           <input id="d-req-w" inputmode="decimal" placeholder="Ш, м" value="${o.reqWidthM??''}" style="flex:1;text-align:center" />
           <input id="d-req-h" inputmode="decimal" placeholder="В, м" value="${o.reqHeightM??''}" style="flex:1;text-align:center" />
         </div>
-        <div class="form-pair">
-          <div>
-            <label for="d-body-type">Кузов</label>
-            <select id="d-body-type">
-              <option value="">— не указан —</option>
-              ${(BODY_TYPES||[]).map(t=>`<option value="${esc(t.id)}" ${o.reqBodyType===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label for="d-cargo-kind">Груз</label>
-            <select id="d-cargo-kind">
-              <option value="">— не указан —</option>
-              ${(CARGO_KINDS||[]).map(t=>`<option value="${esc(t.id)}" ${o.cargoKind===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
-            </select>
-          </div>
-        </div>
+        <label for="d-body-type">Кузов</label>
+        <select id="d-body-type">
+          <option value="">— не указан —</option>
+          ${(BODY_TYPES||[]).map(t=>`<option value="${esc(t.id)}" ${o.reqBodyType===t.id?'selected':''}>${esc(t.label)}</option>`).join('')}
+        </select>
         <label for="d-cargo-desc">Описание груза (для документов)</label>
         <input id="d-cargo-desc" value="${esc(o.cargoDescription||'')}" placeholder="Паллеты, оборудование…" />
         <div class="form-triple">
@@ -4525,7 +4626,7 @@ function openDetail(id){
           </div>
           <div>
             <label for="d-cargo-volume">Объём, м³</label>
-            <input id="d-cargo-volume" inputmode="decimal" value="${o.cargoVolumeM3??''}" placeholder="12" />
+            <input id="d-cargo-volume" inputmode="decimal" value="${o.cargoVolumeM3??''}" placeholder="из Д×Ш×В" />
           </div>
           <div>
             <label for="d-cargo-weight">Масса, кг</label>
@@ -4545,50 +4646,31 @@ function openDetail(id){
             <input id="d-route-km" inputmode="numeric" value="${o.routeKm??''}" placeholder="авто" />
           </div>
         </div>
-        <label for="d-customer-inn">ИНН заказчика</label>
-        <div class="row" style="gap:8px;align-items:center">
-          <input id="d-customer-inn" inputmode="numeric" maxlength="12" placeholder="10 или 12 цифр" style="flex:1" value="${esc(o.customerInn||(findCompanyById(o.customerId)||findCompanyByName(o.customer)||{}).inn||'')}" />
-          <button type="button" class="secondary" id="d-customer-inn-lookup" style="width:auto;flex:0 0 auto;padding:8px 12px">Загрузить</button>
-        </div>
-        <div class="hint" id="d-customer-inn-status"></div>
-        <label for="d-customer">Заказчик (наименование)</label>
-        <input id="d-customer" value="${esc(o.customer||'')}" placeholder="Название компании" />
-        <label for="d-carrier-company">Перевозчик</label>
-        <select id="d-carrier-company"><option value="">— без перевозчика —</option>${companiesByRole('carrier').map(c=>`<option value="${esc(c.id)}" ${o.carrierCompanyId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+      </div>
+    </section>
+    <section class="form-section">
+      <h2 class="form-section-title">${portalOpen?'Цена':'3. Цена'}</h2>
+      <p class="form-section-hint">Перевозчик — по тарифу и типу ТС; заказчик — на <strong>35%</strong> выше перевозчика (можно поправить вручную).</p>
+      ${pricePair&&pricePair.hint?`<p class="hint" id="d-price-tariff-hint">${esc(pricePair.hint)}</p>`:''}
+      <div class="form-fields">
         <div class="form-pair">
           <div>
-            <label for="d-contact-name">Контакт</label>
-            <input id="d-contact-name" value="${esc(o.contactName||'')}" placeholder="ФИО" />
+            <label for="d-price-carrier">Цена перевозчику, ₽</label>
+            <input id="d-price-carrier" inputmode="decimal" value="${priceCarrierShow??''}" placeholder="из тарифа" />
           </div>
           <div>
-            <label for="d-contact-phone">Телефон контакта</label>
-            <input id="d-contact-phone" inputmode="tel" value="${esc(formatPhone(o.contactPhone||''))}" placeholder="+79650730002" />
+            <label for="d-price-client">Цена заказчику, ₽</label>
+            <input id="d-price-client" inputmode="decimal" value="${priceClientShow??''}" placeholder="+35%" />
           </div>
         </div>
-        <label for="d-vehicle-date">Подача ТС — дата</label>
-        <input id="d-vehicle-date" lang="ru" placeholder="ДД.ММ.ГГГГ" inputmode="numeric" maxlength="10" value="${esc(toRuDateValue(o.vehicleAt))}" autocomplete="off" />
-        <label for="d-vehicle-time">Подача ТС — время</label>
-        <input id="d-vehicle-time" lang="ru" placeholder="ЧЧ:ММ" inputmode="numeric" maxlength="5" value="${esc(toTimeHmValue(o.vehicleAt))}" autocomplete="off" />
-        <div class="hint" id="d-free-hint">Ориентир освобождения: ${o.vehicleAt?esc(formatRuDateTimeAt(o.freeAt||computeFreeAt(o.vehicleAt,o,financeForOrder(o))))+' (подача + часы работы)':'укажите подачу ТС'}</div>
-        <h3 style="margin:12px 0 4px;font-size:.85rem">Цены</h3>
-        <div class="form-pair">
-          <div>
-            <label for="d-price-client">Цена для заказчика, ₽</label>
-            <input id="d-price-client" inputmode="decimal" value="${o.priceForClient??''}" placeholder="сумма" />
-          </div>
-          <div>
-            <label for="d-price-carrier">Цена для перевозчика, ₽</label>
-            <input id="d-price-carrier" inputmode="decimal" value="${o.priceForCarrier??''}" placeholder="сумма" />
-          </div>
-        </div>
-        ${o.bookedPlate?`<p class="hint">${o.bookStatus==='confirmed'?'Бронь подтверждена':'Запрос брони'}: ${esc(o.bookedPlate)}${o.bookStatus==='confirmed'?' · в календаре на дату подачи':o.bookStatus==='requested'?' · ждут вашего подтверждения':o.bookStatus==='rejected'?' · отклонена':''}</p>`:''}
-        ${o.fulfillment==='logist'?'<p class="hint">Срочно: заказчик просит закрыть как можно скорее, ставка логиста в цене.</p>':o.fulfillment==='direct'?'<p class="hint">Прямой парк, без срочной ставки логиста.</p>':''}
+        <button type="button" class="secondary" id="d-price-recalc" style="width:auto">Пересчитать из тарифа</button>
         ${typeof logistMarginLine==='function'&&logistMarginLine(o)?`<p class="hint">${esc(logistMarginLine(o))}</p>`:''}
+        ${o.bookedPlate?`<p class="hint">${o.bookStatus==='confirmed'?'Бронь подтверждена':'Запрос брони'}: ${esc(o.bookedPlate)}</p>`:''}
       </div>
     </section>
     ${typeof orderDriverVehicleDocsSectionHtml==='function'?orderDriverVehicleDocsSectionHtml(o):''}
     <section class="form-section">
-      <h2 class="form-section-title">2. Маршрут</h2>
+      <h2 class="form-section-title">${portalOpen?'Маршрут':'4. Маршрут'}</h2>
       <div class="form-fields">
         <div id="route-editor"></div>
         <div class="form-pair">
@@ -4798,7 +4880,6 @@ function openDetail(id){
     refreshDriverDocsWarnBox($('d-driver-docs-warn'), nm, detailFirmId());
   };
   $('d-driver-name')&&($('d-driver-name').oninput=refreshDetailDrvWarn);
-  $('d-driver-name')&&($('d-driver-name').onchange=refreshDetailDrvWarn);
   $('d-own-company')&&($('d-own-company').onchange=refreshDetailDrvWarn);
   refreshDetailDrvWarn();
   const detailAssignBtn=$('detail-assign-apply');
@@ -4835,6 +4916,51 @@ function openDetail(id){
   if(shipSameEl&&shipBox){
     shipSameEl.onchange=()=>{ shipBox.hidden=shipSameEl.checked; };
   }
+  const syncCustomerInnWrap=()=>{
+    const wrap=$('d-customer-inn-wrap');
+    const typ=(($('d-customer-type')||{}).value||'person');
+    if(wrap) wrap.hidden=(typ==='person');
+    if(typ==='person'&&$('d-customer-inn')) $('d-customer-inn').value='';
+  };
+  $('d-customer-type')&&($('d-customer-type').onchange=syncCustomerInnWrap);
+  syncCustomerInnWrap();
+  const applyDetailPriceFromCarrier=()=>{
+    const c=numOrNull(($('d-price-carrier')||{}).value);
+    if(!(c>0)) return;
+    const cl=$('d-price-client');
+    if(cl) cl.value=String(Math.round(c*ADMIN_LOGIST_CLIENT_MARKUP));
+  };
+  const recalcDetailPricesFromTariff=()=>{
+    const order=state.orders.find(x=>x.id===id);
+    if(!order) return;
+    const draft=Object.assign({}, order, {
+      ownCompanyId:(($('d-own-company')||{}).value)||order.ownCompanyId,
+      reqBodyType:(($('d-body-type')||{}).value||'').trim()||order.reqBodyType,
+      reqPayloadTons:numOrNull(($('d-req-pay')||{}).value),
+      tripMode:(($('d-trip-mode')||{}).value||'')==='intercity'?'intercity':'city',
+      routeKm:numOrNull(($('d-route-km')||{}).value),
+      fulfillment:order.fulfillment||'direct'
+    });
+    const pair=adminOrderLogistPricePair(draft);
+    if(!pair) return;
+    if($('d-price-carrier')) $('d-price-carrier').value=String(pair.carrier);
+    if($('d-price-client')) $('d-price-client').value=String(pair.client);
+    const hint=$('d-price-tariff-hint');
+    if(hint&&pair.hint) hint.textContent=pair.hint;
+  };
+  $('d-price-carrier')&&($('d-price-carrier').onchange=applyDetailPriceFromCarrier);
+  $('d-price-recalc')&&($('d-price-recalc').onclick=recalcDetailPricesFromTariff);
+  ['d-req-l','d-req-w','d-req-h'].forEach(id=>{
+    const el=$(id);
+    if(el) el.oninput=adminRecalcCargoVolumeFromDims;
+  });
+  const fillDetailDriverPhone=()=>{
+    const nm=(($('d-driver-name')||{}).value||'').trim();
+    if(!nm) return;
+    const rec=findDriverRecord(nm, detailFirmId());
+    if(rec&&rec.phone&&$('d-driver-phone')) $('d-driver-phone').value=formatPhone(rec.phone);
+  };
+  $('d-driver-name')&&($('d-driver-name').onchange=()=>{ refreshDetailDrvWarn(); fillDetailDriverPhone(); });
   $('d-customer-inn-lookup')&&($('d-customer-inn-lookup').onclick=()=>{
     applyCustomerFromInn((($('d-customer-inn')||{}).value||'').trim(), $('d-customer-inn-status'), 'd');
   });
@@ -4882,7 +5008,14 @@ function openDetail(id){
     }
     const num=el=>{ const v=($(el).value||'').trim().replace(',','.'); return v===''?null:Number(v); };
     order.customer=($('d-customer').value||'').trim();
-    const custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
+    const custParty=(($('d-customer-type')||{}).value||'person');
+    let custInn=String((($('d-customer-inn')||{}).value||'')).replace(/\D/g,'');
+    if(custParty==='person'){
+      custInn='';
+    }else if(custInn.length!==10){
+      showErr('Для юридического лица укажите ИНН (10 цифр) или нажмите «Загрузить»');
+      return;
+    }
     order.customerInn=custInn;
     order.priceForClient=numOrNull(($('d-price-client')||{}).value);
     order.priceForCarrier=numOrNull(($('d-price-carrier')||{}).value);

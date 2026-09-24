@@ -26,6 +26,11 @@
 | `mobile-performance.mdc` | UI в `web-preview/` |
 | `00-never-break.mdc` / `do-not-break-verify.mdc` | детальный чеклист |
 
+## Прогон QA (жизненный цикл заявки)
+
+- Изоляция шагов: `ORDER_LIFECYCLE_QA_ISOLATION.md` — после **ДА**: **на шаге N установлен ЗАМОК** (список **ЗАМКИ** в `ORDER_LIFECYCLE_QA_RUN.md`); правки только для следующих шагов.
+- Журнал: `ORDER_LIFECYCLE_QA_RUN.md` · техника для агента: `ORDER_LIFECYCLE_QA_AGENT.md`.
+
 ## Тесты и удаления данных
 
 - База **общая** (Армада, Нечаев, МБН). **E2E, QA, массовое удаление заказов** — **только кабинет ООО «Армада»** (`spaceId` фирмы «Армада», `findArmadaLogistCompany()`).
@@ -40,6 +45,7 @@
 
 `docs/HANDOFF.archive.md`, `docs/TASK_*.done.md`, стратегический план / O-02 / трекер.
 
-## Модули
+## Модули и навигация
 
-`web-preview/`: `store.js`, `admin.js`, `app.js`, `driver.js`, `index.html`, `styles.css`.
+**Карта «тема → файл → символ»:** [`AGENT_NAVIGATION.md`](AGENT_NAVIGATION.md) — **держать актуальной** (Евгений: да). Читать перед обходом репо; после задачи с новым файлом/входом — **одна строка** в карту в той же задаче.  
+Ядро UI: `store.js`, `app.js`, `admin.js`, `driver.js`, `customer.js`, `order-public.js`, `order-documents.js`.

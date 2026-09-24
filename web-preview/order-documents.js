@@ -7,7 +7,7 @@ const DOC_STATUSES=[
 ];
 const DOC_KINDS=[
   {id:'application', title:'Заявка на перевозку', hint:'Основные данные заявки для заказчика'},
-  {id:'transportApp', title:'Договор‑заявка', hint:'Между заказчиком и перевозчиком'},
+  {id:'transportApp', title:'Договор‑заявка', hint:'Печать: для заказчика или для перевозчика (разные суммы)'},
   {id:'act', title:'Акт выполненных работ', hint:'После выполнения / закрытия заказа'}
 ];
 
@@ -56,11 +56,92 @@ function partyLinesHtml(p){
   const addr=p.address?`<div class="muted">${esc(p.address)}</div>`:'';
   return `<div class="party"><strong>${esc(p.name||'—')}</strong>${req}${addr}</div>`;
 }
+/** Сумма для заказчика на бланке (не цена перевозчику). */
+function orderDocCustomerAmount(o){
+  if(!o) return null;
+  if(+o.priceForClient>0) return Math.round(+o.priceForClient);
+  if(o.pricePending) return null;
+  const legacy=typeof clientRate==='function'?clientRate(o):null;
+  if(legacy!=null&&+legacy>0) return Math.round(+legacy);
+  return null;
+}
+function orderDocTariffBasisText(o){
+  const fin=typeof financeForOrder==='function'?financeForOrder(o):null;
+  if(!fin) return '';
+  const bits=[];
+  bits.push(`мин. ${fin.minWorkHours??4} ч работы + ${fin.podachaHours??1} ч подачи`);
+  if(fin.cityKmThreshold>0) bits.push(`в пакете до ${fin.cityKmThreshold} км`);
+  if(fin.defaultRatePerKmCash>0) bits.push(`сверх пакета ${fmt(fin.defaultRatePerKmCash)} ₽/км (нал)`);
+  if(fin.defaultRatePerHourWork>0) bits.push(`${fmt(fin.defaultRatePerHourWork)} ₽/ч`);
+  if(o.tripMode==='intercity') bits.push('межгород');
+  else bits.push('город');
+  if(o.routeKm>0) bits.push(`≈ ${o.routeKm} км`);
+  const body=o.reqBodyType&&typeof bodyTypeLabel==='function'?bodyTypeLabel(o.reqBodyType):'';
+  if(body) bits.push(`ТС: ${body}`);
+  if(Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds.length&&typeof custVehicleTypeLabel==='function'){
+    bits.push(o.vehicleTypeIds.map(id=>custVehicleTypeLabel(id)).filter(Boolean).join(', '));
+  }
+  return bits.join(' · ');
+}
+function orderDocTariffCalcText(o){
+  if(typeof suggestCustomerOrderPrice!=='function') return '';
+  const quote=suggestCustomerOrderPrice(Object.assign({}, o, {fulfillment:o.fulfillment||'direct'}));
+  return quote&&quote.summary?String(quote.summary).trim():'';
+}
 function orderDocMoneyLine(o){
-  const rate=clientRate(o);
+  const amount=orderDocCustomerAmount(o);
   const form=paymentFormLabel(o);
-  if(rate==null) return `Форма оплаты: ${form}. Сумма не заполнена.`;
-  return `Форма оплаты: ${form}. Сумма к оплате: ${fmt(rate)} ₽`;
+  if(amount==null){
+    return o&&o.pricePending
+      ? `Форма оплаты: ${form}. Стоимость для заказчика уточняется.`
+      : `Форма оплаты: ${form}. Стоимость для заказчика не указана.`;
+  }
+  return `Стоимость перевозки для заказчика: ${fmt(amount)} ₽ (${form}).`;
+}
+function orderDocMoneyBreakdownLine(o){
+  const basis=orderDocTariffBasisText(o);
+  const calc=orderDocTariffCalcText(o);
+  let s='В указанную сумму входит перевозка по тарифу перевозчика';
+  if(basis) s+=` (${basis})`;
+  s+='.';
+  if(calc) s+=` Состав: ${calc}.`;
+  return s;
+}
+/** Сумма перевозчику — только на бланке договор‑заявки для перевозчика. */
+function orderDocCarrierAmount(o){
+  if(!o) return null;
+  if(+o.priceForCarrier>0) return Math.round(+o.priceForCarrier);
+  if(typeof suggestCustomerOrderPrice!=='function') return null;
+  const quote=suggestCustomerOrderPrice(Object.assign({}, o, {fulfillment:o.fulfillment||'direct'}));
+  if(!quote) return null;
+  let base=typeof customerCarrierBaseCash==='function'?customerCarrierBaseCash(quote):null;
+  if(!(base>0)&&quote.minimumCash>0) base=quote.minimumCash;
+  return base>0?Math.round(base):null;
+}
+function orderDocMoneyLineCarrier(o){
+  const amount=orderDocCarrierAmount(o);
+  const form=paymentFormLabel(o);
+  if(amount==null) return `Форма оплаты: ${form}. Вознаграждение перевозчика не указано.`;
+  return `Вознаграждение перевозчика: ${fmt(amount)} ₽ (${form}).`;
+}
+function orderDocMoneyBreakdownLineCarrier(o){
+  const basis=orderDocTariffBasisText(o);
+  const calc=orderDocTariffCalcText(o);
+  let s='Расчёт по тарифу перевозчика';
+  if(basis) s+=` (${basis})`;
+  s+='.';
+  if(calc) s+=` Состав: ${calc}.`;
+  return s;
+}
+function orderPaymentDocLinesForAudience(o, audience){
+  const forCarrier=audience==='carrier';
+  if(forCarrier){
+    const parts=[orderDocMoneyLineCarrier(o), orderDocMoneyBreakdownLineCarrier(o)];
+    const terms=orderDefaultPaymentTerms(o);
+    if(terms) parts.push(terms);
+    return parts.join(' ');
+  }
+  return orderPaymentDocLines(o);
 }
 function orderDocRouteRows(o){
   const pts=ensureRoutePoints(o)||[];
@@ -286,9 +367,10 @@ function orderDefaultPaymentTerms(o){
   return 'Оплата наличными по факту выполнения перевозки, если иное не согласовано сторонами.';
 }
 function orderPaymentDocLines(o){
-  const base=orderDocMoneyLine(o);
+  const parts=[orderDocMoneyLine(o), orderDocMoneyBreakdownLine(o)];
   const terms=orderDefaultPaymentTerms(o);
-  return terms?`${base} ${terms}`:base;
+  if(terms) parts.push(terms);
+  return parts.join(' ');
 }
 function orderTransportDeadlineLine(o){
   if(!o) return '';
@@ -374,12 +456,16 @@ function orderDriverDetailLines(o){
   if(sts) html+=`<br>СТС: <strong>${esc(sts)}</strong>`;
   return html;
 }
-function buildOrderDocBody(kind, o){
+function buildOrderDocBody(kind, o, opts){
+  opts=opts&&typeof opts==='object'?opts:{};
+  let audience=opts.audience==='carrier'?'carrier':'customer';
+  if(kind==='application'||kind==='act') audience='customer';
   const sid=o.partnerSpaceId||o.spaceId;
   if(typeof buildOrderDocFromTemplate==='function'){
     const tpl=buildOrderDocFromTemplate(kind,o,sid);
     if(tpl) return tpl;
   }
+  const paymentText=orderPaymentDocLinesForAudience(o, audience);
   const own=resolveParty(o.ownCompanyId, o.ownCompanyName, o.spaceId);
   const customer=resolveParty(o.customerId, o.customer, o.spaceId);
   const carrierName=o.carrierCompanyName||(o.executorType==='partner'?'':own.name);
@@ -427,7 +513,7 @@ function buildOrderDocBody(kind, o){
       <h2>8. Транспорт и водитель</h2>
       <p>${orderDriverDetailLines(o)}</p>
       <h2>9. Стоимость и порядок расчётов</h2>
-      <p>${esc(orderPaymentDocLines(o))}</p>
+      <p>${esc(paymentText)}</p>
       ${orderDocSignBlock(o, 'Грузоотправитель', 'Перевозчик', o.contactName||shipper.name, o.ownerAdminName||executor.name)}`;
   }
   if(kind==='transportApp'){
@@ -461,8 +547,8 @@ function buildOrderDocBody(kind, o){
       ${orderVehicleReqDocHtml(o)}
       <h2>8. Транспорт и водитель</h2>
       <p>${orderDriverDetailLines(o)}</p>
-      <h2>9. Оплата и порядок расчётов</h2>
-      <p>${esc(orderPaymentDocLines(o))}</p>
+      <h2>9. ${audience==='carrier'?'Оплата перевозчику':'Оплата и порядок расчётов'}</h2>
+      <p>${esc(paymentText)}</p>
       ${orderDocSignBlock(o, 'Заказчик', 'Перевозчик', o.contactName||left.name, o.ownerAdminName||right.name)}`;
   }
   const driver=orderDocDriverName(o);
@@ -546,7 +632,7 @@ function refreshOrderDocRow(orderId, kind){
     meta.textContent=`${kindMeta.hint}${updated}`;
   }
 }
-function printOrderDoc(orderId, kind){
+function printOrderDoc(orderId, kind, audience){
   const o=state.orders.find(x=>x.id===orderId); if(!o) return;
   ensureOrderDocs(o);
   if(!o.docs[kind]) return;
@@ -557,8 +643,10 @@ function printOrderDoc(orderId, kind){
     upsertOrder(o);
     refreshOrderDocRow(orderId, kind);
   }
-  const title=`${(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ'} · заявка №${o.sequentialNumber}`;
-  openPrintHtml(title, buildOrderDocBody(kind, o));
+  const aud=audience==='carrier'?'carrier':'customer';
+  const baseTitle=(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ';
+  const title=`${baseTitle}${kind==='transportApp'&&aud==='carrier'?' (перевозчик)':''} · заявка №${o.sequentialNumber}`;
+  openPrintHtml(title, buildOrderDocBody(kind, o, {audience:aud}));
 }
 function setOrderDocStatus(orderId, kind, status){
   const o=state.orders.find(x=>x.id===orderId); if(!o) return;
@@ -584,7 +672,10 @@ function orderDocsSectionHtml(o){
       </div>
       <div class="doc-actions">
         <select data-doc-status="${esc(k.id)}" aria-label="Статус: ${esc(k.title)}">${opts}</select>
-        <button type="button" class="secondary" data-doc-print="${esc(k.id)}">Печать</button>
+        ${k.id==='transportApp'
+          ?`<button type="button" class="secondary" data-doc-print="transportApp" data-doc-audience="customer">Заказчик</button>
+            <button type="button" class="secondary" data-doc-print="transportApp" data-doc-audience="carrier">Перевозчик</button>`
+          :`<button type="button" class="secondary" data-doc-print="${esc(k.id)}">Печать</button>`}
       </div>
     </div>`;
   }).join('');
@@ -598,7 +689,7 @@ function wireOrderDocs(orderId){
   document.querySelectorAll('#detail-form [data-doc-print]').forEach(btn=>{
     btn.onclick=e=>{
       e.preventDefault();
-      printOrderDoc(orderId, btn.getAttribute('data-doc-print'));
+      printOrderDoc(orderId, btn.getAttribute('data-doc-print'), btn.getAttribute('data-doc-audience')||'customer');
     };
   });
   document.querySelectorAll('#detail-form [data-doc-status]').forEach(sel=>{
@@ -1243,7 +1334,7 @@ function openCustomerOrderDocument(orderId, kind){
     return;
   }
   const title=`${(DOC_KINDS.find(k=>k.id===kind)||{}).title||'Документ'} · заявка №${o.sequentialNumber}`;
-  openPrintHtml(title, buildOrderDocBody(kind, o));
+  openPrintHtml(title, buildOrderDocBody(kind, o, {audience:'customer'}));
 }
 function wireCustomerOrderDocuments(root){
   (root||document).querySelectorAll('.cust-doc-open').forEach(btn=>{

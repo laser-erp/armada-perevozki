@@ -19,7 +19,11 @@ if [ -n "$REF" ]; then
   git -C "$ROOT" archive "origin/$REF" web-preview | tar -x -C "$DEPLOY_SRC" --strip-components=1
 else
   echo "→ web-preview из рабочей копии"
-  rsync -a --delete "$ROOT/web-preview/" "$DEPLOY_SRC/"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete "$ROOT/web-preview/" "$DEPLOY_SRC/"
+  else
+    cp -a "$ROOT/web-preview/." "$DEPLOY_SRC/"
+  fi
 fi
 
 bash "$ROOT/scripts/patch-staging-banner.sh" "$DEPLOY_SRC"
