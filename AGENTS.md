@@ -11,8 +11,10 @@
 ## Прод и staging
 
 - Live: https://app.armada.sx/ · staging: https://staging.app.armada.sx/
-- Прод `deploy-fvds.sh` / push — только по явной просьбе («пуш», «деплой»).
-- Staging: `scripts/STAGING.md`, `deploy-staging-fvds.sh`. Пароль VPS уже в окружении агента: секрет **`root`** (или `FVDS_SSH_PASSWORD`) — **не спрашивать у пользователя**, сразу деплоить.
+- **Новые правки (UI/скрипты): всегда сначала только staging** — `./scripts/deploy-staging-fvds.sh` (или ветка). **Prod не трогать.**
+- **Prod** — `./scripts/deploy-fvds.sh` **только после проверки Евгением на staging** и явных слов: «деплоим на прод», «ок на prod», «выложи на прод» (не путать с «пуш» в git).
+- Push в git — отдельно, только по просьбе «пуш» / «коммить».
+- Staging: `scripts/STAGING.md`. Пароль VPS в окружении агента: секрет **`root`** (или `FVDS_SSH_PASSWORD`) — **не спрашивать**, staging деплоить сразу после правок.
 
 ## Правила по теме (не always — подключаются при работе с файлами)
 
@@ -26,7 +28,7 @@
 
 ## Облако
 
-Одна строка + `scripts/CLOUD_AGENT_*.md`. Прод не трогать без просьбы.
+Одна строка + `scripts/CLOUD_AGENT_*.md`. Цикл: **правка → staging → ждём «ок» → prod**.
 
 ## Не открывать без запроса
 
