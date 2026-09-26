@@ -333,7 +333,10 @@ function customerOrderStatusLabel(o){
     return 'Бронь отклонена';
   if(o.onExchange) return 'Диспетчер ищет машину';
   if(o.arrivedAt!=null && o.startOdometer==null && o.departOdometer==null) return 'На погрузке';
-  if(o.startOdometer!=null || o.departOdometer!=null) return 'В работе';
+  if(typeof orderAwaitingFinalize==='function'&&orderAwaitingFinalize(o)) return 'На выгрузке';
+  if(o.startOdometer!=null && typeof orderLeftLoading==='function'&&orderLeftLoading(o)) return 'В работе';
+  if(o.startOdometer!=null||o.arrivedAt) return 'На погрузке';
+  if(o.departOdometer!=null) return 'В пути на погрузку';
   if(o.executorType==='partner') return 'Назначен';
   if(o.driverName && o.driverName!=='Биржа' && o.driverName!=='—' && o.driverName!=='Диспетчер') return 'Назначен';
   if(o.bookStatus==='requested') return 'Ждёт подтверждения брони';
@@ -2118,7 +2121,7 @@ function customerSubmitSuccessMessage(invoice, order){
   html+=`<li><strong>Договор</strong> — ${fcSt==='signed'?'подписан':fcSt==='pending'?'ожидает подписания (вкладка «Бух доки»)':'будет подготовлен'}</li>`;
   html+=`<li><strong>Заявка на перевозку</strong> — после назначения ТС и водителя</li>`;
   html+=`<li><strong>Акт</strong> — после закрытия заказа</li>`;
-  html+=`<li><strong>ЭТрН</strong> — T1 подписывает грузоотправитель на погрузке${order&&order.shipperSameAsCustomer===false?' (отдельная ссылка отправится грузоотправителю)':''}, QR у водителя в пути</li>`;
+  html+=`<li><strong>ЭТрН</strong> — T1 грузоотправитель до выезда с грузом (КЭП); T2 перевозчик на погрузке; T3 грузополучатель; T4 перевозчик на выгрузке. Выезд со стоянки без T1. Без КЭП — бумажная ТН</li>`;
   html+=`</ul>`;
   if(invoice){
     html+=`<button type="button" class="chat-invoice-link cust-invoice-link" data-invoice-id="${esc(invoice.id)}" data-order-id="${esc(order&&order.id||'')}">Открыть счёт №${esc(invoice.number)}</button>`;
@@ -3084,7 +3087,7 @@ function customerChatBotPrompt(stepId){
   if(stepId==='load') return '<strong>Откуда забираем груз?</strong> Введите адрес внизу или выберите из недавних.';
   if(stepId==='unload') return '<strong>Куда везём?</strong> Введите адрес внизу или выберите из недавних.';
   if(stepId==='loadContact') return '<strong>Контакт на погрузке?</strong> Имя и телефон — введите внизу или выберите из недавних.';
-  if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> Грузоотправитель подписывает ЭТрН (T1) на погрузке. Заказчик перевозки может быть другим.';
+  if(stepId==='shipper') return '<strong>Вы грузоотправитель?</strong> T1 в ЭТрН на погрузке — с КЭП. Заказчик перевозки может быть другим. Без КЭП — бумажная накладная на погрузке, не ссылка в приложении.';
   if(stepId==='unloadContact') return '<strong>Контакт на выгрузке?</strong> Введите внизу, выберите из недавних или «пропустить».';
   if(stepId==='body') return '<strong>Какой кузов?</strong> Нажмите тип ниже или напишите внизу: тент, реф…';
   if(stepId==='loadMethod'){

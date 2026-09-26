@@ -9,7 +9,7 @@
   const EPD_SIGN_ROLES={
     customer:{ kind:'kep', title:'Грузоотправитель · КЭП', hint:'Подпись живёт в АРМАДА: окно оператора откроется здесь. Нужна для T1 в ЭТrН и бухдоков.', tituls:'T1' },
     carrier:{ kind:'kep', title:'Перевозчик · КЭП', hint:'Оформление и подпись T2 — в этом приложении через оператора (облако или токен с телефона).', tituls:'T2' },
-    driver:{ kind:'pep', title:'Водитель · ПЭП', hint:'ПЭП для T3/T4 оформляется здесь через оператора — без отдельного приложения.', tituls:'T3, T4' }
+    driver:{ kind:'pep', title:'Водитель · ПЭП', hint:'ПЭП для T2/T4 (приём и выдача от имени перевозчика) — через оператора.', tituls:'T2, T4' }
   };
 
   const EPD_OPERATOR_LINKS={
@@ -73,8 +73,10 @@
 
   function epdRoleForTitul(titul){
     const t=String(titul||'').toLowerCase();
-    if(t==='t1') return 'customer';
-    if(t==='t2') return 'carrier';
+    if(t==='t1') return 'customer'; // грузоотправитель
+    if(t==='t2') return 'carrier'; // перевозчик (приём); водитель — ПЭП от лица перевозчика
+    if(t==='t3') return 'customer'; // грузополучатель
+    if(t==='t4') return 'carrier'; // перевозчик (выдача)
     return 'driver';
   }
 

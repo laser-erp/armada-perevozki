@@ -13,3 +13,15 @@ fi
 
 echo "hosts override:"
 getent hosts aptown1.fvds.ru
+
+# Общая dev-ветка (локальный + облачный агент). См. scripts/GIT_ONE_BRANCH.md
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+	git fetch origin cursor/dev-f6d2 2>/dev/null || true
+	cur="$(git branch --show-current 2>/dev/null || true)"
+	if [ "$cur" != "cursor/dev-f6d2" ] && git show-ref --verify --quiet refs/remotes/origin/cursor/dev-f6d2; then
+		if git checkout cursor/dev-f6d2 2>/dev/null; then
+			git pull --ff-only origin cursor/dev-f6d2 2>/dev/null || true
+			echo "git: on cursor/dev-f6d2"
+		fi
+	fi
+fi

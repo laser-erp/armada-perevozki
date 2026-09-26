@@ -187,7 +187,7 @@ function dayKeyFromIso(iso){
   if(Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-const APP_BUILD="2026-09-19-cust-status-await-assign";
+const APP_BUILD="2026-09-25-etrn-t1-leave-load-v22";
 /** Корпоративная почта @armada.sx (biz.mail.ru; алиасы → info@armada.sx). */
 const ARMADA_MAIL={
   info:'info@armada.sx',
@@ -495,6 +495,73 @@ const ARMADA_SX_ORDER_VTYPES=[
   {id:'tral', label:'Трал'},
   {id:'board', label:'Бортовой'}
 ];
+/** Типовые т/габариты кузова для заявок с order.html (подбор ТС; логист может поправить). */
+const ARMADA_SX_VTYPE_DEFAULT_REQS={
+  shalanda:{reqPayloadTons:20,reqLengthM:13.6,reqWidthM:2.45,reqHeightM:2.5},
+  manipulator:{reqPayloadTons:5,reqLengthM:6,reqWidthM:2.4,reqHeightM:2.2},
+  tent:{reqPayloadTons:20,reqLengthM:13.6,reqWidthM:2.45,reqHeightM:2.7},
+  dump:{reqPayloadTons:15,reqLengthM:6.5,reqWidthM:2.3,reqHeightM:1.5},
+  tral:{reqPayloadTons:40,reqLengthM:13.6,reqWidthM:2.5,reqHeightM:0.6},
+  board:{reqPayloadTons:10,reqLengthM:6,reqWidthM:2.4,reqHeightM:2.2}
+};
+/** Высота пола кузова/платформы от дороги, м (ориентир для проверки 4 м с грузом). */
+const ARMADA_SX_VTYPE_DECK_HEIGHT_M={
+  shalanda:1.15, manipulator:0.55, tent:1.15, dump:1.2, tral:0.85, board:0.9
+};
+const ARMADA_ROAD_MAX_HEIGHT_M=4;
+const ARMADA_ROAD_HEIGHT_LIMIT_M=3.95;
+function armadaVtypeDeckHeightM(vtypeId){
+  const id=String(vtypeId||'').trim();
+  if(id&&ARMADA_SX_VTYPE_DECK_HEIGHT_M[id]>0) return ARMADA_SX_VTYPE_DECK_HEIGHT_M[id];
+  return 1;
+}
+function armadaCargoRoadHeightViolation(vtypeId, cargoHeightM){
+  const cargo=+cargoHeightM;
+  if(!(cargo>0)) return null;
+  const deck=armadaVtypeDeckHeightM(vtypeId);
+  const sum=Math.round((deck+cargo)*100)/100;
+  if(sum<=ARMADA_ROAD_HEIGHT_LIMIT_M) return null;
+  return {deck, cargo, sum, limit:ARMADA_ROAD_MAX_HEIGHT_M};
+}
+function armadaHeightRoadWarningText(v){
+  if(!v) return '';
+  const d=String(v.deck).replace('.',',');
+  const c=String(v.cargo).replace('.',',');
+  const s=String(v.sum).replace('.',',');
+  return `Пол кузова ${d} м + высота груза ${c} м = ${s} м. По приложению № 1 к Правилам перевозок грузов (постановление Правительства РФ № 2200 от 21.12.2020) допустимая высота транспортного средства с грузом — не более 4 м от поверхности дороги.\n\nВам требуется негабаритная перевозка (разрешение и маршрут). Выберите другой тип ТС, если изменение высоты груза не допустимо.`;
+}
+function applyVehicleTypeDefaultReqs(o, onlyEmpty){
+  if(!o||typeof o!=='object') return o;
+  const vtid=(Array.isArray(o.vehicleTypeIds)&&o.vehicleTypeIds[0])||'';
+  const def=ARMADA_SX_VTYPE_DEFAULT_REQS[vtid]||null;
+  if(!def) return o;
+  const fill=(k,v)=>{
+    if(!(v>0)) return;
+    if(onlyEmpty && (o[k]>0)) return;
+    o[k]=v;
+  };
+  fill('reqPayloadTons', def.reqPayloadTons);
+  fill('reqLengthM', def.reqLengthM);
+  fill('reqWidthM', def.reqWidthM);
+  fill('reqHeightM', def.reqHeightM);
+  if(!o.reqBodyType&&typeof mapVtypeToBodyType==='function') o.reqBodyType=mapVtypeToBodyType(vtid);
+  if(!(o.cargoVolumeM3>0)&&o.reqLengthM>0&&o.reqWidthM>0&&o.reqHeightM>0){
+    o.cargoVolumeM3=Math.round(o.reqLengthM*o.reqWidthM*o.reqHeightM*10)/10;
+  }
+  return o;
+}
+function migrateArmadaSxOrderReqs(){
+  let changed=false;
+  (state.orders||[]).forEach(o=>{
+    if(!o||o.source!=='armada_sx') return;
+    const before=JSON.stringify([o.reqPayloadTons,o.reqLengthM,o.reqWidthM,o.reqHeightM,o.cargoVolumeM3]);
+    applyVehicleTypeDefaultReqs(o, true);
+    const after=JSON.stringify([o.reqPayloadTons,o.reqLengthM,o.reqWidthM,o.reqHeightM,o.cargoVolumeM3]);
+    if(before!==after) changed=true;
+  });
+  if(changed) bumpDataEpoch('armada-sx-req-defaults');
+  return changed;
+}
 function armadaPublicOrderUrl(opts){
   const o=opts&&typeof opts==='object'?opts:{};
   const origin=(typeof location!=='undefined'&&location.origin)?location.origin:ARMADA_LIVE_ORIGIN;
@@ -1018,6 +1085,85 @@ function uuid(){
     return v.toString(16);
   });
 }
+/** Единый формат: +7XXXXXXXXXX — order.html грузит только store.js (без app.js). */
+function formatPhone(raw){
+  let d=String(raw??'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.length===11 && d[0]==='8') d='7'+d.slice(1);
+  if(d.length===10) d='7'+d;
+  if(d.length===11 && d[0]==='7') return '+'+d;
+  if(d.length>11 && d[0]==='7') return '+'+d.slice(0,11);
+  if(d.length>=10) return '+7'+d.slice(-10);
+  return '';
+}
+function numOrNull(raw){
+  const n=+String(raw??'').replace(',','.');
+  return (n>0 && !Number.isNaN(n))?n:null;
+}
+/** Минимальная нормализация ТС для initCloudSync на публичной форме. */
+function normalizeFleetVehicle(v){
+  if(!v) return null;
+  const plate=String(v.plate||'').trim();
+  if(!plate) return null;
+  return {
+    id:v.id||uuid(),
+    plate,
+    consumptionPer100Km:(+v.consumptionPer100Km>0)?+v.consumptionPer100Km:20,
+    makeModel:String(v.makeModel||'').trim(),
+    payloadTons:numOrNull(v.payloadTons),
+    bodyLengthM:numOrNull(v.bodyLengthM),
+    bodyWidthM:numOrNull(v.bodyWidthM),
+    bodyHeightM:numOrNull(v.bodyHeightM),
+    bodyTypeId:v.bodyTypeId?String(v.bodyTypeId).trim():null,
+    hasTrailer:!!v.hasTrailer,
+    trailerPlate:v.hasTrailer?String(v.trailerPlate||'').trim():'',
+    spaceId:v.spaceId||null,
+    companyId:v.companyId||null,
+    companyName:v.companyName||null,
+    currentOdometer:numOrNull(v.currentOdometer),
+    stsSeries:String(v.stsSeries||'').trim(),
+    stsNumber:String(v.stsNumber||'').trim(),
+    stsPhoto:v.stsPhoto||null,
+    assignedDriverIds:(Array.isArray(v.assignedDriverIds)?v.assignedDriverIds:[]).map(String).filter(Boolean),
+    crewName:String(v.crewName||'').trim(),
+    serviceIntervals:Array.isArray(v.serviceIntervals)?v.serviceIntervals:[],
+    maintenanceLogs:Array.isArray(v.maintenanceLogs)?v.maintenanceLogs:[]
+  };
+}
+function normalizeAllPhones(){
+  let changed=false;
+  const fix=v=>{
+    const f=formatPhone(v);
+    if(!v && !f) return v||'';
+    if(f && f!==v){ changed=true; return f; }
+    return v||'';
+  };
+  (state.drivers||[]).forEach(d=>{
+    const next=fix(d.phone);
+    if(next!==(d.phone||'')) d.phone=next;
+  });
+  (state.companies||[]).forEach(c=>{
+    (c.phones||[]).forEach(p=>{ if(p && p.number!=null){ const n=fix(p.number); if(n!==p.number) p.number=n; } });
+    (c.contacts||[]).forEach(ct=>{
+      (ct.phones||[]).forEach(p=>{ if(p && p.number!=null){ const n=fix(p.number); if(n!==p.number) p.number=n; } });
+      if(ct.phone){ const n=fix(ct.phone); if(n!==ct.phone){ ct.phone=n; changed=true; } }
+    });
+    (c.drivers||[]).forEach(d=>{
+      const n=fix(d.phone); if(n!==(d.phone||'')) d.phone=n;
+    });
+  });
+  (state.orders||[]).forEach(o=>{
+    if(o.contactPhone!=null){ const n=fix(o.contactPhone); if(n!==o.contactPhone){ o.contactPhone=n; changed=true; } }
+    if(o.loadingContactPhone!=null){ const n=fix(o.loadingContactPhone); if(n!==o.loadingContactPhone){ o.loadingContactPhone=n; changed=true; } }
+    if(o.unloadingContactPhone!=null){ const n=fix(o.unloadingContactPhone); if(n!==o.unloadingContactPhone){ o.unloadingContactPhone=n; changed=true; } }
+    if(o.driverPhone!=null){ const n=fix(o.driverPhone); if(n!==o.driverPhone){ o.driverPhone=n; changed=true; } }
+    if(o.transportApp && o.transportApp.driverPhone!=null){
+      const n=fix(o.transportApp.driverPhone);
+      if(n!==o.transportApp.driverPhone){ o.transportApp.driverPhone=n; changed=true; }
+    }
+  });
+  return changed;
+}
 /** Общая база на VPS; с GitHub Pages тоже ходим сюда (нужен HTTP-сайт приложения). */
 const PB_BASE=(function(){
   const h=location.hostname;
@@ -1210,12 +1356,12 @@ function routeText(o){
 }
 const $ = id => document.getElementById(id);
 function show(id){
-  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
+  if(id==='driver'||id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-social-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal'){
     if(typeof clearEntrySkin==='function') clearEntrySkin();
   }
   document.querySelectorAll('.phone > .screen').forEach(s=>s.classList.remove('show'));
   $(id).classList.add('show');
-  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
+  const wide = id==='admin'||id==='admin-detail'||id==='admin-create'||id==='admin-claim'||id==='admin-catalogs-screen'||id==='admin-activity-screen'||id==='admin-connect-leads-screen'||id==='admin-social-screen'||id==='admin-billing-screen'||id==='admin-plans-screen'||id==='admin-docs-screen'||id==='admin-links-screen'||id==='admin-vehicle-card'||id==='admin-driver-card'||id==='customer-portal';
   $('shell').classList.toggle('wide', wide);
   try{
     if(id==='driver') localStorage.setItem(LAST_ROLE_KEY,'driver');
@@ -1352,6 +1498,12 @@ function normalizeCustomerPortalLead(raw){
     city,
     fleetSize,
     vehicleTypeId:vehicleTypeId||null,
+    cargoWeightKg:numOrNull(raw.cargoWeightKg),
+    cargoPlaces:numOrNull(raw.cargoPlaces),
+    cargoVolumeM3:numOrNull(raw.cargoVolumeM3),
+    reqLengthM:numOrNull(raw.reqLengthM||raw.cargoLengthM),
+    reqWidthM:numOrNull(raw.reqWidthM||raw.cargoWidthM),
+    reqHeightM:numOrNull(raw.reqHeightM||raw.cargoHeightM),
     loadAddress:String(raw.loadAddress||raw.address||'').trim()||null,
     unloadAddress:String(raw.unloadAddress||'').trim()||null,
     vehicleAt:String(raw.vehicleAt||'').trim()||null,
@@ -1368,9 +1520,135 @@ function normalizeCustomerPortalLead(raw){
 }
 function migrateCustomerPortalLeads(){
   state.customerPortalLeads=(state.customerPortalLeads||[]).map(normalizeCustomerPortalLead).filter(Boolean);
+  migrateTransportLeadsInboxOnly();
+}
+/** Заявка transport → заказ во «Входящие»; pilot/portal — вкладка «Заявки на подключение»; сбой без orderId — Активность. */
+function migrateTransportLeadsInboxOnly(){
+  let changed=false;
+  (state.customerPortalLeads||[]).forEach(l=>{
+    if(l.kind!=='transport'||l.status!=='pending'||!l.orderId) return;
+    l.status='done';
+    l.doneAt=l.doneAt||new Date().toISOString();
+    changed=true;
+  });
+  if(changed) bumpDataEpoch('transport-lead-inbox');
+  return changed;
+}
+/** Ссылки TG/VK для супер-админа (автопост TG/VK — позже на armada-api). */
+function migrateMarketingSocial(){
+  const ms=state.marketingSocial;
+  if(!ms||typeof ms!=='object'){
+    state.marketingSocial={ telegramChannelUrl:'', vkGroupUrl:'' };
+    return;
+  }
+  ms.telegramChannelUrl=String(ms.telegramChannelUrl||'').trim();
+  ms.vkGroupUrl=String(ms.vkGroupUrl||'').trim();
+  state.marketingSocial=ms;
+}
+/** Канал MAX (бот + chat_id) — хранится в облаке, посты через armada-api /marketing/max/* */
+function isPlausibleMaxBotToken(t){
+  const s=String(t||'').trim();
+  if(!s||s.length<16) return false;
+  if(/[^\x21-\x7E]/.test(s)) return false;
+  if(/max\.ru|^https?:/i.test(s)) return false;
+  if(/•/.test(s)||/\u2022/.test(s)) return false;
+  return true;
+}
+function migrateMarketingMax(){
+  const mm=state.marketingMax;
+  if(!mm||typeof mm!=='object'){
+    state.marketingMax={ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+    return;
+  }
+  if(!mm.bot||typeof mm.bot!=='object') mm.bot={ token:'', chatId:'', enabled:false };
+  mm.bot.token=String(mm.bot.token||'');
+  if(mm.bot.token&&!isPlausibleMaxBotToken(mm.bot.token)) mm.bot.token='';
+  mm.bot.chatId=String(mm.bot.chatId||'');
+  mm.bot.enabled=!!mm.bot.enabled;
+  if(!Array.isArray(mm.queue)) mm.queue=[];
+  state.marketingMax=mm;
+}
+async function postMarketingMaxApi(action, body){
+  if(!API_BASE) throw new Error('API недоступен');
+  await ensureArmadaApiToken({});
+  const res=await fetchWithTimeout(`${API_BASE}/marketing/max/${action}`, {
+    method:'POST',
+    headers:armadaApiJsonHeaders(),
+    body:JSON.stringify(body||{})
+  }, 20000);
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error||data.message||('HTTP '+res.status));
+  return data;
+}
+async function marketingMaxTestPost(){
+  return postMarketingMaxApi('test', {});
+}
+async function marketingMaxPublishScheduled(){
+  return postMarketingMaxApi('tick', {});
 }
 function companyOwnRole(c){
   return !!(c&&Array.isArray(c.roles)&&c.roles.includes('own'));
+}
+function companyHasRole(c, role){
+  return !!(c&&Array.isArray(c.roles)&&c.roles.includes(role));
+}
+function contactPhone(contact){
+  if(!contact) return '';
+  if(typeof contact==='string') return formatPhone(contact);
+  if(contact.phone) return formatPhone(contact.phone);
+  const ph=(contact.phones||[])[0];
+  if(ph) return formatPhone(ph.number||ph.phone||ph);
+  return '';
+}
+function driverPercent(name, companyId){
+  const list=state.drivers||[];
+  if(companyId){
+    const hit=list.find(d=>samePersonName(d.name,name) && d.companyId===companyId);
+    if(hit) return hit.salaryPercent??30;
+  }
+  return (list.find(d=>samePersonName(d.name,name))||{salaryPercent:30}).salaryPercent;
+}
+/** Минимальный upsert для order.html (полная версия в app.js на /a). */
+function upsertCompany(raw){
+  if(!raw) return null;
+  const name=String(raw.name||'').trim();
+  if(!name) return null;
+  const spaceId=raw.spaceId||null;
+  const roles=Array.isArray(raw.roles)?raw.roles.slice():[];
+  const idx=(state.companies||[]).findIndex(x=>{
+    if(raw.id && x.id===raw.id) return true;
+    return String(x.name).toLowerCase()===name.toLowerCase() && (x.spaceId||null)===(spaceId||null);
+  });
+  const base={
+    name,
+    roles,
+    note:String(raw.note||'').trim(),
+    contacts:raw.contacts||[],
+    phones:raw.phones||[],
+    loadingAddresses:raw.loadingAddresses||[],
+    unloadingAddresses:raw.unloadingAddresses||[],
+    vehicles:raw.vehicles||[],
+    drivers:raw.drivers||[],
+    spaceId,
+    inn:raw.inn||'',
+    ogrn:raw.ogrn||'',
+    kpp:raw.kpp||'',
+    address:raw.address||''
+  };
+  if(idx>=0){
+    const prev=state.companies[idx];
+    const merged=Object.assign({}, prev, base, {
+      id:prev.id,
+      roles:[...new Set([...(prev.roles||[]), ...roles])]
+    });
+    state.companies[idx]=merged;
+    state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+    return merged;
+  }
+  const created=Object.assign({id:raw.id||uuid()}, base);
+  state.companies.push(created);
+  state.companies.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ru'));
+  return created;
 }
 function findArmadaLogistCompany(){
   if(typeof migrateSpaces==='function') migrateSpaces();
@@ -1503,6 +1781,19 @@ function insertPublicTransportOrder(lead, customerCo, armadaCo){
     partnerSpaceId:null,
     transportApp:null
   };
+  if(lead.cargoWeightKg>0){
+    order.cargoWeightKg=lead.cargoWeightKg;
+    order.reqPayloadTons=Math.round(lead.cargoWeightKg/10)/100;
+  }
+  if(lead.cargoPlaces>0) order.cargoPlaces=lead.cargoPlaces;
+  if(lead.cargoVolumeM3>0) order.cargoVolumeM3=lead.cargoVolumeM3;
+  if(lead.reqLengthM>0) order.reqLengthM=lead.reqLengthM;
+  if(lead.reqWidthM>0) order.reqWidthM=lead.reqWidthM;
+  if(lead.reqHeightM>0) order.reqHeightM=lead.reqHeightM;
+  applyVehicleTypeDefaultReqs(order, true);
+  if(!(order.cargoVolumeM3>0)&&order.reqLengthM>0&&order.reqWidthM>0&&order.reqHeightM>0){
+    order.cargoVolumeM3=Math.round(order.reqLengthM*order.reqWidthM*order.reqHeightM*10)/10;
+  }
   ensureRoutePoints(order);
   state.orders=state.orders||[];
   state.orders.unshift(order);
@@ -1536,12 +1827,34 @@ async function appendCustomerPortalLead(raw){
   let order=null;
   if(rec.kind==='transport'){
     order=attachArmadaTransportLead(rec);
-    if(order) bumpDataEpoch('armada-sx-order');
+    if(order){
+      bumpDataEpoch('armada-sx-order');
+      rec.status='done';
+      rec.doneAt=new Date().toISOString();
+    }
   }
   bumpDataEpoch('customer-portal-lead');
   persistLocalOnly();
+  if(rec.kind==='transport'&&!rec.orderId){
+    return {ok:false, error:'Не удалось создать заказ — проверьте связь с сервером и справочник ООО «Армада»'};
+  }
   try{
-    await persist();
+    if(typeof persistCustomerPortalOrderImmediate==='function'){
+      const push=await persistCustomerPortalOrderImmediate();
+      if(push&&push.ok===false&&push.offline){
+        return {
+          ok:true,
+          id:rec.id,
+          offline:true,
+          orderId:rec.orderId||null,
+          orderNumber:order&&order.sequentialNumber||null,
+          customerId:rec.customerId||null
+        };
+      }
+      if(push&&push.ok===false) throw new Error('Не удалось сохранить на сервер');
+    }else{
+      await persist();
+    }
     return {
       ok:true,
       id:rec.id,
@@ -1583,6 +1896,23 @@ function pendingPortalAccessLeads(){
 }
 function pendingPilotLeads(){
   return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot');
+}
+function pilotRoleNorm(role){
+  const r=String(role||'').trim().toLowerCase();
+  if(r==='carrier'||r==='перевозчик') return 'carrier';
+  if(r==='logist'||r==='логист') return 'logist';
+  return r||'';
+}
+/** Заявки на подключение: перевозчик (pilot). */
+function pendingCarrierConnectLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot'&&pilotRoleNorm(l.pilotRole)==='carrier');
+}
+/** Заявки на подключение: логист / кабинет (pilot). */
+function pendingLogistConnectLeads(){
+  return pendingCustomerPortalLeads().filter(l=>l.kind==='pilot'&&pilotRoleNorm(l.pilotRole)==='logist');
+}
+function pendingConnectLeadsCount(){
+  return pendingPortalAccessLeads().length+pendingCarrierConnectLeads().length+pendingLogistConnectLeads().length;
 }
 function bumpDataEpoch(reason){
   state.dataEpoch=(Number(state.dataEpoch)||0)+1;
@@ -1719,8 +2049,30 @@ function snapshot(){
     docTemplates:typeof docTemplatesSnapshotSlice==='function'?docTemplatesSnapshotSlice():state.docTemplates,
     customerPortalLeads:Array.isArray(state.customerPortalLeads)?state.customerPortalLeads:[],
     opsLog:Array.isArray(state.opsLog)?state.opsLog:[],
+    marketingMax:typeof marketingMaxSnapshotSlice==='function'?marketingMaxSnapshotSlice():state.marketingMax,
+    marketingSocial:typeof marketingSocialSnapshotSlice==='function'?marketingSocialSnapshotSlice():state.marketingSocial,
     savedAt:new Date().toISOString(),
     appBuild:APP_BUILD
+  };
+}
+function marketingMaxSnapshotSlice(){
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  const mm=state.marketingMax||{ bot:{ token:'', chatId:'', enabled:false }, queue:[] };
+  return {
+    bot:{
+      token:String(mm.bot&&mm.bot.token||''),
+      chatId:String(mm.bot&&mm.bot.chatId||''),
+      enabled:!!(mm.bot&&mm.bot.enabled)
+    },
+    queue:Array.isArray(mm.queue)?mm.queue.slice():[]
+  };
+}
+function marketingSocialSnapshotSlice(){
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
+  const ms=state.marketingSocial||{ telegramChannelUrl:'', vkGroupUrl:'' };
+  return {
+    telegramChannelUrl:String(ms.telegramChannelUrl||''),
+    vkGroupUrl:String(ms.vkGroupUrl||'')
   };
 }
 function scorePayload(p){
@@ -1760,8 +2112,12 @@ function applyPayload(p, opts){
   state.driverInvites=Array.isArray(p.driverInvites)?p.driverInvites:[];
   state.customerPortalLeads=Array.isArray(p.customerPortalLeads)?p.customerPortalLeads.map(normalizeCustomerPortalLead).filter(Boolean):[];
   state.opsLog=Array.isArray(p.opsLog)?p.opsLog:[];
+  if(p.marketingMax&&typeof p.marketingMax==='object') state.marketingMax=p.marketingMax;
+  if(typeof migrateMarketingMax==='function') migrateMarketingMax();
+  if(p.marketingSocial&&typeof p.marketingSocial==='object') state.marketingSocial=p.marketingSocial;
+  if(typeof migrateMarketingSocial==='function') migrateMarketingSocial();
   state.dataEpoch=Number(p.dataEpoch)||0;
-  mergeAdminAuthFromRemote(p, opts);
+  if(typeof mergeAdminAuthFromRemote==='function') mergeAdminAuthFromRemote(p, opts);
   if(!(state.finance.markupPercent>=0)) state.finance.markupPercent=15;
   if(state.finance.markupPercent>80) state.finance.markupPercent=80;
   if(!(state.finance.cityKmThreshold>0)) state.finance.cityKmThreshold=100;
@@ -1775,27 +2131,27 @@ function applyPayload(p, opts){
   if(!('orders' in p) && state.shifts.length && !state.orders.length){
     state.orders=stripCancelledFromOrders(state.shifts.flatMap(s=>s.orders||[]));
   }
-  if(keepShifts) mergeLocalShifts(keepShifts);
-  if(keepOrders) mergeLocalOrders(keepOrders);
+  if(keepShifts && typeof mergeLocalShifts==='function') mergeLocalShifts(keepShifts);
+  if(keepOrders && typeof mergeLocalOrders==='function') mergeLocalOrders(keepOrders);
   state.orders=stripCancelledFromOrders(state.orders);
   state.orders.forEach(o=>{
     if(o.customer==null) o.customer="";
-    if(o.driverPercent==null) o.driverPercent=driverPercent(o.driverName||DRIVER);
+    if(o.driverPercent==null && typeof driverPercent==='function') o.driverPercent=driverPercent(o.driverName||DRIVER);
     ensureRoutePoints(o);
   });
-  migrateCompanies();
-  migrateAdmins();
+  if(typeof migrateCompanies==='function') migrateCompanies();
+  if(typeof migrateAdmins==='function') migrateAdmins();
   migrateDriverOwners();
   migrateSpaces();
   if(typeof migrateBilling==='function') migrateBilling();
-  migrateDriverOrderOwners();
+  if(typeof migrateDriverOrderOwners==='function') migrateDriverOrderOwners();
   if(typeof migrateRepairOrderOwnersBySpace==='function') migrateRepairOrderOwnersBySpace();
-  migrateShiftOwners();
+  if(typeof migrateShiftOwners==='function') migrateShiftOwners();
   migrateDriverPins();
   migrateCompanyFinance();
-  healVehicleOdometersFromShifts();
-  ensureManufacturerServiceIntervals();
-  migrateEtoFromMessages();
+  if(typeof healVehicleOdometersFromShifts==='function') healVehicleOdometersFromShifts();
+  if(typeof ensureManufacturerServiceIntervals==='function') ensureManufacturerServiceIntervals();
+  if(typeof migrateEtoFromMessages==='function') migrateEtoFromMessages();
   // Заказы только в смене (потерялись из state.orders) — поднять в общий список
   (state.shifts||[]).forEach(s=>{
     (s.orders||[]).forEach(o=>{
@@ -1810,6 +2166,7 @@ function applyPayload(p, opts){
   // Наоборот: заказы в списке, но выпали из смены — вернуть в смену + чат
   healOrphanOrdersIntoShifts();
   healAllOrders();
+  migrateArmadaSxOrderReqs();
   purgeCancelledOrders();
   if(typeof pruneInvoicesForDeletedOrders==='function') pruneInvoicesForDeletedOrders();
   if(typeof migrateRestoreNechaevDriver==='function') migrateRestoreNechaevDriver();
@@ -1920,6 +2277,9 @@ function normalizeSpace(s){
     routeTemplates,
     createdAt:s.createdAt||new Date().toISOString()
   };
+}
+function findCompanyById(id){
+  return (state.companies||[]).find(c=>c.id===id)||null;
 }
 function findSpaceById(id){ return (state.spaces||[]).find(s=>s.id===id)||null; }
 function currentSpaceId(){ return (currentAdmin&&currentAdmin.spaceId)||null; }
@@ -3034,8 +3394,15 @@ async function reconcileBeforePush(){
     pbRecordId=rec.id||pbRecordId;
     const remoteEpoch=Number(remote.dataEpoch)||0;
     const localEpoch=Number(state.dataEpoch)||0;
-    if(localEpoch<remoteEpoch) return false;
     let changed=false;
+    if(typeof mergeRemoteShiftClosures==='function'&&mergeRemoteShiftClosures(remote)) changed=true;
+    if(localEpoch<remoteEpoch){
+      if(changed){
+        bumpDataEpoch('pre-push-remote-shift-close');
+        persistLocalOnly();
+      }
+      return changed;
+    }
     if(typeof mergeRemoteOrderAssignments==='function'&&mergeRemoteOrderAssignments(remote)) changed=true;
     if(typeof reconcileOrdersAfterSync==='function'&&reconcileOrdersAfterSync()) changed=true;
     if(changed){
@@ -3089,14 +3456,14 @@ async function persistAdminPinImmediate(){
   persistLocalOnly();
   if(navigator.onLine===false){
     syncStatus='local';
-    updateDriverNetHint();
+    if(typeof updateDriverNetHint==='function') updateDriverNetHint();
     if(typeof updateSyncHint==='function') updateSyncHint();
     return { ok:false, offline:true };
   }
   clearTimeout(persistTimer);
   persistTimer=null;
   syncStatus='syncing';
-  updateDriverNetHint();
+  if(typeof updateDriverNetHint==='function') updateDriverNetHint();
   if(typeof updateSyncHint==='function') updateSyncHint();
   let lastErr=null;
   for(let attempt=0; attempt<3; attempt++){
@@ -3215,7 +3582,18 @@ async function pullRemoteUpdates(reason){
     const remote=rec.payload||{};
     const remoteEpoch=Number(remote.dataEpoch)||0;
     const localEpoch=Number(state.dataEpoch)||0;
-    if(remoteEpoch<=localEpoch) return false;
+    if(remoteEpoch<=localEpoch){
+      if(typeof mergeRemoteShiftClosures==='function'&&mergeRemoteShiftClosures(remote)){
+        bumpDataEpoch('poll-remote-shift-close');
+        localStorage.setItem(KEY, JSON.stringify(snapshot()));
+        if(currentAdmin&&typeof scheduleAdminRerender==='function') scheduleAdminRerender();
+        touchSyncServerOk();
+        updateSyncHint();
+        console.info('auto-sync', reason, 'shift-close-only epoch', remoteEpoch);
+        return true;
+      }
+      return false;
+    }
     const localShifts=(state.shifts||[]).map(s=>structuredClone(s));
     const localOrders=(state.orders||[]).map(o=>structuredClone(o));
     const localInvoices=(state.invoices||[]).map(i=>structuredClone(i));

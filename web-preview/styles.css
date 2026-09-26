@@ -359,6 +359,14 @@
     .order-etrn-badge.warn,.order-etrn-badge.urgent{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12);color:#b45309}
     .order-etrn-badge--urgent{animation:etrn-badge-pulse 1.6s ease-in-out infinite}
     @keyframes etrn-badge-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.35)}50%{box-shadow:0 0 0 4px rgba(245,158,11,0)}}
+    .etrn-checklist{margin:6px 0 8px;padding:6px 8px;border:1px solid var(--border);border-radius:10px;background:var(--field)}
+    .etrn-checklist--compact{margin:4px 0 6px;padding:4px 6px}
+    .etrn-check-step{font-size:.68rem;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .etrn-check-row{display:flex;flex-wrap:wrap;gap:4px 6px}
+    .etrn-check{display:inline-flex;align-items:center;gap:3px;font-size:.68rem;font-weight:700;color:var(--muted);padding:2px 6px;border-radius:999px;border:1px solid var(--border);background:#fff}
+    .etrn-check-mark{font-size:.72rem;line-height:1}
+    .etrn-check--on{color:#15803d;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.1)}
+    .kanban-card .etrn-checklist{background:transparent}
     .admin-etrn-card-sign{font-size:.78rem;padding:6px 10px;min-height:34px}
     .admin-etrn-card-sign--ready{
       border-color:rgba(245,158,11,.55);background:rgba(245,158,11,.14);color:#b45309;font-weight:700;
@@ -371,13 +379,33 @@
     }
     .etrn-sign-banner strong{font-size:.88rem;color:#b45309}
     .etrn-titul-row--mine{background:rgba(245,158,11,.08);border-radius:8px;padding:4px 6px;margin:-4px -6px}
+    .etrn-titul-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;max-width:100%}
+    .etrn-titul-actions .primary,.etrn-titul-actions .secondary{white-space:normal;max-width:100%;font-size:.78rem;padding:6px 10px}
+    #admin-detail .etrn-admin-section{overflow:visible}
+    #admin-detail .etrn-admin-section .etrn-section-body{
+      padding:10px 14px 14px;max-height:min(46vh, 380px);overflow-x:hidden;overflow-y:auto;
+      -webkit-overflow-scrolling:touch;overscroll-behavior:contain
+    }
+    #admin-detail .etrn-admin-section .etrn-section-body > .hint,
+    #admin-detail .etrn-admin-section .etrn-section-body > .error{margin:0 0 8px;font-size:.72rem;line-height:1.35;word-break:break-word}
+    #admin-detail .etrn-admin-section .etrn-tituls-panel{margin:8px 0 0}
+    #admin-detail .etrn-admin-section .etrn-tituls-panel .etrn-titul-row{
+      flex-wrap:wrap;align-items:flex-start;gap:8px 10px;padding:6px 0
+    }
+    #admin-detail .etrn-admin-section .etrn-tituls-panel .etrn-titul-row span:last-child{
+      white-space:normal;text-align:left;flex:1 1 100%;max-width:100%
+    }
+    #admin-detail .etrn-admin-section .etrn-section-actions{
+      margin-top:10px;gap:8px;flex-wrap:wrap;align-items:center
+    }
+    #admin-detail .etrn-admin-section .etrn-section-actions .secondary{width:auto;max-width:100%}
     .order-pick{display:flex;align-items:center;padding:2px 0;cursor:pointer}
     .order-pick input{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--accent)}
     .form-grid{display:flex;flex-direction:column;align-items:stretch;gap:6px;width:100%;max-width:640px;margin:0 auto;padding:12px 12px 28px;text-align:left;direction:ltr}
     .form-grid label,.admin-form-scroll label{display:block;width:100%;font-size:.75rem;color:var(--muted);text-align:left;unicode-bidi:isolate}
     .form-grid input,.form-grid select,.form-grid textarea,
     .admin-form-scroll input,.admin-form-scroll select,.admin-form-scroll textarea{width:100%;max-width:100%;align-self:stretch;flex:0 0 auto}
-    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen,#admin-vehicle-card{overflow:hidden;min-height:0}
+    #admin-detail,#admin-create,#admin-claim,#admin-catalogs-screen,#admin-activity-screen,#admin-connect-leads-screen,#admin-social-screen,#admin-vehicle-card{overflow:hidden;min-height:0}
     .svc-badge{display:inline-block;border-radius:var(--radius);padding:2px 8px;font-size:.68rem;font-weight:700}
     .svc-ok{background:rgba(16,185,129,.12);color:#059669}
     .svc-soon{background:rgba(245,158,11,.14);color:#D97706}
@@ -492,6 +520,9 @@
     .calc .calc-row span:last-child{flex:0 1 auto;text-align:right;white-space:nowrap}
     .calc .hint{display:block;width:100%;text-align:left;white-space:normal}
     .ok{color:#059669;font-size:var(--fs-sm)}
+    .max-status-banner{min-height:2.5rem;margin:10px 0;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:#f8fafc;font-size:var(--fs-sm)}
+    .max-status-banner.ok{border-color:#059669;background:#ecfdf5;color:#047857;font-weight:600}
+    .max-status-banner.err-hint{border-color:#dc2626;background:#fef2f2;color:#b91c1c;font-weight:600}
     .admin-cards{display:flex;flex-direction:column;gap:8px;padding:8px 10px 20px}
     .admin-cards .card button{margin-top:8px}
     .admin-cards .order-card button{margin-top:0}
@@ -968,7 +999,7 @@
       background:var(--surface);border:1px solid var(--border)
     }
     .cat-panel-hint{margin:0;color:var(--muted);font-size:var(--fs-sm);line-height:1.35}
-    #admin-catalogs-screen,#admin-activity-screen,#admin-vehicle-card{
+    #admin-catalogs-screen,#admin-activity-screen,#admin-connect-leads-screen,#admin-social-screen,#admin-vehicle-card{
       background:linear-gradient(180deg,#F3F4F6 0%,var(--bg0) 42%)
     }
     .cat-quick .row,.cat-compact .row{gap:4px;align-items:center}
@@ -1166,6 +1197,8 @@
     #admin-create .admin-form-shell,#admin-detail .admin-form-shell{max-width:720px}
     .admin-order-blocks.cust-form-blocks{margin:0;gap:12px}
     .admin-order-blocks .cust-form-block-head{letter-spacing:0;text-transform:none}
+    .admin-order-law-warn{border:1px solid #f59e0b;background:#fffbeb;border-radius:10px;padding:4px 12px!important}
+    .admin-order-law-warn .form-section-hint{color:#92400e!important}
     .admin-order-hero{border:0!important;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%)!important;color:#fff;padding:16px 14px!important;border-radius:14px!important}
     .admin-order-hero .form-section-hint{color:rgba(255,255,255,.82);padding:8px 0 0;margin:0}
     .admin-order-hero-grid{display:grid;grid-template-columns:1fr;gap:12px}

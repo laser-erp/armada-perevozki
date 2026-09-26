@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>АРМАДА — презентация приложения</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="deck.css" />
+</head>
+<body>
+  <p class="nav-hint" aria-hidden="true">↓ прокрутка · P — печать/PDF</p>
+
+  <section class="slide slide--hero" id="s1">
+    <span class="tag">app.armada.sx</span>
+    <h1>АРМАДА — кабинет для малого парка</h1>
+    <p class="lead">Заявки, водитель, заказчик и документы в одной связке. Веб — без установки из магазина приложений.</p>
+    <ul class="bullets">
+      <li>Для логиста и перевозчика примерно <strong>1–15 машин</strong></li>
+      <li>Не enterprise-TMS и не открытая доска объявлений</li>
+    </ul>
+    <div class="footer-note"><span>ООО «Армада»</span><span>Слайд 1</span></div>
+  </section>
+
+  <section class="slide" id="s2">
+    <span class="tag">Боль</span>
+    <h2>Сегодня всё размазано</h2>
+    <div class="grid2">
+      <div class="card"><b>Excel и чаты</b><p>Статус груза — в переписке, клиент звонит «где машина?»</p></div>
+      <div class="card"><b>ATI / доски</b><p>Хорошо для поиска машины, но не ваш закрытый контур с партнёрами</p></div>
+      <div class="card"><b>Крупная TMS</b><p>Дорого и долго — если у вас не сотни машин</p></div>
+      <div class="card"><b>Наш фокус</b><p>Один кабинет + ссылки водителю и заказчику</p></div>
+    </div>
+    <div class="footer-note"><span>Пилот / созвон</span><span>Слайд 2</span></div>
+  </section>
+
+  <section class="slide slide--dark" id="s3">
+    <span class="tag">Позиция</span>
+    <h2>Чем АРМАДА не является</h2>
+    <div class="compare">
+      <div class="card no"><b>Не ATI</b><p>Не публичная биржа для всех — своя сеть кабинетов и партнёров.</p></div>
+      <div class="card yes"><b>Не CARGO.RUN</b><p>Не внедрение TMS на 200+ ТС — быстрый старт для малого парка.</p></div>
+    </div>
+    <p class="lead" style="margin-top:24px">Услуги спецтехники (шаланда, манипулятор) — отдельно на armada.sx; это про <strong>цифровой кабинет</strong> перевозчика.</p>
+    <div class="footer-note"><span>Честное сравнение</span><span>Слайд 3</span></div>
+  </section>
+
+  <section class="slide" id="s4">
+    <span class="tag">Архитектура</span>
+    <h2>Три роли — одна сеть</h2>
+    <div class="grid2">
+      <div class="card"><b>Логист /a</b><p>Заявки, назначение машины и водителя, биржа партнёрам.</p></div>
+      <div class="card"><b>Водитель /v</b><p>Смена и заказы в браузере, SMS-ссылка.</p></div>
+      <div class="card"><b>Заказчик /z</b><p>Портал: статус, документы, новые заявки по PIN.</p></div>
+      <div class="card"><b>Документы</b><p>ЭТрН в связке с заказом (обзор на созвоне, не юрконсультация).</p></div>
+    </div>
+    <div class="footer-note"><span>landing.html</span><span>Слайд 4</span></div>
+  </section>
+
+  <section class="slide" id="s5">
+    <span class="tag">Логист</span>
+    <h2>Один экран вместо десяти чатов</h2>
+    <ul class="bullets">
+      <li>Входящие заявки и статусы</li>
+      <li>Назначение водителя и ТС</li>
+      <li>«Забрать» на бирже — если свой парк занят</li>
+      <li>Заявки с сайта armada.sx попадают в тот же список</li>
+    </ul>
+    <p class="lead" style="margin-top:16px">На живом демо: app.armada.sx/a/ · скрины — после согласования L2 лендинга.</p>
+    <div class="footer-note"><span>kp-logist.html</span><span>Слайд 5</span></div>
+  </section>
+
+  <section class="slide slide--dark" id="s6">
+    <span class="tag">Заказчик</span>
+    <h2>Меньше звонков «где машина?»</h2>
+    <ul class="bullets">
+      <li>Личный кабинет по PIN — без ATI</li>
+      <li>История заявок и документы</li>
+      <li>Можно начать с одного ключевого клиента</li>
+    </ul>
+    <div class="footer-note"><span>kp-zakaz.html</span><span>Слайд 6</span></div>
+  </section>
+
+  <section class="slide" id="s7">
+    <span class="tag">ЭТрН</span>
+    <h2>Документооборот рядом с рейсом</h2>
+    <p class="lead">Статусы подписания в кабинете. Детали зависят от оператора и настроек на сервере — показываем на демо, не обещаем «всё из коробки без ключей».</p>
+    <ul class="bullets">
+      <li>Цель — не отдельная «вторая программа», а часть заказа</li>
+    </ul>
+    <div class="footer-note"><span>help + etrn</span><span>Слайд 7</span></div>
+  </section>
+
+  <section class="slide" id="s8">
+    <span class="tag">Старт</span>
+    <h2>Пилот 30 дней</h2>
+    <div class="grid2">
+      <div class="card"><b>Шаг 1</b><p>Заявка на pilot.html или созвон 15–20 мин</p></div>
+      <div class="card"><b>Шаг 2</b><p>Кабинет, 1–2 вечера на ввод справочников</p></div>
+      <div class="card"><b>Шаг 3</b><p>1 водитель + 1 заказчик — прогон «сквозняка»</p></div>
+      <div class="card"><b>Шаг 4</b><p>Решение по тарифу или пауза</p></div>
+    </div>
+    <div class="footer-note"><span>VORONKA B</span><span>Слайд 8</span></div>
+  </section>
+
+  <section class="slide slide--hero" id="s9">
+    <span class="tag">Дальше</span>
+    <h2>Следующий шаг</h2>
+    <p class="lead">Запросите пилот или войдите, если доступ уже выдан.</p>
+    <div class="cta-row">
+      <a class="cta cta-primary" href="https://app.armada.sx/pilot.html?role=logist">Пилот 30 дней</a>
+      <a class="cta cta-secondary" href="https://app.armada.sx/kp-logist.html">Страница логиста</a>
+    </div>
+    <ul class="bullets" style="margin-top:32px">
+      <li>pilot@armada.sx · support@armada.sx</li>
+      <li>+7 (965) 073-00-02</li>
+    </ul>
+    <div class="footer-note"><span>Спасибо</span><span>Слайд 9</span></div>
+  </section>
+
+  <script>
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        var slides = document.querySelectorAll('.slide');
+        var y = window.scrollY + window.innerHeight * 0.4;
+        for (var i = 0; i < slides.length; i++) {
+          if (slides[i].offsetTop > y) { slides[i].scrollIntoView({ behavior: 'smooth' }); break; }
+        }
+      }
+      if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        var slides = document.querySelectorAll('.slide');
+        var y = window.scrollY - window.innerHeight * 0.4;
+        for (var j = slides.length - 1; j >= 0; j--) {
+          if (slides[j].offsetTop < y - 10) { slides[j].scrollIntoView({ behavior: 'smooth' }); break; }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+version: 1
+last_catalog_review: "2026-09-24-expedition-rental"
+
+documents:
+  - id: pp-2200-2020
+    title: "ПП РФ от 21.12.2020 № 2200 — Правила перевозок грузов"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_371981/"
+    download_url: "https://rosavtotransport.ru/netcat_files/58/59/20201221_Postanovlenie_Pravitel_stva_RF_N_2200.pdf"
+    local_file: "npa/PP-2200-2020-12-21.pdf"
+    last_verified: "2026-09-24"
+
+  - id: fz-259-2007
+    title: "ФЗ от 08.11.2007 № 259-ФЗ — Устав автомобильного транспорта"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_72388/"
+    local_file: null
+    last_verified: null
+
+  - id: pdd-rf
+    title: "ПДД Российской Федерации"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_34481/"
+    local_file: null
+    last_verified: null
+
+  - id: fz-152-2006
+    title: "ФЗ от 27.07.2006 № 152-ФЗ — Персональные данные"
+    priority: service
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_61801/"
+    local_file: null
+    last_verified: null
+
+  - id: fz-257-2007
+    title: "ФЗ от 08.11.2007 № 257-ФЗ — Автомобильные дороги"
+    priority: reference
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_72244/"
+    local_file: null
+    last_verified: null
+
+  - id: fz-87-2003
+    title: "ФЗ от 30.06.2003 № 87-ФЗ — Транспортно-экспедиционная деятельность"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_43006/"
+    local_file: null
+    last_verified: "2026-09-24"
+    notes: "Реестр уведомлений экспедиторов, ГосЛог"
+
+  - id: fz-140-2025
+    title: "ФЗ от 07.06.2025 № 140-ФЗ — изменения 87-ФЗ и 259-ФЗ (ЭПД/экспедиция)"
+    priority: core
+    reference_url: "http://publication.pravo.gov.ru/Document/View/0001202506070016"
+    local_file: null
+    last_verified: "2026-09-24"
+
+  - id: pp-554-2006
+    title: "ПП РФ от 08.09.2006 № 554 — Правила ТЭД"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_62177/"
+    local_file: null
+    last_verified: "2026-09-24"
+
+  - id: pp-173-2026
+    title: "ПП РФ от 20.02.2026 № 173 — реестр уведомлений экспедиторов"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_527115/"
+    local_file: null
+    last_verified: "2026-09-24"
+
+  - id: gk-expedition
+    title: "ГК РФ гл. 41 — перевозка и транспортная экспедиция (ст. 785, 801–806)"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_5142/801/"
+    local_file: null
+    last_verified: "2026-09-24"
+
+  - id: gk-rent-vehicle
+    title: "ГК РФ — аренда ТС (ст. 632 с экипажем, ст. 642 без экипажа)"
+    priority: core
+    reference_url: "https://www.consultant.ru/document/cons_doc_LAW_5142/642/"
+    local_file: null
+    last_verified: "2026-09-24"

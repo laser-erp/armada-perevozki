@@ -1,6 +1,6 @@
 /* order.html — публичная заявка с armada.sx (CSP: без inline) */
 (function () {
-  var BUILD = '2026-08-31-armada-logist4317';
+  var BUILD = '2026-09-24-legal-compliance-v13';
   var form = null;
   var statusEl = null;
   var selectedVtype = '';
@@ -107,11 +107,46 @@
     } else if (title) {
       title.textContent = 'Заказать транспорт';
     }
-    var rental = selectedVtype === 'shalanda' || selectedVtype === 'manipulator';
+    var rental = isRentalOnlyVtype();
     if (unloadWrap) unloadWrap.hidden = rental;
     if (addrLabel) {
       addrLabel.childNodes[0].textContent = rental ? 'Адрес подачи ' : 'Адрес загрузки ';
     }
+    var wLabel = qs('order-weight-label');
+    var wReq = qs('order-weight-req');
+    if (wLabel) wLabel.hidden = rental;
+    if (wReq) wReq.hidden = rental;
+    refreshHeightLawWarn();
+  }
+
+  function parseDimInput(id) {
+    var raw = (qs(id) && qs(id).value || '').trim().replace(',', '.');
+    if (!raw) return null;
+    var n = parseFloat(raw);
+    return n > 0 ? n : null;
+  }
+
+  function refreshHeightLawWarn() {
+    var box = qs('order-height-law-warn');
+    if (!box) return;
+    var h = parseDimInput('order-cargo-h');
+    if (typeof armadaCargoRoadHeightViolation !== 'function' || !h) {
+      box.hidden = true;
+      box.textContent = '';
+      return;
+    }
+    var vtype = selectedVtype && selectedVtype !== 'other' ? selectedVtype : '';
+    var v = armadaCargoRoadHeightViolation(vtype, h);
+    if (!v) {
+      box.hidden = true;
+      box.textContent = '';
+      return;
+    }
+    var txt = typeof armadaHeightRoadWarningText === 'function'
+      ? armadaHeightRoadWarningText(v)
+      : '';
+    box.textContent = txt;
+    box.hidden = !txt;
   }
 
   function applyPageMeta(params) {
@@ -136,6 +171,7 @@
   }
 
   function readForm(params) {
+    var cargoKg = parseInt((qs('order-cargo-weight') && qs('order-cargo-weight').value || '').replace(/\D/g, ''), 10);
     return {
       kind: 'transport',
       company: (qs('order-company') && qs('order-company').value || '').trim(),
@@ -147,17 +183,36 @@
       comment: (qs('order-comment') && qs('order-comment').value || '').trim(),
       vehicleTypeId: selectedVtype === 'other' ? '' : selectedVtype,
       vtype: selectedVtype === 'other' ? '' : selectedVtype,
+      cargoWeightKg: cargoKg > 0 ? cargoKg : null,
+      reqLengthM: parseDimInput('order-cargo-l'),
+      reqWidthM: parseDimInput('order-cargo-w'),
+      reqHeightM: parseDimInput('order-cargo-h'),
       source: params.source,
       carrierHint: 'ООО «Армада»'
     };
+  }
+
+  function isRentalOnlyVtype() {
+    return selectedVtype === 'shalanda' || selectedVtype === 'manipulator';
   }
 
   function validate(data) {
     if (!selectedVtype) return 'Выберите тип транспорта';
     if (!data.company) return 'Укажите компанию или ФИО';
     if (!data.phone || data.phone.replace(/\D/g, '').length < 10) return 'Укажите телефон для связи';
-    if (!data.loadAddress) return 'Укажите адрес подачи';
-    if (!data.vehicleAt) return 'Укажите дату подачи';
+    if (!data.contactName) return 'Укажите контактное лицо';
+    if (!data.loadAddress) return isRentalOnlyVtype() ? 'Укажите адрес подачи' : 'Укажите адрес загрузки';
+    if (!isRentalOnlyVtype() && !data.unloadAddress) return 'Укажите адрес выгрузки';
+    var d = (qs('order-date') && qs('order-date').value || '').trim();
+    var t = (qs('order-time') && qs('order-time').value || '').trim();
+    if (!d) return 'Укажите дату подачи';
+    if (!t) return 'Укажите время подачи (выберите из списка)';
+    if (!data.comment) return 'Опишите груз или особенности (комментарий)';
+    if (!isRentalOnlyVtype()) {
+      if (!(data.cargoWeightKg > 0)) return 'Укажите вес груза (кг)';
+    }
+    var agree = qs('order-legal-agree');
+    if (!agree || !agree.checked) return 'Подтвердите условия заявки на транспорт (галочка ниже)';
     return '';
   }
 
@@ -188,8 +243,12 @@
     try {
       await ensureStore();
       if (typeof appendCustomerPortalLead !== 'function') throw new Error('sync');
+      if (typeof initCloudSync === 'function') await initCloudSync();
       var res = await appendCustomerPortalLead(data);
       if (!res || !res.ok) throw new Error((res && res.error) || 'Не удалось сохранить');
+      if (!res.duplicate && !res.orderId) {
+        throw new Error('Заявка не попала в диспетчерскую (нет ООО «Армада» в базе)');
+      }
       if (form) form.hidden = true;
       var okBox = qs('order-success');
       if (okBox) {
@@ -216,6 +275,10 @@
     applyPageMeta(params);
     paintVtypes(normalizeVtype(params.vtype));
     if (form) form.addEventListener('submit', submitOrder);
+    ['order-cargo-h', 'order-cargo-weight'].forEach(function (id) {
+      var el = qs(id);
+      if (el) el.addEventListener('input', refreshHeightLawWarn);
+    });
     var again = qs('order-again');
     if (again) again.addEventListener('click', resetForm);
     var dateEl = qs('order-date');
