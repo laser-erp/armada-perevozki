@@ -28,7 +28,7 @@ def load_password() -> str:
     return pw
 
 
-def patch_staging_banner(index_path: Path) -> None:
+def patch_staging_banner_html(path: Path) -> None:
     banner = (
         '<div id="armada-staging-banner" role="status" aria-label="Среда staging" '
         'style="position:fixed;left:0;right:0;top:0;z-index:99999;height:3px;'
@@ -39,7 +39,9 @@ def patch_staging_banner(index_path: Path) -> None:
         'font-weight:700;line-height:1.25;letter-spacing:.02em;text-decoration:none;'
         'color:#fff;background:rgba(180,83,9,.88);box-shadow:0 1px 4px rgba(0,0,0,.18)">STAGING</a>'
     )
-    text = index_path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    if "<body" not in text:
+        return
     text = re.sub(
         r'<div id="armada-staging-banner"[^>]*>.*?</div>\s*',
         "",
@@ -50,8 +52,17 @@ def patch_staging_banner(index_path: Path) -> None:
     text = re.sub(r'<a id="armada-staging-chip"[^>]*>STAGING</a>\s*', "", text)
     text, n = re.subn(r"(<body[^>]*>)", r"\1\n" + banner, text, count=1)
     if n != 1:
-        raise SystemExit("не найден <body> в index.html")
-    index_path.write_text(text, encoding="utf-8", newline="\n")
+        raise SystemExit(f"не найден <body> в {path.name}")
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def patch_staging_web_dir(web_dir: Path) -> None:
+    patched = 0
+    for path in sorted(web_dir.glob("*.html")):
+        patch_staging_banner_html(path)
+        patched += 1
+    if patched == 0:
+        raise SystemExit("нет *.html для staging-banner")
 
 
 def main() -> None:
@@ -64,7 +75,7 @@ def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="armada-staging-"))
     try:
         shutil.copytree(SRC_PREVIEW, tmp / "web", dirs_exist_ok=True)
-        patch_staging_banner(tmp / "web" / "index.html")
+        patch_staging_web_dir(tmp / "web")
         tar_path = tmp / "deploy.tar.gz"
         with tarfile.open(tar_path, "w:gz") as tar:
             tar.add(tmp / "web", arcname=".")

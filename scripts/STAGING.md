@@ -2,7 +2,7 @@
 
 **URL:** https://staging.app.armada.sx/
 
-Отдельная копия интерфейса на том же VPS (`/var/www/armada-staging`). **API и данные — общие с продом** (тот же `armada-api`). На экране оранжевая полоса «STAGING».
+Отдельная копия интерфейса на том же VPS (`/var/www/armada-staging`). **API и данные — общие с продом** (тот же `armada-api`). На экране оранжевая полоса «STAGING» (все `*.html`, включая **order.html** — `patch-staging-banner.sh` при деплое).
 
 ## Первый запуск (один раз)
 
